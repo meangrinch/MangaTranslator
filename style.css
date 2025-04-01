@@ -1,0 +1,222 @@
+/* --- SETTINGS LAYOUT --- */
+#settings-tab-container { padding-top: 15px; }
+
+/* --- NAVIGATION SIDEBAR --- */
+#settings-nav {
+    width: 15em !important; padding: 10px 5px 10px 10px !important;
+    border-right: 1px solid var(--border-color-primary); min-width: 15em !important;
+    flex-grow: 0 !important; flex-shrink: 0 !important;
+}
+
+#settings-nav button.nav-button {
+    display: block !important; width: 100% !important; border: none !important;
+    background: none !important; text-align: left !important;
+    padding: 8px 10px !important;
+    margin-bottom: 4px !important;
+    border-radius: 4px !important;
+    color: var(--body-text-color) !important;
+    font-size: var(--text-lg) !important;
+    transition: background-color 0.1s ease, color 0.1s ease;
+    font-weight: bold !important;
+    cursor: pointer;
+}
+
+#settings-nav button.nav-button:hover {
+    background-color: var(--background-fill-secondary-hover) !important;
+    color: var(--body-text-color-hover) !important;
+}
+
+#settings-nav button.nav-button-selected {
+    background-color: var(--neutral-100) !important;
+    color: var(--neutral-800) !important;
+}
+
+/* --- DARK THEME --- */
+.dark #settings-nav button.nav-button-selected {
+    background-color: var(--neutral-700) !important;
+    color: var(--primary-300) !important;
+}
+
+/* --- SETTINGS CONTENT --- */
+#config-content-area {
+    padding-left: 20px; 
+    padding-right: 15px;
+}
+
+#config-content-area .settings-group {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    margin-bottom: 25px;
+    background-color: transparent;
+}
+
+/* Style the subsection headers within groups */
+#config-content-area .settings-group .prose h3 {
+    margin-top: 0;
+    margin-bottom: 1.25em;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid var(--border-color-primary);
+    font-size: var(--text-lg);
+    font-weight: bold;
+    color: var(--body-text-color);
+}
+
+/* --- Core Reset for Gradio Component Blocks/Wrappers within settings --- */
+#config-content-area .settings-group .block,
+#config-content-area .settings-group div.form,
+#config-content-area .settings-group div.styler {
+    background: transparent !important;
+    border-width: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 1.3em;
+}
+
+/* --- Label Styling --- */
+#config-content-area .settings-group .block > label,
+#config-content-area .settings-group div.styler > label {
+    display: block;
+    font-weight: bold !important;
+    font-size: var(--text-md) !important;
+    color: var(--body-text-color) !important;
+    margin-bottom: 0.6em !important;
+    padding: 0 !important;
+}
+/* If labels have spans, target that */
+#config-content-area .settings-group .block > label > span:not(.has-info),
+#config-content-area .settings-group div.styler > label > span:not(.has-info) {
+    margin-bottom: 0.6em !important;
+    padding: 0 !important;
+}
+
+/* --- Component-Specific Fine-tuning (Minimal) --- */
+/* Sliders */
+#config-content-area .settings-group .gradio-slider input[type="number"] {
+    width: 5em;
+    margin-left: 8px;
+    border-width: 1px !important;
+    box-shadow: none !important;
+}
+#config-content-area .settings-group .gradio-slider .wrap {
+    padding: 0 !important;
+}
+
+/* Dropdowns/Textboxes */
+#config-content-area .settings-group .gradio-dropdown input,
+#config-content-area .settings-group .gradio-dropdown select,
+#config-content-area .settings-group .gradio-textbox input {
+    width: 100%;
+    border-width: none !important;
+    box-shadow: none !important;
+}
+#config-content-area .settings-group .gradio-dropdown .wrap-inner,
+#config-content-area .settings-group .gradio-textbox .wrap-inner {
+    padding: 0 !important;
+    border: none !important;
+}
+
+/* Checkboxes */
+#config-content-area .settings-group .gradio-checkbox label {
+    display: flex !important;
+    align-items: center !important;
+    font-weight: normal !important;
+    margin-bottom: 0 !important;
+}
+#config-content-area .settings-group .gradio-checkbox label span {
+    font-weight: normal !important;
+    margin-bottom: 0 !important;
+}
+#config-content-area .settings-group .gradio-checkbox input[type="checkbox"] {
+    margin-right: 8px;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary-500);
+    cursor: pointer;
+    border-width: 1px !important;
+    box-shadow: none !important;
+}
+
+/* Radio Buttons */
+#config-content-area .settings-group .gradio-radio .radio-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 5px;
+}
+#config-content-area .settings-group .gradio-radio .radio-buttons > label {
+    display: flex !important;
+    align-items: center !important;
+    font-weight: normal !important;
+    margin-bottom: 0 !important;
+    cursor: pointer;
+}
+#config-content-area .settings-group .gradio-radio .radio-buttons label span {
+    font-weight: normal !important;
+    margin-bottom: 0 !important;
+}
+#config-content-area .settings-group .gradio-radio input[type="radio"] {
+    margin-right: 5px;
+    accent-color: var(--primary-500);
+    cursor: pointer;
+    border-width: 1px !important;
+    box-shadow: none !important;
+}
+
+/* --- CONFIG REFRESH BUTTON --- */
+.config-refresh-button {
+    margin-bottom: 20px !important;
+    font-weight: normal !important;
+    display: inline-block !important;
+    width: auto !important;
+    max-width: 170px !important;
+    font-size: 1.0em !important;
+    background-color: var(--neutral-100) !important;
+    color: var(--neutral-800) !important;
+    border: none !important;
+    padding: 8px 16px !important;
+    border-radius: 4px !important;
+    transition: background-color 0.2s ease, color 0.2s ease !important;
+}
+
+.config-refresh-button:hover {
+    background-color: var(--background-fill-secondary-hover) !important;
+    color: var(--body-text-color-hover) !important;
+}
+
+.dark .config-refresh-button {
+    background-color: var(--neutral-800) !important;
+    color: var(--body-text-color-hover) !important;
+}
+
+.dark .config-refresh-button:hover {
+    background-color: var(--neutral-900) !important;
+}
+
+/* --- STATUS MESSAGES --- */
+#config_status p, #config_status div.prose {
+    margin: 0;
+    padding-left: 5px;
+}
+
+/* --- CONFIG BUTTONS --- */
+#config-button-row {
+    margin-bottom: 5px;
+}
+
+/* Hide status message initially*/
+#config_status {
+    display: none;
+}
+
+/* --- IMAGE PREVIEW RESIZING --- */
+#translator_input_image img,
+#translator_output_image img {
+    display: block;
+    max-height: 1152px;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+    margin: auto;
+}
