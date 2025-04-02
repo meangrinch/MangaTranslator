@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 import os
 from pathlib import Path
-from .common_utils import log_message
+from .common_utils import log_message 
 
 def pil_to_cv2(pil_image):
     """

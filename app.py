@@ -9,7 +9,6 @@ import time
 from functools import partial
 from pathlib import Path
 
-import cv2
 import gradio as gr
 from PIL import Image
 import torch
@@ -23,7 +22,6 @@ def custom_except_hook(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, gr.Error) or issubclass(exc_type, gr.CancelledError):
         print(f"Gradio error: {exc_value}")
     else:
-        # Print full traceback for non-Gradio errors
         import traceback
         print("Non-Gradio Error Caught by Custom Hook:")
         traceback.print_exception(exc_type, exc_value, exc_traceback)
@@ -57,6 +55,9 @@ DEFAULT_SETTINGS = {
     "max_font_size": 14,
     "min_font_size": 8,
     "line_spacing": 1.0,
+    "use_subpixel_rendering": True,
+    "font_hinting": "none",
+    "use_ligatures": False,
     "font_pack": None,
     "verbose": False,
     "jpeg_quality": 95,
@@ -263,7 +264,8 @@ def reset_to_defaults():
 # --- Consolidated Validation ---
 
 def _validate_common_inputs(api_key: str, selected_model: str, font_pack: str,
-                            max_font_size: int, min_font_size: int, line_spacing: float) -> tuple[Path, Path]:
+                            max_font_size: int, min_font_size: int, line_spacing: float,
+                            font_hinting: str) -> tuple[Path, Path]: # Added font_hinting
     """
     Validates common inputs used by both single and batch translation.
 
@@ -274,6 +276,7 @@ def _validate_common_inputs(api_key: str, selected_model: str, font_pack: str,
         max_font_size (int): Maximum font size for rendering.
         min_font_size (int): Minimum font size for rendering.
         line_spacing (float): Line spacing multiplier.
+        font_hinting (str): Font hinting setting.
 
     Returns:
         tuple[Path, Path]: Validated absolute path to the YOLO model and font directory.
@@ -281,12 +284,11 @@ def _validate_common_inputs(api_key: str, selected_model: str, font_pack: str,
     Raises:
         gr.Error: If any validation fails.
     """
-    # API Key
+
     api_valid, api_msg = validate_api_key(api_key)
     if not api_valid:
         raise gr.Error(api_msg, print_exception=False)
 
-    # Model
     available_models = get_available_models(MODELS_DIR)
     if not available_models:
         raise gr.Error(
@@ -322,12 +324,13 @@ def _validate_common_inputs(api_key: str, selected_model: str, font_pack: str,
          raise gr.Error(f"{ERROR_PREFIX}Line Spacing must be a positive number.", print_exception=False)
     if min_font_size > max_font_size:
          raise gr.Error(f"{ERROR_PREFIX}Min Font Size cannot be larger than Max Font Size.", print_exception=False)
+    if font_hinting not in ["none", "slight", "normal", "full"]:
+        raise gr.Error(f"{ERROR_PREFIX}Invalid Font Hinting value. Must be one of: none, slight, normal, full.", print_exception=False)
 
     return yolo_model_path, font_dir
 
 
 # --- Translation Functions ---
-
 def translate_manga(image: Union[str, Path, Image.Image],
                     api_key: str, input_language="Japanese", output_language="English",
                     gemini_model="gemini-2.0-flash", confidence=0.35, dilation_kernel_size=7, dilation_iterations=1,
@@ -335,6 +338,7 @@ def translate_manga(image: Union[str, Path, Image.Image],
                     constraint_erosion_kernel_size=5, constraint_erosion_iterations=1, temperature=0.1, top_p=0.95,
                     top_k=1, selected_model="", font_pack=None,
                     max_font_size=14, min_font_size=8, line_spacing=1.0,
+                    use_subpixel_rendering=False, font_hinting="none", use_ligatures=False,
                     verbose=False, jpeg_quality=95, png_compression=6,
                     output_format="auto", device=None):
     """
@@ -366,6 +370,9 @@ def translate_manga(image: Union[str, Path, Image.Image],
         max_font_size (int, optional): Max font size for rendering. Defaults to 14.
         min_font_size (int, optional): Min font size for rendering. Defaults to 8.
         line_spacing (float, optional): Line spacing multiplier. Defaults to 1.0.
+        use_subpixel_rendering (bool, optional): Enable subpixel rendering. Defaults to False.
+        font_hinting (str, optional): Font hinting level ('none', 'slight', 'normal', 'full'). Defaults to "none".
+        use_ligatures (bool, optional): Enable standard ligatures. Defaults to False.
         verbose (bool, optional): Whether to enable verbose logging. Defaults to False.
         jpeg_quality (int, optional): JPEG quality setting (1-100). Defaults to 95.
         png_compression (int, optional): PNG compression level (0-9). Defaults to 6.
@@ -391,7 +398,7 @@ def translate_manga(image: Union[str, Path, Image.Image],
 
     # Common validation (API Key, Model, Font, Rendering Params)
     yolo_model_path, font_dir = _validate_common_inputs(
-        api_key, selected_model, font_pack, max_font_size, min_font_size, line_spacing
+        api_key, selected_model, font_pack, max_font_size, min_font_size, line_spacing, font_hinting
     )
     
     temp_image_path = None
@@ -441,7 +448,7 @@ def translate_manga(image: Union[str, Path, Image.Image],
         config = MangaTranslatorConfig(
             yolo_model_path=str(yolo_model_path),
             verbose=verbose,
-            device=device or target_device,
+            device=device or target_device, # Use provided device or global default
             detection=DetectionConfig(
                 confidence=confidence
             ),
@@ -468,7 +475,10 @@ def translate_manga(image: Union[str, Path, Image.Image],
                 font_dir=str(font_dir),
                 max_font_size=max_font_size,
                 min_font_size=min_font_size,
-                line_spacing=line_spacing
+                line_spacing=line_spacing,
+                use_subpixel_rendering=use_subpixel_rendering,
+                font_hinting=font_hinting,
+                use_ligatures=use_ligatures
             ),
             output=OutputConfig(
                 jpeg_quality=jpeg_quality,
@@ -588,6 +598,7 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
                   closing_iterations=1, constraint_erosion_kernel_size=5, constraint_erosion_iterations=1,
                   temperature=0.1, top_p=0.95, top_k=1,
                   max_font_size=14, min_font_size=8, line_spacing=1.0,
+                  use_subpixel_rendering=False, font_hinting="none", use_ligatures=False,
                   verbose=False, selected_model="", jpeg_quality=95,
                   png_compression=6, progress=gr.Progress(), device=None):
     """
@@ -618,6 +629,9 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
         max_font_size (int, optional): Max font size for rendering. Defaults to 14.
         min_font_size (int, optional): Min font size for rendering. Defaults to 8.
         line_spacing (float, optional): Line spacing multiplier. Defaults to 1.0.
+        use_subpixel_rendering (bool, optional): Enable subpixel rendering. Defaults to False.
+        font_hinting (str, optional): Font hinting level ('none', 'slight', 'normal', 'full'). Defaults to "none".
+        use_ligatures (bool, optional): Enable standard ligatures. Defaults to False.
         verbose (bool, optional): Whether to enable verbose logging. Defaults to False.
         selected_model (str, optional): YOLO model filename to use. Defaults to "".
         jpeg_quality (int, optional): JPEG quality setting (1-100). Defaults to 95.
@@ -638,9 +652,9 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
     # --- Input Validation ---
     # Common validation (API Key, Model, Font, Rendering Params)
     yolo_model_path, font_dir = _validate_common_inputs(
-        api_key, selected_model, font_pack, max_font_size, min_font_size, line_spacing
+        api_key, selected_model, font_pack, max_font_size, min_font_size, line_spacing, font_hinting
     )
-    
+
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_path = Path("./output") / timestamp
     
@@ -683,12 +697,15 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
                 font_dir=str(font_dir),
                 max_font_size=max_font_size,
                 min_font_size=min_font_size,
-                line_spacing=line_spacing
+                line_spacing=line_spacing,
+                use_subpixel_rendering=use_subpixel_rendering,
+                font_hinting=font_hinting,
+                use_ligatures=use_ligatures
             ),
             output=OutputConfig(
                 jpeg_quality=jpeg_quality,
                 png_compression=png_compression,
-                image_mode="RGBA" # Default mode for batch config, core function handles per-file needs
+                image_mode="RGBA"
             )
         )
 
@@ -719,7 +736,7 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
                 except Exception as copy_err:
                     print(f"Warning: Could not copy file {img_file.name}: {copy_err}")
 
-            process_dir = temp_dir_path
+            process_dir = temp_dir_path_obj
 
         elif isinstance(input_dir_or_files, str):
              input_path = Path(input_dir_or_files)
@@ -1003,14 +1020,14 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                             value=saved_settings.get("dilation_kernel_size", 7), 
                             step=2, 
                             label="Dilation Kernel Size", 
-                            info="Expands initial detection to ensure bubble edge is included."
+                            info="Controls how much the initial bubble detection grows outwards. Increase if the bubble's edge or text is missed."
                         )
                         dilation_iterations = gr.Slider(
                             1, 5, 
                             value=saved_settings.get("dilation_iterations", 1), 
                             step=1, 
                             label="Dilation Iterations", 
-                            info="How many times to expand."
+                            info="Controls how many times to apply the above bubble detection growth."
                         )
                         gr.Markdown("#### Bubble Interior Isolation")
                         threshold_value = gr.Slider(
@@ -1018,14 +1035,14 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                             value=saved_settings.get("threshold_value", 210), 
                             step=1, 
                             label="Brightness Threshold (-1 for auto)", 
-                            info="Separates bright bubble interior from darker outline/background. -1 uses automatic Otsu thresholding."
+                            info="Separates white bubble interior from darker outline/background (-1 uses automatic Otsu thresholding)."
                         )
                         min_contour_area = gr.Slider(
                             0, 500, 
                             value=saved_settings.get("min_contour_area", 50), 
                             step=10, 
                             label="Min Bubble Area", 
-                            info="Filters out small noise within bubbles after thresholding."
+                            info="Removes tiny detected regions. Increase to ignore small specks or dots inside the bubble area."
                         )
                         gr.Markdown("#### Mask Smoothing")
                         closing_kernel_size = gr.Slider(
@@ -1033,14 +1050,14 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                             value=saved_settings.get("closing_kernel_size", 7), 
                             step=2, 
                             label="Closing Kernel Size", 
-                            info="Smooths mask edge and can bridge gaps to include text very close to the bubble outline."
+                            info="Controls the size of gaps between outline and text to fill. Increase to capture text very close to the bubble outline"
                         )
                         closing_iterations = gr.Slider(
                             1, 5, 
                             value=saved_settings.get("closing_iterations", 1), 
                             step=1, 
                             label="Closing Iterations", 
-                            info="How many times to close (increase if gaps to text are larger)."
+                            info="Controls how many times to apply the above gap filling."
                         )
                         gr.Markdown("#### Edge Constraint")
                         constraint_erosion_kernel_size = gr.Slider(
@@ -1048,14 +1065,14 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                             value=saved_settings.get("constraint_erosion_kernel_size", 5), 
                             step=2, 
                             label="Constraint Erosion Kernel Size", 
-                            info="Shrinks the original boundary slightly to prevent including edge outlines."
+                            info="Controls how much to shrink the cleaned mask inwards. Increase if the bubble's outline is being erased."
                         )
                         constraint_erosion_iterations = gr.Slider(
                             1, 3, 
                             value=saved_settings.get("constraint_erosion_iterations", 1), 
                             step=1, 
                             label="Constraint Erosion Iterations", 
-                            info="How many times to shrink (increase if the bubble outline is getting erased)."
+                            info="Controls how many times to apply the above shrinkage."
                         )
                     setting_groups.append(group_cleaning)
 
@@ -1097,6 +1114,22 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                             0.5, 2.0, value=saved_settings.get("line_spacing", 1.0), step=0.05,
                             label="Line Spacing Multiplier",
                             info="Adjusts the vertical space between lines of text (1.0 = standard)."
+                        )
+                        use_subpixel_rendering = gr.Checkbox(
+                            value=saved_settings.get("use_subpixel_rendering", False),
+                            label="Use Subpixel Rendering",
+                            info="May improve text clarity on some LCD screens, but can cause color fringing."
+                        )
+                        font_hinting = gr.Radio(
+                            choices=["none", "slight", "normal", "full"],
+                            value=saved_settings.get("font_hinting", "none"),
+                            label="Font Hinting",
+                            info="Adjusts glyph outlines to fit pixel grid. 'None' is often best for high-res displays."
+                        )
+                        use_ligatures = gr.Checkbox(
+                            value=saved_settings.get("use_ligatures", False),
+                            label="Use Standard Ligatures (e.g., fi, fl)",
+                            info="Enables common letter combinations to be rendered as single glyphs if supported by the font."
                         )
                     setting_groups.append(group_rendering)
 
@@ -1207,7 +1240,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
 
     save_config_btn.click(
         fn=lambda api_key_val, mdl_dd_val, conf_val, dks_val, di_val, tv_val, mca_val, cks_val, ci_val, ceks_val, cei_val,
-                max_fs_val, min_fs_val, ls_val,
+                max_fs_val, min_fs_val, ls_val, subpix_val, hint_val, liga_val,
                 temp_val, tp_val, tk_val, out_fmt_val, jpeg_q_val, png_comp_val, verb_val,
                 input_lang_val, output_lang_val, gm_val, fp_val,
                 b_input_lang_val, b_output_lang_val, b_gm_val, b_fp_val:
@@ -1218,7 +1251,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                 'threshold_value': tv_val, 'min_contour_area': mca_val,
                 'closing_kernel_size': cks_val, 'closing_iterations': ci_val,
                 'constraint_erosion_kernel_size': ceks_val, 'constraint_erosion_iterations': cei_val,
-                'max_font_size': max_fs_val, 'min_font_size': min_fs_val, 'line_spacing': ls_val,
+                'max_font_size': max_fs_val, 'min_font_size': min_fs_val, 'line_spacing': ls_val, 'use_subpixel_rendering': subpix_val, 'font_hinting': hint_val, 'use_ligatures': liga_val,
                 'temperature': temp_val, 'top_p': tp_val, 'top_k': tk_val,
                 'output_format': out_fmt_val, 'jpeg_quality': jpeg_q_val, 'png_compression': png_comp_val,
                 'verbose': verb_val,
@@ -1228,7 +1261,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         inputs=[
             api_key, model_dropdown, confidence, dilation_kernel_size, dilation_iterations, threshold_value, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
-            max_font_size, min_font_size, line_spacing,
+            max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
             temperature, top_p, top_k,
             output_format, jpeg_quality, png_compression, verbose,
             input_language, output_language, gemini_model, font_dropdown,
@@ -1286,7 +1319,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             defaults['threshold_value'], defaults['min_contour_area'],
             defaults['closing_kernel_size'], defaults['closing_iterations'],
             defaults['constraint_erosion_kernel_size'], defaults['constraint_erosion_iterations'],
-            defaults['max_font_size'], defaults['min_font_size'], defaults['line_spacing'],
+            defaults['max_font_size'], defaults['min_font_size'], defaults['line_spacing'], defaults['use_subpixel_rendering'], defaults['font_hinting'], defaults['use_ligatures'],
             defaults.get('gemini_api_key', ''), defaults['temperature'], defaults['top_p'], defaults['top_k'],
             defaults['output_format'], defaults['jpeg_quality'], defaults['png_compression'],
             defaults['verbose'],
@@ -1304,7 +1337,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             confidence,
             dilation_kernel_size, dilation_iterations, threshold_value, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
-            max_font_size, min_font_size, line_spacing,
+            max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
             api_key, temperature, top_p, top_k,
             output_format, jpeg_quality, png_compression,
             verbose,
@@ -1332,7 +1365,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             top_k,
             model_dropdown,
             font_dropdown,
-            max_font_size, min_font_size, line_spacing,
+            max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
             verbose,
             jpeg_quality,
             png_compression,
@@ -1362,7 +1395,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             temperature,
             top_p,
             top_k,
-            max_font_size, min_font_size, line_spacing,
+            max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures, 
             verbose,
             model_dropdown,
             jpeg_quality, 

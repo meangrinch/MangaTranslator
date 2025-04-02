@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, Union, Callable, Dict, Any
 
 import cv2
-from PIL import Image, ImageDraw
+from PIL import Image
 import torch
 
 # Local imports
@@ -16,7 +16,7 @@ from .cleaning import clean_speech_bubbles
 from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
 from .translation import call_gemini_api_batch, sort_bubbles_manga_order
 from .common_utils import log_message
-from .rendering import choose_font, fit_text_to_bubble
+from .rendering import choose_font, render_text_skia
 
 def translate_and_render(image_path: Union[str, Path],
                          config: MangaTranslatorConfig,
@@ -35,7 +35,7 @@ def translate_and_render(image_path: Union[str, Path],
     start_time = time.time()
     image_path = Path(image_path)
     verbose = config.verbose
-    device = config.device # Use device from config
+    device = config.device
 
     log_message(f"Using device: {device}", verbose=verbose)
 
@@ -140,14 +140,12 @@ def translate_and_render(image_path: Union[str, Path],
               log_message(f"Converting cleaned image mode from {pil_cleaned_image.mode} to {target_mode}", verbose=verbose)
               pil_cleaned_image = pil_cleaned_image.convert(pil_image_processed.mode)
 
-
-         draw = ImageDraw.Draw(pil_cleaned_image)
-
          # --- Prepare images for Translation ---
          log_message("Preparing bubble images for translation...", verbose=verbose)
          for bubble in bubble_data:
              x1, y1, x2, y2 = bubble["bbox"]
 
+             # Crop from the *original* processed image (before cleaning)
              bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
 
              try:
@@ -212,18 +210,29 @@ def translate_and_render(image_path: Union[str, Path],
                  log_message(f"Rendering text for bubble {bbox}: '{text[:30]}...'", verbose=verbose)
 
                  font_path = choose_font(text, config.rendering.font_dir, verbose=verbose)
-                 if font_path == "default":
-                      log_message(f"Warning: Using default font for bubble {bbox}", verbose=verbose, always_print=True)
+                 if not font_path:
+                      log_message(f"Critical: Could not find font for bubble {bbox}. Skipping rendering.", always_print=True)
+                      continue
 
-                 success = fit_text_to_bubble(
-                     draw, text, bbox, font_path,
-                     max_font_size=config.rendering.max_font_size,
+                 rendered_image, success = render_text_skia(
+                     pil_image=pil_cleaned_image,
+                     text=text,
+                     bbox=bbox,
+                     font_path=font_path,
                      min_font_size=config.rendering.min_font_size,
-                     line_spacing=config.rendering.line_spacing,
+                     max_font_size=config.rendering.max_font_size,
+                     line_spacing_mult=config.rendering.line_spacing,
+                     use_subpixel_rendering=config.rendering.use_subpixel_rendering,
+                     font_hinting=config.rendering.font_hinting,
+                     use_ligatures=config.rendering.use_ligatures,
                      verbose=verbose
                  )
-                 if not success:
-                      log_message(f"Failed to fit text in bubble {bbox}", verbose=verbose, always_print=True)
+
+                 if success:
+                     pil_cleaned_image = rendered_image
+                     final_image_to_save = pil_cleaned_image
+                 else:
+                     log_message(f"Failed to render text in bubble {bbox} using Skia.", verbose=verbose, always_print=True)
          else:
               log_message(f"Warning: Mismatch between number of bubbles ({len(sorted_bubble_data)}) and translations ({len(translated_texts)}). Skipping rendering.", always_print=True)
 
@@ -246,7 +255,7 @@ def translate_and_render(image_path: Union[str, Path],
 
 def batch_translate_images(input_dir: Union[str, Path],
                            config: MangaTranslatorConfig,
-                           output_dir: Union[str, Path], # Made mandatory
+                           output_dir: Optional[Union[str, Path]] = None,
                            progress_callback: Optional[Callable[[float, str], None]] = None) -> Dict[str, Any]:
     """
     Process all images in a directory using a configuration object.
@@ -268,13 +277,14 @@ def batch_translate_images(input_dir: Union[str, Path],
         log_message(f"Input path '{input_dir}' is not a directory", always_print=True)
         return {"success_count": 0, "error_count": 0, "errors": {}}
 
-    # Caller is responsible for providing a valid Path object for output_dir
-    output_dir = Path(output_dir) # Ensure it's a Path object
-    if not output_dir:
-        log_message("Error: Output directory must be specified for batch processing.", always_print=True)
-        return {"success_count": 0, "error_count": 0, "errors": {"Missing output directory"}}
+    if output_dir:
+        output_dir = Path(output_dir)
+    else:
+        # Default to timestamped directory in ./output, like app.py
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        output_dir = Path("./output") / timestamp
 
-    os.makedirs(output_dir, exist_ok=True) # Ensure the directory exists
+    os.makedirs(output_dir, exist_ok=True)
 
     image_extensions = ['.jpg', '.jpeg', '.png', '.webp']
     image_files = [f for f in input_dir.iterdir() if f.is_file() and f.suffix.lower() in image_extensions]
@@ -441,19 +451,16 @@ def main():
              print(f"Error: --batch requires --input '{args.input}' to be a directory.")
              exit(1)
 
+        output_dir = Path(args.output) if args.output else None
+
         if args.output:
             output_dir = Path(args.output)
             if not output_dir.exists():
-                 print(f"Creating specified output directory: {output_dir}")
+                 print(f"Creating output directory: {output_dir}")
                  output_dir.mkdir(parents=True, exist_ok=True)
             elif not output_dir.is_dir():
                  print(f"Error: Specified --output '{output_dir}' is not a directory.")
                  exit(1)
-        else:
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            output_dir = Path("./output") / timestamp
-            print(f"--output not specified, using default timestamped directory: {output_dir}")
-            output_dir.mkdir(parents=True, exist_ok=True)
 
         batch_translate_images(
             input_path,
@@ -468,7 +475,12 @@ def main():
 
         output_path_arg = args.output
         if not output_path_arg:
-            output_path = input_path.parent / f"{input_path.stem}_translated{input_path.suffix}"
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            original_ext = input_path.suffix.lower()
+            output_ext = original_ext
+            output_dir = Path("./output")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = output_dir / f"MangaTranslator_{timestamp}{output_ext}"
             print(f"--output not specified, using default: {output_path}")
         else:
              output_path = Path(output_path_arg)

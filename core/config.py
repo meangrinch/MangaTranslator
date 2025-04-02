@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Tuple, Union
 import torch
 import cv2
 
@@ -39,6 +39,9 @@ class RenderingConfig:
     max_font_size: int = 14
     min_font_size: int = 8
     line_spacing: float = 1.0
+    use_subpixel_rendering: bool = False
+    font_hinting: str = "none"
+    use_ligatures: bool = False
 
 @dataclass
 class OutputConfig:
