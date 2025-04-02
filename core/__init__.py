@@ -7,19 +7,13 @@ It uses YOLO for speech bubble detection and Gemini API for text translation.
 
 from .generate_manga import (
     translate_and_render,
-    batch_translate_images,
-    choose_font,
-    fit_text_to_bubble
+    batch_translate_images
 )
-
-from .utils import (
-    detect_speech_bubbles,
-    clean_speech_bubbles,
-    call_gemini_api_batch,
-    sort_bubbles_manga_order,
-    pil_to_cv2,
-    cv2_to_pil
-)
+from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
+from .detection import  detect_speech_bubbles
+from .cleaning import clean_speech_bubbles
+from .translation import sort_bubbles_manga_order, call_gemini_api_batch
+from .rendering import choose_font, fit_text_to_bubble
 
 __version__ = "1.0.0"
 __version_info__ = (1, 0, 0)
@@ -38,5 +32,6 @@ __all__ = [
     'call_gemini_api_batch',
     'sort_bubbles_manga_order',
     'pil_to_cv2',
-    'cv2_to_pil'
+    'cv2_to_pil',
+    'save_image_with_compression'
 ]

@@ -15,13 +15,18 @@ from PIL import Image
 import torch
 
 import core
+from core.config import MangaTranslatorConfig, DetectionConfig, CleaningConfig, TranslationConfig, RenderingConfig, OutputConfig
 from core.generate_manga import translate_and_render, batch_translate_images
+from typing import Union
 
 def custom_except_hook(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, gr.Error) or issubclass(exc_type, gr.CancelledError):
         print(f"Gradio error: {exc_value}")
     else:
-        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        # Print full traceback for non-Gradio errors
+        import traceback
+        print("Non-Gradio Error Caught by Custom Hook:")
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
 
 sys.excepthook = custom_except_hook
 
@@ -254,13 +259,83 @@ def reset_to_defaults():
     
     return settings
 
-def translate_manga(image, api_key, input_language="Japanese", output_language="English", 
+
+# --- Consolidated Validation ---
+
+def _validate_common_inputs(api_key: str, selected_model: str, font_pack: str,
+                            max_font_size: int, min_font_size: int, line_spacing: float) -> tuple[Path, Path]:
+    """
+    Validates common inputs used by both single and batch translation.
+
+    Args:
+        api_key (str): Gemini API key.
+        selected_model (str): Filename of the selected YOLO model.
+        font_pack (str): Name of the selected font pack directory.
+        max_font_size (int): Maximum font size for rendering.
+        min_font_size (int): Minimum font size for rendering.
+        line_spacing (float): Line spacing multiplier.
+
+    Returns:
+        tuple[Path, Path]: Validated absolute path to the YOLO model and font directory.
+
+    Raises:
+        gr.Error: If any validation fails.
+    """
+    # API Key
+    api_valid, api_msg = validate_api_key(api_key)
+    if not api_valid:
+        raise gr.Error(api_msg, print_exception=False)
+
+    # Model
+    available_models = get_available_models(MODELS_DIR)
+    if not available_models:
+        raise gr.Error(
+            f"{ERROR_PREFIX}No YOLO models found. Please download a model file "
+            f"and place it in the 'models' directory, then refresh the models list.",
+            print_exception=False
+        )
+    if not selected_model:
+        raise gr.Error(f"{ERROR_PREFIX}Please select a YOLO model.", print_exception=False)
+    if selected_model not in available_models:
+        raise gr.Error(
+            f"{ERROR_PREFIX}Selected model '{selected_model}' is not available. Please choose from: {', '.join(available_models)}",
+            print_exception=False
+        )
+    yolo_model_path = MODELS_DIR / selected_model
+    if not yolo_model_path.exists():
+        raise gr.Error(f"{ERROR_PREFIX}YOLO model not found at {yolo_model_path}.", print_exception=False)
+
+    # Font Pack
+    if not font_pack:
+        raise gr.Error(f"{ERROR_PREFIX}Please select a font pack.", print_exception=False)
+    font_dir = FONTS_BASE_DIR / font_pack
+    font_valid, font_msg = validate_font_directory(font_dir)
+    if not font_valid:
+        raise gr.Error(f"{ERROR_PREFIX}{font_msg}.", print_exception=False)
+
+    # Rendering Params
+    if not (isinstance(max_font_size, int) and max_font_size > 0):
+        raise gr.Error(f"{ERROR_PREFIX}Max Font Size must be a positive integer.", print_exception=False)
+    if not (isinstance(min_font_size, int) and min_font_size > 0):
+        raise gr.Error(f"{ERROR_PREFIX}Min Font Size must be a positive integer.", print_exception=False)
+    if not (isinstance(line_spacing, (int, float)) and float(line_spacing) > 0):
+         raise gr.Error(f"{ERROR_PREFIX}Line Spacing must be a positive number.", print_exception=False)
+    if min_font_size > max_font_size:
+         raise gr.Error(f"{ERROR_PREFIX}Min Font Size cannot be larger than Max Font Size.", print_exception=False)
+
+    return yolo_model_path, font_dir
+
+
+# --- Translation Functions ---
+
+def translate_manga(image: Union[str, Path, Image.Image],
+                    api_key: str, input_language="Japanese", output_language="English",
                     gemini_model="gemini-2.0-flash", confidence=0.35, dilation_kernel_size=7, dilation_iterations=1,
                     threshold_value=210, min_contour_area=50, closing_kernel_size=7, closing_iterations=1,
-                    constraint_erosion_kernel_size=5, constraint_erosion_iterations=1, temperature=0.1, top_p=0.95, 
-                    top_k=1, selected_model="", font_pack=None, 
-                    max_font_size=14, min_font_size=8, line_spacing=1.0, 
-                    verbose=False, jpeg_quality=95, png_compression=6, 
+                    constraint_erosion_kernel_size=5, constraint_erosion_iterations=1, temperature=0.1, top_p=0.95,
+                    top_k=1, selected_model="", font_pack=None,
+                    max_font_size=14, min_font_size=8, line_spacing=1.0,
+                    verbose=False, jpeg_quality=95, png_compression=6,
                     output_format="auto", device=None):
     """
     Process a single manga image with translation.
@@ -307,54 +382,17 @@ def translate_manga(image, api_key, input_language="Japanese", output_language="
     """
     start_time = time.time()
     translated_image = None
-    
-    available_models = get_available_models(MODELS_DIR)
-    if not available_models:
-        raise gr.Error(
-            f"{ERROR_PREFIX}No YOLO models found. Please download a model file "
-            f"and place it in the 'models' directory, then refresh the models list.", 
-            print_exception=False
-        )
-    
-    api_valid, api_msg = validate_api_key(api_key)
-    if not api_valid:
-        raise gr.Error(api_msg, print_exception=False)
-    
+
+    # --- Input Validation ---
+    # Image specific validation
     img_valid, img_msg = validate_image(image)
     if not img_valid:
         raise gr.Error(img_msg, print_exception=False)
-    
-    if not selected_model:
-        raise gr.Error(f"{ERROR_PREFIX}Please select a YOLO model.", print_exception=False)
-    
-    if selected_model not in available_models:
-        raise gr.Error(
-            f"{ERROR_PREFIX}Selected model '{selected_model}' is not available. Please choose from: {', '.join(available_models)}",
-            print_exception=False
-        )
-    
-    yolo_model_path = MODELS_DIR / selected_model
-    if not yolo_model_path.exists():
-        raise gr.Error(f"{ERROR_PREFIX}YOLO model not found at {yolo_model_path}.", print_exception=False)
-    
-    if not font_pack:
-        raise gr.Error(f"{ERROR_PREFIX}Please select a font pack.", print_exception=False)
-    
-    font_dir = FONTS_BASE_DIR / font_pack
-    
-    font_valid, font_msg = validate_font_directory(font_dir)
-    if not font_valid:
-        raise gr.Error(f"{ERROR_PREFIX}{font_msg}.", print_exception=False)
-    
-    # Validate rendering parameters
-    if not (isinstance(max_font_size, int) and max_font_size > 0):
-        raise gr.Error(f"{ERROR_PREFIX}Max Font Size must be a positive integer.", print_exception=False)
-    if not (isinstance(min_font_size, int) and min_font_size > 0):
-        raise gr.Error(f"{ERROR_PREFIX}Min Font Size must be a positive integer.", print_exception=False)
-    if not (isinstance(line_spacing, (int, float)) and float(line_spacing) > 0):
-         raise gr.Error(f"{ERROR_PREFIX}Line Spacing must be a positive number.", print_exception=False)
-    if min_font_size > max_font_size:
-         raise gr.Error(f"{ERROR_PREFIX}Min Font Size cannot be larger than Max Font Size.", print_exception=False)
+
+    # Common validation (API Key, Model, Font, Rendering Params)
+    yolo_model_path, font_dir = _validate_common_inputs(
+        api_key, selected_model, font_pack, max_font_size, min_font_size, line_spacing
+    )
     
     temp_image_path = None
     try:
@@ -390,41 +428,60 @@ def translate_manga(image, api_key, input_language="Japanese", output_language="
         os.makedirs(output_dir, exist_ok=True)
         save_path = output_dir / f"MangaTranslator_{timestamp}{output_ext}"
 
-        if output_format == "jpeg" or (output_format == "auto" and (original_ext == '.jpg' or original_ext == '.jpeg')):
+        # Determine image mode based on output format
+        if output_format == "jpeg" or (output_format == "auto" and (original_ext in ['.jpg', '.jpeg'])):
             image_mode = "RGB"
         else:
-            image_mode = "RGBA"
-        
-        translated_image = translate_and_render(
-            image_path_for_processing,
-            str(yolo_model_path),
-            api_key,
-            str(font_dir),
-            input_language,
-            output_language,
-            confidence,
-            str(save_path),
-            dilation_kernel_size=dilation_kernel_size,
-            dilation_iterations=dilation_iterations,
-            threshold_value=threshold_value,
-            min_contour_area=min_contour_area,
-            closing_kernel_size=closing_kernel_size,
-            closing_iterations=closing_iterations,
-            closing_kernel_shape=cv2.MORPH_ELLIPSE,
-            constraint_erosion_kernel_size=constraint_erosion_kernel_size,
-            constraint_erosion_iterations=constraint_erosion_iterations,
-            gemini_model=gemini_model,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            max_font_size=max_font_size,
-            min_font_size=min_font_size,
-            line_spacing=line_spacing,
-            jpeg_quality=jpeg_quality,
-            png_compression=png_compression,
+            image_mode = "RGBA" # Default to RGBA for PNG or other formats
+
+        # --- Configuration Setup ---
+        # Handle threshold value: None if user wants auto/Otsu (-1 or less)
+        threshold_config_val = None if threshold_value < 0 else threshold_value
+
+        config = MangaTranslatorConfig(
+            yolo_model_path=str(yolo_model_path),
             verbose=verbose,
-            image_mode=image_mode,
-            device=device
+            device=device or target_device,
+            detection=DetectionConfig(
+                confidence=confidence
+            ),
+            cleaning=CleaningConfig(
+                dilation_kernel_size=dilation_kernel_size,
+                dilation_iterations=dilation_iterations,
+                threshold_value=threshold_config_val,
+                min_contour_area=min_contour_area,
+                closing_kernel_size=closing_kernel_size,
+                closing_iterations=closing_iterations,
+                constraint_erosion_kernel_size=constraint_erosion_kernel_size,
+                constraint_erosion_iterations=constraint_erosion_iterations
+            ),
+            translation=TranslationConfig(
+                api_key=api_key,
+                gemini_model=gemini_model,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                input_language=input_language,
+                output_language=output_language
+            ),
+            rendering=RenderingConfig(
+                font_dir=str(font_dir),
+                max_font_size=max_font_size,
+                min_font_size=min_font_size,
+                line_spacing=line_spacing
+            ),
+            output=OutputConfig(
+                jpeg_quality=jpeg_quality,
+                png_compression=png_compression,
+                image_mode=image_mode
+            )
+        )
+
+        # --- Execute Translation ---
+        translated_image = translate_and_render(
+            image_path=image_path_for_processing,
+            config=config,
+            output_path=save_path
         )
         
         width, height = translated_image.size
@@ -524,13 +581,14 @@ def refresh_models_and_fonts():
 
         return gr.Dropdown(choices=models, value=selected_model_val), gr.Dropdown(choices=font_packs, value=selected_font_val)
 
-def process_batch(input_dir, api_key, input_language="Japanese", output_language="English",
-                  gemini_model="gemini-2.0-flash", font_pack=None, confidence=0.35, dilation_kernel_size=7, 
-                  dilation_iterations=1, threshold_value=210, min_contour_area=50, closing_kernel_size=7, 
-                  closing_iterations=1, constraint_erosion_kernel_size=5, constraint_erosion_iterations=1, 
+def process_batch(input_dir_or_files: Union[str, list], # Type hint added
+                  api_key: str, input_language="Japanese", output_language="English",
+                  gemini_model="gemini-2.0-flash", font_pack=None, confidence=0.35, dilation_kernel_size=7,
+                  dilation_iterations=1, threshold_value=210, min_contour_area=50, closing_kernel_size=7,
+                  closing_iterations=1, constraint_erosion_kernel_size=5, constraint_erosion_iterations=1,
                   temperature=0.1, top_p=0.95, top_k=1,
                   max_font_size=14, min_font_size=8, line_spacing=1.0,
-                  verbose=False, selected_model="", jpeg_quality=95, 
+                  verbose=False, selected_model="", jpeg_quality=95,
                   png_compression=6, progress=gr.Progress(), device=None):
     """
     Process a batch of manga images with translation.
@@ -576,50 +634,12 @@ def process_batch(input_dir, api_key, input_language="Japanese", output_language
         gr.Error: If inputs are invalid or processing fails
     """
     start_time = time.time()
-    
-    available_models = get_available_models(MODELS_DIR)
-    if not available_models:
-        raise gr.Error(
-            f"{ERROR_PREFIX}No YOLO models found. Please download a model file "
-            f"and place it in the 'models' directory, then refresh the models list.", 
-            print_exception=False
-        )
-    
-    api_valid, api_msg = validate_api_key(api_key)
-    if not api_valid:
-        raise gr.Error(api_msg, print_exception=False)
-    
-    if not selected_model:
-        raise gr.Error(f"{ERROR_PREFIX}Please select a YOLO model.", print_exception=False)
-    
-    if selected_model not in available_models:
-        raise gr.Error(
-            f"{ERROR_PREFIX}Selected model '{selected_model}' is not available. Please choose from: {', '.join(available_models)}",
-            print_exception=False
-        )
-    
-    yolo_model_path = MODELS_DIR / selected_model
-    if not yolo_model_path.exists():
-        raise gr.Error(f"{ERROR_PREFIX}YOLO model not found at {yolo_model_path}.", print_exception=False)
-    
-    if not font_pack:
-        raise gr.Error(f"{ERROR_PREFIX}Please select a font pack.", print_exception=False)
-    
-    font_dir = FONTS_BASE_DIR / font_pack
-    
-    font_valid, font_msg = validate_font_directory(font_dir)
-    if not font_valid:
-        raise gr.Error(f"{ERROR_PREFIX}{font_msg}.", print_exception=False)
-    
-    # Validate rendering parameters
-    if not (isinstance(max_font_size, int) and max_font_size > 0):
-        raise gr.Error(f"{ERROR_PREFIX}Max Font Size must be a positive integer.", print_exception=False)
-    if not (isinstance(min_font_size, int) and min_font_size > 0):
-        raise gr.Error(f"{ERROR_PREFIX}Min Font Size must be a positive integer.", print_exception=False)
-    if not (isinstance(line_spacing, (int, float)) and float(line_spacing) > 0):
-         raise gr.Error(f"{ERROR_PREFIX}Line Spacing must be a positive number.", print_exception=False)
-    if min_font_size > max_font_size:
-         raise gr.Error(f"{ERROR_PREFIX}Min Font Size cannot be larger than Max Font Size.", print_exception=False)
+
+    # --- Input Validation ---
+    # Common validation (API Key, Model, Font, Rendering Params)
+    yolo_model_path, font_dir = _validate_common_inputs(
+        api_key, selected_model, font_pack, max_font_size, min_font_size, line_spacing
+    )
     
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_path = Path("./output") / timestamp
@@ -629,92 +649,97 @@ def process_batch(input_dir, api_key, input_language="Japanese", output_language
     
     temp_dir_path_obj = None
     try:
-        if isinstance(input_dir, list):
-            if not input_dir:
-                raise gr.Error(f"{ERROR_PREFIX}No files found in selected directory.", print_exception=False)
-            
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_dir_path = Path(temp_dir)
-                image_extensions = ['.jpg', '.jpeg', '.png', '.webp']
-                image_files = [Path(f) for f in input_dir if Path(f).suffix.lower() in image_extensions]
-                
-                if not image_files:
-                    raise gr.Error(f"{ERROR_PREFIX}No image files found in the input directory.", print_exception=False)
-                
-                progress(0.1, desc="Preparing files...")
-                for img_file in image_files:
-                    shutil.copy2(img_file, temp_dir_path / img_file.name)
-                
-                progress(0.2, desc="Starting batch processing...")
-                
-                results = batch_translate_images(
-                    input_dir=temp_dir_path,
-                    output_dir=output_path,
-                    yolo_model_path=str(yolo_model_path),
-                    api_key=api_key,
-                    font_dir=str(font_dir),
-                    input_language=input_language,
-                    output_language=output_language,
-                    confidence=confidence,
-                    dilation_kernel_size=dilation_kernel_size,
-                    dilation_iterations=dilation_iterations,
-                    threshold_value=threshold_value,
-                    min_contour_area=min_contour_area,
-                    closing_kernel_size=closing_kernel_size,
-                    closing_iterations=closing_iterations,
-                    closing_kernel_shape=cv2.MORPH_ELLIPSE,
-                    constraint_erosion_kernel_size=constraint_erosion_kernel_size,
-                    constraint_erosion_iterations=constraint_erosion_iterations,
-                    gemini_model=gemini_model,
-                    temperature=temperature,
-                    top_p=top_p,
-                    top_k=top_k,
-                    jpeg_quality=jpeg_quality,
-                    png_compression=png_compression,
-                    verbose=verbose,
-                    progress_callback=update_progress,
-                    device=device
-                )
-        else:
-            input_path = Path(input_dir)
-            if not input_path.exists() or not input_path.is_dir():
-                raise gr.Error(f"{ERROR_PREFIX}Input directory '{input_dir}' does not exist or is not a directory.", print_exception=False)
-            process_dir = input_path
-            
-            progress(0.2, desc="Starting batch processing...")
-            
-            results = batch_translate_images(
-                input_dir=process_dir,
-                output_dir=output_path,
-                yolo_model_path=str(yolo_model_path),
-                api_key=api_key,
-                font_dir=str(font_dir),
-                input_language=input_language,
-                output_language=output_language,
-                confidence=confidence,
+        # --- Configuration Setup ---
+        # Handle threshold value: None if user wants auto/Otsu (-1 or less)
+        threshold_config_val = None if threshold_value < 0 else threshold_value
+
+        config = MangaTranslatorConfig(
+            yolo_model_path=str(yolo_model_path),
+            verbose=verbose,
+            device=device or target_device,
+            detection=DetectionConfig(
+                confidence=confidence
+            ),
+            cleaning=CleaningConfig(
                 dilation_kernel_size=dilation_kernel_size,
                 dilation_iterations=dilation_iterations,
-                threshold_value=threshold_value,
+                threshold_value=threshold_config_val,
                 min_contour_area=min_contour_area,
                 closing_kernel_size=closing_kernel_size,
                 closing_iterations=closing_iterations,
-                closing_kernel_shape=cv2.MORPH_ELLIPSE,
                 constraint_erosion_kernel_size=constraint_erosion_kernel_size,
-                constraint_erosion_iterations=constraint_erosion_iterations,
+                constraint_erosion_iterations=constraint_erosion_iterations
+            ),
+            translation=TranslationConfig(
+                api_key=api_key,
                 gemini_model=gemini_model,
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
+                input_language=input_language,
+                output_language=output_language
+            ),
+            rendering=RenderingConfig(
+                font_dir=str(font_dir),
                 max_font_size=max_font_size,
                 min_font_size=min_font_size,
-                line_spacing=line_spacing,
+                line_spacing=line_spacing
+            ),
+            output=OutputConfig(
                 jpeg_quality=jpeg_quality,
                 png_compression=png_compression,
-                verbose=verbose,
-                progress_callback=update_progress,
-                device=device
+                image_mode="RGBA" # Default mode for batch config, core function handles per-file needs
             )
+        )
+
+        # --- Execute Batch Processing ---
+        if isinstance(input_dir_or_files, list):
+            if not input_dir_or_files:
+                raise gr.Error(f"{ERROR_PREFIX}No files provided for batch processing.", print_exception=False)
+
+            temp_dir_path_obj = tempfile.TemporaryDirectory()
+            temp_dir_path = Path(temp_dir_path_obj.name)
+
+            image_extensions = ['.jpg', '.jpeg', '.png', '.webp']
+            image_files_to_copy = []
+            for f_path in input_dir_or_files:
+                p = Path(f_path)
+                if p.is_file() and p.suffix.lower() in image_extensions:
+                    image_files_to_copy.append(p)
+
+            if not image_files_to_copy:
+                 temp_dir_path_obj.cleanup()
+                 raise gr.Error(f"{ERROR_PREFIX}No valid image files (.jpg, .jpeg, .png, .webp) found in the selection.", print_exception=False)
+
+            progress(0.1, desc="Preparing files...")
+            for img_file in image_files_to_copy:
+                try:
+                    # Use copy2 to preserve metadata if possible
+                    shutil.copy2(img_file, temp_dir_path / img_file.name)
+                except Exception as copy_err:
+                    print(f"Warning: Could not copy file {img_file.name}: {copy_err}")
+
+            process_dir = temp_dir_path
+
+        elif isinstance(input_dir_or_files, str):
+             input_path = Path(input_dir_or_files)
+             if not input_path.exists() or not input_path.is_dir():
+                 raise gr.Error(f"{ERROR_PREFIX}Input directory '{input_dir_or_files}' does not exist or is not a directory.", print_exception=False)
+             process_dir = input_path
+        else:
+             raise gr.Error(f"{ERROR_PREFIX}Invalid input type for batch processing.", print_exception=False)
+
+
+        progress(0.2, desc="Starting batch processing...")
+
+        results = batch_translate_images(
+            input_dir=process_dir,
+            config=config,
+            output_dir=output_path,
+            progress_callback=update_progress
+        )
         
+        # --- Result Handling ---
         progress(0.9, desc="Processing complete, preparing results...")
         
         success_count = results["success_count"]
@@ -1043,7 +1068,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                         )
                         
                         temperature = gr.Slider(
-                            0, 1, value=saved_settings.get("temperature", 0.1), step=0.1,
+                            0, 2, value=saved_settings.get("temperature", 0.1), step=0.05,
                             label="Temperature"
                         )
                         top_p = gr.Slider(
