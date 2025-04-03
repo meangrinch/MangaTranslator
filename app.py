@@ -43,7 +43,7 @@ DEFAULT_SETTINGS = {
     "confidence": 0.35,
     "dilation_kernel_size": 7,
     "dilation_iterations": 1,
-    "threshold_value": 210,
+    "use_otsu_threshold": False,
     "min_contour_area": 50,
     "closing_kernel_size": 7,
     "closing_iterations": 1,
@@ -334,7 +334,7 @@ def _validate_common_inputs(api_key: str, selected_model: str, font_pack: str,
 def translate_manga(image: Union[str, Path, Image.Image],
                     api_key: str, input_language="Japanese", output_language="English",
                     gemini_model="gemini-2.0-flash", confidence=0.35, dilation_kernel_size=7, dilation_iterations=1,
-                    threshold_value=210, min_contour_area=50, closing_kernel_size=7, closing_iterations=1,
+                    use_otsu_threshold=False, min_contour_area=50, closing_kernel_size=7, closing_iterations=1, # Changed threshold_value
                     constraint_erosion_kernel_size=5, constraint_erosion_iterations=1, temperature=0.1, top_p=0.95,
                     top_k=1, selected_model="", font_pack=None,
                     max_font_size=14, min_font_size=8, line_spacing=1.0,
@@ -356,7 +356,7 @@ def translate_manga(image: Union[str, Path, Image.Image],
         confidence (float, optional): Bubble detection confidence threshold. Defaults to 0.35.
         dilation_kernel_size (int): Kernel size for dilating initial YOLO mask for ROI.
         dilation_iterations (int): Iterations for dilation.
-        threshold_value (int or None): Fixed threshold for isolating bright bubble interior. None uses Otsu.
+        use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value (210).
         min_contour_area (int): Minimum area for a contour to be considered part of the bubble interior.
         closing_kernel_size (int): Kernel size for morphological closing to smooth mask and include text.
         closing_iterations (int): Iterations for closing.
@@ -442,20 +442,19 @@ def translate_manga(image: Union[str, Path, Image.Image],
             image_mode = "RGBA" # Default to RGBA for PNG or other formats
 
         # --- Configuration Setup ---
-        # Handle threshold value: None if user wants auto/Otsu (-1 or less)
-        threshold_config_val = None if threshold_value < 0 else threshold_value
+        use_otsu_config_val = use_otsu_threshold
 
         config = MangaTranslatorConfig(
             yolo_model_path=str(yolo_model_path),
             verbose=verbose,
-            device=device or target_device, # Use provided device or global default
+            device=device or target_device,
             detection=DetectionConfig(
                 confidence=confidence
             ),
             cleaning=CleaningConfig(
                 dilation_kernel_size=dilation_kernel_size,
                 dilation_iterations=dilation_iterations,
-                threshold_value=threshold_config_val,
+                use_otsu_threshold=use_otsu_config_val,
                 min_contour_area=min_contour_area,
                 closing_kernel_size=closing_kernel_size,
                 closing_iterations=closing_iterations,
@@ -505,7 +504,7 @@ def translate_manga(image: Union[str, Path, Image.Image],
             f"• Target language: {output_language}\n"
             f"• Font pack: {font_pack}\n"
             f"• Model used: {selected_model}\n"
-            f"• Cleaning Params: DKS:{dilation_kernel_size}, DI:{dilation_iterations}, Thresh:{threshold_value}, "
+            f"• Cleaning Params: DKS:{dilation_kernel_size}, DI:{dilation_iterations}, Otsu:{use_otsu_threshold}, "
             f"MCA:{min_contour_area}, CKS:{closing_kernel_size}, CI:{closing_iterations}, "
             f"CEKS:{constraint_erosion_kernel_size}, CEI:{constraint_erosion_iterations}\n"
             f"• Temperature: {temperature}\n"
@@ -594,7 +593,7 @@ def refresh_models_and_fonts():
 def process_batch(input_dir_or_files: Union[str, list], # Type hint added
                   api_key: str, input_language="Japanese", output_language="English",
                   gemini_model="gemini-2.0-flash", font_pack=None, confidence=0.35, dilation_kernel_size=7,
-                  dilation_iterations=1, threshold_value=210, min_contour_area=50, closing_kernel_size=7,
+                  dilation_iterations=1, use_otsu_threshold=False, min_contour_area=50, closing_kernel_size=7, # Changed threshold_value
                   closing_iterations=1, constraint_erosion_kernel_size=5, constraint_erosion_iterations=1,
                   temperature=0.1, top_p=0.95, top_k=1,
                   max_font_size=14, min_font_size=8, line_spacing=1.0,
@@ -617,7 +616,7 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
         confidence (float, optional): Bubble detection confidence threshold. Defaults to 0.35.
         dilation_kernel_size (int): Kernel size for dilating initial YOLO mask for ROI.
         dilation_iterations (int): Iterations for dilation.
-        threshold_value (int or None): Fixed threshold for isolating bright bubble interior. None uses Otsu.
+        use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value (210).
         min_contour_area (int): Minimum area for a contour to be considered part of the bubble interior.
         closing_kernel_size (int): Kernel size for morphological closing to smooth mask and include text.
         closing_iterations (int): Iterations for closing.
@@ -664,8 +663,7 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
     temp_dir_path_obj = None
     try:
         # --- Configuration Setup ---
-        # Handle threshold value: None if user wants auto/Otsu (-1 or less)
-        threshold_config_val = None if threshold_value < 0 else threshold_value
+        use_otsu_config_val = use_otsu_threshold
 
         config = MangaTranslatorConfig(
             yolo_model_path=str(yolo_model_path),
@@ -677,7 +675,7 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
             cleaning=CleaningConfig(
                 dilation_kernel_size=dilation_kernel_size,
                 dilation_iterations=dilation_iterations,
-                threshold_value=threshold_config_val,
+                use_otsu_threshold=use_otsu_config_val,
                 min_contour_area=min_contour_area,
                 closing_kernel_size=closing_kernel_size,
                 closing_iterations=closing_iterations,
@@ -787,7 +785,7 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
             f"• Target language: {output_language}\n"
             f"• Font pack: {font_pack}\n"
             f"• Model used: {selected_model}\n"
-            f"• Cleaning Params: DKS:{dilation_kernel_size}, DI:{dilation_iterations}, Thresh:{threshold_value}, "
+            f"• Cleaning Params: DKS:{dilation_kernel_size}, DI:{dilation_iterations}, Otsu:{use_otsu_threshold}, "
             f"MCA:{min_contour_area}, CKS:{closing_kernel_size}, CI:{closing_iterations}, "
             f"CEKS:{constraint_erosion_kernel_size}, CEI:{constraint_erosion_iterations}\n"
             f"• Temperature: {temperature}\n"
@@ -1030,12 +1028,10 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                             info="Controls how many times to apply the above bubble detection growth."
                         )
                         gr.Markdown("#### Bubble Interior Isolation")
-                        threshold_value = gr.Slider(
-                            -1, 255, 
-                            value=saved_settings.get("threshold_value", 210), 
-                            step=1, 
-                            label="Brightness Threshold (-1 for auto)", 
-                            info="Separates white bubble interior from darker outline/background (-1 uses automatic Otsu thresholding)."
+                        use_otsu_threshold = gr.Checkbox(
+                            value=saved_settings.get("use_otsu_threshold", False),
+                            label="Use Automatic Thresholding (Otsu)",
+                            info="Automatically determine the brightness threshold instead of using the fixed value (210). Recommended for varied lighting."
                         )
                         min_contour_area = gr.Slider(
                             0, 500, 
@@ -1239,7 +1235,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             """)
 
     save_config_btn.click(
-        fn=lambda api_key_val, mdl_dd_val, conf_val, dks_val, di_val, tv_val, mca_val, cks_val, ci_val, ceks_val, cei_val,
+        fn=lambda api_key_val, mdl_dd_val, conf_val, dks_val, di_val, otsu_val, mca_val, cks_val, ci_val, ceks_val, cei_val, # Added otsu_val
                 max_fs_val, min_fs_val, ls_val, subpix_val, hint_val, liga_val,
                 temp_val, tp_val, tk_val, out_fmt_val, jpeg_q_val, png_comp_val, verb_val,
                 input_lang_val, output_lang_val, gm_val, fp_val,
@@ -1248,7 +1244,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                 'gemini_api_key': api_key_val, 'yolo_model': mdl_dd_val,
                 'confidence': conf_val,
                 'dilation_kernel_size': dks_val, 'dilation_iterations': di_val,
-                'threshold_value': tv_val, 'min_contour_area': mca_val,
+                'use_otsu_threshold': otsu_val, 'min_contour_area': mca_val,
                 'closing_kernel_size': cks_val, 'closing_iterations': ci_val,
                 'constraint_erosion_kernel_size': ceks_val, 'constraint_erosion_iterations': cei_val,
                 'max_font_size': max_fs_val, 'min_font_size': min_fs_val, 'line_spacing': ls_val, 'use_subpixel_rendering': subpix_val, 'font_hinting': hint_val, 'use_ligatures': liga_val,
@@ -1259,7 +1255,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                 'batch_input_language': b_input_lang_val, 'batch_output_language': b_output_lang_val, 'batch_gemini_model': b_gm_val, 'batch_font_pack': b_fp_val
             })[1],
         inputs=[
-            api_key, model_dropdown, confidence, dilation_kernel_size, dilation_iterations, threshold_value, min_contour_area,
+            api_key, model_dropdown, confidence, dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
             max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
             temperature, top_p, top_k,
@@ -1316,7 +1312,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             reset_model,
             defaults['confidence'],
             defaults['dilation_kernel_size'], defaults['dilation_iterations'],
-            defaults['threshold_value'], defaults['min_contour_area'],
+            defaults['use_otsu_threshold'], defaults['min_contour_area'],
             defaults['closing_kernel_size'], defaults['closing_iterations'],
             defaults['constraint_erosion_kernel_size'], defaults['constraint_erosion_iterations'],
             defaults['max_font_size'], defaults['min_font_size'], defaults['line_spacing'], defaults['use_subpixel_rendering'], defaults['font_hinting'], defaults['use_ligatures'],
@@ -1335,7 +1331,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         outputs=[
             model_dropdown,
             confidence,
-            dilation_kernel_size, dilation_iterations, threshold_value, min_contour_area,
+            dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
             max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
             api_key, temperature, top_p, top_k,
@@ -1358,7 +1354,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             output_language,
             gemini_model,
             confidence,
-            dilation_kernel_size, dilation_iterations, threshold_value, min_contour_area,
+            dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
             temperature,
             top_p,
@@ -1390,7 +1386,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             batch_gemini_model,
             batch_font_dropdown,
             confidence,
-            dilation_kernel_size, dilation_iterations, threshold_value, min_contour_area,
+            dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
             temperature,
             top_p,

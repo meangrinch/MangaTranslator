@@ -20,9 +20,9 @@ _font_features_cache = {}
 # Cache font variants
 _font_variants_cache: Dict[str, Dict[str, Optional[Path]]] = {}
 FONT_KEYWORDS = {
-    "bold": {"bold", "heavy", "black", "extrabold", "semibold", "demibold", "ultrabold"},
+    "bold": {"bold", "heavy", "black"},
     "italic": {"italic", "oblique", "slanted", "inclined"},
-    "regular": {"regular", "normal", "roman", "book", "medium"}
+    "regular": {"regular", "normal", "roman", "medium"}
 }
 
 # --- Style Parsing Helper ---
@@ -348,6 +348,7 @@ def render_text_skia(
     text: str,
     bbox: Tuple[int, int, int, int],
     font_dir: str,
+    bubble_color_bgr: Optional[Tuple[int, int, int]] = (255, 255, 255),
     min_font_size: int = 8,
     max_font_size: int = 14,
     line_spacing_mult: float = 1.0,
@@ -364,6 +365,7 @@ def render_text_skia(
         text: Text to render.
         bbox: Bounding box coordinates (x1, y1, x2, y2).
         font_path: Path to the font file.
+        bubble_color_bgr: Background color of the bubble (BGR tuple). Used to determine text color. Defaults to white.
         min_font_size: Minimum font size to try.
         max_font_size: Starting font size to try.
         line_spacing_mult: Multiplier for line height (based on font metrics).
@@ -583,8 +585,12 @@ def render_text_skia(
         "full": skia.FontHinting.kFull,
     }
     skia_hinting = hinting_map.get(font_hinting.lower(), skia.FontHinting.kNone)
-
-    paint = skia.Paint(AntiAlias=True, Color=skia.ColorBLACK) # Use black text
+    
+    # --- Determine Text Color based on Bubble Background ---
+    text_color = skia.ColorBLACK
+    if bubble_color_bgr and (sum(bubble_color_bgr) / 3) < 128:
+        text_color = skia.ColorWHITE
+    paint = skia.Paint(AntiAlias=True, Color=text_color)
 
     # --- Calculate Centered Starting Position ---
     # Top-left corner of the rendering area within the bubble

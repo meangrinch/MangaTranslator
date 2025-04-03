@@ -13,7 +13,7 @@ class CleaningConfig:
     """Configuration for speech bubble cleaning."""
     dilation_kernel_size: int = 7
     dilation_iterations: int = 1
-    threshold_value: Optional[int] = 210
+    use_otsu_threshold: bool = False
     min_contour_area: int = 50
     closing_kernel_size: int = 7
     closing_iterations: int = 1

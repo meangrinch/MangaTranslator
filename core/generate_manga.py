@@ -120,12 +120,9 @@ def translate_and_render(image_path: Union[str, Path],
          # --- Cleaning ---
          log_message("Cleaning speech bubbles...", verbose=verbose)
          try:
-             # Handle threshold: -1 or lower means Otsu, None also means Otsu in cleaning func
-             actual_threshold_value = config.cleaning.threshold_value
-             if actual_threshold_value is not None and actual_threshold_value < 0:
-                  actual_threshold_value = -1
+             use_otsu = config.cleaning.use_otsu_threshold
 
-             cleaned_image_cv = clean_speech_bubbles(
+             cleaned_image_cv, processed_bubbles_info = clean_speech_bubbles(
                  image_path,
                  config.yolo_model_path,
                  config.detection.confidence,
@@ -133,7 +130,7 @@ def translate_and_render(image_path: Union[str, Path],
                  device=device,
                  dilation_kernel_size=config.cleaning.dilation_kernel_size,
                  dilation_iterations=config.cleaning.dilation_iterations,
-                 threshold_value=actual_threshold_value,
+                 use_otsu_threshold=use_otsu,
                  min_contour_area=config.cleaning.min_contour_area,
                  closing_kernel_size=config.cleaning.closing_kernel_size,
                  closing_iterations=config.cleaning.closing_iterations,
@@ -142,10 +139,12 @@ def translate_and_render(image_path: Union[str, Path],
                  constraint_erosion_iterations=config.cleaning.constraint_erosion_iterations,
                  verbose=verbose
                  )
+             log_message(f"Cleaning returned info for {len(processed_bubbles_info)} bubbles.", verbose=verbose)
          except Exception as e:
              log_message(f"Error during bubble cleaning: {e}. Proceeding with uncleaned image.", always_print=True)
              cleaned_image_cv = original_cv_image.copy()
-
+             processed_bubbles_info = []
+ 
          pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
          final_image_to_save = pil_cleaned_image
          if pil_cleaned_image.mode != target_mode:
@@ -212,6 +211,10 @@ def translate_and_render(image_path: Union[str, Path],
                  translated_texts = ["[Translation Error]" for _ in sorted_bubble_data]
 
          # --- Render Translations ---
+         bubble_color_map = {
+             tuple(info['bbox']): info['color']
+             for info in processed_bubbles_info if 'bbox' in info and 'color' in info
+         }
          log_message("Rendering translations onto image...", verbose=verbose)
          if len(translated_texts) == len(sorted_bubble_data):
              for i, bubble in enumerate(sorted_bubble_data):
@@ -225,10 +228,13 @@ def translate_and_render(image_path: Union[str, Path],
 
                  log_message(f"Rendering text for bubble {bbox}: '{text[:30]}...'", verbose=verbose)
 
+                 bubble_color_bgr = bubble_color_map.get(tuple(bbox), (255, 255, 255))
+ 
                  rendered_image, success = render_text_skia(
                      pil_image=pil_cleaned_image,
                      text=text,
                      bbox=bbox,
+                     bubble_color_bgr=bubble_color_bgr,
                      font_dir=config.rendering.font_dir,
                      min_font_size=config.rendering.min_font_size,
                      max_font_size=config.rendering.max_font_size,
@@ -379,7 +385,7 @@ def main():
     # Cleaning args
     parser.add_argument("--dilation-kernel-size", type=int, default=7, help="ROI Dilation Kernel Size")
     parser.add_argument("--dilation-iterations", type=int, default=1, help="ROI Dilation Iterations")
-    parser.add_argument("--threshold-value", type=int, default=210, help="Bubble Interior Threshold (0-255, or -1 for auto/Otsu)")
+    parser.add_argument("--use-otsu-threshold", action="store_true", help="Use Otsu's method for thresholding instead of the fixed value (210)")
     parser.add_argument("--min-contour-area", type=int, default=50, help="Min Bubble Contour Area")
     parser.add_argument("--closing-kernel-size", type=int, default=7, help="Mask Closing Kernel Size")
     parser.add_argument("--closing-iterations", type=int, default=1, help="Mask Closing Iterations")
@@ -413,8 +419,7 @@ def main():
     target_device = torch.device('cpu') if args.cpu or not torch.cuda.is_available() else torch.device('cuda')
     print(f"Using {'CPU' if target_device.type == 'cpu' else 'CUDA'} device.")
 
-    # Handle threshold value: Store None if user wants auto/Otsu (-1 or less)
-    threshold_config_val = None if args.threshold_value < 0 else args.threshold_value
+    use_otsu_config_val = args.use_otsu_threshold
 
     config = MangaTranslatorConfig(
         yolo_model_path=args.yolo_model,
@@ -426,7 +431,7 @@ def main():
         cleaning=CleaningConfig(
             dilation_kernel_size=args.dilation_kernel_size,
             dilation_iterations=args.dilation_iterations,
-            threshold_value=threshold_config_val,
+            use_otsu_threshold=use_otsu_config_val,
             min_contour_area=args.min_contour_area,
             closing_kernel_size=args.closing_kernel_size,
             closing_iterations=args.closing_iterations,
