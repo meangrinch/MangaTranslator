@@ -54,7 +54,7 @@ DEFAULT_SETTINGS = {
     "top_k": 1,
     "max_font_size": 14,
     "min_font_size": 8,
-    "line_spacing": 1.0,
+    "line_spacing": 1.2,
     "use_subpixel_rendering": True,
     "font_hinting": "none",
     "use_ligatures": False,

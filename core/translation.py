@@ -35,14 +35,16 @@ def sort_bubbles_manga_order(detections, image_width):
         key=lambda d: (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
     )
 
-def call_gemini_api_batch(api_key, images_b64, input_language="Japanese", output_language="English", 
+def call_gemini_api_batch(api_key, images_b64: list, full_image_b64: str, input_language="Japanese", output_language="English",
                           model_name="gemini-2.0-flash", temperature=0.1, top_p=0.95, top_k=1, debug=False):
     """
-    Call Gemini API to translate text from all speech bubbles at once.
-    
+    Call Gemini API to translate text from all speech bubbles at once, using the full page for context
+    and requesting font style information via asterisk wrapping.
+
     Args:
         api_key (str): Gemini API key
-        images_b64 (list): List of base64 encoded images of all bubbles
+        images_b64 (list): List of base64 encoded images of all bubbles, in reading order.
+        full_image_b64 (str): Base64 encoded image of the full manga page.
         input_language (str): Source language of the text in the image
         output_language (str): Target language for translation
         model_name (str): Gemini model to use for inference
@@ -50,9 +52,9 @@ def call_gemini_api_batch(api_key, images_b64, input_language="Japanese", output
         top_p (float): Nucleus sampling parameter
         top_k (int): Controls diversity by limiting to top k tokens
         debug (bool): Whether to print debugging information
-        
+
     Returns:
-        list: List of translated strings, one for each input image.
+        list: List of translated strings (potentially with style markers), one for each input bubble image.
 
     Raises:
         ValueError: If API key is missing.
@@ -64,13 +66,26 @@ def call_gemini_api_batch(api_key, images_b64, input_language="Japanese", output
         
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
     
-    prompt_text = f"""Analyze the {len(images_b64)} speech bubble images provided below, which are in reading order from a manga page.
-For each image, extract the {input_language} text and translate it to {output_language}. 
-Provide your response exactly in this format: "1: [translation] 2: [translation]..."
-Make sure the dialogue flows naturally in {output_language}, while still being faithful to the original {input_language} text.
-Respond with ONLY the formatted translations without any additional text or explanations."""
-    
-    parts = [{"text": prompt_text}]
+    prompt_text = f"""Analyze the full manga page image provided, followed by the {len(images_b64)} individual speech bubble images extracted from it in reading order (right-to-left).
+For each individual speech bubble image:
+1. Extract the {input_language} text and translate it to {output_language}, making necessary minor adjustments to ensure it flows naturally in the target language.
+2. Decide if styling should be applied the translated text using these markdown-like markers:
+    - Italic (`*text*`): Use for internal thoughts/monologues, dialogue heard through a device or from a distance, or dialogue/narration in a flashback.
+    - Bold (`**text**`): Use for sound effects (SFX), shouting/yelling, or location/time stamps (e.g., '**Three Days Later**').
+    - Bold Italic (`***text***`): Use for loud dialogue/SFX in flashbacks or heard through devices/distance.
+    - Use regular text otherwise. You can apply styling to parts of the text within a bubble (e.g., "He said **'Stop!'** and then thought *why?*").
+
+Provide your response in this *exact* format:
+1: [{output_language} translation for bubble 1]
+...
+{len(images_b64)}: [{output_language} translation for bubble {len(images_b64)}]
+
+Do not include any other text or explanations in your response."""
+
+    parts = [
+        {"text": prompt_text},
+        {"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}}
+    ]
     for i, img_b64 in enumerate(images_b64):
         parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
     
@@ -96,7 +111,7 @@ Respond with ONLY the formatted translations without any additional text or expl
             if debug:
                 print(f"Making batch API request (Attempt {attempt + 1}/{max_retries + 1})...")
 
-            response = requests.post(url, json=payload, timeout=90)
+            response = requests.post(url, json=payload, timeout=120)
 
             response.raise_for_status()
 

@@ -13,7 +13,7 @@ from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
 from .detection import  detect_speech_bubbles
 from .cleaning import clean_speech_bubbles
 from .translation import sort_bubbles_manga_order, call_gemini_api_batch
-from .rendering import choose_font, render_text_skia
+from .rendering import render_text_skia
 
 __version__ = "1.0.0"
 __version_info__ = (1, 0, 0)
@@ -25,7 +25,6 @@ __description__ = "A tool for translating manga pages using AI"
 __all__ = [
     'translate_and_render',
     'batch_translate_images',
-    'choose_font',
     'render_text_skia',
     'detect_speech_bubbles',
     'clean_speech_bubbles',

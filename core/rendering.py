@@ -9,8 +9,24 @@ from PIL import Image
 
 from .common_utils import log_message
 
-# --- Font Feature Inspection (Optional but useful for debugging) ---
+# Cache loaded font data
+_font_data_cache = {}
+_typeface_cache = {}
+_hb_face_cache = {}
+
+# Cache font features
 _font_features_cache = {}
+
+# Cache font variants
+_font_variants_cache: Dict[str, Dict[str, Optional[Path]]] = {}
+FONT_KEYWORDS = {
+    "bold": {"bold", "heavy", "black", "extrabold", "semibold", "demibold", "ultrabold"},
+    "italic": {"italic", "oblique", "slanted", "inclined"},
+    "regular": {"regular", "normal", "roman", "book", "medium"}
+}
+
+# --- Style Parsing Helper ---
+STYLE_PATTERN = re.compile(r'(\*{1,3})(.*?)(\1)') # Matches *text*, **text**, ***text***
 
 def get_font_features(font_path: str) -> Dict[str, List[str]]:
     """
@@ -45,57 +61,58 @@ def get_font_features(font_path: str) -> Dict[str, List[str]]:
     _font_features_cache[font_path] = features
     return features
 
-# --- Font Choice Logic (Keep existing) ---
-def choose_font(translated_text, font_dir="./fonts", verbose=False):
+def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optional[Path]]:
     """
-    Choose the most appropriate font file path and its intended style
-    based on semantic interpretation of the text content, common comic/manga
-    conventions, and available font files.
+    Finds regular, italic, bold, and bold-italic font variants (.ttf, .otf)
+    in a directory based on filename keywords. Caches results per directory.
 
     Args:
-        translated_text (str): The translated text
-        font_dir (str): Directory containing font files
-        verbose (bool): Whether to print more detailed logging information
+        font_dir (str): Directory containing font files.
+        verbose (bool): Whether to print detailed logs.
 
     Returns:
-        str | None: Font path or None if no font is found.
+        Dict[str, Optional[Path]]: Dictionary mapping style names
+                                   ("regular", "italic", "bold", "bold_italic")
+                                   to their respective Path objects, or None if not found.
     """
-    FONT_KEYWORDS = {
-        "bold": {"bold", "heavy", "black", "extrabold", "semibold", "demibold", "ultrabold"},
-        "italic": {"italic", "oblique", "slanted", "inclined"},
-        "regular": {"regular", "normal", "roman", "book", "medium"}
-    }
+    resolved_dir = str(Path(font_dir).resolve())
+    if resolved_dir in _font_variants_cache:
+        log_message(f"Using cached font variants for directory: {resolved_dir}", verbose=verbose)
+        return _font_variants_cache[resolved_dir]
 
-    font_files = []
-    selected_font_path_obj = None
+    log_message(f"Scanning font directory: {resolved_dir}", verbose=verbose)
+    font_files: List[Path] = []
+    font_variants: Dict[str, Optional[Path]] = {"regular": None, "italic": None, "bold": None, "bold_italic": None}
+    identified_files: set[Path] = set()
 
     try:
-        font_dir_path = Path(font_dir).resolve()
+        font_dir_path = Path(resolved_dir)
         if font_dir_path.exists() and font_dir_path.is_dir():
             font_files = list(font_dir_path.glob("*.ttf")) + list(font_dir_path.glob("*.otf"))
         else:
             log_message(f"Font directory '{font_dir_path}' does not exist or is not a directory.", always_print=True)
-            return None
+            _font_variants_cache[resolved_dir] = font_variants
+            return font_variants
     except Exception as e:
         log_message(f"Error accessing font directory '{font_dir}': {e}", always_print=True)
-        return None
+        _font_variants_cache[resolved_dir] = font_variants
+        return font_variants
 
     if not font_files:
-        log_message(f"No font files (.ttf, .otf) found in '{font_dir_path}'", always_print=True)
-        return None
+        log_message(f"No font files (.ttf, .otf) found in '{resolved_dir}'", always_print=True)
+        _font_variants_cache[resolved_dir] = font_variants
+        return font_variants
 
-    font_variants = {"regular": None, "italic": None, "bold": None, "bold_italic": None}
-    identified_files = set()
-
-    def get_filename_parts(filepath):
+    def get_filename_parts(filepath: Path) -> set[str]:
         name = filepath.stem.lower()
         name = re.sub(r'[-_]', ' ', name)
         return set(name.split())
 
+    # Sort by name length (desc) to potentially prioritize more specific names like "BoldItalic" over "Bold"
     font_files.sort(key=lambda x: len(x.name), reverse=True)
 
     # --- Font File Detection (Multi-pass) ---
-    # Pass 1: Exact matches
+    # Pass 1: Exact matches for combined styles first
     for font_file in font_files:
         if font_file in identified_files: continue
         parts = get_filename_parts(font_file)
@@ -103,128 +120,128 @@ def choose_font(translated_text, font_dir="./fonts", verbose=False):
         is_italic = any(kw in parts for kw in FONT_KEYWORDS["italic"])
         assigned = False
         if is_bold and is_italic:
-            if not font_variants["bold_italic"]: font_variants["bold_italic"] = font_file; assigned = True; log_message(f"Found Bold Italic: {font_file.name}", verbose=verbose)
-        elif is_bold:
-             if not font_variants["bold"]: font_variants["bold"] = font_file; assigned = True; log_message(f"Found Bold: {font_file.name}", verbose=verbose)
-        elif is_italic:
-             if not font_variants["italic"]: font_variants["italic"] = font_file; assigned = True; log_message(f"Found Italic: {font_file.name}", verbose=verbose)
-        elif any(kw in parts for kw in FONT_KEYWORDS["regular"]):
-             if not font_variants["regular"]: font_variants["regular"] = font_file; assigned = True; log_message(f"Found Regular: {font_file.name}", verbose=verbose)
+            if not font_variants["bold_italic"]:
+                font_variants["bold_italic"] = font_file; assigned = True
+                log_message(f"Found Bold Italic: {font_file.name}", verbose=verbose)
         if assigned: identified_files.add(font_file)
 
-    # Pass 2: Infer regular
+    # Pass 2: Exact matches for single styles
+    for font_file in font_files:
+        if font_file in identified_files: continue
+        parts = get_filename_parts(font_file)
+        is_bold = any(kw in parts for kw in FONT_KEYWORDS["bold"])
+        is_italic = any(kw in parts for kw in FONT_KEYWORDS["italic"])
+        assigned = False
+        if is_bold and not is_italic: # Only bold
+             if not font_variants["bold"]:
+                 font_variants["bold"] = font_file; assigned = True
+                 log_message(f"Found Bold: {font_file.name}", verbose=verbose)
+        elif is_italic and not is_bold: # Only italic
+             if not font_variants["italic"]:
+                 font_variants["italic"] = font_file; assigned = True
+                 log_message(f"Found Italic: {font_file.name}", verbose=verbose)
+        if assigned: identified_files.add(font_file)
+
+    # Pass 3: Explicit regular matches
+    for font_file in font_files:
+         if font_file in identified_files: continue
+         parts = get_filename_parts(font_file)
+         is_regular = any(kw in parts for kw in FONT_KEYWORDS["regular"])
+         is_bold = any(kw in parts for kw in FONT_KEYWORDS["bold"])
+         is_italic = any(kw in parts for kw in FONT_KEYWORDS["italic"])
+         assigned = False
+         if is_regular and not is_bold and not is_italic:
+              if not font_variants["regular"]:
+                  font_variants["regular"] = font_file; assigned = True
+                  log_message(f"Found Regular (explicit): {font_file.name}", verbose=verbose)
+         if assigned: identified_files.add(font_file)
+
+    # Pass 4: Infer regular (no style keywords found)
     if not font_variants["regular"]:
         for font_file in font_files:
             if font_file in identified_files: continue
             parts = get_filename_parts(font_file)
             is_bold = any(kw in parts for kw in FONT_KEYWORDS["bold"])
             is_italic = any(kw in parts for kw in FONT_KEYWORDS["italic"])
-            font_name_lower = font_file.name.lower()
-            is_specific = any(spec in font_name_lower for spec in ["italic", "bold", "roman", "oblique", "slanted", "heavy", "black", "light", "thin"])
-            if not is_bold and not is_italic and not is_specific:
-                font_variants["regular"] = font_file
-                identified_files.add(font_file)
-                log_message(f"Inferred Regular: {font_file.name}", verbose=verbose)
-                break
+            if not is_bold and not is_italic and not any(kw in parts for kw in FONT_KEYWORDS["regular"]):
+                font_name_lower = font_file.name.lower()
+                is_likely_specific = any(spec in font_name_lower for spec in ["light", "thin", "condensed", "expanded", "semi", "demi", "extra", "ultra", "book", "medium", "black", "heavy"])
+                if not is_likely_specific:
+                    font_variants["regular"] = font_file
+                    identified_files.add(font_file)
+                    log_message(f"Inferred Regular (no keywords): {font_file.name}", verbose=verbose)
+                    break
 
-    # Pass 3: Fallback regular
+    # Pass 5: Fallback regular (use first available unidentified font)
     if not font_variants["regular"]:
-        first_available = next((f for f in font_files if f not in identified_files), font_files[0] if font_files else None)
+        first_available = next((f for f in font_files if f not in identified_files), None)
         if first_available:
             font_variants["regular"] = first_available
             if first_available not in identified_files: identified_files.add(first_available)
-            log_message(f"Fallback Regular: {first_available.name}", verbose=verbose)
+            log_message(f"Fallback Regular (first unidentified): {first_available.name}", verbose=verbose)
 
-    if not font_variants["regular"] and any(f for f in font_variants.values() if f):
-         backup_regular = next(f for f in [font_variants.get("bold"), font_variants.get("italic"), font_variants.get("bold_italic")] if f)
+    # Pass 6: Final fallback (use *any* identified font if regular is still missing)
+    if not font_variants["regular"]:
+         backup_regular = next((f for f in [font_variants.get("bold"), font_variants.get("italic"), font_variants.get("bold_italic")] if f), None)
          if backup_regular:
              font_variants["regular"] = backup_regular
-             log_message(f"Using existing variant {backup_regular.name} as fallback Regular", verbose=verbose)
+             log_message(f"Fallback Regular (using existing variant): {backup_regular.name}", verbose=verbose)
+         elif font_files: # Absolute last resort: just grab the first font file found
+              font_variants["regular"] = font_files[0]
+              log_message(f"Fallback Regular (absolute first file): {font_files[0].name}", verbose=verbose)
+
 
     if not font_variants["regular"]:
-        log_message(f"Could not identify or fallback to any font file in '{font_dir_path}'. Cannot proceed.", always_print=True)
-        return None
-
-    # --- Semantic Rule-Based Style Selection ---
-    text = translated_text.strip()
-    text_lower = text.lower()
-    text_stripped = text.strip('.,?!()[]{}<>~*_-"\'`')
-
-    intended_style = "regular"
-    rule_reason = "Default"
-
-    # Rule checking
-    if text_stripped.isupper() and (text.count('!') >= 2 or text.count('?') >= 2 or (len(text) > 2 and text[0]=='(' and text[-1]==')' and text[1:-1].strip().isupper())):
-        intended_style = "bold_italic"; rule_reason = "Intense Shouting/Scream"
-    elif text_stripped.isupper() and len(text_stripped) <= 15 and any(sfx in text_lower for sfx in ["kaboom", "krakoom", "thooom", "craaash", "baam!", "krakaboom"]):
-         intended_style = "bold_italic"; rule_reason = "High-Impact SFX"
-    elif intended_style == "regular" and text_stripped.isupper() and len(text_stripped) > 1 and len(text_stripped) < 60:
-        intended_style = "bold"; rule_reason = "Standard Shouting / Loud Voice"
-    elif intended_style == "regular" and not text.isupper() and not text.islower():
-        words = re.findall(r'\b\w+\b', text)
-        uppercase_word_count = sum(1 for word in words if word.isupper() and len(word) > 1 and word.isalpha())
-        if uppercase_word_count > 0 and uppercase_word_count <= 2 and len(words) > uppercase_word_count:
-            intended_style = "bold"; rule_reason = "Single Word Emphasis (All Caps)"
-    elif intended_style == "regular" and text.startswith("(") and text.endswith(")") and len(text) > 2:
-        intended_style = "italic"; rule_reason = "Thought/Aside (Parentheses)"
-    elif intended_style == "regular" and ((text.startswith("*") and text.endswith("*")) or (text.startswith("~") and text.endswith("~"))) and len(text) > 2:
-        intended_style = "italic"; rule_reason = "Emphasis/Whisper (Asterisks/Tildes)"
-    elif intended_style == "regular" and ((text.startswith("[") and text.endswith("]")) or (text.startswith("<<") and text.endswith(">>"))) and len(text) > 4:
-         intended_style = "italic"; rule_reason = "Radio/Speaker Text"
-    elif intended_style == "regular" and len(text_stripped) <= 25:
-        common_onomatopoeias = {"boom", "bang", "crash", "whoosh", "thud", "slam", "pow", "bam", "splash", "drip", "crack", "crunch", "buzz", "hiss", "click", "clack", "thump", "whack", "ring", "swish", "zap", "vroom", "beep", "boop", "ding", "dong", "fwoosh", "kerplunk", "murmur", "pitter-patter", "rat-a-tat", "screech", "thwip", "whirr", "clank", "creak", "gulp", "sigh"}
-        sfx_candidate = text_stripped.lower().replace('!','').replace('?','').replace('.','')
-        if sfx_candidate in common_onomatopoeias:
-             intended_style = "italic"; rule_reason = f"Onomatopoeia ({sfx_candidate})"
-        elif (re.search(r"([a-zA-Z])\1{2,}", text_stripped, re.IGNORECASE) or re.search(r"([ HhAa ]{4,})", text) or (text.endswith("...") and len(text) > 3)):
-             if not (text_stripped.isupper() and ("!" in text or "?" in text)):
-                 intended_style = "italic"; rule_reason = "Repetitive Sound/Laughter/Trailing Off"
-        elif '-' in text and any(part and part[0].isupper() for part in text.split('-')):
-             intended_style = "italic"; rule_reason = "Hyphenated SFX/Emphasis"
-
-    log_message(f"Text: '{text[:30]}...' -> Intended Style: {intended_style} (Reason: {rule_reason})", verbose=verbose)
-
-    # --- Font Path Selection  ---
-    selected_font_path_obj = None
-    if font_variants.get(intended_style):
-        selected_font_path_obj = font_variants[intended_style]
-        log_message(f"Selected exact font file for {intended_style}: {selected_font_path_obj.name}", verbose=verbose)
+        log_message(f"CRITICAL: Could not identify or fallback to any regular font file in '{resolved_dir}'. Rendering will likely fail.", always_print=True)
+        # Still cache the (lack of) results
     else:
-        log_message(f"Font file for intended style '{intended_style}' not found. Applying fallback.", verbose=verbose)
-        final_variant_used_for_log = intended_style
-        if intended_style == "bold_italic":
-            if font_variants.get("bold"): selected_font_path_obj = font_variants["bold"]; final_variant_used_for_log = "bold"
-            elif font_variants.get("italic"): selected_font_path_obj = font_variants["italic"]; final_variant_used_for_log = "italic"
-            else: selected_font_path_obj = font_variants.get("regular"); final_variant_used_for_log = "regular"
-        elif intended_style == "bold":
-            selected_font_path_obj = font_variants.get("regular"); final_variant_used_for_log = "regular"
-        elif intended_style == "italic":
-            selected_font_path_obj = font_variants.get("regular"); final_variant_used_for_log = "regular"
-        else:
-            selected_font_path_obj = font_variants.get("regular"); final_variant_used_for_log = "regular"
+         log_message(f"Final Font Variants Found in {resolved_dir}:", verbose=verbose)
+         for style, path in font_variants.items():
+              log_message(f"  - {style}: {path.name if path else 'None'}", verbose=verbose)
 
-        if selected_font_path_obj:
-             log_message(f"Using fallback font: {selected_font_path_obj.name} (as {final_variant_used_for_log})", verbose=verbose)
 
-    if selected_font_path_obj is None:
-        log_message(f"Critical: No font file could be selected for '{text[:15]}...'. Check font directory and logic.", always_print=True)
-        return None
+    _font_variants_cache[resolved_dir] = font_variants
+    return font_variants
 
-    try:
-        final_path_str = str(selected_font_path_obj.resolve())
-        log_message(f"Selected Path: {final_path_str} for text starting with '{text[:15]}...'", verbose=verbose)
-        return final_path_str
-    except Exception as e:
-        log_message(f"Error resolving font path for {selected_font_path_obj.name}: {e}", always_print=True)
-        return None
+def _parse_styled_segments(text: str) -> List[Tuple[str, str]]:
+    """
+    Parses text with markdown-like style markers into segments.
 
+    Args:
+        text (str): Input text potentially containing ***bold italic***, **bold**, *italic*.
+
+    Returns:
+        List[Tuple[str, str]]: List of (segment_text, style_name) tuples.
+                               style_name is one of "regular", "italic", "bold", "bold_italic".
+    """
+    segments = []
+    last_end = 0
+    for match in STYLE_PATTERN.finditer(text):
+        start, end = match.span()
+        marker = match.group(1)
+        content = match.group(2)
+
+        # Add preceding regular text
+        if start > last_end:
+            segments.append((text[last_end:start], "regular"))
+
+        style = "regular"
+        if len(marker) == 3:
+            style = "bold_italic"
+        elif len(marker) == 2:
+            style = "bold"
+        elif len(marker) == 1:
+            style = "italic"
+
+        segments.append((content, style))
+        last_end = end
+
+    if last_end < len(text):
+        segments.append((text[last_end:], "regular"))
+
+    return [(txt, style) for txt, style in segments if txt]
 
 # --- Skia/HarfBuzz Rendering Implementation ---
-# Cache loaded font data to avoid repeated disk reads
-_font_data_cache = {}
-_typeface_cache = {}
-_hb_face_cache = {}
-
 def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia.Typeface], Optional[hb.Face]]:
     """Loads font data, Skia Typeface, and HarfBuzz Face, using caching."""
     if font_path not in _font_data_cache:
@@ -241,7 +258,6 @@ def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia
         _typeface_cache[font_path] = skia.Typeface.MakeFromData(skia_data)
         if _typeface_cache[font_path] is None:
             log_message(f"ERROR: Skia could not load typeface from {font_path}", always_print=True)
-            # Clear bad cache entry
             del _typeface_cache[font_path]
             del _font_data_cache[font_path]
             return None, None, None
@@ -331,7 +347,7 @@ def render_text_skia(
     pil_image: Image.Image,
     text: str,
     bbox: Tuple[int, int, int, int],
-    font_path: str,
+    font_dir: str,
     min_font_size: int = 8,
     max_font_size: int = 14,
     line_spacing_mult: float = 1.0,
@@ -383,13 +399,23 @@ def render_text_skia(
          max_render_width = max(1, bubble_width)
          max_render_height = max(1, bubble_height)
 
-    # --- Load Font Resources ---
-    _, typeface, hb_face = _load_font_resources(font_path)
-    if not typeface or not hb_face:
+    # --- Find and Load Font Variants ---
+    font_variants = _find_font_variants(font_dir, verbose=verbose)
+    regular_font_path = font_variants.get("regular")
+
+    if not regular_font_path:
+        log_message(f"CRITICAL: Regular font variant not found in '{font_dir}'. Cannot render text.", always_print=True)
+        return pil_image, False
+
+    log_message(f"Using regular font: {regular_font_path.name}", verbose=verbose)
+    _, regular_typeface, regular_hb_face = _load_font_resources(str(regular_font_path))
+
+    if not regular_typeface or not regular_hb_face:
+        log_message(f"CRITICAL: Failed to load regular font resources for {regular_font_path.name}.", always_print=True)
         return pil_image, False
 
     # --- Determine HarfBuzz Features ---
-    available_features = get_font_features(font_path)
+    available_features = get_font_features(str(regular_font_path)) # Check features on regular font
     features_to_enable = {
         # Enable kerning if available (GPOS 'kern' or legacy 'kern' table)
         "kern": "kern" in available_features['GPOS'],
@@ -410,21 +436,22 @@ def render_text_skia(
     current_size = max_font_size
     while current_size >= min_font_size:
         log_message(f"Trying font size: {current_size}", verbose=verbose)
-        hb_font = hb.Font(hb_face)
+        # Use REGULAR font face for size fitting calculations
+        hb_font = hb.Font(regular_hb_face)
         hb_font.ptem = float(current_size)
 
         # Scale factor to convert font units to pixels
         scale_factor = 1.0
-        if hb_face.upem > 0:
-            scale_factor = current_size / hb_face.upem
+        if regular_hb_face.upem > 0:
+            scale_factor = current_size / regular_hb_face.upem
         else:
-            log_message(f"Warning: Font {font_path} has upem=0. Using scale factor 1.0.", verbose=verbose)
+            log_message(f"Warning: Regular font {regular_font_path.name} has upem=0. Using scale factor 1.0.", verbose=verbose)
 
         # Convert scale factor to 16.16 fixed-point integer for HarfBuzz
         hb_scale = int(scale_factor * (2**16))
         hb_font.scale = (hb_scale, hb_scale)
 
-        skia_font_test = skia.Font(typeface, current_size)
+        skia_font_test = skia.Font(regular_typeface, current_size)
         try:
             metrics = skia_font_test.getMetrics()
             single_line_height = (-metrics.fAscent + metrics.fDescent + metrics.fLeading) * line_spacing_mult
@@ -434,39 +461,46 @@ def render_text_skia(
              single_line_height = current_size * 1.2 * line_spacing_mult
 
         # --- Text Wrapping at current_size ---
-        words = clean_text.split()
+        text_for_measurement = STYLE_PATTERN.sub(r'\2', clean_text)
+        words = text_for_measurement.split()
+        original_words = clean_text.split()
+        word_map = {STYLE_PATTERN.sub(r'\2', w): w for w in original_words}
+
         wrapped_lines_text = []
-        current_line_words = []
+        current_line_stripped_words = []
         longest_word_width_at_size = 0
 
-        for word in words:
+        for word in words: # Iterate through stripped words for measurement
             _, w_positions = _shape_line(word, hb_font, features_to_enable)
             word_width = _calculate_line_width(w_positions, 1.0)
             longest_word_width_at_size = max(longest_word_width_at_size, word_width)
 
             if word_width > max_render_width:
-                 log_message(f"Size {current_size}: Word '{word}' ({word_width:.1f}px) wider than max width ({max_render_width:.1f}px). Trying smaller size.", verbose=verbose)
-                 current_line_words = None
+                 original_word = word_map.get(word, word)
+                 log_message(f"Size {current_size}: Word '{original_word}' ({word_width:.1f}px) wider than max width ({max_render_width:.1f}px). Trying smaller size.", verbose=verbose)
+                 current_line_stripped_words = None
                  break
 
-            test_line_words = current_line_words + [word]
-            test_line_text = " ".join(test_line_words)
-            _, test_positions = _shape_line(test_line_text, hb_font, features_to_enable)
+            test_line_stripped_words = current_line_stripped_words + [word]
+            test_line_stripped_text = " ".join(test_line_stripped_words)
+            _, test_positions = _shape_line(test_line_stripped_text, hb_font, features_to_enable)
             tentative_width = _calculate_line_width(test_positions, 1.0)
 
             if tentative_width <= max_render_width:
-                current_line_words = test_line_words
+                current_line_stripped_words = test_line_stripped_words
             else:
-                if current_line_words:
-                    wrapped_lines_text.append(" ".join(current_line_words))
-                current_line_words = [word]
+                if current_line_stripped_words:
+                    original_line_words = [word_map.get(w, w) for w in current_line_stripped_words]
+                    wrapped_lines_text.append(" ".join(original_line_words))
+                current_line_stripped_words = [word]
 
-        if current_line_words is None:
+        if current_line_stripped_words is None:
             current_size -= 1
             continue
 
-        if current_line_words:
-            wrapped_lines_text.append(" ".join(current_line_words))
+        if current_line_stripped_words:
+            original_line_words = [word_map.get(w, w) for w in current_line_stripped_words]
+            wrapped_lines_text.append(" ".join(original_line_words))
 
         if not wrapped_lines_text:
             log_message(f"Size {current_size}: Wrapping failed, no lines generated.", verbose=verbose)
@@ -476,10 +510,11 @@ def render_text_skia(
         # --- Measure Wrapped Block at current_size ---
         current_max_line_width = 0
         lines_data_at_size = []
-        for line_text in wrapped_lines_text:
-            infos, positions = _shape_line(line_text, hb_font, features_to_enable)
+        for line_text_with_markers in wrapped_lines_text:
+            line_text_stripped = STYLE_PATTERN.sub(r'\2', line_text_with_markers)
+            infos, positions = _shape_line(line_text_stripped, hb_font, features_to_enable)
             width = _calculate_line_width(positions, 1.0)
-            lines_data_at_size.append({"text": line_text, "infos": infos, "positions": positions, "width": width})
+            lines_data_at_size.append({"text_with_markers": line_text_with_markers, "width": width})
             current_max_line_width = max(current_max_line_width, width)
 
         total_block_height = (-metrics.fAscent + metrics.fDescent) + (len(wrapped_lines_text) - 1) * single_line_height
@@ -512,15 +547,35 @@ def render_text_skia(
     final_line_height = (-final_metrics.fAscent + final_metrics.fDescent + final_metrics.fLeading) * line_spacing_mult
     if final_line_height <= 0: final_line_height = final_font_size * 1.2 * line_spacing_mult
 
+    # --- Load Needed Font Resources for Rendering ---
+    # Determine which styles are actually present in the text
+    required_styles = {"regular"} | {style for segment, style in _parse_styled_segments(clean_text)}
+    log_message(f"Required font styles: {required_styles}", verbose=verbose)
+
+    # Initialize dictionaries to hold loaded resources, starting with regular
+    loaded_typefaces: Dict[str, Optional[skia.Typeface]] = {"regular": regular_typeface}
+    loaded_hb_faces: Dict[str, Optional[hb.Face]] = {"regular": regular_hb_face}
+
+    for style in ["italic", "bold", "bold_italic"]:
+        if style in required_styles:
+            font_path = font_variants.get(style)
+            if font_path:
+                log_message(f"Loading {style} font variant: {font_path.name}", verbose=verbose)
+                _, typeface, hb_face = _load_font_resources(str(font_path))
+                if typeface and hb_face:
+                    loaded_typefaces[style] = typeface
+                    loaded_hb_faces[style] = hb_face
+                else:
+                    log_message(f"Warning: Failed to load {style} font variant {font_path.name}. Will fallback to regular.", verbose=verbose)
+            else:
+                 log_message(f"Warning: {style} style requested by text, but font variant not found in {font_dir}. Will fallback to regular.", verbose=verbose)
+
     surface = _pil_to_skia_surface(pil_image)
     if surface is None:
         log_message("Failed to create Skia surface for rendering.", always_print=True)
         return pil_image, False
 
-    # --- Skia Font and Paint Setup ---
-    skia_font_final = skia.Font(typeface, final_font_size)
-    skia_font_final.setSubpixel(use_subpixel_rendering)
-
+    # --- Skia Font Hinting Setup (Used per segment) ---
     hinting_map = {
         "none": skia.FontHinting.kNone,
         "slight": skia.FontHinting.kSlight,
@@ -528,7 +583,6 @@ def render_text_skia(
         "full": skia.FontHinting.kFull,
     }
     skia_hinting = hinting_map.get(font_hinting.lower(), skia.FontHinting.kNone)
-    skia_font_final.setHinting(skia_hinting)
 
     paint = skia.Paint(AntiAlias=True, Color=skia.ColorBLACK) # Use black text
 
@@ -546,47 +600,86 @@ def render_text_skia(
 
     log_message(f"Rendering at size {final_font_size}. Block Start (X,Y): ({block_start_x:.1f}, {block_start_y:.1f}). First Baseline Y: {first_baseline_y:.1f}", verbose=verbose)
 
-    # --- Build and Draw TextBlobs ---
+    # --- Render Line by Line, Segment by Segment ---
     with surface as canvas:
         current_baseline_y = first_baseline_y
         for i, line_data in enumerate(final_lines_data):
-            infos = line_data["infos"]
-            positions = line_data["positions"]
-            line_width = line_data["width"]
-
-            if not infos:
-                current_baseline_y += final_line_height
-                continue
+            line_text_with_markers = line_data["text_with_markers"]
+            line_width_measured = line_data["width"] # Width measured using regular font
 
             # Horizontal alignment for this specific line within the block width
-            line_start_x = block_start_x + (final_max_line_width - line_width) / 2
-
-            builder = skia.TextBlobBuilder()
-            glyph_ids = [info.codepoint for info in infos]
-            skia_point_positions = []
+            line_start_x = block_start_x + (final_max_line_width - line_width_measured) / 2
             cursor_x = line_start_x
 
-            # HarfBuzz positions are in 26.6 fixed point, convert to pixels
-            HB_26_6_SCALE_FACTOR = 64.0
-            for _, pos in zip(infos, positions):
-                # Apply offsets (converting from 26.6 fixed point)
-                glyph_x = cursor_x + (pos.x_offset / HB_26_6_SCALE_FACTOR)
-                glyph_y = current_baseline_y - (pos.y_offset / HB_26_6_SCALE_FACTOR) # Y flipped
-                skia_point_positions.append(skia.Point(glyph_x, glyph_y))
+            segments = _parse_styled_segments(line_text_with_markers)
+            log_message(f"Line {i} Segments: {segments}", verbose=verbose)
 
-                # Advance cursor (converting from 26.6 fixed point)
-                cursor_x += pos.x_advance / HB_26_6_SCALE_FACTOR
+            for segment_text, style_name in segments:
+                if not segment_text: continue
 
-            try:
-                builder.allocRunPos(skia_font_final, glyph_ids, skia_point_positions)
+                # --- Select Font Resources for Segment ---
+                typeface_to_use = loaded_typefaces.get(style_name, regular_typeface)
+                hb_face_to_use = loaded_hb_faces.get(style_name, regular_hb_face)
 
-                text_blob = builder.make()
-                if text_blob:
-                    canvas.drawTextBlob(text_blob, 0, 0, paint)
+                if not typeface_to_use or not hb_face_to_use:
+                     log_message(f"ERROR: Could not get font resources for style '{style_name}' (fallback failed?). Skipping segment.", always_print=True)
+                     continue
+
+                # --- Setup Skia Font for Segment ---
+                skia_font_segment = skia.Font(typeface_to_use, final_font_size)
+                skia_font_segment.setSubpixel(use_subpixel_rendering)
+                skia_font_segment.setHinting(skia_hinting)
+
+                # --- Setup HarfBuzz Font for Segment ---
+                hb_font_segment = hb.Font(hb_face_to_use)
+                hb_font_segment.ptem = float(final_font_size)
+                if hb_face_to_use.upem > 0:
+                     scale_factor = final_font_size / hb_face_to_use.upem
+                     hb_scale = int(scale_factor * (2**16))
+                     hb_font_segment.scale = (hb_scale, hb_scale)
                 else:
-                    log_message(f"Warning: Failed to build TextBlob for line {i}", verbose=verbose)
-            except Exception as e:
-                log_message(f"ERROR during Skia rendering for line {i}: {e}", always_print=True)
+                     hb_font_segment.scale = (int(final_font_size * (2**16)), int(final_font_size * (2**16)))
+
+                # --- Shape Segment ---
+                try:
+                    infos, positions = _shape_line(segment_text, hb_font_segment, features_to_enable)
+                    if not infos:
+                        log_message(f"Warning: HarfBuzz returned no glyphs for segment '{segment_text}'", verbose=verbose)
+                        continue
+                except Exception as e:
+                    log_message(f"ERROR: HarfBuzz shaping failed for segment '{segment_text}': {e}", always_print=True)
+                    continue
+
+                # --- Build and Draw Skia TextBlob for Segment ---
+                builder = skia.TextBlobBuilder()
+                glyph_ids = [info.codepoint for info in infos]
+                skia_point_positions = []
+                segment_cursor_x = 0
+
+                HB_26_6_SCALE_FACTOR = 64.0
+                for _, pos in zip(infos, positions):
+                    glyph_x = cursor_x + segment_cursor_x + (pos.x_offset / HB_26_6_SCALE_FACTOR)
+                    glyph_y = current_baseline_y - (pos.y_offset / HB_26_6_SCALE_FACTOR) # Y flipped
+                    skia_point_positions.append(skia.Point(glyph_x, glyph_y))
+
+                    segment_cursor_x += pos.x_advance / HB_26_6_SCALE_FACTOR
+
+                try:
+                    run_buffer = builder.allocRunPos(skia_font_segment, glyph_ids, skia_point_positions)
+
+                    text_blob = builder.make()
+                    if text_blob:
+                        canvas.drawTextBlob(text_blob, 0, 0, paint)
+                        segment_width = segment_cursor_x
+                        cursor_x += segment_width
+                        log_message(f"  Rendered segment '{segment_text}' ({style_name}), width={segment_width:.1f}, new cursor_x={cursor_x:.1f}", verbose=verbose)
+                    else:
+                        log_message(f"Warning: Failed to build TextBlob for segment '{segment_text}'", verbose=verbose)
+
+                except Exception as e:
+                    log_message(f"ERROR during Skia rendering for segment '{segment_text}': {e}", always_print=True)
+                    segment_width = segment_cursor_x
+                    cursor_x += segment_width
 
             current_baseline_y += final_line_height
 

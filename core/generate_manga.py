@@ -16,7 +16,7 @@ from .cleaning import clean_speech_bubbles
 from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
 from .translation import call_gemini_api_batch, sort_bubbles_manga_order
 from .common_utils import log_message
-from .rendering import choose_font, render_text_skia
+from .rendering import render_text_skia
 
 def translate_and_render(image_path: Union[str, Path],
                          config: MangaTranslatorConfig,
@@ -82,6 +82,18 @@ def translate_and_render(image_path: Union[str, Path],
         target_mode = original_mode # Fallback to original mode
 
     original_cv_image = pil_to_cv2(pil_image_processed)
+
+    # --- Encode Full Image for Context ---
+    full_image_b64 = None
+    try:
+        is_success, buffer = cv2.imencode('.jpg', original_cv_image)
+        if not is_success:
+            raise ValueError("Full image encoding to JPEG failed")
+        full_image_b64 = base64.b64encode(buffer).decode('utf-8')
+        log_message("Encoded full image for translation context.", verbose=verbose)
+    except Exception as e:
+        log_message(f"Error encoding full image to base64: {e}. Translation might lack context.", always_print=True)
+        # Continue without full image context if encoding fails
 
     # --- Detection ---
     log_message("Detecting speech bubbles...", verbose=verbose)
@@ -170,30 +182,34 @@ def translate_and_render(image_path: Union[str, Path],
          sorted_bubble_data = sort_bubbles_manga_order(valid_bubble_data, image_width)
 
          bubble_images_b64 = [bubble["image_b64"] for bubble in sorted_bubble_data]
+         translated_texts = []
          if not bubble_images_b64:
-            log_message("No bubbles to translate after sorting/filtering. Skipping translation and rendering.", always_print=True)
+             log_message("No valid bubble images to translate after sorting/filtering. Skipping translation and rendering.", always_print=True)
+         elif full_image_b64 is None:
+             log_message("Full image context is missing due to encoding error. Skipping translation and rendering.", always_print=True)
+         else:
+             # Only attempt translation if we have bubbles and context
+             log_message(f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} to {config.translation.output_language}...",
+                         always_print=True)
+             try:
+                 if not config.translation.api_key:
+                     raise ValueError("Gemini API key is missing in the configuration.")
 
-         log_message(f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} to {config.translation.output_language}...",
-                     always_print=True)
-
-         try:
-             if not config.translation.api_key:
-                  raise ValueError("Gemini API key is missing in the configuration.")
-
-             translated_texts = call_gemini_api_batch(
-                 config.translation.api_key,
-                 bubble_images_b64,
-                 config.translation.input_language,
-                 config.translation.output_language,
-                 config.translation.gemini_model,
-                 config.translation.temperature,
-                 config.translation.top_p,
-                 config.translation.top_k,
-                 debug=verbose
-             )
-         except Exception as e:
-              log_message(f"Error during API translation: {e}", always_print=True)
-              translated_texts = ["[Translation Error]" for _ in sorted_bubble_data]
+                 translated_texts = call_gemini_api_batch(
+                     api_key=config.translation.api_key,
+                     images_b64=bubble_images_b64,
+                     full_image_b64=full_image_b64,
+                     input_language=config.translation.input_language,
+                     output_language=config.translation.output_language,
+                     model_name=config.translation.gemini_model,
+                     temperature=config.translation.temperature,
+                     top_p=config.translation.top_p,
+                     top_k=config.translation.top_k,
+                     debug=verbose
+                 )
+             except Exception as e:
+                 log_message(f"Error during API translation: {e}", always_print=True)
+                 translated_texts = ["[Translation Error]" for _ in sorted_bubble_data]
 
          # --- Render Translations ---
          log_message("Rendering translations onto image...", verbose=verbose)
@@ -209,16 +225,11 @@ def translate_and_render(image_path: Union[str, Path],
 
                  log_message(f"Rendering text for bubble {bbox}: '{text[:30]}...'", verbose=verbose)
 
-                 font_path = choose_font(text, config.rendering.font_dir, verbose=verbose)
-                 if not font_path:
-                      log_message(f"Critical: Could not find font for bubble {bbox}. Skipping rendering.", always_print=True)
-                      continue
-
                  rendered_image, success = render_text_skia(
                      pil_image=pil_cleaned_image,
                      text=text,
                      bbox=bbox,
-                     font_path=font_path,
+                     font_dir=config.rendering.font_dir,
                      min_font_size=config.rendering.min_font_size,
                      max_font_size=config.rendering.max_font_size,
                      line_spacing_mult=config.rendering.line_spacing,

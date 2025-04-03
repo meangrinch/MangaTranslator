@@ -20,7 +20,7 @@ def clean_speech_bubbles(
     closing_kernel_shape=cv2.MORPH_ELLIPSE,
     constraint_erosion_kernel_size=5,
     constraint_erosion_iterations=1,
-    verbose: bool = False # Added verbose parameter
+    verbose: bool = False
 ):
     """
     Clean speech bubbles in the given image using YOLO detection and refined masking.
@@ -73,7 +73,6 @@ def clean_speech_bubbles(
         )
 
         for detection in detections:
-            # Add verbose logging here if needed in the future
             if "mask_points" not in detection or not detection["mask_points"]:
                 if verbose: print(f"Verbose: Skipping detection without mask points: {detection.get('bbox')}")
                 continue
@@ -101,17 +100,14 @@ def clean_speech_bubbles(
                     continue
                 roi_gray[roi_indices] = img_gray[roi_indices]
 
-                if threshold_value != -1: # Use fixed threshold
-                    # Apply fixed threshold directly to the ROI (roi_gray already contains ROI pixels or zeros)
+                if threshold_value != -1:
                     _, thresholded_roi = cv2.threshold(roi_gray, threshold_value, 255, cv2.THRESH_BINARY)
                 else: # Use Otsu's method
-                    thresholded_roi = np.zeros_like(img_gray) # Initialize mask
-                    if np.any(roi_indices): # Check if there are any pixels in the ROI
-                        roi_pixels = img_gray[roi_indices] # Get grayscale pixels from the original gray image within the ROI
-                        if roi_pixels.size > 0: # Ensure there are pixels to process
-                            # Calculate Otsu threshold based *only* on pixels within the ROI
+                    thresholded_roi = np.zeros_like(img_gray)
+                    if np.any(roi_indices):
+                        roi_pixels = img_gray[roi_indices]
+                        if roi_pixels.size > 0:
                             thresh_val, _ = cv2.threshold(roi_pixels, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                            # Apply threshold to the ROI pixels and place result in the full-size mask
                             thresholded_roi[roi_indices] = np.where(roi_pixels > thresh_val, 255, 0).astype(np.uint8)
 
                 thresholded_roi_refined = cv2.bitwise_and(thresholded_roi, original_yolo_mask)
@@ -137,7 +133,6 @@ def clean_speech_bubbles(
                     bubble_masks.append(final_mask)
 
             except Exception as e:
-                # Always print errors, but add more detail if verbose
                 error_msg = f"Error processing mask for detection {detection.get('bbox')}: {e}"
                 if verbose:
                     import traceback
