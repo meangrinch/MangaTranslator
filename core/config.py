@@ -31,6 +31,7 @@ class TranslationConfig:
     top_k: int = 1
     input_language: str = "Japanese"
     output_language: str = "English"
+    reading_direction: str = "rtl"
 
 @dataclass
 class RenderingConfig:

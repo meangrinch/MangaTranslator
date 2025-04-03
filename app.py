@@ -39,6 +39,7 @@ SUCCESS_PREFIX = "✅ "
 DEFAULT_SETTINGS = {
     "input_language": "Japanese",
     "output_language": "English",
+    "reading_direction": "rtl",
     "gemini_model": "gemini-2.0-flash",
     "confidence": 0.35,
     "dilation_kernel_size": 7,
@@ -54,7 +55,7 @@ DEFAULT_SETTINGS = {
     "top_k": 1,
     "max_font_size": 14,
     "min_font_size": 8,
-    "line_spacing": 1.2,
+    "line_spacing": 1.0,
     "use_subpixel_rendering": True,
     "font_hinting": "none",
     "use_ligatures": False,
@@ -68,6 +69,7 @@ DEFAULT_SETTINGS = {
 DEFAULT_BATCH_SETTINGS = {
     "batch_input_language": "Japanese",
     "batch_output_language": "English",
+    "batch_reading_direction": "rtl",
     "batch_gemini_model": "gemini-2.0-flash",
     "batch_font_pack": None
 }
@@ -468,7 +470,7 @@ def translate_manga(image: Union[str, Path, Image.Image],
                 top_p=top_p,
                 top_k=top_k,
                 input_language=input_language,
-                output_language=output_language
+                output_language=output_language,
             ),
             rendering=RenderingConfig(
                 font_dir=str(font_dir),
@@ -500,8 +502,9 @@ def translate_manga(image: Union[str, Path, Image.Image],
         translator_status_msg = (
             f"{SUCCESS_PREFIX}Translation completed!\n"
             f"• Image size: {width}x{height} pixels\n"
-            f"• Source language: {input_language}\n"
-            f"• Target language: {output_language}\n"
+            f"• Source language: {config.translation.input_language}\n"
+            f"• Target language: {config.translation.output_language}\n"
+            f"• Reading Direction: {config.translation.reading_direction.upper()}\n"
             f"• Font pack: {font_pack}\n"
             f"• Model used: {selected_model}\n"
             f"• Cleaning Params: DKS:{dilation_kernel_size}, DI:{dilation_iterations}, Otsu:{use_otsu_threshold}, "
@@ -689,7 +692,7 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
                 top_p=top_p,
                 top_k=top_k,
                 input_language=input_language,
-                output_language=output_language
+                output_language=output_language,
             ),
             rendering=RenderingConfig(
                 font_dir=str(font_dir),
@@ -781,8 +784,9 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
         
         batch_status_msg = (
             f"{SUCCESS_PREFIX}Batch translation completed!\n"
-            f"• Source language: {input_language}\n"
-            f"• Target language: {output_language}\n"
+            f"• Source language: {config.translation.input_language}\n"
+            f"• Target language: {config.translation.output_language}\n"
+            f"• Reading Direction: {config.translation.reading_direction.upper()}\n"
             f"• Font pack: {font_pack}\n"
             f"• Model used: {selected_model}\n"
             f"• Cleaning Params: DKS:{dilation_kernel_size}, DI:{dilation_iterations}, Otsu:{use_otsu_threshold}, "
@@ -1007,6 +1011,13 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                         confidence = gr.Slider(
                             0.1, 1.0, value=saved_settings.get("confidence", 0.35), step=0.05,
                             label="Bubble Detection Confidence"
+                        )
+                        config_reading_direction = gr.Radio(
+                            choices=["rtl", "ltr"],
+                            label="Reading Direction",
+                            value=saved_settings.get("reading_direction", "rtl"),
+                            info="Order for sorting bubbles (rtl=Manga, ltr=Comics).",
+                            elem_id="config_reading_direction"
                         )
                     setting_groups.append(group_detection)
 
@@ -1235,11 +1246,13 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             """)
 
     save_config_btn.click(
-        fn=lambda api_key_val, mdl_dd_val, conf_val, dks_val, di_val, otsu_val, mca_val, cks_val, ci_val, ceks_val, cei_val, # Added otsu_val
-                max_fs_val, min_fs_val, ls_val, subpix_val, hint_val, liga_val,
-                temp_val, tp_val, tk_val, out_fmt_val, jpeg_q_val, png_comp_val, verb_val,
-                input_lang_val, output_lang_val, gm_val, fp_val,
-                b_input_lang_val, b_output_lang_val, b_gm_val, b_fp_val:
+        fn=lambda api_key_val, mdl_dd_val, conf_val, config_rd_val,
+                 dks_val, di_val, otsu_val, mca_val, cks_val, ci_val, ceks_val, cei_val,
+                 max_fs_val, min_fs_val, ls_val, subpix_val, hint_val, liga_val,
+                 temp_val, tp_val, tk_val,
+                 out_fmt_val, jpeg_q_val, png_comp_val, verb_val,
+                 input_lang_val, output_lang_val, gm_val, fp_val,
+                 b_input_lang_val, b_output_lang_val, b_gm_val, b_fp_val:
             save_config({
                 'gemini_api_key': api_key_val, 'yolo_model': mdl_dd_val,
                 'confidence': conf_val,
@@ -1252,10 +1265,13 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                 'output_format': out_fmt_val, 'jpeg_quality': jpeg_q_val, 'png_compression': png_comp_val,
                 'verbose': verb_val,
                 'input_language': input_lang_val, 'output_language': output_lang_val, 'gemini_model': gm_val, 'font_pack': fp_val,
-                'batch_input_language': b_input_lang_val, 'batch_output_language': b_output_lang_val, 'batch_gemini_model': b_gm_val, 'batch_font_pack': b_fp_val
+                'reading_direction': config_rd_val,
+                'batch_input_language': b_input_lang_val, 'batch_output_language': b_output_lang_val, 'batch_gemini_model': b_gm_val, 'batch_font_pack': b_fp_val,
+                'batch_reading_direction': config_rd_val
             })[1],
         inputs=[
-            api_key, model_dropdown, confidence, dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
+            api_key, model_dropdown, confidence, config_reading_direction,
+            dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
             max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
             temperature, top_p, top_k,
@@ -1310,7 +1326,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         batch_reset_font = defaults.get('batch_font_pack') if defaults.get('batch_font_pack') in available_fonts else (available_fonts[0] if available_fonts else None)
         return [
             reset_model,
-            defaults['confidence'],
+            defaults['confidence'], defaults['reading_direction'],
             defaults['dilation_kernel_size'], defaults['dilation_iterations'],
             defaults['use_otsu_threshold'], defaults['min_contour_area'],
             defaults['closing_kernel_size'], defaults['closing_iterations'],
@@ -1330,7 +1346,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         fn=apply_defaults, inputs=[],
         outputs=[
             model_dropdown,
-            confidence,
+            confidence, config_reading_direction,
             dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
             max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
@@ -1391,10 +1407,10 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             temperature,
             top_p,
             top_k,
-            max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures, 
+            max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
             verbose,
             model_dropdown,
-            jpeg_quality, 
+            jpeg_quality,
             png_compression
         ],
         outputs=[batch_output_gallery, batch_status_message]

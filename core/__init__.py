@@ -12,7 +12,7 @@ from .generate_manga import (
 from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
 from .detection import  detect_speech_bubbles
 from .cleaning import clean_speech_bubbles
-from .translation import sort_bubbles_manga_order, call_gemini_api_batch
+from .translation import sort_bubbles_by_reading_order, call_gemini_api_batch
 from .rendering import render_text_skia
 
 __version__ = "1.0.0"
@@ -29,7 +29,7 @@ __all__ = [
     'detect_speech_bubbles',
     'clean_speech_bubbles',
     'call_gemini_api_batch',
-    'sort_bubbles_manga_order',
+    'sort_bubbles_by_reading_order',
     'pil_to_cv2',
     'cv2_to_pil',
     'save_image_with_compression'

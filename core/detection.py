@@ -59,7 +59,7 @@ def detect_speech_bubbles(image_path, model_path, confidence=0.35, verbose=False
     if len(results) == 0:
         return detections
     
-    for i, result in enumerate(results[0]):
+    for _, result in enumerate(results[0]):
         boxes = result.boxes
         
         for j, box in enumerate(boxes):

@@ -14,7 +14,7 @@ from .config import *
 from .detection import detect_speech_bubbles
 from .cleaning import clean_speech_bubbles
 from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
-from .translation import call_gemini_api_batch, sort_bubbles_manga_order
+from .translation import call_gemini_api_batch, sort_bubbles_by_reading_order
 from .common_utils import log_message
 from .rendering import render_text_skia
 
@@ -175,10 +175,12 @@ def translate_and_render(image_path: Union[str, Path],
             log_message("No valid bubble images could be prepared for translation. Skipping translation and rendering.", always_print=True)
 
          # --- Sort and Translate ---
-         log_message("Sorting bubbles in manga reading order...", verbose=verbose)
+         reading_direction = config.translation.reading_direction
+         log_message(f"Sorting bubbles in {reading_direction.upper()} reading order...", verbose=verbose)
          image_width = original_cv_image.shape[1]
+         image_height = original_cv_image.shape[0]
 
-         sorted_bubble_data = sort_bubbles_manga_order(valid_bubble_data, image_width)
+         sorted_bubble_data = sort_bubbles_by_reading_order(valid_bubble_data, image_height, image_width, reading_direction)
 
          bubble_images_b64 = [bubble["image_b64"] for bubble in sorted_bubble_data]
          translated_texts = []
@@ -188,7 +190,7 @@ def translate_and_render(image_path: Union[str, Path],
              log_message("Full image context is missing due to encoding error. Skipping translation and rendering.", always_print=True)
          else:
              # Only attempt translation if we have bubbles and context
-             log_message(f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} to {config.translation.output_language}...",
+             log_message(f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} to {config.translation.output_language} ({reading_direction.upper()} order)...",
                          always_print=True)
              try:
                  if not config.translation.api_key:
@@ -200,6 +202,7 @@ def translate_and_render(image_path: Union[str, Path],
                      full_image_b64=full_image_b64,
                      input_language=config.translation.input_language,
                      output_language=config.translation.output_language,
+                     reading_direction=reading_direction,
                      model_name=config.translation.gemini_model,
                      temperature=config.translation.temperature,
                      top_p=config.translation.top_p,
@@ -382,6 +385,7 @@ def main():
     parser.add_argument("--input-language", type=str, default="Japanese", help="Source language")
     parser.add_argument("--output-language", type=str, default="English", help="Target language")
     parser.add_argument("--conf", type=float, default=0.35, help="Confidence threshold for detection")
+    parser.add_argument("--reading-direction", type=str, default="rtl", choices=["rtl", "ltr"], help="Reading direction for sorting bubbles (rtl or ltr)")
     # Cleaning args
     parser.add_argument("--dilation-kernel-size", type=int, default=7, help="ROI Dilation Kernel Size")
     parser.add_argument("--dilation-iterations", type=int, default=1, help="ROI Dilation Iterations")
@@ -445,7 +449,8 @@ def main():
             top_p=args.top_p,
             top_k=args.top_k,
             input_language=args.input_language,
-            output_language=args.output_language
+            output_language=args.output_language,
+            reading_direction=args.reading_direction
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,

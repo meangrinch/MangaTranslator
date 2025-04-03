@@ -3,16 +3,18 @@ import re
 import time
 import requests
 
-def sort_bubbles_manga_order(detections, image_width):
+def sort_bubbles_by_reading_order(detections, image_height, image_width, reading_direction="rtl"):
     """
-    Sort speech bubbles in Japanese manga reading order (top-right to bottom-left).
-    
+    Sort speech bubbles based on specified reading order.
+
     Args:
-        detections (list): List of detection dictionaries
-        image_width (int): Width of the full image for reference
-    
+        detections (list): List of detection dictionaries, each must have a "bbox" key.
+        image_height (int): Height of the full image for reference.
+        image_width (int): Width of the full image for reference (used for column calculation).
+        reading_direction (str): "rtl" (right-to-left, default) or "ltr" (left-to-right).
+
     Returns:
-        list: Sorted list of detections
+        list: Sorted list of detections.
     """
     grid_rows = 3
     grid_cols = 2
@@ -24,18 +26,22 @@ def sort_bubbles_manga_order(detections, image_width):
         center_x = (x1 + x2) / 2
         center_y = (y1 + y2) / 2
         
-        col_idx = grid_cols - 1 - int((center_x / image_width) * grid_cols)
-        row_idx = int((center_y / image_width) * grid_rows)
-        
+        # Calculate row index based on vertical position (consistent for both directions)
+        row_idx = int((center_y / image_height) * grid_rows)
+
+        if reading_direction == "ltr":
+            col_idx = int((center_x / image_width) * grid_cols)
+            sort_key = lambda d: (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
+        else: # Default to "rtl" (right-to-left)
+            col_idx = grid_cols - 1 - int((center_x / image_width) * grid_cols)
+            sort_key = lambda d: (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
+
         detection["grid_pos"] = (row_idx, col_idx)
         detection["center_y"] = center_y
-    
-    return sorted(
-        sorted_detections,
-        key=lambda d: (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
-    )
 
-def call_gemini_api_batch(api_key, images_b64: list, full_image_b64: str, input_language="Japanese", output_language="English",
+    return sorted(sorted_detections, key=sort_key)
+
+def call_gemini_api_batch(api_key, images_b64: list, full_image_b64: str, input_language="Japanese", output_language="English", reading_direction="rtl",
                           model_name="gemini-2.0-flash", temperature=0.1, top_p=0.95, top_k=1, debug=False):
     """
     Call Gemini API to translate text from all speech bubbles at once, using the full page for context
@@ -47,11 +53,12 @@ def call_gemini_api_batch(api_key, images_b64: list, full_image_b64: str, input_
         full_image_b64 (str): Base64 encoded image of the full manga page.
         input_language (str): Source language of the text in the image
         output_language (str): Target language for translation
-        model_name (str): Gemini model to use for inference
-        temperature (float): Controls randomness in the output
-        top_p (float): Nucleus sampling parameter
-        top_k (int): Controls diversity by limiting to top k tokens
-        debug (bool): Whether to print debugging information
+        model_name (str): Gemini model to use for inference.
+        temperature (float): Controls randomness in the output.
+        top_p (float): Nucleus sampling parameter.
+        top_k (int): Controls diversity by limiting to top k tokens.
+        reading_direction (str): "rtl" or "ltr", used to inform the model about bubble order.
+        debug (bool): Whether to print debugging information.
 
     Returns:
         list: List of translated strings (potentially with style markers), one for each input bubble image.
@@ -66,19 +73,20 @@ def call_gemini_api_batch(api_key, images_b64: list, full_image_b64: str, input_
         
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
     
-    prompt_text = f"""Analyze the full manga page image provided, followed by the {len(images_b64)} individual speech bubble images extracted from it in reading order (right-to-left).
+    reading_order_desc = "right-to-left, top-to-bottom" if reading_direction == "rtl" else "left-to-right, top-to-bottom"
+    prompt_text = f"""Analyze the full manga/comic page image provided, followed by the {len(images_b64)} individual speech bubble images extracted from it in reading order ({reading_order_desc}).
 For each individual speech bubble image:
-1. Extract the {input_language} text and translate it to {output_language}, making necessary minor adjustments to ensure it flows naturally in the target language.
-2. Decide if styling should be applied the translated text using these markdown-like markers:
+1. Extract the {input_language} text and translate it to {output_language}, making *necessary* adjustments to ensure it flows naturally in the target language and fits the context of the page.
+2. Decide if styling should be applied to the translated text using these markdown-like markers:
     - Italic (`*text*`): Use for internal thoughts/monologues, dialogue heard through a device or from a distance, or dialogue/narration in a flashback.
     - Bold (`**text**`): Use for sound effects (SFX), shouting/yelling, or location/time stamps (e.g., '**Three Days Later**').
     - Bold Italic (`***text***`): Use for loud dialogue/SFX in flashbacks or heard through devices/distance.
     - Use regular text otherwise. You can apply styling to parts of the text within a bubble (e.g., "He said **'Stop!'** and then thought *why?*").
 
-Provide your response in this *exact* format:
-1: [{output_language} translation for bubble 1]
+Provide your response in this *exact* format, with each translation on a new line:
+1: [Translation for bubble 1]
 ...
-{len(images_b64)}: [{output_language} translation for bubble {len(images_b64)}]
+{len(images_b64)}: [Translation for bubble {len(images_b64)}]
 
 Do not include any other text or explanations in your response."""
 
