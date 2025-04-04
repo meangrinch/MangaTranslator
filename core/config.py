@@ -49,7 +49,8 @@ class OutputConfig:
     """Configuration for saving output images."""
     jpeg_quality: int = 95
     png_compression: int = 6
-    image_mode: str = "RGBA" # Default based on batch processing logic
+    image_mode: str = "RGBA" # Default image mode
+    output_format: str = "auto"
 
 @dataclass
 class MangaTranslatorConfig:

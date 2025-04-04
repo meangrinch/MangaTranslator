@@ -51,35 +51,48 @@ def translate_and_render(image_path: Union[str, Path],
     original_mode = pil_original.mode
     log_message(f"Original image mode: {original_mode}", verbose=verbose)
 
-    target_mode = config.output.image_mode
-    pil_image_processed = pil_original
+    desired_format = config.output.output_format
+    output_ext_for_mode = Path(output_path).suffix.lower() if output_path else image_path.suffix.lower()
 
-    if target_mode == "RGB":
-        if original_mode == "RGBA":
-            log_message("Converting RGBA to RGB", verbose=verbose)
-            background = Image.new('RGB', pil_original.size, (255, 255, 255))
-            background.paste(pil_original, mask=pil_original.split()[3])
-            pil_image_processed = background
-        elif original_mode == "P":
-             log_message("Converting P to RGB", verbose=verbose)
-             pil_image_processed = pil_original.convert("RGB")
-        elif original_mode == "LA":
-             log_message("Converting LA to RGB", verbose=verbose)
-             background = Image.new('RGB', pil_original.size, (255, 255, 255))
-             background.paste(pil_original, mask=pil_original.split()[1])
-             pil_image_processed = background
-        elif original_mode != "RGB":
-             log_message(f"Converting {original_mode} to RGB", verbose=verbose)
-             pil_image_processed = pil_original.convert("RGB")
-        # else: already RGB
-    elif target_mode == "RGBA":
-        if original_mode != "RGBA":
-            log_message(f"Converting {original_mode} to RGBA", verbose=verbose)
-            pil_image_processed = pil_original.convert("RGBA")
-        # else: already RGBA
-    else:
-        log_message(f"Warning: Unknown image_mode '{target_mode}'. Using original mode: {original_mode}", verbose=verbose, always_print=True)
-        target_mode = original_mode # Fallback to original mode
+    if desired_format == "jpeg" or (desired_format == "auto" and output_ext_for_mode in ['.jpg', '.jpeg']):
+        target_mode = "RGB"
+    else: # Default to RGBA for PNG, WEBP, or other formats in auto mode
+        target_mode = "RGBA"
+    log_message(f"Target image mode determined as: {target_mode} (based on format: {desired_format}, output_ext: {output_ext_for_mode})", verbose=verbose)
+
+    pil_image_processed = pil_original
+    if pil_image_processed.mode != target_mode:
+        if target_mode == "RGB":
+             # Handle transparency when converting to RGB
+             if pil_image_processed.mode == "RGBA" or pil_image_processed.mode == "LA" or (pil_image_processed.mode == "P" and 'transparency' in pil_image_processed.info):
+                 log_message(f"Converting {pil_image_processed.mode} to RGB (flattening transparency)", verbose=verbose)
+                 background = Image.new('RGB', pil_image_processed.size, (255, 255, 255))
+                 try:
+                     # Ensure mask is correctly obtained for different modes
+                     mask = None
+                     if pil_image_processed.mode == "RGBA":
+                         mask = pil_image_processed.split()[3]
+                     elif pil_image_processed.mode == "LA":
+                         mask = pil_image_processed.split()[1]
+                     elif pil_image_processed.mode == "P" and 'transparency' in pil_image_processed.info:
+                          # Convert P with transparency to RGBA to get mask
+                          temp_rgba = pil_image_processed.convert("RGBA")
+                          mask = temp_rgba.split()[3]
+
+                     if mask:
+                         background.paste(pil_image_processed, mask=mask)
+                         pil_image_processed = background
+                     else: # If no mask found, just convert
+                          pil_image_processed = pil_image_processed.convert("RGB")
+                 except Exception as paste_err:
+                      log_message(f"Warning: Error during RGBA/LA/P -> RGB conversion paste: {paste_err}. Using simple convert.", verbose=verbose)
+                      pil_image_processed = pil_image_processed.convert("RGB") # Fallback conversion
+             else: # Non-transparent conversion to RGB
+                 log_message(f"Converting {pil_image_processed.mode} to RGB", verbose=verbose)
+                 pil_image_processed = pil_image_processed.convert("RGB")
+        elif target_mode == "RGBA":
+             log_message(f"Converting {pil_image_processed.mode} to RGBA", verbose=verbose)
+             pil_image_processed = pil_image_processed.convert("RGBA")
 
     original_cv_image = pil_to_cv2(pil_image_processed)
 
@@ -146,10 +159,10 @@ def translate_and_render(image_path: Union[str, Path],
              processed_bubbles_info = []
  
          pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
-         final_image_to_save = pil_cleaned_image
          if pil_cleaned_image.mode != target_mode:
-              log_message(f"Converting cleaned image mode from {pil_cleaned_image.mode} to {target_mode}", verbose=verbose)
-              pil_cleaned_image = pil_cleaned_image.convert(pil_image_processed.mode)
+             log_message(f"Converting cleaned CV image mode from {pil_cleaned_image.mode} back to target {target_mode}", verbose=verbose)
+             pil_cleaned_image = pil_cleaned_image.convert(target_mode)
+         final_image_to_save = pil_cleaned_image
 
          # --- Prepare images for Translation ---
          log_message("Preparing bubble images for translation...", verbose=verbose)
@@ -258,7 +271,12 @@ def translate_and_render(image_path: Union[str, Path],
 
     # --- Save Output ---
     if output_path:
-        log_message(f"Saving final image to {output_path}", verbose=verbose)
+        # Ensure the final image is in the correct mode before saving
+        if final_image_to_save.mode != target_mode:
+             log_message(f"Converting final image mode from {final_image_to_save.mode} to target {target_mode} before saving.", verbose=verbose)
+             final_image_to_save = final_image_to_save.convert(target_mode)
+
+        log_message(f"Saving final image to {output_path} (Mode: {final_image_to_save.mode})", verbose=verbose)
         save_image_with_compression(
             final_image_to_save,
             output_path,
@@ -300,7 +318,6 @@ def batch_translate_images(input_dir: Union[str, Path],
     if output_dir:
         output_dir = Path(output_dir)
     else:
-        # Default to timestamped directory in ./output, like app.py
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         output_dir = Path("./output") / timestamp
 
@@ -333,7 +350,20 @@ def batch_translate_images(input_dir: Union[str, Path],
                 current_progress = i / total_images
                 progress_callback(current_progress, f"Processing image {i+1}/{total_images}: {img_path.name}")
 
-            output_path = output_dir / f"{img_path.stem}_translated{img_path.suffix}"
+            # Determine correct output extension based on config
+            original_ext = img_path.suffix.lower()
+            desired_format = config.output.output_format
+            if desired_format == "jpeg":
+                output_ext = ".jpg"
+            elif desired_format == "png":
+                output_ext = ".png"
+            elif desired_format == "auto":
+                output_ext = original_ext
+            else:
+                output_ext = original_ext
+                log_message(f"Warning: Invalid output_format '{desired_format}' in config. Using original extension '{original_ext}'.", always_print=True)
+
+            output_path = output_dir / f"{img_path.stem}_translated{output_ext}"
             log_message(f"Image {i+1}/{total_images}: Processing {img_path.name}", always_print=True)
 
             translate_and_render(
@@ -362,9 +392,9 @@ def batch_translate_images(input_dir: Union[str, Path],
 
     end_batch_time = time.time()
     total_batch_time = end_batch_time - start_batch_time
-    seconds_per_image = total_batch_time / total_images if total_images > 0 else 0 # Use total images for average time
+    seconds_per_image = total_batch_time / total_images if total_images > 0 else 0
 
-    log_message(f"\nBatch processing complete: {results['success_count']} of {total_images} images processed in {total_batch_time:.2f} seconds ({seconds_per_image:.2f} seconds/image avg).",
+    log_message(f"\nBatch processing complete: {results['success_count']} of {total_images} images processed in {total_batch_time:.2f} seconds ({seconds_per_image:.2f} seconds/image).",
                 always_print=True)
     if results["error_count"] > 0:
         log_message(f"Failed to process {results['error_count']} images.", always_print=True)

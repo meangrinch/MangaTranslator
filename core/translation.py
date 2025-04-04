@@ -26,7 +26,6 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
         center_x = (x1 + x2) / 2
         center_y = (y1 + y2) / 2
         
-        # Calculate row index based on vertical position (consistent for both directions)
         row_idx = int((center_y / image_height) * grid_rows)
 
         if reading_direction == "ltr":

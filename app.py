@@ -10,6 +10,7 @@ from functools import partial
 from pathlib import Path
 
 import gradio as gr
+from typing import Optional
 from PIL import Image
 import torch
 
@@ -70,7 +71,6 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_input_language": "Japanese",
     "batch_output_language": "English",
     "batch_reading_direction": "rtl",
-    "batch_gemini_model": "gemini-2.0-flash",
     "batch_font_pack": None
 }
 
@@ -265,20 +265,19 @@ def reset_to_defaults():
 
 # --- Consolidated Validation ---
 
-def _validate_common_inputs(api_key: str, selected_model: str, font_pack: str,
-                            max_font_size: int, min_font_size: int, line_spacing: float,
-                            font_hinting: str) -> tuple[Path, Path]: # Added font_hinting
+def _validate_common_inputs(
+    translation_cfg: TranslationConfig,
+    rendering_cfg: RenderingConfig,
+    selected_model: str
+) -> tuple[Path, Path]:
     """
     Validates common inputs used by both single and batch translation.
 
     Args:
-        api_key (str): Gemini API key.
+        translation_cfg (TranslationConfig): Translation configuration.
+        rendering_cfg (RenderingConfig): Rendering configuration.
         selected_model (str): Filename of the selected YOLO model.
-        font_pack (str): Name of the selected font pack directory.
-        max_font_size (int): Maximum font size for rendering.
-        min_font_size (int): Minimum font size for rendering.
-        line_spacing (float): Line spacing multiplier.
-        font_hinting (str): Font hinting setting.
+
 
     Returns:
         tuple[Path, Path]: Validated absolute path to the YOLO model and font directory.
@@ -287,7 +286,7 @@ def _validate_common_inputs(api_key: str, selected_model: str, font_pack: str,
         gr.Error: If any validation fails.
     """
 
-    api_valid, api_msg = validate_api_key(api_key)
+    api_valid, api_msg = validate_api_key(translation_cfg.api_key)
     if not api_valid:
         raise gr.Error(api_msg, print_exception=False)
 
@@ -309,40 +308,42 @@ def _validate_common_inputs(api_key: str, selected_model: str, font_pack: str,
     if not yolo_model_path.exists():
         raise gr.Error(f"{ERROR_PREFIX}YOLO model not found at {yolo_model_path}.", print_exception=False)
 
-    # Font Pack
-    if not font_pack:
-        raise gr.Error(f"{ERROR_PREFIX}Please select a font pack.", print_exception=False)
-    font_dir = FONTS_BASE_DIR / font_pack
+    # Font Pack - Extract font pack name from the directory path
+    font_pack_name = Path(rendering_cfg.font_dir).name
+    if not font_pack_name:
+         raise gr.Error(f"{ERROR_PREFIX}Please select a font pack (check config).", print_exception=False)
+    font_dir = Path(rendering_cfg.font_dir)
     font_valid, font_msg = validate_font_directory(font_dir)
     if not font_valid:
-        raise gr.Error(f"{ERROR_PREFIX}{font_msg}.", print_exception=False)
+        raise gr.Error(f"{ERROR_PREFIX}{font_msg} (Font Dir: {font_dir}).", print_exception=False)
 
     # Rendering Params
-    if not (isinstance(max_font_size, int) and max_font_size > 0):
+    if not (isinstance(rendering_cfg.max_font_size, int) and rendering_cfg.max_font_size > 0):
         raise gr.Error(f"{ERROR_PREFIX}Max Font Size must be a positive integer.", print_exception=False)
-    if not (isinstance(min_font_size, int) and min_font_size > 0):
+    if not (isinstance(rendering_cfg.min_font_size, int) and rendering_cfg.min_font_size > 0):
         raise gr.Error(f"{ERROR_PREFIX}Min Font Size must be a positive integer.", print_exception=False)
-    if not (isinstance(line_spacing, (int, float)) and float(line_spacing) > 0):
+    if not (isinstance(rendering_cfg.line_spacing, (int, float)) and float(rendering_cfg.line_spacing) > 0):
          raise gr.Error(f"{ERROR_PREFIX}Line Spacing must be a positive number.", print_exception=False)
-    if min_font_size > max_font_size:
+    if rendering_cfg.min_font_size > rendering_cfg.max_font_size:
          raise gr.Error(f"{ERROR_PREFIX}Min Font Size cannot be larger than Max Font Size.", print_exception=False)
-    if font_hinting not in ["none", "slight", "normal", "full"]:
+    if rendering_cfg.font_hinting not in ["none", "slight", "normal", "full"]:
         raise gr.Error(f"{ERROR_PREFIX}Invalid Font Hinting value. Must be one of: none, slight, normal, full.", print_exception=False)
 
     return yolo_model_path, font_dir
 
-
 # --- Translation Functions ---
-def translate_manga(image: Union[str, Path, Image.Image],
-                    api_key: str, input_language="Japanese", output_language="English",
-                    gemini_model="gemini-2.0-flash", confidence=0.35, dilation_kernel_size=7, dilation_iterations=1,
-                    use_otsu_threshold=False, min_contour_area=50, closing_kernel_size=7, closing_iterations=1, # Changed threshold_value
-                    constraint_erosion_kernel_size=5, constraint_erosion_iterations=1, temperature=0.1, top_p=0.95,
-                    top_k=1, selected_model="", font_pack=None,
-                    max_font_size=14, min_font_size=8, line_spacing=1.0,
-                    use_subpixel_rendering=False, font_hinting="none", use_ligatures=False,
-                    verbose=False, jpeg_quality=95, png_compression=6,
-                    output_format="auto", device=None):
+def translate_manga(
+    image: Union[str, Path, Image.Image],
+    selected_model: str,
+    detection_cfg: DetectionConfig,
+    cleaning_cfg: CleaningConfig,
+    translation_cfg: TranslationConfig,
+    rendering_cfg: RenderingConfig,
+    output_cfg: OutputConfig,
+    verbose: bool = False,
+    output_format: str = "auto",
+    device: Optional[torch.device] = None
+):
     """
     Process a single manga image with translation.
     
@@ -350,36 +351,16 @@ def translate_manga(image: Union[str, Path, Image.Image],
     through the translation pipeline, and generates a status report.
     
     Args:
-        image (str or PIL.Image): Image to translate, either as a file path or PIL image
-        api_key (str): Gemini API key for translation
-        input_language (str, optional): Source language. Defaults to "Japanese".
-        output_language (str, optional): Target language. Defaults to "English".
-        gemini_model (str, optional): Gemini model to use. Defaults to "gemini-2.0-flash".
-        confidence (float, optional): Bubble detection confidence threshold. Defaults to 0.35.
-        dilation_kernel_size (int): Kernel size for dilating initial YOLO mask for ROI.
-        dilation_iterations (int): Iterations for dilation.
-        use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value (210).
-        min_contour_area (int): Minimum area for a contour to be considered part of the bubble interior.
-        closing_kernel_size (int): Kernel size for morphological closing to smooth mask and include text.
-        closing_iterations (int): Iterations for closing.
-        constraint_erosion_kernel_size (int): Kernel size for eroding the original YOLO mask for edge constraint.
-        constraint_erosion_iterations (int): Iterations for constraint erosion.
-        temperature (float, optional): Temperature for Gemini model. Defaults to 0.1.
-        top_p (float, optional): Top-p parameter for Gemini model. Defaults to 0.95.
-        top_k (int, optional): Top-k parameter for Gemini model. Defaults to 1.
-        selected_model (str, optional): YOLO model filename to use. Defaults to "".
-        font_pack (str, optional): Font pack to use. Defaults to None.
-        max_font_size (int, optional): Max font size for rendering. Defaults to 14.
-        min_font_size (int, optional): Min font size for rendering. Defaults to 8.
-        line_spacing (float, optional): Line spacing multiplier. Defaults to 1.0.
-        use_subpixel_rendering (bool, optional): Enable subpixel rendering. Defaults to False.
-        font_hinting (str, optional): Font hinting level ('none', 'slight', 'normal', 'full'). Defaults to "none".
-        use_ligatures (bool, optional): Enable standard ligatures. Defaults to False.
-        verbose (bool, optional): Whether to enable verbose logging. Defaults to False.
-        jpeg_quality (int, optional): JPEG quality setting (1-100). Defaults to 95.
-        png_compression (int, optional): PNG compression level (0-9). Defaults to 6.
+        image (Union[str, Path, Image.Image]): Image to translate.
+        selected_model (str): Filename of the selected YOLO model.
+        detection_cfg (DetectionConfig): Detection parameters.
+        cleaning_cfg (CleaningConfig): Cleaning parameters.
+        translation_cfg (TranslationConfig): Translation parameters.
+        rendering_cfg (RenderingConfig): Rendering parameters.
+        output_cfg (OutputConfig): Output image parameters.
+        verbose (bool, optional): Enable verbose logging. Defaults to False.
         output_format (str, optional): Output image format ('auto', 'png', 'jpeg'). Defaults to "auto".
-        device (torch.device, optional): The target device to run models on.
+        device (Optional[torch.device], optional): Target device. Defaults to None.
     
     Returns:
         tuple: 
@@ -398,9 +379,9 @@ def translate_manga(image: Union[str, Path, Image.Image],
     if not img_valid:
         raise gr.Error(img_msg, print_exception=False)
 
-    # Common validation (API Key, Model, Font, Rendering Params)
-    yolo_model_path, font_dir = _validate_common_inputs(
-        api_key, selected_model, font_pack, max_font_size, min_font_size, line_spacing, font_hinting
+    # Common validation
+    yolo_model_path, _ = _validate_common_inputs(
+        translation_cfg, rendering_cfg, selected_model
     )
     
     temp_image_path = None
@@ -428,64 +409,31 @@ def translate_manga(image: Union[str, Path, Image.Image],
             
         save_path = Path("./output") / f"MangaTranslator_{timestamp}{output_ext}"
         
-        if output_format == "jpeg" or (output_format == "auto" and (output_ext == '.jpg' or output_ext == '.jpeg')):
-            image_mode = "RGB"
-        else:
-            image_mode = "RGBA"
-            
-        output_dir = Path("./output")
-        os.makedirs(output_dir, exist_ok=True)
-        save_path = output_dir / f"MangaTranslator_{timestamp}{output_ext}"
-
-        # Determine image mode based on output format
+        # Determine image mode based on output format (use output_cfg)
         if output_format == "jpeg" or (output_format == "auto" and (original_ext in ['.jpg', '.jpeg'])):
             image_mode = "RGB"
         else:
             image_mode = "RGBA" # Default to RGBA for PNG or other formats
+            
+        output_dir = Path("./output")
+        os.makedirs(output_dir, exist_ok=True)
+        save_path = output_dir / f"MangaTranslator_{timestamp}{output_ext}"
+        output_cfg_updated = OutputConfig(
+            jpeg_quality=output_cfg.jpeg_quality,
+            png_compression=output_cfg.png_compression,
+            image_mode=image_mode
+        )
 
         # --- Configuration Setup ---
-        use_otsu_config_val = use_otsu_threshold
-
         config = MangaTranslatorConfig(
             yolo_model_path=str(yolo_model_path),
             verbose=verbose,
             device=device or target_device,
-            detection=DetectionConfig(
-                confidence=confidence
-            ),
-            cleaning=CleaningConfig(
-                dilation_kernel_size=dilation_kernel_size,
-                dilation_iterations=dilation_iterations,
-                use_otsu_threshold=use_otsu_config_val,
-                min_contour_area=min_contour_area,
-                closing_kernel_size=closing_kernel_size,
-                closing_iterations=closing_iterations,
-                constraint_erosion_kernel_size=constraint_erosion_kernel_size,
-                constraint_erosion_iterations=constraint_erosion_iterations
-            ),
-            translation=TranslationConfig(
-                api_key=api_key,
-                gemini_model=gemini_model,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                input_language=input_language,
-                output_language=output_language,
-            ),
-            rendering=RenderingConfig(
-                font_dir=str(font_dir),
-                max_font_size=max_font_size,
-                min_font_size=min_font_size,
-                line_spacing=line_spacing,
-                use_subpixel_rendering=use_subpixel_rendering,
-                font_hinting=font_hinting,
-                use_ligatures=use_ligatures
-            ),
-            output=OutputConfig(
-                jpeg_quality=jpeg_quality,
-                png_compression=png_compression,
-                image_mode=image_mode
-            )
+            detection=detection_cfg,
+            cleaning=cleaning_cfg,
+            translation=translation_cfg,
+            rendering=rendering_cfg,
+            output=output_cfg_updated
         )
 
         # --- Execute Translation ---
@@ -505,17 +453,17 @@ def translate_manga(image: Union[str, Path, Image.Image],
             f"• Source language: {config.translation.input_language}\n"
             f"• Target language: {config.translation.output_language}\n"
             f"• Reading Direction: {config.translation.reading_direction.upper()}\n"
-            f"• Font pack: {font_pack}\n"
+            f"• Font pack: {Path(config.rendering.font_dir).name}\n"
             f"• Model used: {selected_model}\n"
-            f"• Cleaning Params: DKS:{dilation_kernel_size}, DI:{dilation_iterations}, Otsu:{use_otsu_threshold}, "
-            f"MCA:{min_contour_area}, CKS:{closing_kernel_size}, CI:{closing_iterations}, "
-            f"CEKS:{constraint_erosion_kernel_size}, CEI:{constraint_erosion_iterations}\n"
-            f"• Temperature: {temperature}\n"
-            f"• Top-p: {top_p}\n"
-            f"• Top-k: {top_k}\n"
+            f"• Cleaning Params: DKS:{config.cleaning.dilation_kernel_size}, DI:{config.cleaning.dilation_iterations}, Otsu:{config.cleaning.use_otsu_threshold}, "
+            f"MCA:{config.cleaning.min_contour_area}, CKS:{config.cleaning.closing_kernel_size}, CI:{config.cleaning.closing_iterations}, "
+            f"CEKS:{config.cleaning.constraint_erosion_kernel_size}, CEI:{config.cleaning.constraint_erosion_iterations}\n"
+            f"• Temperature: {config.translation.temperature}\n"
+            f"• Top-p: {config.translation.top_p}\n"
+            f"• Top-k: {config.translation.top_k}\n"
             f"• Output format: {output_format}\n"
-            f"• JPEG quality: {jpeg_quality}\n"
-            f"• PNG compression: {png_compression}\n"
+            f"• JPEG quality: {config.output.jpeg_quality}\n"
+            f"• PNG compression: {config.output.png_compression}\n"
             f"• Processing time: {processing_time:.2f} seconds\n"
             f"• Saved to: {save_path}"
         )
@@ -593,16 +541,18 @@ def refresh_models_and_fonts():
 
         return gr.Dropdown(choices=models, value=selected_model_val), gr.Dropdown(choices=font_packs, value=selected_font_val)
 
-def process_batch(input_dir_or_files: Union[str, list], # Type hint added
-                  api_key: str, input_language="Japanese", output_language="English",
-                  gemini_model="gemini-2.0-flash", font_pack=None, confidence=0.35, dilation_kernel_size=7,
-                  dilation_iterations=1, use_otsu_threshold=False, min_contour_area=50, closing_kernel_size=7, # Changed threshold_value
-                  closing_iterations=1, constraint_erosion_kernel_size=5, constraint_erosion_iterations=1,
-                  temperature=0.1, top_p=0.95, top_k=1,
-                  max_font_size=14, min_font_size=8, line_spacing=1.0,
-                  use_subpixel_rendering=False, font_hinting="none", use_ligatures=False,
-                  verbose=False, selected_model="", jpeg_quality=95,
-                  png_compression=6, progress=gr.Progress(), device=None):
+def process_batch(
+    input_dir_or_files: Union[str, list],
+    selected_model: str,
+    detection_cfg: DetectionConfig,
+    cleaning_cfg: CleaningConfig,
+    translation_cfg: TranslationConfig,
+    rendering_cfg: RenderingConfig,
+    output_cfg: OutputConfig,
+    verbose: bool = False,
+    progress=gr.Progress(),
+    device: Optional[torch.device] = None
+):
     """
     Process a batch of manga images with translation.
     
@@ -610,36 +560,16 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
     the translation pipeline, and generation of a status report.
     
     Args:
-        input_dir (str or list): Directory path containing images to translate or a list of file paths
-        api_key (str): Gemini API key for translation
-        input_language (str, optional): Source language. Defaults to "Japanese".
-        output_language (str, optional): Target language. Defaults to "English".
-        gemini_model (str, optional): Gemini model to use. Defaults to "gemini-2.0-flash".
-        font_pack (str, optional): Font pack to use. Defaults to None.
-        confidence (float, optional): Bubble detection confidence threshold. Defaults to 0.35.
-        dilation_kernel_size (int): Kernel size for dilating initial YOLO mask for ROI.
-        dilation_iterations (int): Iterations for dilation.
-        use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value (210).
-        min_contour_area (int): Minimum area for a contour to be considered part of the bubble interior.
-        closing_kernel_size (int): Kernel size for morphological closing to smooth mask and include text.
-        closing_iterations (int): Iterations for closing.
-        constraint_erosion_kernel_size (int): Kernel size for eroding the original YOLO mask for edge constraint.
-        constraint_erosion_iterations (int): Iterations for constraint erosion.
-        temperature (float, optional): Temperature for Gemini model. Defaults to 0.1.
-        top_p (float, optional): Top-p parameter for Gemini model. Defaults to 0.95.
-        top_k (int, optional): Top-k parameter for Gemini model. Defaults to 1.
-        max_font_size (int, optional): Max font size for rendering. Defaults to 14.
-        min_font_size (int, optional): Min font size for rendering. Defaults to 8.
-        line_spacing (float, optional): Line spacing multiplier. Defaults to 1.0.
-        use_subpixel_rendering (bool, optional): Enable subpixel rendering. Defaults to False.
-        font_hinting (str, optional): Font hinting level ('none', 'slight', 'normal', 'full'). Defaults to "none".
-        use_ligatures (bool, optional): Enable standard ligatures. Defaults to False.
-        verbose (bool, optional): Whether to enable verbose logging. Defaults to False.
-        selected_model (str, optional): YOLO model filename to use. Defaults to "".
-        jpeg_quality (int, optional): JPEG quality setting (1-100). Defaults to 95.
-        png_compression (int, optional): PNG compression level (0-9). Defaults to 6.
+        input_dir_or_files (Union[str, list]): Directory path or list of file paths.
+        selected_model (str): Filename of the selected YOLO model.
+        detection_cfg (DetectionConfig): Detection parameters.
+        cleaning_cfg (CleaningConfig): Cleaning parameters.
+        translation_cfg (TranslationConfig): Translation parameters.
+        rendering_cfg (RenderingConfig): Rendering parameters.
+        output_cfg (OutputConfig): Output image parameters (quality, compression, format).
+        verbose (bool, optional): Enable verbose logging. Defaults to False.
         progress (gr.Progress, optional): Gradio progress component. Defaults to gr.Progress().
-        device (torch.device, optional): The target device to run models on.
+        device (Optional[torch.device], optional): Target device. Defaults to None.
     
     Returns:
         tuple: 
@@ -652,9 +582,9 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
     start_time = time.time()
 
     # --- Input Validation ---
-    # Common validation (API Key, Model, Font, Rendering Params)
-    yolo_model_path, font_dir = _validate_common_inputs(
-        api_key, selected_model, font_pack, max_font_size, min_font_size, line_spacing, font_hinting
+    # Common validation
+    yolo_model_path, _ = _validate_common_inputs(
+        translation_cfg, rendering_cfg, selected_model
     )
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -666,48 +596,16 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
     temp_dir_path_obj = None
     try:
         # --- Configuration Setup ---
-        use_otsu_config_val = use_otsu_threshold
 
         config = MangaTranslatorConfig(
             yolo_model_path=str(yolo_model_path),
             verbose=verbose,
             device=device or target_device,
-            detection=DetectionConfig(
-                confidence=confidence
-            ),
-            cleaning=CleaningConfig(
-                dilation_kernel_size=dilation_kernel_size,
-                dilation_iterations=dilation_iterations,
-                use_otsu_threshold=use_otsu_config_val,
-                min_contour_area=min_contour_area,
-                closing_kernel_size=closing_kernel_size,
-                closing_iterations=closing_iterations,
-                constraint_erosion_kernel_size=constraint_erosion_kernel_size,
-                constraint_erosion_iterations=constraint_erosion_iterations
-            ),
-            translation=TranslationConfig(
-                api_key=api_key,
-                gemini_model=gemini_model,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                input_language=input_language,
-                output_language=output_language,
-            ),
-            rendering=RenderingConfig(
-                font_dir=str(font_dir),
-                max_font_size=max_font_size,
-                min_font_size=min_font_size,
-                line_spacing=line_spacing,
-                use_subpixel_rendering=use_subpixel_rendering,
-                font_hinting=font_hinting,
-                use_ligatures=use_ligatures
-            ),
-            output=OutputConfig(
-                jpeg_quality=jpeg_quality,
-                png_compression=png_compression,
-                image_mode="RGBA"
-            )
+            detection=detection_cfg,
+            cleaning=cleaning_cfg,
+            translation=translation_cfg,
+            rendering=rendering_cfg,
+            output=output_cfg
         )
 
         # --- Execute Batch Processing ---
@@ -737,7 +635,7 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
                 except Exception as copy_err:
                     print(f"Warning: Could not copy file {img_file.name}: {copy_err}")
 
-            process_dir = temp_dir_path_obj
+            process_dir = temp_dir_path
 
         elif isinstance(input_dir_or_files, str):
              input_path = Path(input_dir_or_files)
@@ -787,17 +685,17 @@ def process_batch(input_dir_or_files: Union[str, list], # Type hint added
             f"• Source language: {config.translation.input_language}\n"
             f"• Target language: {config.translation.output_language}\n"
             f"• Reading Direction: {config.translation.reading_direction.upper()}\n"
-            f"• Font pack: {font_pack}\n"
+            f"• Font pack: {Path(config.rendering.font_dir).name}\n"
             f"• Model used: {selected_model}\n"
-            f"• Cleaning Params: DKS:{dilation_kernel_size}, DI:{dilation_iterations}, Otsu:{use_otsu_threshold}, "
-            f"MCA:{min_contour_area}, CKS:{closing_kernel_size}, CI:{closing_iterations}, "
-            f"CEKS:{constraint_erosion_kernel_size}, CEI:{constraint_erosion_iterations}\n"
-            f"• Temperature: {temperature}\n"
-            f"• Top-p: {top_p}\n"
-            f"• Top-k: {top_k}\n"
-            f"• Output format: {output_format}\n"
-            f"• JPEG quality: {jpeg_quality}\n"
-            f"• PNG compression: {png_compression}\n"
+            f"• Cleaning Params: DKS:{config.cleaning.dilation_kernel_size}, DI:{config.cleaning.dilation_iterations}, Otsu:{config.cleaning.use_otsu_threshold}, "
+            f"MCA:{config.cleaning.min_contour_area}, CKS:{config.cleaning.closing_kernel_size}, CI:{config.cleaning.closing_iterations}, "
+            f"CEKS:{config.cleaning.constraint_erosion_kernel_size}, CEI:{config.cleaning.constraint_erosion_iterations}\n"
+            f"• Temperature: {config.translation.temperature}\n"
+            f"• Top-p: {config.translation.top_p}\n"
+            f"• Top-k: {config.translation.top_k}\n"
+            f"• Output format: {config.output.output_format}\n"
+            f"• JPEG quality: {config.output.jpeg_quality}{' (if applicable)' if config.output.output_format != 'jpeg' else ''}\n"
+            f"• PNG compression: {config.output.png_compression}{' (if applicable)' if config.output.output_format != 'png' else ''}\n"
             f"• Successful translations: {success_count}/{total_images}{error_summary}\n"
             f"• Total processing time: {processing_time:.2f} seconds ({seconds_per_image:.2f} seconds/image)\n"
             f"• Output directory: {output_path}"
@@ -869,14 +767,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                         image_mode="RGBA",
                         elem_id="translator_input_image"
                     )
-                    
-                    with gr.Row():
-                        gemini_model = gr.Dropdown(
-                            ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash-thinking-exp-01-21", "gemini-2.0-pro-exp-02-05", "gemini-2.5-pro-exp-03-25"], 
-                            label="Model (Gemini)", 
-                            value=saved_settings.get("gemini_model", "gemini-2.0-flash")
-                        )
-                    
+                                        
                     with gr.Row():
                         font_dropdown = gr.Dropdown(
                             choices=font_choices,
@@ -928,14 +819,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                         file_count="directory",
                         type="filepath"
                     )
-                    
-                    with gr.Row():
-                        batch_gemini_model = gr.Dropdown(
-                            ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21"], 
-                            label="Model (Gemini)", 
-                            value=saved_settings.get("batch_gemini_model", "gemini-2.0-flash")
-                        )
-                    
+                                        
                     with gr.Row():
                         batch_font_dropdown = gr.Dropdown(
                             choices=font_choices,
@@ -1090,7 +974,12 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                             value=saved_settings.get('gemini_api_key', ''), show_copy_button=False,
                             info="API keys are stored locally"
                         )
-                        
+                        config_gemini_model = gr.Dropdown(
+                            ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash-thinking-exp-01-21", "gemini-2.0-pro-exp-02-05", "gemini-2.5-pro-exp-03-25"],
+                            label="Model (Gemini)",
+                            value=saved_settings.get("gemini_model", "gemini-2.0-flash"),
+                            info="Select the Gemini model for translation."
+                        )
                         temperature = gr.Slider(
                             0, 2, value=saved_settings.get("temperature", 0.1), step=0.05,
                             label="Temperature"
@@ -1202,57 +1091,15 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                 fn=lambda format: [gr.update(interactive=format != "png"), gr.update(interactive=format != "jpeg")],
                 inputs=output_format, outputs=[jpeg_quality, png_compression]
             )
-        
-        with gr.TabItem("Setup"):
-            gr.Markdown("## Initial Setup")
-            gr.Markdown("""
-            1. Get a Gemini API key from [Google AI Studio](https://aistudio.google.com/)
-            2. **Optional**: Place a custom YOLO model in the 'models' directory.
-               - The default model is [yolov8m_seg-speech-bubble.pt](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
-            3. Place fonts in their own folders inside the 'fonts' directory.
-               - Each font should have its own dedicated folder containing all its variants (regular, bold, italic, etc.)
-               - The default font "CC Wild Words" includes Roman, Italic, and Bold Italic variants
-               <br><br>
-            """)
-            
-            gr.Markdown("""
-            ## Font Management
-            
-            You can add more fonts by placing folders containing font files (and their variants) into the 'fonts' directory.
-            
-            Each subdirectory in the 'fonts' directory will be treated as a separate font pack in the dropdown menu.
-            
-            Example directory structure:
-            ```
-            fonts/
-            ├── CC Wild Words/
-            │   ├── CC Wild Words Roman.ttf
-            │   ├── CC Wild Words Bold.ttf
-            │   └── CC Wild Words Bold Italic.ttf
-            └── Another Font/
-                ├── AnotherFont-Regular.ttf
-                ├── AnotherFont-Bold.ttf
-                └── AnotherFont-BoldItalic.ttf
-            ```
-            <br>
-            """)
-            
-            gr.Markdown("""
-            ## Using Your Own YOLO Model
-            
-            If you want to use a custom YOLO model, place the model file in the 'models' folder, refresh the models list (via the Other section) and select your model from the dropdown in the Config tab.
-            
-            **Note: The YOLO model must have segmentation and be trained *specifically* for speech bubble detection.**
-            """)
 
     save_config_btn.click(
         fn=lambda api_key_val, mdl_dd_val, conf_val, config_rd_val,
                  dks_val, di_val, otsu_val, mca_val, cks_val, ci_val, ceks_val, cei_val,
                  max_fs_val, min_fs_val, ls_val, subpix_val, hint_val, liga_val,
-                 temp_val, tp_val, tk_val,
+                 config_gm_val, temp_val, tp_val, tk_val,
                  out_fmt_val, jpeg_q_val, png_comp_val, verb_val,
-                 input_lang_val, output_lang_val, gm_val, fp_val,
-                 b_input_lang_val, b_output_lang_val, b_gm_val, b_fp_val:
+                 input_lang_val, output_lang_val, fp_val,
+                 b_input_lang_val, b_output_lang_val, b_fp_val:
             save_config({
                 'gemini_api_key': api_key_val, 'yolo_model': mdl_dd_val,
                 'confidence': conf_val,
@@ -1261,12 +1108,12 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                 'closing_kernel_size': cks_val, 'closing_iterations': ci_val,
                 'constraint_erosion_kernel_size': ceks_val, 'constraint_erosion_iterations': cei_val,
                 'max_font_size': max_fs_val, 'min_font_size': min_fs_val, 'line_spacing': ls_val, 'use_subpixel_rendering': subpix_val, 'font_hinting': hint_val, 'use_ligatures': liga_val,
-                'temperature': temp_val, 'top_p': tp_val, 'top_k': tk_val,
+                'gemini_model': config_gm_val, 'temperature': temp_val, 'top_p': tp_val, 'top_k': tk_val,
                 'output_format': out_fmt_val, 'jpeg_quality': jpeg_q_val, 'png_compression': png_comp_val,
                 'verbose': verb_val,
-                'input_language': input_lang_val, 'output_language': output_lang_val, 'gemini_model': gm_val, 'font_pack': fp_val,
+                'input_language': input_lang_val, 'output_language': output_lang_val, 'font_pack': fp_val,
                 'reading_direction': config_rd_val,
-                'batch_input_language': b_input_lang_val, 'batch_output_language': b_output_lang_val, 'batch_gemini_model': b_gm_val, 'batch_font_pack': b_fp_val,
+                'batch_input_language': b_input_lang_val, 'batch_output_language': b_output_lang_val, 'batch_font_pack': b_fp_val,
                 'batch_reading_direction': config_rd_val
             })[1],
         inputs=[
@@ -1274,10 +1121,10 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
             max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
-            temperature, top_p, top_k,
+            config_gemini_model, temperature, top_p, top_k,
             output_format, jpeg_quality, png_compression, verbose,
-            input_language, output_language, gemini_model, font_dropdown,
-            batch_input_language, batch_output_language, batch_gemini_model, batch_font_dropdown
+            input_language, output_language, font_dropdown,
+            batch_input_language, batch_output_language, batch_font_dropdown
         ],
         outputs=[config_status],
         queue=False
@@ -1332,14 +1179,14 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             defaults['closing_kernel_size'], defaults['closing_iterations'],
             defaults['constraint_erosion_kernel_size'], defaults['constraint_erosion_iterations'],
             defaults['max_font_size'], defaults['min_font_size'], defaults['line_spacing'], defaults['use_subpixel_rendering'], defaults['font_hinting'], defaults['use_ligatures'],
-            defaults.get('gemini_api_key', ''), defaults['temperature'], defaults['top_p'], defaults['top_k'],
+            defaults.get('gemini_api_key', ''), defaults['gemini_model'], defaults['temperature'], defaults['top_p'], defaults['top_k'],
             defaults['output_format'], defaults['jpeg_quality'], defaults['png_compression'],
             defaults['verbose'],
-            defaults['input_language'], defaults['output_language'], defaults['gemini_model'],
+            defaults['input_language'], defaults['output_language'],
             reset_font,
             defaults['batch_input_language'], defaults['batch_output_language'],
-            defaults['batch_gemini_model'], batch_reset_font,
-            f"{SUCCESS_PREFIX}Settings reset to defaults"
+            batch_reset_font,
+            f"Settings reset to defaults"
         ]
 
     reset_defaults_btn.click(
@@ -1350,38 +1197,82 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
             max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
-            api_key, temperature, top_p, top_k,
+            api_key, config_gemini_model, temperature, top_p, top_k,
             output_format, jpeg_quality, png_compression,
             verbose,
-            input_language, output_language, gemini_model, font_dropdown,
-            batch_input_language, batch_output_language, batch_gemini_model, batch_font_dropdown,
+            input_language, output_language, font_dropdown,
+            batch_input_language, batch_output_language, batch_font_dropdown,
             config_status
         ], queue=False
+    ).then(
+        fn=lambda: None,
+        inputs=None, outputs=None,
+        js="""
+        () => {
+            const statusElement = document.getElementById('config_status');
+            if (statusElement && statusElement.textContent.trim() !== "") {
+                clearTimeout(statusElement.fadeTimer);
+                clearTimeout(statusElement.resetTimer);
+
+                statusElement.style.display = 'block';
+                statusElement.style.transition = 'none';
+                statusElement.style.opacity = '1';
+
+                const fadeDelay = 3000;
+                const fadeDuration = 1000;
+
+                statusElement.fadeTimer = setTimeout(() => {
+                    statusElement.style.transition = `opacity ${fadeDuration}ms ease-out`;
+                    statusElement.style.opacity = '0';
+
+                    statusElement.resetTimer = setTimeout(() => {
+                        statusElement.style.display = 'none';
+                        statusElement.style.opacity = '1';
+                        statusElement.style.transition = 'none';
+                    }, fadeDuration);
+
+                }, fadeDelay);
+            } else if (statusElement) {
+                statusElement.style.display = 'none';
+            }
+        }
+        """,
+        queue=False
     )
 
     translate_button.click(
         fn=lambda: gr.update(interactive=False, value="Translating..."), outputs=translate_button, queue=False
     ).then(
-        partial(translate_manga, device=target_device),
+        lambda img, api_k, i_lang, o_lang, config_g_model, conf, dks, di, otsu, mca, cks, ci, ceks, cei, temp, t_p, t_k, mdl, font, max_fs, min_fs, ls, subpix, hint, liga, verb, jq, pngc, out_fmt: translate_manga(
+            image=img,
+            selected_model=mdl,
+            detection_cfg=DetectionConfig(confidence=conf),
+            cleaning_cfg=CleaningConfig(
+                dilation_kernel_size=dks, dilation_iterations=di, use_otsu_threshold=otsu,
+                min_contour_area=mca, closing_kernel_size=cks, closing_iterations=ci,
+                constraint_erosion_kernel_size=ceks, constraint_erosion_iterations=cei
+            ),
+            translation_cfg=TranslationConfig(
+                api_key=api_k, input_language=i_lang, output_language=o_lang,
+                gemini_model=config_g_model, temperature=temp, top_p=t_p, top_k=t_k
+            ),
+            rendering_cfg=RenderingConfig(
+                font_dir=str(FONTS_BASE_DIR / font) if font else "",
+                max_font_size=max_fs, min_font_size=min_fs, line_spacing=ls,
+                use_subpixel_rendering=subpix, font_hinting=hint, use_ligatures=liga
+            ),
+            output_cfg=OutputConfig(jpeg_quality=jq, png_compression=pngc),
+            verbose=verb,
+            output_format=out_fmt,
+            device=target_device
+        ),
         inputs=[
-            input_image,
-            api_key,
-            input_language,
-            output_language,
-            gemini_model,
-            confidence,
-            dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
+            input_image, api_key, input_language, output_language, config_gemini_model,
+            confidence, dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
-            temperature,
-            top_p,
-            top_k,
-            model_dropdown,
-            font_dropdown,
+            temperature, top_p, top_k, model_dropdown, font_dropdown,
             max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
-            verbose,
-            jpeg_quality,
-            png_compression,
-            output_format
+            verbose, jpeg_quality, png_compression, output_format
         ],
         outputs=[output_image, status_message]
     ).then(
@@ -1393,25 +1284,36 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
     batch_process_button.click(
         fn=lambda: gr.update(interactive=False, value="Processing..."), outputs=batch_process_button, queue=False
     ).then(
-        partial(process_batch, device=target_device),
+        lambda in_dir, api_k, i_lang, o_lang, config_g_model, font, conf, dks, di, otsu, mca, cks, ci, ceks, cei, temp, t_p, t_k, max_fs, min_fs, ls, subpix, hint, liga, verb, mdl, jq, pngc, out_fmt: process_batch(
+            input_dir_or_files=in_dir,
+            selected_model=mdl,
+            detection_cfg=DetectionConfig(confidence=conf),
+            cleaning_cfg=CleaningConfig(
+                dilation_kernel_size=dks, dilation_iterations=di, use_otsu_threshold=otsu,
+                min_contour_area=mca, closing_kernel_size=cks, closing_iterations=ci,
+                constraint_erosion_kernel_size=ceks, constraint_erosion_iterations=cei
+            ),
+            translation_cfg=TranslationConfig(
+                api_key=api_k, input_language=i_lang, output_language=o_lang,
+                gemini_model=config_g_model, temperature=temp, top_p=t_p, top_k=t_k
+            ),
+            rendering_cfg=RenderingConfig(
+                font_dir=str(FONTS_BASE_DIR / font) if font else "",
+                max_font_size=max_fs, min_font_size=min_fs, line_spacing=ls,
+                use_subpixel_rendering=subpix, font_hinting=hint, use_ligatures=liga
+            ),
+            output_cfg=OutputConfig(jpeg_quality=jq, png_compression=pngc, output_format=out_fmt),
+            verbose=verb,
+            device=target_device
+        ),
         inputs=[
-            input_dir,
-            api_key,
-            batch_input_language,
-            batch_output_language,
-            batch_gemini_model,
-            batch_font_dropdown,
-            confidence,
+            input_dir, api_key, batch_input_language, batch_output_language, config_gemini_model,
+            batch_font_dropdown, confidence,
             dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
             closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
-            temperature,
-            top_p,
-            top_k,
+            temperature, top_p, top_k,
             max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
-            verbose,
-            model_dropdown,
-            jpeg_quality,
-            png_compression
+            verbose, model_dropdown, jpeg_quality, png_compression, output_format
         ],
         outputs=[batch_output_gallery, batch_status_message]
     ).then(
