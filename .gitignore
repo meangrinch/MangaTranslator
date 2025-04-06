@@ -5,7 +5,7 @@ __pycache__/
 /venv/
 /.venv/
 /output/
-/font/
+/fonts/
 /models/
 .DS_Store
 Thumbs.db
