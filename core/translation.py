@@ -1,7 +1,6 @@
-import json
 import re
-import time
-import requests
+from .config import TranslationConfig
+from scripts.endpoints import call_gemini_endpoint, call_openai_endpoint, call_anthropic_endpoint, call_openrouter_endpoint, call_openai_compatible_endpoint
 
 def sort_bubbles_by_reading_order(detections, image_height, image_width, reading_direction="rtl"):
     """
@@ -18,14 +17,14 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
     """
     grid_rows = 3
     grid_cols = 2
-    
+
     sorted_detections = detections.copy()
-    
+
     for detection in sorted_detections:
         x1, y1, x2, y2 = detection["bbox"]
         center_x = (x1 + x2) / 2
         center_y = (y1 + y2) / 2
-        
+
         row_idx = int((center_y / image_height) * grid_rows)
 
         if reading_direction == "ltr":
@@ -40,38 +39,41 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
 
     return sorted(sorted_detections, key=sort_key)
 
-def call_gemini_api_batch(api_key, images_b64: list, full_image_b64: str, input_language="Japanese", output_language="English", reading_direction="rtl",
-                          model_name="gemini-2.0-flash", temperature=0.1, top_p=0.95, top_k=1, debug=False):
+def call_translation_api_batch(config: TranslationConfig, images_b64: list, full_image_b64: str, debug=False):
     """
-    Call Gemini API to translate text from all speech bubbles at once, using the full page for context
-    and requesting font style information via asterisk wrapping.
+    Generates a prompt and calls the appropriate translation API endpoint based on the provider
+    specified in the configuration, translating text from speech bubbles.
+
+    Uses the full page for context and requests font style information via markdown markers.
+    Handles parsing the structured response from the API.
 
     Args:
-        api_key (str): Gemini API key
+        config (TranslationConfig): Configuration object containing provider, API keys, model, language settings, etc.
         images_b64 (list): List of base64 encoded images of all bubbles, in reading order.
         full_image_b64 (str): Base64 encoded image of the full manga page.
-        input_language (str): Source language of the text in the image
-        output_language (str): Target language for translation
-        model_name (str): Gemini model to use for inference.
-        temperature (float): Controls randomness in the output.
-        top_p (float): Nucleus sampling parameter.
-        top_k (int): Controls diversity by limiting to top k tokens.
-        reading_direction (str): "rtl" or "ltr", used to inform the model about bubble order.
         debug (bool): Whether to print debugging information.
 
     Returns:
         list: List of translated strings (potentially with style markers), one for each input bubble image.
+              Returns placeholder messages like "[Blocked]" or "[No translation...]" on errors or empty responses.
 
     Raises:
-        ValueError: If API key is missing.
-        RuntimeError: If API call fails after retries for rate-limited errors
-                      or response processing fails.
+        ValueError: If the required API key for the selected provider is missing or if the provider is unknown.
+        RuntimeError: If the API call fails irrecoverably (raised by the endpoint function)
+                      or if parsing the successful API response fails.
     """
-    if not api_key:
-        raise ValueError("API key is required")
-        
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-    
+    # Extract parameters from config
+    provider = config.provider
+    api_key = ""
+    model_name = config.model_name
+    temperature = config.temperature
+    top_p = config.top_p
+    top_k = config.top_k
+    input_language = config.input_language
+    output_language = config.output_language
+    reading_direction = config.reading_direction
+
+    # --- Prepare Prompt (consistent across providers) ---
     reading_order_desc = "right-to-left, top-to-bottom" if reading_direction == "rtl" else "left-to-right, top-to-bottom"
     prompt_text = f"""Analyze the full manga/comic page image provided, followed by the {len(images_b64)} individual speech bubble images extracted from it in reading order ({reading_order_desc}).
 For each individual speech bubble image:
@@ -89,107 +91,109 @@ Provide your response in this *exact* format, with each translation on a new lin
 
 Do not include any other text or explanations in your response."""
 
+    # --- Prepare API Input Parts (consistent structure) ---
     parts = [
         {"text": prompt_text},
-        {"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}}
+        {"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}} # Assuming JPEG
     ]
     for i, img_b64 in enumerate(images_b64):
         parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
-    
-    safety_settings_config = [
-        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-    ]
-    
-    payload = {
-        "contents": [{"parts": parts}],
-        "generationConfig": {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_output_tokens": 2048},
-        "safetySettings": safety_settings_config
-    }
-    
-    max_retries = 5
-    base_delay = 1.0
-    
-    for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2 ** attempt), 16.0) # Double delay, max 16s
+
+    # --- Provider Dispatch Logic ---
+    response_text = None
+    try:
+        if provider == "Gemini":
+            api_key = config.gemini_api_key
+            if not api_key:
+                raise ValueError("Gemini API key is missing in configuration and environment variables.")
+            generation_config = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_output_tokens": 2048}
+            response_text = call_gemini_endpoint(
+                api_key=api_key, model_name=model_name, parts=parts,
+                generation_config=generation_config, debug=debug
+            )
+        elif provider == "OpenAI":
+            api_key = config.openai_api_key
+            if not api_key:
+                raise ValueError("OpenAI API key is missing in configuration and environment variables.")
+            # OpenAI Chat Completions API ignores top_k
+            generation_config = {"temperature": temperature, "top_p": top_p, "max_output_tokens": 2048}
+            response_text = call_openai_endpoint(
+                api_key=api_key, model_name=model_name, parts=parts,
+                generation_config=generation_config, debug=debug
+            )
+        elif provider == "Anthropic":
+            api_key = config.anthropic_api_key
+            if not api_key:
+                raise ValueError("Anthropic API key is missing in configuration and environment variables.")
+            # Clamp temperature to 1.0 for Anthropic
+            clamped_temp = min(temperature, 1.0)
+            generation_config = {"temperature": clamped_temp, "top_p": top_p, "top_k": top_k, "max_output_tokens": 2048}
+            response_text = call_anthropic_endpoint(
+                api_key=api_key, model_name=model_name, parts=parts,
+                generation_config=generation_config, debug=debug
+            )
+        elif provider == "OpenRouter":
+            api_key = config.openrouter_api_key
+            if not api_key:
+                raise ValueError("OpenRouter API key is missing in configuration and environment variables.")
+            # Parameter restrictions (temp clamp, no top_k for OpenAI/Anthropic models) are handled *inside* call_openrouter_endpoint
+            generation_config = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_output_tokens": 2048}
+            response_text = call_openrouter_endpoint(
+                api_key=api_key, model_name=model_name, parts=parts,
+                generation_config=generation_config, debug=debug
+            )
+        elif provider == "OpenAI-Compatible":
+            base_url = config.openai_compatible_url
+            api_key = config.openai_compatible_api_key # Can be None or empty string
+            if not base_url:
+                raise ValueError("OpenAI-Compatible URL is missing in configuration.")
+            # Compatible endpoints generally follow OpenAI's parameter structure (no top_k)
+            generation_config = {"temperature": temperature, "top_p": top_p, "max_output_tokens": 2048}
+            response_text = call_openai_compatible_endpoint(
+                base_url=base_url, api_key=api_key, model_name=model_name, parts=parts,
+                generation_config=generation_config, debug=debug
+            )
+        else:
+            raise ValueError(f"Unknown translation provider specified: {provider}")
+
+        # --- Process Response (consistent parsing logic) ---
+        if response_text is None:
+            return [f"[{provider}: Blocked or No Response]"] * len(images_b64) # Placeholder for error
+        elif response_text == "":
+             if debug: print(f"Received empty response from {provider} API, likely no text detected.")
+             return [f"[{provider}: No text detected or translation failed]"] * len(images_b64) # Placeholder for empty
+
         try:
-            if debug:
-                print(f"Making batch API request (Attempt {attempt + 1}/{max_retries + 1})...")
-
-            response = requests.post(url, json=payload, timeout=120)
-
-            response.raise_for_status()
+            translations = []
+            # Regex to find numbered lines
+            translation_pattern = re.compile(r'^\s*(\d+)\s*:\s*(.*?)(?=\s*\n\s*\d+\s*:|\s*$)', re.MULTILINE | re.DOTALL)
+            matches = translation_pattern.findall(response_text)
 
             if debug:
-                print("API response OK (200), processing result...")
-            try:
-                result = response.json()
-                if "candidates" in result and len(result["candidates"]) > 0:
-                    response_text = result["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+                print(f"Raw response text received from {provider}:\n---\n{response_text}\n---")
+                print(f"Regex matches found: {len(matches)}")
 
-                    if not response_text and result["candidates"][0].get("finishReason") == "SAFETY":
-                         block_reason = result.get("promptFeedback", {}).get("blockReason", "Unknown Safety Reason")
-                         print(f"API Error: Content blocked by safety settings ({block_reason})")
-                         return [f"[Blocked: {block_reason}]"] * len(images_b64)
+            translations_dict = {}
+            for num_str, text in matches:
+                 try:
+                     num = int(num_str)
+                     translations_dict[num] = text.strip()
+                 except ValueError:
+                     if debug: print(f"Warning: Could not parse number '{num_str}' in response line.")
 
-                    translations = []
-                    translation_pattern = re.compile(r'\s*(\d+)\s*:\s*(.*?)(?=\s*\d+\s*:|\s*$)', re.DOTALL)
-                    matches = translation_pattern.findall(response_text)
-                    
-                    if debug:
-                        print(f"Raw response text: {response_text}")
-                        print(f"Regex matches: {matches}")
-                    
-                    translations_dict = {int(num): text.strip() for num, text in matches}
-                    for i in range(1, len(images_b64) + 1):
-                        translations.append(translations_dict.get(i, f"[No translation for bubble {i}]"))
+            # Ensure we have a result for every input bubble, even if missing from response
+            for i in range(1, len(images_b64) + 1):
+                translations.append(translations_dict.get(i, f"[{provider}: No translation for bubble {i}]")) # Placeholder for missing bubble
 
-                    if len(translations) != len(images_b64) and debug:
-                         print(f"Warning: Expected {len(images_b64)} translations, but parsed {len(translations)}. Check raw response.")
+            if len(translations) != len(images_b64) and debug:
+                 print(f"Warning: Expected {len(images_b64)} translations, but constructed {len(translations)}. Check raw response and parsing logic.")
 
-                    return translations
-                else:
-                    block_reason = result.get("promptFeedback", {}).get("blockReason")
-                    if block_reason:
-                         print(f"API Warning: Request blocked. Reason: {block_reason}")
-                         return [f"[Blocked: {block_reason}]"] * len(images_b64)
-                    else:
-                         print("API Warning: No candidates found in successful response.")
-                         return ["No text detected or translation failed"] * len(images_b64)
+            return translations
 
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                print(f"Error processing successful API response: {str(e)}")
-                raise RuntimeError(f"Error processing successful API response: {str(e)}") from e
+        except Exception as e:
+            print(f"Error processing successful {provider} API response content: {str(e)}")
+            raise RuntimeError(f"Error processing {provider} API response content: {str(e)}\nRaw Response:\n{response_text}") from e
 
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code
-            error_text = e.response.text[:500]
-            
-            if status_code == 429 and attempt < max_retries:
-                if debug:
-                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
-                time.sleep(current_delay)
-                continue
-
-            else:
-                error_reason = f"Status Code: {status_code}, Response: {error_text}"
-                if status_code == 429 and attempt == max_retries:
-                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
-
-                print(f"API Error: {error_reason}")
-                raise RuntimeError(f"API Error: {error_reason}") from e 
-
-        except requests.exceptions.RequestException as e:
-            if attempt < max_retries:
-                if debug:
-                    print(f"API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
-                time.sleep(current_delay)
-                continue
-            else:
-                print(f"API Connection Error after {max_retries + 1} attempts: {str(e)}")
-                raise RuntimeError(f"API Connection Error after retries: {str(e)}") from e
-
-    print(f"Failed to get translation after {max_retries + 1} attempts due to repeated errors.")
-    raise RuntimeError(f"Failed to get translation after {max_retries + 1} attempts.")
+    except (ValueError, RuntimeError) as e:
+        print(f"Translation failed using {provider}: {e}")
+        raise

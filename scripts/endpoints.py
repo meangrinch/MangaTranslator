@@ -1,0 +1,746 @@
+import requests
+import time
+import json
+from typing import List, Dict, Any, Optional
+
+def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
+                         generation_config: Dict[str, Any],
+                         debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+    """
+    Calls the Gemini API endpoint with the provided data and handles retries.
+
+    Args:
+        api_key (str): Gemini API key.
+        model_name (str): Gemini model to use.
+        parts (List[Dict[str, Any]]): List of content parts (text, images).
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, etc.).
+        debug (bool): Whether to print debugging information.
+        timeout (int): Request timeout in seconds.
+        max_retries (int): Maximum number of retries for rate limiting errors.
+        base_delay (float): Initial delay for retries in seconds.
+
+    Returns:
+        Optional[str]: The raw text content from the API response if successful,
+                       None if blocked by safety settings or if no content is found after retries.
+
+    Raises:
+        ValueError: If API key is missing.
+        RuntimeError: If API call fails after retries for non-rate-limited HTTP errors,
+                      connection errors, or response processing fails.
+    """
+    if not api_key:
+        raise ValueError("API key is required for Gemini endpoint")
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+
+    safety_settings_config = [
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+    ]
+
+    payload = {
+        "contents": [{"parts": parts}],
+        "generationConfig": generation_config,
+        "safetySettings": safety_settings_config
+    }
+
+    for attempt in range(max_retries + 1):
+        current_delay = min(base_delay * (2 ** attempt), 16.0) # Exponential backoff, max 16s
+        try:
+            if debug:
+                print(f"Making Gemini API request (Attempt {attempt + 1}/{max_retries + 1})...")
+                # print(f"Payload: {json.dumps(payload, indent=2)}")
+
+            response = requests.post(url, json=payload, timeout=timeout)
+            response.raise_for_status()
+
+            if debug:
+                print("Gemini API response OK (200), processing result...")
+            try:
+                result = response.json()
+                prompt_feedback = result.get("promptFeedback")
+                if prompt_feedback and prompt_feedback.get("blockReason"):
+                    block_reason = prompt_feedback.get("blockReason")
+                    print(f"API Warning: Request blocked by prompt feedback. Reason: {block_reason}")
+                    return None
+
+                if "candidates" in result and len(result["candidates"]) > 0:
+                    candidate = result["candidates"][0]
+                    if candidate.get("finishReason") == "SAFETY":
+                         safety_ratings = candidate.get("safetyRatings", [])
+                         block_reason = "Unknown Safety Reason"
+                         if safety_ratings:
+                             block_reason = safety_ratings[0].get("category", block_reason)
+                         print(f"API Error: Content generation blocked by safety settings ({block_reason})")
+                         return None
+
+                    content_parts = candidate.get("content", {}).get("parts", [{}])
+                    if content_parts and "text" in content_parts[0]:
+                        return content_parts[0].get("text", "").strip()
+                    else:
+                         if debug: print("API Warning: No text content found in the first candidate part.")
+                         return ""
+
+                else:
+                    print("API Warning: No candidates found in successful response.")
+                    if prompt_feedback and prompt_feedback.get("blockReason"):
+                        block_reason = prompt_feedback.get("blockReason")
+                        print(f"API Warning: No candidates and request blocked by prompt feedback. Reason: {block_reason}")
+                        return None
+                    return None
+
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+                print(f"Error processing successful Gemini API response: {str(e)}")
+                raise RuntimeError(f"Error processing successful Gemini API response: {str(e)}") from e
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code
+            error_text = e.response.text[:500] # Limit error text length
+
+            if status_code == 429 and attempt < max_retries:
+                if debug:
+                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                error_reason = f"Status Code: {status_code}, Response: {error_text}"
+                if status_code == 429 and attempt == max_retries:
+                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+
+                print(f"Gemini API HTTP Error: {error_reason}")
+                raise RuntimeError(f"Gemini API HTTP Error: {error_reason}") from e
+
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries:
+                if debug:
+                    print(f"Gemini API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                print(f"Gemini API Connection Error after {max_retries + 1} attempts: {str(e)}")
+                raise RuntimeError(f"Gemini API Connection Error after retries: {str(e)}") from e
+
+    print(f"Failed to get response from Gemini API after {max_retries + 1} attempts due to repeated errors.")
+    raise RuntimeError(f"Failed to get response from Gemini API after {max_retries + 1} attempts.")
+
+def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
+                         generation_config: Dict[str, Any],
+                         debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+    """
+    Calls the OpenAI Chat Completions API endpoint with the provided data and handles retries.
+
+    Args:
+        api_key (str): OpenAI API key.
+        model_name (str): OpenAI model to use (e.g., "gpt-4o").
+        parts (List[Dict[str, Any]]): List of content parts (text, images).
+                                      # Assumes the first part is the text prompt, subsequent are images.
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_output_tokens).
+                                            # 'top_k' is ignored by OpenAI Chat API.
+        debug (bool): Whether to print debugging information.
+        timeout (int): Request timeout in seconds.
+        max_retries (int): Maximum number of retries for rate limiting errors.
+        base_delay (float): Initial delay for retries in seconds.
+
+    Returns:
+        Optional[str]: The raw text content from the API response if successful,
+                       None if blocked by content filter or if no content is found after retries.
+
+    Raises:
+        ValueError: If API key is missing or parts format is invalid.
+        RuntimeError: If API call fails after retries for non-rate-limited HTTP errors,
+                      connection errors, or response processing fails.
+    """
+    if not api_key:
+        raise ValueError("API key is required for OpenAI endpoint")
+    if not parts or "text" not in parts[0]:
+         raise ValueError("Invalid 'parts' format for OpenAI: First part must be text prompt.")
+
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    # Transform parts to OpenAI messages format
+    messages = []
+    user_content = []
+    user_content.append({"type": "text", "text": parts[0]["text"]})
+    for part in parts[1:]:
+        if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
+            mime_type = part["inline_data"]["mime_type"]
+            base64_image = part["inline_data"]["data"]
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
+            })
+        else:
+             print(f"Warning: Skipping invalid image part format in OpenAI request: {part}")
+    messages.append({"role": "user", "content": user_content})
+
+    # Map generation config
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": generation_config.get("temperature"),
+        "top_p": generation_config.get("top_p"),
+        "max_tokens": generation_config.get("max_output_tokens", 2048)
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+
+    for attempt in range(max_retries + 1):
+        current_delay = min(base_delay * (2 ** attempt), 16.0)
+        try:
+            if debug:
+                print(f"Making OpenAI API request (Attempt {attempt + 1}/{max_retries + 1})...")
+                # print(f"Payload: {json.dumps(payload, indent=2)}")
+
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response.raise_for_status()
+
+            if debug:
+                print("OpenAI API response OK (200), processing result...")
+            try:
+                result = response.json()
+
+                if "choices" in result and len(result["choices"]) > 0:
+                    choice = result["choices"][0]
+                    finish_reason = choice.get("finish_reason")
+
+                    if finish_reason == "content_filter":
+                        print("API Error: Content generation blocked by OpenAI content filter.")
+                        return None
+
+                    message = choice.get("message")
+                    if message and "content" in message:
+                        content = message["content"]
+                        return content.strip() if content else ""
+                    else:
+                        if debug: print("API Warning: No message content found in the first choice.")
+                        return ""
+                else:
+                    print("API Warning: No choices found in successful OpenAI response.")
+                    return None
+
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+                print(f"Error processing successful OpenAI API response: {str(e)}")
+                raise RuntimeError(f"Error processing successful OpenAI API response: {str(e)}") from e
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code
+            error_text = e.response.text[:500]
+
+            if status_code == 429 and attempt < max_retries:
+                if debug:
+                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                error_reason = f"Status Code: {status_code}, Response: {error_text}"
+                if status_code == 429 and attempt == max_retries:
+                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                elif status_code == 400:
+                     error_reason += " (Check model name and request payload)" # Often indicates a bad request
+
+                print(f"OpenAI API HTTP Error: {error_reason}")
+                raise RuntimeError(f"OpenAI API HTTP Error: {error_reason}") from e
+
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries:
+                if debug:
+                    print(f"OpenAI API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                print(f"OpenAI API Connection Error after {max_retries + 1} attempts: {str(e)}")
+                raise RuntimeError(f"OpenAI API Connection Error after retries: {str(e)}") from e
+
+    print(f"Failed to get response from OpenAI API after {max_retries + 1} attempts due to repeated errors.")
+    raise RuntimeError(f"Failed to get response from OpenAI API after {max_retries + 1} attempts.")
+
+def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
+                            generation_config: Dict[str, Any],
+                            debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+    """
+    Calls the Anthropic Messages API endpoint with the provided data and handles retries.
+
+    Args:
+        api_key (str): Anthropic API key.
+        model_name (str): Anthropic model to use (e.g., "claude-3-opus-20240229").
+        parts (List[Dict[str, Any]]): List of content parts (text, images).
+                                      # Assumes the first part is the system/main prompt, subsequent are images.
+        generation_config (Dict[str, Any]): Configuration for generation (temp <= 1.0, top_p, top_k, max_output_tokens).
+        debug (bool): Whether to print debugging information.
+        timeout (int): Request timeout in seconds.
+        max_retries (int): Maximum number of retries for rate limiting errors.
+        base_delay (float): Initial delay for retries in seconds.
+
+    Returns:
+        Optional[str]: The raw text content from the API response if successful,
+                       None if an error occurs or no content is found after retries.
+
+    Raises:
+        ValueError: If API key is missing or parts format is invalid.
+        RuntimeError: If API call fails after retries for non-rate-limited HTTP errors,
+                      connection errors, or response processing fails.
+    """
+    if not api_key:
+        raise ValueError("API key is required for Anthropic endpoint")
+    if not parts or "text" not in parts[0]:
+         raise ValueError("Invalid 'parts' format for Anthropic: First part must be text prompt.")
+
+    url = "https://api.anthropic.com/v1/messages"
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+    }
+
+    # Transform parts to Anthropic messages format
+    system_prompt = parts[0]["text"]
+    messages = []
+    user_content = []
+    for part in parts[1:]:
+        if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
+            mime_type = part["inline_data"]["mime_type"]
+            base64_image = part["inline_data"]["data"]
+            user_content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime_type,
+                    "data": base64_image,
+                }
+            })
+        elif "text" in part:
+             user_content.append({"type": "text", "text": part["text"]})
+        else:
+             print(f"Warning: Skipping invalid part format in Anthropic request: {part}")
+
+    if not user_content:
+         raise ValueError("No valid content (images/text) found for Anthropic user message after the system prompt.")
+
+    messages.append({"role": "user", "content": user_content})
+
+    # Map generation config
+    temp = generation_config.get("temperature")
+    clamped_temp = min(temp, 1.0) if temp is not None else None
+
+    payload = {
+        "model": model_name,
+        "system": system_prompt,
+        "messages": messages,
+        "temperature": clamped_temp,
+        "top_p": generation_config.get("top_p"),
+        "top_k": generation_config.get("top_k"),
+        "max_tokens": generation_config.get("max_output_tokens", 2048)
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+
+    for attempt in range(max_retries + 1):
+        current_delay = min(base_delay * (2 ** attempt), 16.0)
+        try:
+            if debug:
+                print(f"Making Anthropic API request (Attempt {attempt + 1}/{max_retries + 1})...")
+                # print(f"Payload: {json.dumps(payload, indent=2)}")
+
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response.raise_for_status()
+
+            if debug:
+                print("Anthropic API response OK (200), processing result...")
+            try:
+                result = response.json()
+
+                if result.get("type") == "error":
+                    error_data = result.get("error", {})
+                    error_type = error_data.get("type", "unknown_error")
+                    error_message = error_data.get("message", "No error message provided.")
+                    print(f"Anthropic API Error Response: Type: {error_type}, Message: {error_message}")
+                    # TODO: Decide if retryable based on type? For now, treat as non-retryable error from API.
+                    raise RuntimeError(f"Anthropic API returned error: {error_type} - {error_message}")
+
+                if "content" in result and isinstance(result["content"], list) and len(result["content"]) > 0:
+                    text_content = ""
+                    for block in result["content"]:
+                        if block.get("type") == "text":
+                            text_content = block.get("text", "")
+                            break
+
+                    stop_reason = result.get("stop_reason")
+                    if stop_reason == "max_tokens":
+                         print("API Warning: Anthropic response truncated due to max_tokens limit.")
+                    elif stop_reason == "stop_sequence":
+                         pass
+                    elif stop_reason:
+                         if debug: print(f"Anthropic response finished with reason: {stop_reason}")
+
+                    return text_content.strip()
+
+                else:
+                    print("API Warning: No text content block found in successful Anthropic response.")
+                    return None
+
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+                print(f"Error processing successful Anthropic API response: {str(e)}")
+                raise RuntimeError(f"Error processing successful Anthropic API response: {str(e)}") from e
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code
+            error_text = e.response.text[:500]
+
+            if status_code == 429 and attempt < max_retries:
+                if debug:
+                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                error_reason = f"Status Code: {status_code}, Response: {error_text}"
+                if status_code == 429 and attempt == max_retries:
+                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                elif status_code == 400:
+                     error_reason += " (Check model name, API key, payload structure, or max_tokens)"
+                elif status_code == 401:
+                     error_reason += " (Check API key)"
+                elif status_code == 403:
+                     error_reason += " (Permission denied, check API key/plan)"
+
+
+                print(f"Anthropic API HTTP Error: {error_reason}")
+                raise RuntimeError(f"Anthropic API HTTP Error: {error_reason}") from e
+
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries:
+                if debug:
+                    print(f"Anthropic API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                print(f"Anthropic API Connection Error after {max_retries + 1} attempts: {str(e)}")
+                raise RuntimeError(f"Anthropic API Connection Error after retries: {str(e)}") from e
+
+    print(f"Failed to get response from Anthropic API after {max_retries + 1} attempts due to repeated errors.")
+    raise RuntimeError(f"Failed to get response from Anthropic API after {max_retries + 1} attempts.")
+
+
+def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
+                             generation_config: Dict[str, Any],
+                             debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+    """
+    Calls the OpenRouter Chat Completions API endpoint (OpenAI compatible) and handles retries.
+
+    Args:
+        api_key (str): OpenRouter API key.
+        model_name (str): OpenRouter model ID (e.g., "openai/gpt-4o", "anthropic/claude-3-haiku").
+        parts (List[Dict[str, Any]]): List of content parts (text, images).
+                                      # Assumes the first part is the text prompt, subsequent are images.
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, top_k, max_output_tokens).
+                                             # Parameter restrictions (temp clamp, no top_k) are applied
+                                             # based on the model_name if it indicates OpenAI or Anthropic.
+        debug (bool): Whether to print debugging information.
+        timeout (int): Request timeout in seconds.
+        max_retries (int): Maximum number of retries for rate limiting errors.
+        base_delay (float): Initial delay for retries in seconds.
+
+    Returns:
+        Optional[str]: The raw text content from the API response if successful,
+                       None if blocked by content filter or if no content is found after retries.
+
+    Raises:
+        ValueError: If API key is missing or parts format is invalid.
+        RuntimeError: If API call fails after retries for non-rate-limited HTTP errors,
+                      connection errors, or response processing fails.
+    """
+    if not api_key:
+        raise ValueError("API key is required for OpenRouter endpoint")
+    if not parts or "text" not in parts[0]:
+         raise ValueError("Invalid 'parts' format for OpenRouter: First part must be text prompt.")
+
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/meangrinch/MangaTranslator",
+        "X-Title": "MangaTranslator"
+    }
+
+    # Transform parts to OpenAI messages format
+    messages = []
+    user_content = []
+    user_content.append({"type": "text", "text": parts[0]["text"]})
+    for part in parts[1:]:
+        if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
+            mime_type = part["inline_data"]["mime_type"]
+            base64_image = part["inline_data"]["data"]
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
+            })
+        else:
+             print(f"Warning: Skipping invalid image part format in OpenRouter request: {part}")
+    messages.append({"role": "user", "content": user_content})
+
+    # Map generation config with provider-specific restrictions
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "max_tokens": generation_config.get("max_output_tokens", 2048)
+    }
+
+    is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")
+    is_anthropic_model = "anthropic/" in model_name or model_name.startswith("claude-")
+
+    temp = generation_config.get("temperature")
+    if temp is not None:
+        if is_anthropic_model or is_openai_model:
+            payload["temperature"] = min(temp, 1.0)
+        else:
+            payload["temperature"] = temp
+
+    top_p = generation_config.get("top_p")
+    if top_p is not None:
+        payload["top_p"] = top_p
+
+    top_k = generation_config.get("top_k")
+    if top_k is not None and not is_openai_model and not is_anthropic_model:
+        payload["top_k"] = top_k
+
+    payload = {k: v for k, v in payload.items() if v is not None}
+
+    for attempt in range(max_retries + 1):
+        current_delay = min(base_delay * (2 ** attempt), 16.0)
+        try:
+            if debug:
+                print(f"Making OpenRouter API request (Attempt {attempt + 1}/{max_retries + 1})...")
+                # print(f"Payload: {json.dumps(payload, indent=2)}")
+
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response.raise_for_status()
+
+            if debug:
+                print("OpenRouter API response OK (200), processing result...")
+            try:
+                result = response.json()
+
+                if "choices" in result and len(result["choices"]) > 0:
+                    choice = result["choices"][0]
+                    finish_reason = choice.get("finish_reason")
+
+                    if finish_reason == "content_filter":
+                        print("API Error: Content generation blocked by OpenRouter content filter.")
+                        return None
+
+                    message = choice.get("message")
+                    if message and "content" in message:
+                        content = message["content"]
+                        return content.strip() if content else ""
+                    else:
+                        if debug: print("API Warning: No message content found in the first choice.")
+                        return ""
+                else:
+                    print("API Warning: No choices found in successful OpenRouter response.")
+                    if "error" in result:
+                        error_msg = result.get("error", {}).get("message", "Unknown error")
+                        print(f"OpenRouter API returned an error in the response body: {error_msg}")
+                        raise RuntimeError(f"OpenRouter API returned error: {error_msg}")
+                    return None
+
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+                print(f"Error processing successful OpenRouter API response: {str(e)}")
+                raise RuntimeError(f"Error processing successful OpenRouter API response: {str(e)}") from e
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code
+            error_text = e.response.text[:500]
+
+            if status_code == 429 and attempt < max_retries:
+                if debug:
+                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                error_reason = f"Status Code: {status_code}, Response: {error_text}"
+                if status_code == 429 and attempt == max_retries:
+                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                elif status_code == 400:
+                     error_reason += " (Check model name and request payload)" # Potential 400 reasons
+                elif status_code == 401:
+                     error_reason += " (Check API key)" # Potential 401 reason
+                elif status_code == 403:
+                     error_reason += " (Permission denied, check API key/plan)" # Potential 403 reason
+
+                print(f"OpenRouter API HTTP Error: {error_reason}")
+                raise RuntimeError(f"OpenRouter API HTTP Error: {error_reason}") from e
+
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries:
+                if debug:
+                    print(f"OpenRouter API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                print(f"OpenRouter API Connection Error after {max_retries + 1} attempts: {str(e)}")
+                raise RuntimeError(f"OpenRouter API Connection Error after retries: {str(e)}") from e
+
+    print(f"Failed to get response from OpenRouter API after {max_retries + 1} attempts due to repeated errors.")
+    raise RuntimeError(f"Failed to get response from OpenRouter API after {max_retries + 1} attempts.")
+
+
+def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model_name: str, parts: List[Dict[str, Any]],
+                                    generation_config: Dict[str, Any],
+                                    debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+    """
+    Calls a generic OpenAI-Compatible Chat Completions API endpoint and handles retries.
+
+    Args:
+        base_url (str): The base URL of the compatible endpoint (e.g., "http://localhost:11434/v1").
+        api_key (Optional[str]): The API key, if required by the endpoint.
+        model_name (str): The model ID to use.
+        parts (List[Dict[str, Any]]): List of content parts (text, images).
+                                      # Assumes the first part is the text prompt, subsequent are images.
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, top_k, max_output_tokens).
+                                             # Parameter restrictions (temp clamp, no top_k) might apply depending on the underlying model.
+        debug (bool): Whether to print debugging information.
+        timeout (int): Request timeout in seconds.
+        max_retries (int): Maximum number of retries for rate limiting errors.
+        base_delay (float): Initial delay for retries in seconds.
+
+    Returns:
+        Optional[str]: The raw text content from the API response if successful,
+                       None if blocked by content filter or if no content is found after retries.
+
+    Raises:
+        ValueError: If base_url is missing or parts format is invalid.
+        RuntimeError: If API call fails after retries for non-rate-limited HTTP errors,
+                      connection errors, or response processing fails.
+    """
+    if not base_url:
+        raise ValueError("Base URL is required for OpenAI-Compatible endpoint")
+    if not parts or "text" not in parts[0]:
+         raise ValueError("Invalid 'parts' format for OpenAI-Compatible: First part must be text prompt.")
+
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    # Transform parts to OpenAI messages format
+    messages = []
+    user_content = []
+    user_content.append({"type": "text", "text": parts[0]["text"]})
+    for part in parts[1:]:
+        if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
+            mime_type = part["inline_data"]["mime_type"]
+            base64_image = part["inline_data"]["data"]
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
+            })
+        else:
+             print(f"Warning: Skipping invalid image part format in OpenAI-Compatible request: {part}")
+    messages.append({"role": "user", "content": user_content})
+
+    # Map generation config (apply common restrictions cautiously)
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "max_tokens": generation_config.get("max_output_tokens", 2048)
+    }
+
+    temp = generation_config.get("temperature")
+    if temp is not None:
+        payload["temperature"] = min(temp, 1.0)
+
+    top_p = generation_config.get("top_p")
+    if top_p is not None:
+        payload["top_p"] = top_p
+
+    top_k = generation_config.get("top_k")
+    if top_k is not None:
+        payload["top_k"] = top_k
+
+    payload = {k: v for k, v in payload.items() if v is not None}
+
+    for attempt in range(max_retries + 1):
+        current_delay = min(base_delay * (2 ** attempt), 16.0)
+        try:
+            if debug:
+                print(f"Making OpenAI-Compatible API request to {url} (Attempt {attempt + 1}/{max_retries + 1})...")
+                # print(f"Payload: {json.dumps(payload, indent=2)}")
+
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response.raise_for_status()
+
+            if debug:
+                print(f"OpenAI-Compatible API response OK (200) from {url}, processing result...")
+            try:
+                result = response.json()
+
+                if "choices" in result and len(result["choices"]) > 0:
+                    choice = result["choices"][0]
+                    finish_reason = choice.get("finish_reason")
+
+                    if finish_reason == "content_filter":
+                        print("API Error: Content generation blocked by compatible endpoint content filter.")
+                        return None
+                    if finish_reason == "safety":
+                         print("API Error: Content generation blocked by compatible endpoint safety settings.")
+                         return None
+
+                    message = choice.get("message")
+                    if message and "content" in message:
+                        content = message["content"]
+                        return content.strip() if content else ""
+                    else:
+                        if debug: print("API Warning: No message content found in the first choice.")
+                        return ""
+                else:
+                    print("API Warning: No choices found in successful OpenAI-Compatible response.")
+                    if "error" in result:
+                        error_msg = result.get("error", {}).get("message", "Unknown error")
+                        print(f"OpenAI-Compatible API returned an error in the response body: {error_msg}")
+                        raise RuntimeError(f"OpenAI-Compatible API returned error: {error_msg}")
+                    return None
+
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
+                print(f"Error processing successful OpenAI-Compatible API response: {str(e)}")
+                raise RuntimeError(f"Error processing successful OpenAI-Compatible API response: {str(e)}") from e
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code
+            error_text = e.response.text[:500]
+
+            if status_code == 429 and attempt < max_retries:
+                if debug:
+                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                error_reason = f"Status Code: {status_code}, Response: {error_text}"
+                if status_code == 429 and attempt == max_retries:
+                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                elif status_code == 400:
+                     error_reason += " (Check model name and request payload)"
+                elif status_code == 401:
+                     error_reason += " (Check API key if provided)"
+                elif status_code == 403:
+                     error_reason += " (Permission denied)"
+
+                print(f"OpenAI-Compatible API HTTP Error: {error_reason}")
+                raise RuntimeError(f"OpenAI-Compatible API HTTP Error: {error_reason}") from e
+
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries:
+                if debug:
+                    print(f"OpenAI-Compatible API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                time.sleep(current_delay)
+                continue
+            else:
+                print(f"OpenAI-Compatible API Connection Error after {max_retries + 1} attempts: {str(e)}")
+                raise RuntimeError(f"OpenAI-Compatible API Connection Error after retries: {str(e)}") from e
+
+    print(f"Failed to get response from OpenAI-Compatible API ({url}) after {max_retries + 1} attempts due to repeated errors.")
+    raise RuntimeError(f"Failed to get response from OpenAI-Compatible API ({url}) after {max_retries + 1} attempts.")

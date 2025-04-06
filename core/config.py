@@ -24,8 +24,15 @@ class CleaningConfig:
 @dataclass
 class TranslationConfig:
     """Configuration for text translation."""
-    api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    provider: str = "Gemini"
+    gemini_api_key: str = ""
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    openrouter_api_key: str = ""
+    openai_compatible_url: str = "http://localhost:11434/v1"
+    openai_compatible_api_key: Optional[str] = ""
+    model_name: str = "gemini-2.0-flash"
+    provider_models: dict[str, Optional[str]] = field(default_factory=dict)
     temperature: float = 0.1
     top_p: float = 0.95
     top_k: int = 1
@@ -65,12 +72,19 @@ class MangaTranslatorConfig:
     device: Optional[torch.device] = None
 
     def __post_init__(self):
-        if not self.translation.api_key:
-            import os
-            self.translation.api_key = os.environ.get("GOOGLE_API_KEY", "")
-            if not self.translation.api_key:
-                 print("Warning: Gemini API key not provided in config or GOOGLE_API_KEY env var.")
-
+        # Load API keys from environment variables if not already set
+        import os
+        if not self.translation.gemini_api_key:
+            self.translation.gemini_api_key = os.environ.get("GOOGLE_API_KEY", "")
+        if not self.translation.openai_api_key:
+            self.translation.openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+        if not self.translation.anthropic_api_key:
+            self.translation.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not self.translation.openrouter_api_key:
+            self.translation.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        if not self.translation.openai_compatible_api_key: # Check if it's None or empty string
+            self.translation.openai_compatible_api_key = os.environ.get("OPENAI_COMPATIBLE_API_KEY", "")
+ 
         # Autodetect device if not specified
         if self.device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

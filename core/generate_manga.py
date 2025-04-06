@@ -9,12 +9,11 @@ import cv2
 from PIL import Image
 import torch
 
-# Local imports
 from .config import *
 from .detection import detect_speech_bubbles
 from .cleaning import clean_speech_bubbles
 from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
-from .translation import call_gemini_api_batch, sort_bubbles_by_reading_order
+from .translation import call_translation_api_batch, sort_bubbles_by_reading_order
 from .common_utils import log_message
 from .rendering import render_text_skia
 
@@ -68,7 +67,6 @@ def translate_and_render(image_path: Union[str, Path],
                  log_message(f"Converting {pil_image_processed.mode} to RGB (flattening transparency)", verbose=verbose)
                  background = Image.new('RGB', pil_image_processed.size, (255, 255, 255))
                  try:
-                     # Ensure mask is correctly obtained for different modes
                      mask = None
                      if pil_image_processed.mode == "RGBA":
                          mask = pil_image_processed.split()[3]
@@ -82,7 +80,7 @@ def translate_and_render(image_path: Union[str, Path],
                      if mask:
                          background.paste(pil_image_processed, mask=mask)
                          pil_image_processed = background
-                     else: # If no mask found, just convert
+                     else:
                           pil_image_processed = pil_image_processed.convert("RGB")
                  except Exception as paste_err:
                       log_message(f"Warning: Error during RGBA/LA/P -> RGB conversion paste: {paste_err}. Using simple convert.", verbose=verbose)
@@ -203,23 +201,13 @@ def translate_and_render(image_path: Union[str, Path],
              log_message("Full image context is missing due to encoding error. Skipping translation and rendering.", always_print=True)
          else:
              # Only attempt translation if we have bubbles and context
-             log_message(f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} to {config.translation.output_language} ({reading_direction.upper()} order)...",
+             log_message(f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} to {config.translation.output_language} ({reading_direction.upper()})...",
                          always_print=True)
              try:
-                 if not config.translation.api_key:
-                     raise ValueError("Gemini API key is missing in the configuration.")
-
-                 translated_texts = call_gemini_api_batch(
-                     api_key=config.translation.api_key,
+                 translated_texts = call_translation_api_batch(
+                     config=config.translation,
                      images_b64=bubble_images_b64,
                      full_image_b64=full_image_b64,
-                     input_language=config.translation.input_language,
-                     output_language=config.translation.output_language,
-                     reading_direction=reading_direction,
-                     model_name=config.translation.gemini_model,
-                     temperature=config.translation.temperature,
-                     top_p=config.translation.top_p,
-                     top_k=config.translation.top_k,
                      debug=verbose
                  )
              except Exception as e:
@@ -394,7 +382,7 @@ def batch_translate_images(input_dir: Union[str, Path],
     total_batch_time = end_batch_time - start_batch_time
     seconds_per_image = total_batch_time / total_images if total_images > 0 else 0
 
-    log_message(f"\nBatch processing complete: {results['success_count']} of {total_images} images processed in {total_batch_time:.2f} seconds ({seconds_per_image:.2f} seconds/image).",
+    log_message(f"\nBatch processing complete: {results['success_count']} of {total_images} images processed in {total_batch_time:.2f} seconds ({seconds_per_image:.2f} seconds/image).\n",
                 always_print=True)
     if results["error_count"] > 0:
         log_message(f"Failed to process {results['error_count']} images.", always_print=True)
@@ -409,8 +397,15 @@ def main():
     parser.add_argument("--output", type=str, required=False, help="Path to save the translated image or directory (if using --batch)")
     parser.add_argument("--batch", action="store_true", help="Process all images in the input directory")
     parser.add_argument("--yolo-model", type=str, required=True, help="Path to YOLO model")
-    parser.add_argument("--api-key", type=str, default=None, help="Gemini API key (overrides GOOGLE_API_KEY env var)")
-    parser.add_argument("--gemini-model", type=str, default="gemini-2.0-flash", help="Gemini model to use")
+    # --- Provider and API Key Arguments ---
+    parser.add_argument("--provider", type=str, default="Gemini", choices=["Gemini", "OpenAI", "Anthropic", "OpenRouter", "OpenAI-Compatible"], help="LLM provider to use for translation")
+    parser.add_argument("--gemini-api-key", type=str, default=None, help="Gemini API key (overrides GOOGLE_API_KEY env var if --provider is Gemini)")
+    parser.add_argument("--openai-api-key", type=str, default=None, help="OpenAI API key (overrides OPENAI_API_KEY env var if --provider is OpenAI)")
+    parser.add_argument("--anthropic-api-key", type=str, default=None, help="Anthropic API key (overrides ANTHROPIC_API_KEY env var if --provider is Anthropic)")
+    parser.add_argument("--openrouter-api-key", type=str, default=None, help="OpenRouter API key (overrides OPENROUTER_API_KEY env var if --provider is OpenRouter)")
+    parser.add_argument("--openai-compatible-url", type=str, default="http://localhost:11434/v1", help="Base URL for the OpenAI-Compatible endpoint (e.g., http://localhost:11434/v1)")
+    parser.add_argument("--openai-compatible-api-key", type=str, default=None, help="Optional API key for the OpenAI-Compatible endpoint (overrides OPENAI_COMPATIBLE_API_KEY env var)")
+    parser.add_argument("--model-name", type=str, default=None, help="Model name for the selected provider (e.g., 'gemini-2.0 flash'). If not provided, a default will be attempted based on the provider.")
     parser.add_argument("--font-dir", type=str, default="./fonts", help="Directory containing font files")
     parser.add_argument("--input-language", type=str, default="Japanese", help="Source language")
     parser.add_argument("--output-language", type=str, default="English", help="Target language")
@@ -445,10 +440,46 @@ def main():
     args = parser.parse_args()
 
     # --- Create Config Object ---
-    api_key = args.api_key or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-         print("Error: Gemini API key not provided via --api-key or GOOGLE_API_KEY environment variable.")
-         exit(1)
+    # Determine API key based on provider
+    provider = args.provider
+    api_key = None
+    api_key_arg_name = ""
+    api_key_env_var = ""
+    compatible_url = None # Initialize compatible URL
+
+    if provider == "Gemini":
+        api_key = args.gemini_api_key or os.environ.get("GOOGLE_API_KEY")
+        api_key_arg_name = "--gemini-api-key"
+        api_key_env_var = "GOOGLE_API_KEY"
+        default_model = "gemini-2.0-flash"
+    elif provider == "OpenAI":
+        api_key = args.openai_api_key or os.environ.get("OPENAI_API_KEY")
+        api_key_arg_name = "--openai-api-key"
+        api_key_env_var = "OPENAI_API_KEY"
+        default_model = "gpt-4o"
+    elif provider == "Anthropic":
+        api_key = args.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
+        api_key_arg_name = "--anthropic-api-key"
+        api_key_env_var = "ANTHROPIC_API_KEY"
+        default_model = "claude-3.7-sonnet-latest" 
+    elif provider == "OpenRouter":
+        api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
+        api_key_arg_name = "--openrouter-api-key"
+        api_key_env_var = "OPENROUTER_API_KEY"
+        default_model = "openrouter/auto"
+    elif provider == "OpenAI-Compatible":
+        compatible_url = args.openai_compatible_url
+        api_key = args.openai_compatible_api_key or os.environ.get("OPENAI_COMPATIBLE_API_KEY")
+        api_key_arg_name = "--openai-compatible-api-key"
+        api_key_env_var = "OPENAI_COMPATIBLE_API_KEY"
+        default_model = "default"
+
+    if provider != "OpenAI-Compatible" and not api_key:
+         print(f"Warning: {provider} API key not provided via {api_key_arg_name} or {api_key_env_var} environment variable. Translation will likely fail.")
+
+    model_name = args.model_name or default_model
+    if not args.model_name:
+        print(f"Using default model for {provider}: {model_name}")
 
     target_device = torch.device('cpu') if args.cpu or not torch.cuda.is_available() else torch.device('cuda')
     print(f"Using {'CPU' if target_device.type == 'cpu' else 'CUDA'} device.")
@@ -473,8 +504,14 @@ def main():
             constraint_erosion_iterations=args.constraint_erosion_iterations
         ),
         translation=TranslationConfig(
-            api_key=api_key,
-            gemini_model=args.gemini_model,
+            provider=provider,
+            gemini_api_key=api_key if provider == "Gemini" else os.environ.get("GOOGLE_API_KEY", ""),
+            openai_api_key=api_key if provider == "OpenAI" else os.environ.get("OPENAI_API_KEY", ""),
+            anthropic_api_key=api_key if provider == "Anthropic" else os.environ.get("ANTHROPIC_API_KEY", ""),
+            openrouter_api_key=api_key if provider == "OpenRouter" else os.environ.get("OPENROUTER_API_KEY", ""),
+            openai_compatible_url=compatible_url, # Pass the URL
+            openai_compatible_api_key=api_key if provider == "OpenAI-Compatible" else os.environ.get("OPENAI_COMPATIBLE_API_KEY", ""), # Pass the key
+            model_name=model_name,
             temperature=args.temperature,
             top_p=args.top_p,
             top_k=args.top_k,
