@@ -348,6 +348,7 @@ def render_text_skia(
     text: str,
     bbox: Tuple[int, int, int, int],
     font_dir: str,
+    lir_bbox: Optional[List[int]] = None,
     bubble_color_bgr: Optional[Tuple[int, int, int]] = (255, 255, 255),
     min_font_size: int = 8,
     max_font_size: int = 14,
@@ -379,27 +380,47 @@ def render_text_skia(
         - Modified PIL Image object (or original if failed).
         - Boolean indicating success.
     """
+    # --- Use original bbox for wrapping constraints ---
     x1, y1, x2, y2 = bbox
     bubble_width = x2 - x1
     bubble_height = y2 - y1
 
     if bubble_width <= 0 or bubble_height <= 0:
-        log_message(f"Invalid bubble dimensions: {bbox}", always_print=True)
+        log_message(f"Invalid original bbox dimensions: {bbox}", always_print=True)
         return pil_image, False
 
     clean_text = ' '.join(text.split())
     if not clean_text:
         return pil_image, True
 
-    # --- Padding ---
-    padding_ratio = 0.08
+    # --- Padding (Always based on original bbox) ---
+    padding_ratio = 0.08 # Adjust padding as needed
     max_render_width = bubble_width * (1 - 2 * padding_ratio)
     max_render_height = bubble_height * (1 - 2 * padding_ratio)
 
     if max_render_width <= 0 or max_render_height <= 0:
-         log_message(f"Bubble too small for padding: {bbox}", verbose=verbose)
-         max_render_width = max(1, bubble_width)
+         log_message(f"Original bbox too small for padding: w={bubble_width}, h={bubble_height}", verbose=verbose)
+         max_render_width = max(1, bubble_width) # Use base width/height if padding makes it too small
          max_render_height = max(1, bubble_height)
+
+    # --- Determine Target Center Point (Prefer LIR center, fallback to bbox center) ---
+    use_lir = False
+    target_center_x, target_center_y = 0.0, 0.0
+
+    if lir_bbox is not None and len(lir_bbox) == 4 and lir_bbox[2] > 0 and lir_bbox[3] > 0:
+        lir_x, lir_y, lir_w, lir_h = lir_bbox
+        target_center_x = lir_x + lir_w / 2.0
+        target_center_y = lir_y + lir_h / 2.0
+        use_lir = True
+        log_message(f"Using LIR center for positioning: ({target_center_x:.1f}, {target_center_y:.1f})", verbose=verbose)
+    else:
+        if lir_bbox: # Log if LIR was provided but invalid
+            log_message(f"Invalid LIR received: {lir_bbox}. Falling back to original bbox center.", verbose=verbose)
+        else:
+             log_message(f"LIR not provided. Falling back to original bbox center.", verbose=verbose)
+        # Fallback to original bbox center
+        target_center_x = x1 + bubble_width / 2.0
+        target_center_y = y1 + bubble_height / 2.0
 
     # --- Find and Load Font Variants ---
     font_variants = _find_font_variants(font_dir, verbose=verbose)
@@ -592,19 +613,15 @@ def render_text_skia(
         text_color = skia.ColorWHITE
     paint = skia.Paint(AntiAlias=True, Color=text_color)
 
-    # --- Calculate Centered Starting Position ---
-    # Top-left corner of the rendering area within the bubble
-    render_area_x = x1 + (bubble_width - max_render_width) / 2
-    render_area_y = y1 + (bubble_height - max_render_height) / 2
-
-    # Top-left corner of the text block within the rendering area
-    block_start_x = render_area_x + (max_render_width - final_max_line_width) / 2
-    block_start_y = render_area_y + (max_render_height - final_block_height) / 2
+    # --- Calculate Starting Position (Centering the final block around the target center) ---
+    # Top-left corner of the final text block
+    block_start_x = target_center_x - final_max_line_width / 2.0
+    block_start_y = target_center_y - final_block_height / 2.0
 
     # Y coordinate for the baseline of the *first* line
-    first_baseline_y = block_start_y - final_metrics.fAscent # Offset by ascent
+    first_baseline_y = block_start_y - final_metrics.fAscent # Offset by ascent from the block's top
 
-    log_message(f"Rendering at size {final_font_size}. Block Start (X,Y): ({block_start_x:.1f}, {block_start_y:.1f}). First Baseline Y: {first_baseline_y:.1f}", verbose=verbose)
+    log_message(f"Rendering at size {final_font_size}. Centering target ({'LIR' if use_lir else 'BBox'}): ({target_center_x:.1f}, {target_center_y:.1f}). Block Start (X,Y): ({block_start_x:.1f}, {block_start_y:.1f}). First Baseline Y: {first_baseline_y:.1f}", verbose=verbose)
 
     # --- Render Line by Line, Segment by Segment ---
     with surface as canvas:
@@ -613,8 +630,8 @@ def render_text_skia(
             line_text_with_markers = line_data["text_with_markers"]
             line_width_measured = line_data["width"] # Width measured using regular font
 
-            # Horizontal alignment for this specific line within the block width
-            line_start_x = block_start_x + (final_max_line_width - line_width_measured) / 2
+            # Horizontal alignment for this specific line, centered within the block's max width
+            line_start_x = block_start_x + (final_max_line_width - line_width_measured) / 2.0
             cursor_x = line_start_x
 
             segments = _parse_styled_segments(line_text_with_markers)

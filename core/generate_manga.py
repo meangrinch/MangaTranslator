@@ -223,8 +223,9 @@ def translate_and_render(image_path: Union[str, Path],
                  translated_texts = ["[Translation Error]" for _ in sorted_bubble_data]
 
          # --- Render Translations ---
-         bubble_color_map = {
-             tuple(info['bbox']): info['color']
+         # Map original bbox tuple to color and LIR bbox
+         bubble_render_info_map = {
+             tuple(info['bbox']): {'color': info['color'], 'lir_bbox': info.get('lir_bbox')}
              for info in processed_bubbles_info if 'bbox' in info and 'color' in info
          }
          log_message("Rendering translations onto image...", verbose=verbose)
@@ -240,12 +241,15 @@ def translate_and_render(image_path: Union[str, Path],
 
                  log_message(f"Rendering text for bubble {bbox}: '{text[:30]}...'", verbose=verbose)
 
-                 bubble_color_bgr = bubble_color_map.get(tuple(bbox), (255, 255, 255))
- 
+                 render_info = bubble_render_info_map.get(tuple(bbox))
+                 bubble_color_bgr = render_info['color'] if render_info else (255, 255, 255)
+                 lir_bbox_coords = render_info.get('lir_bbox') if render_info else None
+
                  rendered_image, success = render_text_skia(
                      pil_image=pil_cleaned_image,
                      text=text,
                      bbox=bbox,
+                     lir_bbox=lir_bbox_coords,
                      bubble_color_bgr=bubble_color_bgr,
                      font_dir=config.rendering.font_dir,
                      min_font_size=config.rendering.min_font_size,
@@ -426,7 +430,7 @@ def main():
     parser.add_argument("--min-contour-area", type=int, default=50, help="Min Bubble Contour Area")
     parser.add_argument("--closing-kernel-size", type=int, default=7, help="Mask Closing Kernel Size")
     parser.add_argument("--closing-iterations", type=int, default=1, help="Mask Closing Iterations")
-    parser.add_argument("--constraint-erosion-kernel-size", type=int, default=5, help="Edge Constraint Erosion Kernel Size")
+    parser.add_argument("--constraint-erosion-kernel-size", type=int, default=9, help="Edge Constraint Erosion Kernel Size")
     parser.add_argument("--constraint-erosion-iterations", type=int, default=1, help="Edge Constraint Erosion Iterations")
     # Translation args
     parser.add_argument("--temperature", type=float, default=0.1, help="Controls randomness in output (0.0-2.0)")

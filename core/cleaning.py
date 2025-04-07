@@ -1,4 +1,5 @@
 import cv2
+import largestinteriorrectangle
 import numpy as np
 from PIL import Image
 
@@ -192,8 +193,26 @@ def clean_speech_bubbles(
                         log_message(f"  - No contours found at all.", verbose=verbose)
 
                 if final_mask is not None:
-                    processed_bubbles.append({'mask': final_mask, 'color': fill_color_bgr, 'bbox': detection.get('bbox')})
-                    log_message(f"Detection {detection.get('bbox')}: Stored final mask and color {fill_color_bgr}.", verbose=verbose)
+                    lir_coords = None
+                    if np.any(final_mask):
+                        try:
+                            # Ensure mask is uint8, 255 filled (already should be)
+                            # Convert to boolean for lir function
+                            lir_coords = largestinteriorrectangle.lir(final_mask.astype(bool)) # Returns [x, y, width, height]
+                            log_message(f"  - Calculated LIR: {lir_coords}", verbose=verbose)
+                        except Exception as lir_e:
+                            log_message(f"  - LIR calculation failed: {lir_e}", verbose=verbose, is_error=True)
+                            lir_coords = None
+                    else:
+                         log_message(f"  - Skipping LIR calculation: Final mask is empty.", verbose=verbose)
+
+                    processed_bubbles.append({
+                        'mask': final_mask,
+                        'color': fill_color_bgr,
+                        'bbox': detection.get('bbox'),
+                        'lir_bbox': lir_coords
+                    })
+                    log_message(f"Detection {detection.get('bbox')}: Stored final mask, color {fill_color_bgr}, and LIR {lir_coords}.", verbose=verbose)
 
             except Exception as e:
                 error_msg = f"Error processing mask for detection {detection.get('bbox')}: {e}"
