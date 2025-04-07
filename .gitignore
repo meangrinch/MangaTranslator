@@ -4,9 +4,11 @@ __pycache__/
 *.pyd
 /venv/
 /.venv/
+*.otf
+*.ttf
+*.pt
+*.onnx
 /output/
-/fonts/
-/models/
 .DS_Store
 Thumbs.db
 /.vscode/
