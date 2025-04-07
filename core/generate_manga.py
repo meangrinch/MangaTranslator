@@ -83,8 +83,16 @@ def translate_and_render(image_path: Union[str, Path],
                      else:
                           pil_image_processed = pil_image_processed.convert("RGB")
                  except Exception as paste_err:
-                      log_message(f"Warning: Error during RGBA/LA/P -> RGB conversion paste: {paste_err}. Using simple convert.", verbose=verbose)
-                      pil_image_processed = pil_image_processed.convert("RGB") # Fallback conversion
+                      log_message(f"Warning: Error during RGBA/LA/P -> RGB conversion paste: {paste_err}. Trying alpha_composite.", verbose=verbose)
+                      try:
+                          # Attempt alpha compositing onto a white background as an alternative
+                          background_comp = Image.new('RGB', pil_image_processed.size, (255, 255, 255))
+                          img_rgba_for_composite = pil_image_processed if pil_image_processed.mode == "RGBA" else pil_image_processed.convert("RGBA")
+                          pil_image_processed = Image.alpha_composite(background_comp.convert("RGBA"), img_rgba_for_composite).convert("RGB")
+                          log_message("Successfully used alpha_composite for RGB conversion.", verbose=verbose)
+                      except Exception as composite_err:
+                           log_message(f"Warning: alpha_composite also failed: {composite_err}. Using simple convert.", verbose=verbose)
+                           pil_image_processed = pil_image_processed.convert("RGB") # Final fallback conversion
              else: # Non-transparent conversion to RGB
                  log_message(f"Converting {pil_image_processed.mode} to RGB", verbose=verbose)
                  pil_image_processed = pil_image_processed.convert("RGB")
@@ -445,7 +453,7 @@ def main():
     api_key = None
     api_key_arg_name = ""
     api_key_env_var = ""
-    compatible_url = None # Initialize compatible URL
+    compatible_url = None
 
     if provider == "Gemini":
         api_key = args.gemini_api_key or os.environ.get("GOOGLE_API_KEY")
