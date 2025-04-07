@@ -691,7 +691,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                         gr.Markdown("#### ROI Expansion")
                         dilation_kernel_size = gr.Slider(
                             1, 15, value=saved_settings_config.get("dilation_kernel_size", 7), step=2,
-                            label="Dilation Kernel Size", info="Controls how much the initial bubble detection grows outwards. Increase if the bubble's edge or text is missed."
+                            label="Dilation Kernel Size", info="Controls how much the initial bubble detection grows outwards. Increase if blocky artifacts are present."
                         )
                         dilation_iterations = gr.Slider(
                             1, 5, value=saved_settings_config.get("dilation_iterations", 1), step=1,
@@ -717,7 +717,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                         )
                         gr.Markdown("#### Edge Constraint")
                         constraint_erosion_kernel_size = gr.Slider(
-                            1, 12, value=saved_settings_config.get("constraint_erosion_kernel_size", 5), step=2,
+                            1, 15, value=saved_settings_config.get("constraint_erosion_kernel_size", 9), step=2,
                             label="Constraint Erosion Kernel Size", info="Controls how much to shrink the cleaned mask inwards. Increase if the bubble's outline is being erased."
                         )
                         constraint_erosion_iterations = gr.Slider(
