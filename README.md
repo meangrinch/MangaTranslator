@@ -47,7 +47,7 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
 3.  **Install PyTorch:**
     ```python
     # Example (CUDA 12.4)
-    pip install torch==2.6.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
+    pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
 
     # Example (CPU)
     pip install torch
@@ -91,7 +91,9 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
 ## Running
 
 ### **Web UI (Gradio):**
-Use `start-webui.bat` (requires `venv/`) or run `python app.py --open-browser`
+Use `start-webui.bat` or run `python app.py --open-browser`
+
+*Note: First launch will take longer to open (~1 minute).*
 
 ### **CLI:**
 ```python
