@@ -5,11 +5,11 @@ Automatically translate speech bubbles in manga/comics using AI. This tool utili
 ## Features
 
 *   Automatic speech bubble detection and segmentation.
-*   Text extraction and cleaning from detected bubbles.
-*   Translation using a vision-capable LLM
+*   Text removal and intelligent filling (i.e. cleaning) from detected bubbles (white or black).
+*   Text extraction and translation via a vision-capable LLM.
 *   Rendering translated text back onto the image with selected fonts.
 *   Easy-to-use Web Interface (Gradio)
-*   Command-Line Interface (CLI)
+*   Command-Line Interface (CLI)    
 
 ## Requirements
 
@@ -22,7 +22,7 @@ Automatically translate speech bubbles in manga/comics using AI. This tool utili
 
 ## Windows Portable
 
-Download the standalone zip for NVIDIA GPUs (or CPU only) on the [releases page](https://github.com/meangrinch/MangaTranslator/releases), which includes the recommended YOLOv8 model and an example font pack.
+Download the standalone zip for NVIDIA GPUs (or CPU only) on the [releases page](https://github.com/meangrinch/MangaTranslator/releases), which includes the recommended YOLO model and an example font pack.
 
 ## Manual Install
 
@@ -127,19 +127,11 @@ You can either use an external LLM provider (e.g., Gemini, OpenAI, Anthropic, Op
 7.  Results will appear on the right (single image) or in the gallery (batch). Status messages provide details about the process.
 8.  Output images are saved in the `./output/` directory by default (or the specified output directory for CLI batch).
 
+*Note: There is a "cleaning only" mode available that skips the translation and text rendering steps, outputting just the cleaned speech bubbles.*
+
 ## Customization
 
-*   **Adding Fonts:**
-    1.  Create a new folder inside the `fonts/` directory (e.g., `fonts/MyNewFont/`).
-    2.  Place the font files (`.ttf`, `.otf`) inside this new folder.
-    3.  Launch the Web UI, go to "Config" -> "Other", and click **"Refresh Models / Fonts"**.
-    4.  The new font pack will now be available in the "Text Font" dropdowns on the Translator, Batch, and Config tabs.
-
-*   **Using Custom YOLO Models:**
-    1.  Place your custom YOLO model file (`.pt`) in the `models/` directory. The model must support segmentation (e.g., trained with YOLOv8-Seg).
-    2.  Launch the Web UI, go to "Config" -> "Other", and click **"Refresh Models / Fonts"**.
-    3.  Go to "Config" -> "Detection" and select your model from the "YOLO Model" dropdown.
-    4.  Remember to **"Save Config"**.
+*   **Using Custom YOLO Models:** Place your custom YOLO model file (`.pt`) in the `models/` directory. The model must support segmentation and be trained to detect speech bubbles.
 
 ## License
 
