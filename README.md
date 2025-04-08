@@ -31,6 +31,7 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
     git clone https://github.com/meangrinch/MangaTranslator.git
     cd MangaTranslator
     ```
+
 2.  **Create Virtual Environment (Recommended):**
     ```bash
     # Create venv
@@ -42,8 +43,8 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
     # Activate (Linux/macOS/Git Bash)
     source venv/bin/activate
     ```
+
 3.  **Install PyTorch:**
-    *   Refer to the official [PyTorch installation guide](https://pytorch.org/get-started/locally/) for system-specific commands.
     ```python
     # Example (CUDA 12.4)
     pip install torch==2.6.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
@@ -51,6 +52,8 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
     # Example (CPU)
     pip install torch
     ```
+    *Refer to the official [PyTorch installation guide](https://pytorch.org/get-started/locally/) for system-specific commands.*
+
 4.  **Install Dependencies:**
     ```python
     pip install -r requirements.txt
@@ -60,8 +63,9 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
 
 1.  **Download YOLO Model:**
     *   Download the [recommended model](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt) and place it in the `models` directory.
+
 2.  **Prepare Fonts:**
-    *   Place font folders (containing `.otf`/`.ttf` files) inside `fonts/`. Each sub-folder is a font pack (e.g., `fonts/CC Wild Words/`).
+    *   Place font folders (containing `.otf`/`.ttf` files) inside `fonts/`.
     *   Font variants need 'italic' or 'bold' in their filename to be used for emphasis. 
     *   Example structure:
         ```
@@ -76,6 +80,7 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
             └── AnotherFont-BoldItalic.ttf
         ```
     *Note: "CC Wild Words" is a common manga translation font.*
+
 3.  **Setup LLM:**
     *   Supports external providers (Gemini, OpenAI, etc.) and local models (Ollama, LMStudio).
     *   **Web UI:** Configure in the "Config" tab (API keys saved locally to `config.json`).
@@ -86,7 +91,7 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
 ## Running
 
 ### **Web UI (Gradio):**
-*   Use `start-webui.bat` (requires `venv`) or run `python app.py --open-browser`
+Use `start-webui.bat` (requires `venv/`) or run `python app.py --open-browser`
 
 ### **CLI:**
 ```python
@@ -113,7 +118,7 @@ python main.py --help
 6.  Return to the previous tab and click **"Translate"** / **"Start Batch Translating"**.
 7.  Output is saved to `./output/` by default.
 
-*Note: A "cleaning only" mode is also available in the **"Other"** sub-tab.*
+*Note: A "cleaning only" mode is also available in the "Other" sub-tab.*
 
 ## Updating
 
