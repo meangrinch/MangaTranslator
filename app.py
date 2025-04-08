@@ -221,26 +221,32 @@ def translate_manga(
         llm_params_str += param_notes
 
         processing_mode_str = "Cleaning Only" if config.cleaning_only else "Translation"
-        translator_status_msg = (
-            f"{SUCCESS_PREFIX}{processing_mode_str} completed!\n"
-            f"• Image size: {width}x{height} pixels\n"
-            f"• Provider: {provider}\n"
-            f"• Model: {model_name}\n"
-            f"• Source language: {config.translation.input_language}\n"
-            f"• Target language: {config.translation.output_language}\n"
-            f"• Reading Direction: {config.translation.reading_direction.upper()}\n"
-            f"• Font pack: {font_dir_path.name}\n"
-            f"• YOLO Model: {selected_yolo_model}\n"
-            f"• Cleaning Params: DKS:{config.cleaning.dilation_kernel_size}, DI:{config.cleaning.dilation_iterations}, Otsu:{config.cleaning.use_otsu_threshold}, "
-            f"MCA:{config.cleaning.min_contour_area}, CKS:{config.cleaning.closing_kernel_size}, CI:{config.cleaning.closing_iterations}, "
+        msg_parts = [
+            f"{SUCCESS_PREFIX}{processing_mode_str} completed!\n",
+            f"• Image size: {width}x{height} pixels\n",
+            f"• Provider: {provider}\n",
+            f"• Model: {model_name}\n",
+            f"• Source language: {config.translation.input_language}\n",
+            f"• Target language: {config.translation.output_language}\n",
+            f"• Reading Direction: {config.translation.reading_direction.upper()}\n",
+            f"• Font pack: {font_dir_path.name}\n",
+            f"• YOLO Model: {selected_yolo_model}\n",
+            f"• Cleaning Params: DKS:{config.cleaning.dilation_kernel_size}, DI:{config.cleaning.dilation_iterations}, Otsu:{config.cleaning.use_otsu_threshold}, ",
+            f"MCA:{config.cleaning.min_contour_area}, CKS:{config.cleaning.closing_kernel_size}, CI:{config.cleaning.closing_iterations}, ",
             f"CEKS:{config.cleaning.constraint_erosion_kernel_size}, CEI:{config.cleaning.constraint_erosion_iterations}\n"
-            f"{llm_params_str}\n" if not config.cleaning_only else "" # Only show LLM params if translating
-            f"• Output format: {output_cfg_final.output_format}\n"
-            f"• JPEG quality: {config.output.jpeg_quality}{' (if applicable)' if output_ext != '.jpg' else ''}\n"
-            f"• PNG compression: {config.output.png_compression}{' (if applicable)' if output_ext != '.png' else ''}\n"
-            f"• Processing time: {processing_time:.2f} seconds\n"
+        ]
+        if not config.cleaning_only:
+            msg_parts.append(f"{llm_params_str}\n")
+        msg_parts.append(f"• Output format: {output_cfg_final.output_format}\n")
+        if output_ext in ['.jpg', '.jpeg']:
+            msg_parts.append(f"• JPEG quality: {config.output.jpeg_quality}\n")
+        if output_ext == '.png':
+             msg_parts.append(f"• PNG compression: {config.output.png_compression}\n")
+        msg_parts.extend([
+            f"• Processing time: {processing_time:.2f} seconds\n",
             f"• Saved to: {save_path}"
-        )
+        ])
+        translator_status_msg = "".join(msg_parts)
 
         result = translated_image.copy()
         return result, translator_status_msg
@@ -444,26 +450,32 @@ def process_batch(
                     print(f"Error processing {filename}: {error_msg}")
 
         processing_mode_str = "Cleaning Only" if config.cleaning_only else "Translation"
-        batch_status_msg = (
-            f"{SUCCESS_PREFIX}Batch {processing_mode_str.lower()} completed!\n"
-            f"• Provider: {provider}\n"
-            f"• Model: {model_name}\n"
-            f"• Source language: {config.translation.input_language}\n"
-            f"• Target language: {config.translation.output_language}\n"
-            f"• Reading Direction: {config.translation.reading_direction.upper()}\n"
-            f"• Font pack: {font_dir_path.name}\n"
-            f"• YOLO Model: {selected_yolo_model}\n"
-            f"• Cleaning Params: DKS:{config.cleaning.dilation_kernel_size}, DI:{config.cleaning.dilation_iterations}, Otsu:{config.cleaning.use_otsu_threshold}, "
-            f"MCA:{config.cleaning.min_contour_area}, CKS:{config.cleaning.closing_kernel_size}, CI:{config.cleaning.closing_iterations}, "
+        msg_parts = [
+            f"{SUCCESS_PREFIX}Batch {processing_mode_str.lower()} completed!\n",
+            f"• Provider: {provider}\n",
+            f"• Model: {model_name}\n",
+            f"• Source language: {config.translation.input_language}\n",
+            f"• Target language: {config.translation.output_language}\n",
+            f"• Reading Direction: {config.translation.reading_direction.upper()}\n",
+            f"• Font pack: {font_dir_path.name}\n",
+            f"• YOLO Model: {selected_yolo_model}\n",
+            f"• Cleaning Params: DKS:{config.cleaning.dilation_kernel_size}, DI:{config.cleaning.dilation_iterations}, Otsu:{config.cleaning.use_otsu_threshold}, ",
+            f"MCA:{config.cleaning.min_contour_area}, CKS:{config.cleaning.closing_kernel_size}, CI:{config.cleaning.closing_iterations}, ",
             f"CEKS:{config.cleaning.constraint_erosion_kernel_size}, CEI:{config.cleaning.constraint_erosion_iterations}\n"
-            f"{llm_params_str}\n" if not config.cleaning_only else "" # Only show LLM params if translating
-            f"• Output format: {config.output.output_format}\n"
-            f"• JPEG quality: {config.output.jpeg_quality}{' (if applicable)' if config.output.output_format != 'jpeg' else ''}\n"
-            f"• PNG compression: {config.output.png_compression}{' (if applicable)' if config.output.output_format != 'png' else ''}\n"
-            f"• Successful translations: {success_count}/{total_images}{error_summary}\n"
-            f"• Total processing time: {processing_time:.2f} seconds ({seconds_per_image:.2f} seconds/image)\n"
+        ]
+        if not config.cleaning_only:
+            msg_parts.append(f"{llm_params_str}\n")
+        msg_parts.append(f"• Output format: {config.output.output_format}\n")
+        if config.output.output_format == 'jpeg':
+             msg_parts.append(f"• JPEG quality: {config.output.jpeg_quality}\n")
+        if config.output.output_format == 'png':
+             msg_parts.append(f"• PNG compression: {config.output.png_compression}\n")
+        msg_parts.extend([
+            f"• Successful translations: {success_count}/{total_images}{error_summary}\n",
+            f"• Total processing time: {processing_time:.2f} seconds ({seconds_per_image:.2f} seconds/image)\n",
             f"• Saved to: {output_path}"
-        )
+        ])
+        batch_status_msg = "".join(msg_parts)
 
         progress(1.0, desc="Batch processing complete")
         return gallery_images, batch_status_msg
