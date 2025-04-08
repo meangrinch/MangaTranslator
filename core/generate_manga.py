@@ -414,7 +414,7 @@ def main():
     parser.add_argument("--batch", action="store_true", help="Process all images in the input directory")
     parser.add_argument("--yolo-model", type=str, required=True, help="Path to YOLO model")
     # --- Provider and API Key Arguments ---
-    parser.add_argument("--provider", type=str, default="Gemini", choices=["Gemini", "OpenAI", "Anthropic", "OpenRouter", "OpenAI-Compatible"], help="LLM provider to use for translation")
+    parser.add_argument("--provider", type=str, default="Gemini", choices=["Gemini", "OpenAI", "Anthropic", "OpenRouter", "OpenAI-compatible"], help="LLM provider to use for translation")
     parser.add_argument("--gemini-api-key", type=str, default=None, help="Gemini API key (overrides GOOGLE_API_KEY env var if --provider is Gemini)")
     parser.add_argument("--openai-api-key", type=str, default=None, help="OpenAI API key (overrides OPENAI_API_KEY env var if --provider is OpenAI)")
     parser.add_argument("--anthropic-api-key", type=str, default=None, help="Anthropic API key (overrides ANTHROPIC_API_KEY env var if --provider is Anthropic)")
