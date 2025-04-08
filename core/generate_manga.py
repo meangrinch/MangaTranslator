@@ -18,8 +18,8 @@ from .common_utils import log_message
 from .rendering import render_text_skia
 
 def translate_and_render(image_path: Union[str, Path],
-                         config: MangaTranslatorConfig,
-                         output_path: Optional[Union[str, Path]] = None):
+                        config: MangaTranslatorConfig,
+                        output_path: Optional[Union[str, Path]] = None):
     """
     Main function to translate manga speech bubbles and render translations using a config object.
 
@@ -62,43 +62,43 @@ def translate_and_render(image_path: Union[str, Path],
     pil_image_processed = pil_original
     if pil_image_processed.mode != target_mode:
         if target_mode == "RGB":
-             # Handle transparency when converting to RGB
-             if pil_image_processed.mode == "RGBA" or pil_image_processed.mode == "LA" or (pil_image_processed.mode == "P" and 'transparency' in pil_image_processed.info):
-                 log_message(f"Converting {pil_image_processed.mode} to RGB (flattening transparency)", verbose=verbose)
-                 background = Image.new('RGB', pil_image_processed.size, (255, 255, 255))
-                 try:
-                     mask = None
-                     if pil_image_processed.mode == "RGBA":
-                         mask = pil_image_processed.split()[3]
-                     elif pil_image_processed.mode == "LA":
-                         mask = pil_image_processed.split()[1]
-                     elif pil_image_processed.mode == "P" and 'transparency' in pil_image_processed.info:
-                          # Convert P with transparency to RGBA to get mask
-                          temp_rgba = pil_image_processed.convert("RGBA")
-                          mask = temp_rgba.split()[3]
+            # Handle transparency when converting to RGB
+            if pil_image_processed.mode == "RGBA" or pil_image_processed.mode == "LA" or (pil_image_processed.mode == "P" and 'transparency' in pil_image_processed.info):
+                log_message(f"Converting {pil_image_processed.mode} to RGB (flattening transparency)", verbose=verbose)
+                background = Image.new('RGB', pil_image_processed.size, (255, 255, 255))
+                try:
+                    mask = None
+                    if pil_image_processed.mode == "RGBA":
+                        mask = pil_image_processed.split()[3]
+                    elif pil_image_processed.mode == "LA":
+                        mask = pil_image_processed.split()[1]
+                    elif pil_image_processed.mode == "P" and 'transparency' in pil_image_processed.info:
+                        # Convert P with transparency to RGBA to get mask
+                        temp_rgba = pil_image_processed.convert("RGBA")
+                        mask = temp_rgba.split()[3]
 
-                     if mask:
-                         background.paste(pil_image_processed, mask=mask)
-                         pil_image_processed = background
-                     else:
-                          pil_image_processed = pil_image_processed.convert("RGB")
-                 except Exception as paste_err:
-                      log_message(f"Warning: Error during RGBA/LA/P -> RGB conversion paste: {paste_err}. Trying alpha_composite.", verbose=verbose)
-                      try:
-                          # Attempt alpha compositing onto a white background as an alternative
-                          background_comp = Image.new('RGB', pil_image_processed.size, (255, 255, 255))
-                          img_rgba_for_composite = pil_image_processed if pil_image_processed.mode == "RGBA" else pil_image_processed.convert("RGBA")
-                          pil_image_processed = Image.alpha_composite(background_comp.convert("RGBA"), img_rgba_for_composite).convert("RGB")
-                          log_message("Successfully used alpha_composite for RGB conversion.", verbose=verbose)
-                      except Exception as composite_err:
-                           log_message(f"Warning: alpha_composite also failed: {composite_err}. Using simple convert.", verbose=verbose)
-                           pil_image_processed = pil_image_processed.convert("RGB") # Final fallback conversion
-             else: # Non-transparent conversion to RGB
-                 log_message(f"Converting {pil_image_processed.mode} to RGB", verbose=verbose)
-                 pil_image_processed = pil_image_processed.convert("RGB")
+                    if mask:
+                        background.paste(pil_image_processed, mask=mask)
+                        pil_image_processed = background
+                    else:
+                        pil_image_processed = pil_image_processed.convert("RGB")
+                except Exception as paste_err:
+                    log_message(f"Warning: Error during RGBA/LA/P -> RGB conversion paste: {paste_err}. Trying alpha_composite.", verbose=verbose)
+                    try:
+                        # Attempt alpha compositing onto a white background as an alternative
+                        background_comp = Image.new('RGB', pil_image_processed.size, (255, 255, 255))
+                        img_rgba_for_composite = pil_image_processed if pil_image_processed.mode == "RGBA" else pil_image_processed.convert("RGBA")
+                        pil_image_processed = Image.alpha_composite(background_comp.convert("RGBA"), img_rgba_for_composite).convert("RGB")
+                        log_message("Successfully used alpha_composite for RGB conversion.", verbose=verbose)
+                    except Exception as composite_err:
+                        log_message(f"Warning: alpha_composite also failed: {composite_err}. Using simple convert.", verbose=verbose)
+                        pil_image_processed = pil_image_processed.convert("RGB") # Final fallback conversion
+            else: # Non-transparent conversion to RGB
+                log_message(f"Converting {pil_image_processed.mode} to RGB", verbose=verbose)
+                pil_image_processed = pil_image_processed.convert("RGB")
         elif target_mode == "RGBA":
-             log_message(f"Converting {pil_image_processed.mode} to RGBA", verbose=verbose)
-             pil_image_processed = pil_image_processed.convert("RGBA")
+            log_message(f"Converting {pil_image_processed.mode} to RGBA", verbose=verbose)
+            pil_image_processed = pil_image_processed.convert("RGBA")
 
     original_cv_image = pil_to_cv2(pil_image_processed)
 
@@ -134,147 +134,151 @@ def translate_and_render(image_path: Union[str, Path],
     if not bubble_data:
        log_message("No speech bubbles detected or detection failed. Skipping cleaning, translation, and rendering.", always_print=True)
     else:
-         log_message(f"Detected {len(bubble_data)} potential bubbles.", verbose=verbose)
+        log_message(f"Detected {len(bubble_data)} potential bubbles.", verbose=verbose)
 
-         # --- Cleaning ---
-         log_message("Cleaning speech bubbles...", verbose=verbose)
-         try:
-             use_otsu = config.cleaning.use_otsu_threshold
+        # --- Cleaning ---
+        log_message("Cleaning speech bubbles...", verbose=verbose)
+        try:
+            use_otsu = config.cleaning.use_otsu_threshold
 
-             cleaned_image_cv, processed_bubbles_info = clean_speech_bubbles(
-                 image_path,
-                 config.yolo_model_path,
-                 config.detection.confidence,
-                 pre_computed_detections=bubble_data,
-                 device=device,
-                 dilation_kernel_size=config.cleaning.dilation_kernel_size,
-                 dilation_iterations=config.cleaning.dilation_iterations,
-                 use_otsu_threshold=use_otsu,
-                 min_contour_area=config.cleaning.min_contour_area,
-                 closing_kernel_size=config.cleaning.closing_kernel_size,
-                 closing_iterations=config.cleaning.closing_iterations,
-                 closing_kernel_shape=config.cleaning.closing_kernel_shape,
-                 constraint_erosion_kernel_size=config.cleaning.constraint_erosion_kernel_size,
-                 constraint_erosion_iterations=config.cleaning.constraint_erosion_iterations,
-                 verbose=verbose
-                 )
-             log_message(f"Cleaning returned info for {len(processed_bubbles_info)} bubbles.", verbose=verbose)
-         except Exception as e:
-             log_message(f"Error during bubble cleaning: {e}. Proceeding with uncleaned image.", always_print=True)
-             cleaned_image_cv = original_cv_image.copy()
-             processed_bubbles_info = []
+            cleaned_image_cv, processed_bubbles_info = clean_speech_bubbles(
+                image_path,
+                config.yolo_model_path,
+                config.detection.confidence,
+                pre_computed_detections=bubble_data,
+                device=device,
+                dilation_kernel_size=config.cleaning.dilation_kernel_size,
+                dilation_iterations=config.cleaning.dilation_iterations,
+                use_otsu_threshold=use_otsu,
+                min_contour_area=config.cleaning.min_contour_area,
+                closing_kernel_size=config.cleaning.closing_kernel_size,
+                closing_iterations=config.cleaning.closing_iterations,
+                closing_kernel_shape=config.cleaning.closing_kernel_shape,
+                constraint_erosion_kernel_size=config.cleaning.constraint_erosion_kernel_size,
+                constraint_erosion_iterations=config.cleaning.constraint_erosion_iterations,
+                verbose=verbose
+                )
+            log_message(f"Cleaning returned info for {len(processed_bubbles_info)} bubbles.", verbose=verbose)
+        except Exception as e:
+            log_message(f"Error during bubble cleaning: {e}. Proceeding with uncleaned image.", always_print=True)
+            cleaned_image_cv = original_cv_image.copy()
+            processed_bubbles_info = []
  
-         pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
-         if pil_cleaned_image.mode != target_mode:
-             log_message(f"Converting cleaned CV image mode from {pil_cleaned_image.mode} back to target {target_mode}", verbose=verbose)
-             pil_cleaned_image = pil_cleaned_image.convert(target_mode)
-         final_image_to_save = pil_cleaned_image
+        pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
+        if pil_cleaned_image.mode != target_mode:
+            log_message(f"Converting cleaned CV image mode from {pil_cleaned_image.mode} back to target {target_mode}", verbose=verbose)
+            pil_cleaned_image = pil_cleaned_image.convert(target_mode)
+        final_image_to_save = pil_cleaned_image
+ 
+        # --- Check for Cleaning Only Mode ---
+        if config.cleaning_only:
+            log_message("Cleaning only mode enabled. Skipping translation and rendering.", verbose=verbose, always_print=True)
+        else:
+            # --- Prepare images for Translation ---
+            log_message("Preparing bubble images for translation...", verbose=verbose)
+            for bubble in bubble_data:
+                x1, y1, x2, y2 = bubble["bbox"]
 
-         # --- Prepare images for Translation ---
-         log_message("Preparing bubble images for translation...", verbose=verbose)
-         for bubble in bubble_data:
-             x1, y1, x2, y2 = bubble["bbox"]
+                # Crop from the *original* processed image (before cleaning)
+                bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
+ 
+                try:
+                    is_success, buffer = cv2.imencode('.jpg', bubble_image_cv)
+                    if not is_success:
+                        raise ValueError("cv2.imencode failed")
+                    image_b64 = base64.b64encode(buffer).decode('utf-8')
+                    bubble["image_b64"] = image_b64
+                    log_message(f"Collected bubble at ({x1}, {y1}), size {x2-x1}x{y2-y1}", verbose=verbose)
+                except Exception as e:
+                    log_message(f"Error encoding bubble at {bubble['bbox']}: {e}", verbose=verbose, always_print=True)
+                    bubble["image_b64"] = None
+ 
+            valid_bubble_data = [b for b in bubble_data if b.get("image_b64")]
+            if not valid_bubble_data:
+                log_message("No valid bubble images could be prepared for translation. Skipping translation and rendering.", always_print=True)
+            else: # Only proceed if we have valid bubble data
+                # --- Sort and Translate ---
+                reading_direction = config.translation.reading_direction
+                log_message(f"Sorting bubbles in {reading_direction.upper()} reading order...", verbose=verbose)
+                image_width = original_cv_image.shape[1]
+                image_height = original_cv_image.shape[0]
+ 
+                sorted_bubble_data = sort_bubbles_by_reading_order(valid_bubble_data, image_height, image_width, reading_direction)
+ 
+                bubble_images_b64 = [bubble["image_b64"] for bubble in sorted_bubble_data]
+                translated_texts = []
+                if not bubble_images_b64:
+                    log_message("No valid bubble images to translate after sorting/filtering. Skipping translation and rendering.", always_print=True)
+                elif full_image_b64 is None:
+                    log_message("Full image context is missing due to encoding error. Skipping translation and rendering.", always_print=True)
+                else:
+                    # Only attempt translation if we have bubbles and context
+                    log_message(f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} to {config.translation.output_language} ({reading_direction.upper()})...",
+                                always_print=True)
+                    try:
+                        translated_texts = call_translation_api_batch(
+                            config=config.translation,
+                            images_b64=bubble_images_b64,
+                            full_image_b64=full_image_b64,
+                            debug=verbose
+                        )
+                    except Exception as e:
+                        log_message(f"Error during API translation: {e}", always_print=True)
+                        translated_texts = ["[Translation Error]" for _ in sorted_bubble_data]
+ 
+                # --- Render Translations ---
+                # Map original bbox tuple to color and LIR bbox
+                bubble_render_info_map = {
+                    tuple(info['bbox']): {'color': info['color'], 'lir_bbox': info.get('lir_bbox')}
+                    for info in processed_bubbles_info if 'bbox' in info and 'color' in info
+                }
+                log_message("Rendering translations onto image...", verbose=verbose)
+                if len(translated_texts) == len(sorted_bubble_data):
+                    for i, bubble in enumerate(sorted_bubble_data):
+                        bubble["translation"] = translated_texts[i]
+                        bbox = bubble["bbox"]
+                        text = bubble.get("translation", "")
+ 
+                        if not text or text.startswith("API Error") or text == "No text detected or translation failed" or text.startswith("[No translation") or text.startswith("[Translation Error]"):
+                            log_message(f"Skipping rendering for bubble {bbox} due to empty or error translation: '{text}'", verbose=verbose)
+                            continue
+ 
+                        log_message(f"Rendering text for bubble {bbox}: '{text[:30]}...'", verbose=verbose)
+ 
+                        render_info = bubble_render_info_map.get(tuple(bbox))
+                        bubble_color_bgr = render_info['color'] if render_info else (255, 255, 255)
+                        lir_bbox_coords = render_info.get('lir_bbox') if render_info else None
+ 
+                        rendered_image, success = render_text_skia(
+                            pil_image=pil_cleaned_image,
+                            text=text,
+                            bbox=bbox,
+                            lir_bbox=lir_bbox_coords,
+                            bubble_color_bgr=bubble_color_bgr,
+                            font_dir=config.rendering.font_dir,
+                            min_font_size=config.rendering.min_font_size,
+                            max_font_size=config.rendering.max_font_size,
+                            line_spacing_mult=config.rendering.line_spacing,
+                            use_subpixel_rendering=config.rendering.use_subpixel_rendering,
+                            font_hinting=config.rendering.font_hinting,
+                            use_ligatures=config.rendering.use_ligatures,
+                            verbose=verbose
+                        )
 
-             # Crop from the *original* processed image (before cleaning)
-             bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
-
-             try:
-                 is_success, buffer = cv2.imencode('.jpg', bubble_image_cv)
-                 if not is_success:
-                     raise ValueError("cv2.imencode failed")
-                 image_b64 = base64.b64encode(buffer).decode('utf-8')
-                 bubble["image_b64"] = image_b64
-                 log_message(f"Collected bubble at ({x1}, {y1}), size {x2-x1}x{y2-y1}", verbose=verbose)
-             except Exception as e:
-                  log_message(f"Error encoding bubble at {bubble['bbox']}: {e}", verbose=verbose, always_print=True)
-                  bubble["image_b64"] = None
-
-         valid_bubble_data = [b for b in bubble_data if b.get("image_b64")]
-         if not valid_bubble_data:
-            log_message("No valid bubble images could be prepared for translation. Skipping translation and rendering.", always_print=True)
-
-         # --- Sort and Translate ---
-         reading_direction = config.translation.reading_direction
-         log_message(f"Sorting bubbles in {reading_direction.upper()} reading order...", verbose=verbose)
-         image_width = original_cv_image.shape[1]
-         image_height = original_cv_image.shape[0]
-
-         sorted_bubble_data = sort_bubbles_by_reading_order(valid_bubble_data, image_height, image_width, reading_direction)
-
-         bubble_images_b64 = [bubble["image_b64"] for bubble in sorted_bubble_data]
-         translated_texts = []
-         if not bubble_images_b64:
-             log_message("No valid bubble images to translate after sorting/filtering. Skipping translation and rendering.", always_print=True)
-         elif full_image_b64 is None:
-             log_message("Full image context is missing due to encoding error. Skipping translation and rendering.", always_print=True)
-         else:
-             # Only attempt translation if we have bubbles and context
-             log_message(f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} to {config.translation.output_language} ({reading_direction.upper()})...",
-                         always_print=True)
-             try:
-                 translated_texts = call_translation_api_batch(
-                     config=config.translation,
-                     images_b64=bubble_images_b64,
-                     full_image_b64=full_image_b64,
-                     debug=verbose
-                 )
-             except Exception as e:
-                 log_message(f"Error during API translation: {e}", always_print=True)
-                 translated_texts = ["[Translation Error]" for _ in sorted_bubble_data]
-
-         # --- Render Translations ---
-         # Map original bbox tuple to color and LIR bbox
-         bubble_render_info_map = {
-             tuple(info['bbox']): {'color': info['color'], 'lir_bbox': info.get('lir_bbox')}
-             for info in processed_bubbles_info if 'bbox' in info and 'color' in info
-         }
-         log_message("Rendering translations onto image...", verbose=verbose)
-         if len(translated_texts) == len(sorted_bubble_data):
-             for i, bubble in enumerate(sorted_bubble_data):
-                 bubble["translation"] = translated_texts[i]
-                 bbox = bubble["bbox"]
-                 text = bubble.get("translation", "")
-
-                 if not text or text.startswith("API Error") or text == "No text detected or translation failed" or text.startswith("[No translation") or text.startswith("[Translation Error]"):
-                     log_message(f"Skipping rendering for bubble {bbox} due to empty or error translation: '{text}'", verbose=verbose)
-                     continue
-
-                 log_message(f"Rendering text for bubble {bbox}: '{text[:30]}...'", verbose=verbose)
-
-                 render_info = bubble_render_info_map.get(tuple(bbox))
-                 bubble_color_bgr = render_info['color'] if render_info else (255, 255, 255)
-                 lir_bbox_coords = render_info.get('lir_bbox') if render_info else None
-
-                 rendered_image, success = render_text_skia(
-                     pil_image=pil_cleaned_image,
-                     text=text,
-                     bbox=bbox,
-                     lir_bbox=lir_bbox_coords,
-                     bubble_color_bgr=bubble_color_bgr,
-                     font_dir=config.rendering.font_dir,
-                     min_font_size=config.rendering.min_font_size,
-                     max_font_size=config.rendering.max_font_size,
-                     line_spacing_mult=config.rendering.line_spacing,
-                     use_subpixel_rendering=config.rendering.use_subpixel_rendering,
-                     font_hinting=config.rendering.font_hinting,
-                     use_ligatures=config.rendering.use_ligatures,
-                     verbose=verbose
-                 )
-
-                 if success:
-                     pil_cleaned_image = rendered_image
-                     final_image_to_save = pil_cleaned_image
-                 else:
-                     log_message(f"Failed to render text in bubble {bbox} using Skia.", verbose=verbose, always_print=True)
-         else:
-              log_message(f"Warning: Mismatch between number of bubbles ({len(sorted_bubble_data)}) and translations ({len(translated_texts)}). Skipping rendering.", always_print=True)
+                        if success:
+                            pil_cleaned_image = rendered_image
+                            final_image_to_save = pil_cleaned_image
+                        else:
+                            log_message(f"Failed to render text in bubble {bbox} using Skia.", verbose=verbose, always_print=True)
+                else:
+                    log_message(f"Warning: Mismatch between number of bubbles ({len(sorted_bubble_data)}) and translations ({len(translated_texts)}). Skipping rendering.", always_print=True)
 
     # --- Save Output ---
     if output_path:
         # Ensure the final image is in the correct mode before saving
         if final_image_to_save.mode != target_mode:
-             log_message(f"Converting final image mode from {final_image_to_save.mode} to target {target_mode} before saving.", verbose=verbose)
-             final_image_to_save = final_image_to_save.convert(target_mode)
+            log_message(f"Converting final image mode from {final_image_to_save.mode} to target {target_mode} before saving.", verbose=verbose)
+            final_image_to_save = final_image_to_save.convert(target_mode)
 
         log_message(f"Saving final image to {output_path} (Mode: {final_image_to_save.mode})", verbose=verbose)
         save_image_with_compression(
@@ -447,7 +451,8 @@ def main():
     # General args
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--cpu", action="store_true", help="Force CPU usage")
-    parser.set_defaults(verbose=False, cpu=False)
+    parser.add_argument("--cleaning-only", action="store_true", help="Only perform detection and cleaning, skip translation and rendering.")
+    parser.set_defaults(verbose=False, cpu=False, cleaning_only=False)
 
     args = parser.parse_args()
 
@@ -502,6 +507,7 @@ def main():
         yolo_model_path=args.yolo_model,
         verbose=args.verbose,
         device=target_device,
+        cleaning_only=args.cleaning_only,
         detection=DetectionConfig(
             confidence=args.conf
         ),

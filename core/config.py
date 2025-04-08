@@ -70,6 +70,7 @@ class MangaTranslatorConfig:
     output: OutputConfig = field(default_factory=OutputConfig)
     verbose: bool = False
     device: Optional[torch.device] = None
+    cleaning_only: bool = False
 
     def __post_init__(self):
         # Load API keys from environment variables if not already set

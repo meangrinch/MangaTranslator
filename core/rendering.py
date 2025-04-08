@@ -613,15 +613,21 @@ def render_text_skia(
         text_color = skia.ColorWHITE
     paint = skia.Paint(AntiAlias=True, Color=text_color)
 
-    # --- Calculate Starting Position (Centering the final block around the target center) ---
-    # Top-left corner of the final text block
+    # --- Calculate Starting Position (Centering the visual block around the target center) ---
+    # Center the max line width
     block_start_x = target_center_x - final_max_line_width / 2.0
-    block_start_y = target_center_y - final_block_height / 2.0
 
-    # Y coordinate for the baseline of the *first* line
-    first_baseline_y = block_start_y - final_metrics.fAscent # Offset by ascent from the block's top
+    # Vertical centering
+    num_lines = len(final_lines_data)
+    if num_lines > 0:
+        # Distance from first baseline to last baseline
+        visual_block_height_span = (num_lines - 1) * final_line_height - final_metrics.fAscent
+        # Calculate the baseline of the first line needed to center this span
+        first_baseline_y = target_center_y - visual_block_height_span / 2.0 - final_metrics.fAscent
+    else:
+        first_baseline_y = target_center_y - final_metrics.fAscent / 2.0
 
-    log_message(f"Rendering at size {final_font_size}. Centering target ({'LIR' if use_lir else 'BBox'}): ({target_center_x:.1f}, {target_center_y:.1f}). Block Start (X,Y): ({block_start_x:.1f}, {block_start_y:.1f}). First Baseline Y: {first_baseline_y:.1f}", verbose=verbose)
+    log_message(f"Rendering at size {final_font_size}. Centering target ({'LIR' if use_lir else 'BBox'}): ({target_center_x:.1f}, {target_center_y:.1f}). Block Start X: {block_start_x:.1f}. First Baseline Y: {first_baseline_y:.1f}", verbose=verbose)
 
     # --- Render Line by Line, Segment by Segment ---
     with surface as canvas:

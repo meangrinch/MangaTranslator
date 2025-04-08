@@ -197,8 +197,7 @@ def clean_speech_bubbles(
                     if np.any(final_mask):
                         try:
                             # Ensure mask is uint8, 255 filled (already should be)
-                            # Convert to boolean for lir function
-                            lir_coords = largestinteriorrectangle.lir(final_mask.astype(bool)) # Returns [x, y, width, height]
+                            lir_coords = largestinteriorrectangle.lir(final_mask.astype(bool)) # Convert to boolean for lir function
                             log_message(f"  - Calculated LIR: {lir_coords}", verbose=verbose)
                         except Exception as lir_e:
                             log_message(f"  - LIR calculation failed: {lir_e}", verbose=verbose, is_error=True)

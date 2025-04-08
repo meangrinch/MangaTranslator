@@ -72,6 +72,7 @@ DEFAULT_SETTINGS = {
     "jpeg_quality": 95,
     "png_compression": 6,
     "output_format": "auto",
+    "cleaning_only": False,
 }
 
 DEFAULT_BATCH_SETTINGS = {
@@ -96,7 +97,8 @@ def save_config(incoming_settings: Dict[str, Any]):
 
         known_keys = set(DEFAULT_SETTINGS.keys()) | set(DEFAULT_BATCH_SETTINGS.keys())
         known_keys.add('provider_models')
-        known_keys.add('yolo_model') # Ensure yolo_model is known, even if not in defaults here
+        known_keys.add('yolo_model')
+        known_keys.add('cleaning_only')
         all_defaults = {**DEFAULT_SETTINGS, **DEFAULT_BATCH_SETTINGS}
         known_keys.add('openai_compatible_url')
         known_keys.add('openai_compatible_api_key')
@@ -245,5 +247,6 @@ def reset_to_defaults() -> Dict[str, Any]:
     default_provider = DEFAULT_SETTINGS["provider"]
     settings["provider"] = default_provider
     settings["model_name"] = settings["provider_models"].get(default_provider)
-
+    settings["cleaning_only"] = DEFAULT_SETTINGS["cleaning_only"]
+ 
     return settings
