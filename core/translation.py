@@ -142,7 +142,7 @@ Do not include any other text or explanations in your response."""
                 api_key=api_key, model_name=model_name, parts=parts,
                 generation_config=generation_config, debug=debug
             )
-        elif provider == "OpenAI-Compatible":
+        elif provider == "OpenAI-compatible":
             base_url = config.openai_compatible_url
             api_key = config.openai_compatible_api_key # Can be None or empty string
             if not base_url:
