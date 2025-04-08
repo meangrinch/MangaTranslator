@@ -37,7 +37,7 @@ os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
 
-parser = argparse.ArgumentParser(description='Manga Translator')
+parser = argparse.ArgumentParser(description='MangaTranslator')
 parser.add_argument('--models', type=str, default='./models', help='Directory containing YOLO model files')
 parser.add_argument('--fonts', type=str, default='./fonts', help='Base directory containing font pack subdirectories')
 parser.add_argument('--open-browser', action='store_true', help='Automatically open the default web browser')
@@ -72,7 +72,7 @@ def translate_manga(
     translation_cfg: TranslationConfig,
     rendering_cfg: RenderingConfig,
     output_cfg: OutputConfig,
-    cleaning_only: bool = False, # Added for cleaning only mode
+    cleaning_only: bool = False,
     verbose: bool = False,
     device: Optional[torch.device] = None
 ):
@@ -181,7 +181,7 @@ def translate_manga(
                  use_ligatures=rendering_cfg.use_ligatures
             ),
             output=output_cfg_final,
-            cleaning_only=cleaning_only # Pass the flag here
+            cleaning_only=cleaning_only
         )
 
         translated_image = translate_and_render(
@@ -517,9 +517,9 @@ function() {
 }
 """
 
-with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") as app:
+with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as app:
 
-    gr.Markdown("# Manga Translator")
+    gr.Markdown("# MangaTranslator")
 
     model_choices = ui_utils.get_available_models(MODELS_DIR)
     font_choices, initial_default_font = ui_utils.get_available_font_packs(FONTS_BASE_DIR)
@@ -923,7 +923,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         temperature, top_p, top_k,
         max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
         output_format, jpeg_quality, png_compression,
-        verbose, cleaning_only_toggle, # Added cleaning_only_toggle
+        verbose, cleaning_only_toggle,
         input_language, output_language, font_dropdown,
         batch_input_language, batch_output_language, batch_font_dropdown
     ]
@@ -931,7 +931,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         fn=lambda yolo, conf, rd, dks, di, otsu, mca, cks, ci, ceks, cei,
                  prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk,
                  max_fs, min_fs, ls, subpix, hint, liga,
-                 out_fmt, jq, pngc, verb, cleaning_only_val, # Added cleaning_only_val
+                 out_fmt, jq, pngc, verb, cleaning_only_val,
                  s_in_lang, s_out_lang, s_font,
                  b_in_lang, b_out_lang, b_font:
             config_utils.save_config({
@@ -945,7 +945,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                 'max_font_size': max_fs, 'min_font_size': min_fs, 'line_spacing': ls, 'use_subpixel_rendering': subpix, 'font_hinting': hint, 'use_ligatures': liga,
                 'output_format': out_fmt, 'jpeg_quality': jq, 'png_compression': pngc,
                 'verbose': verb,
-                'cleaning_only': cleaning_only_val, # Save cleaning_only value
+                'cleaning_only': cleaning_only_val,
                 'input_language': s_in_lang, 'output_language': s_out_lang,
                 'batch_input_language': b_in_lang, 'batch_output_language': b_out_lang, 'batch_font_pack': b_font
             })[1],
@@ -993,7 +993,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         temperature, top_p, top_k,
         max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
         output_format, jpeg_quality, png_compression,
-        verbose, cleaning_only_toggle, # Added cleaning_only_toggle
+        verbose, cleaning_only_toggle,
         input_language, output_language, font_dropdown,
         batch_input_language, batch_output_language, batch_font_dropdown,
         config_status
@@ -1047,7 +1047,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
             defaults['max_font_size'], defaults['min_font_size'], defaults['line_spacing'], defaults['use_subpixel_rendering'], defaults['font_hinting'], defaults['use_ligatures'],
             defaults['output_format'], defaults['jpeg_quality'], defaults['png_compression'],
             defaults['verbose'],
-            defaults.get('cleaning_only', False), # Reset cleaning_only
+            defaults.get('cleaning_only', False),
             defaults['input_language'], defaults['output_language'], gr.update(value=reset_single_font),
             defaults['batch_input_language'], defaults['batch_output_language'], gr.update(value=batch_reset_font),
             f"Settings reset to defaults (API keys preserved)."
@@ -1083,7 +1083,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         font_dropdown,
         max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
         output_format, jpeg_quality, png_compression,
-        verbose, cleaning_only_toggle, # Added cleaning_only_toggle
+        verbose, cleaning_only_toggle,
         input_language, output_language
     ]
     translate_button.click(
@@ -1092,7 +1092,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         lambda img, yolo_mdl, conf, dks, di, otsu, mca, cks, ci, ceks, cei,
                prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk, rd,
                s_font, max_fs, min_fs, ls, subpix, hint, liga,
-               out_fmt, jq, pngc, verb, cleaning_only_val, # Added cleaning_only_val
+               out_fmt, jq, pngc, verb, cleaning_only_val,
                s_in_lang, s_out_lang:
 
             translate_manga(
@@ -1119,7 +1119,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                 output_cfg=OutputConfig(
                     output_format=out_fmt, jpeg_quality=jq, png_compression=pngc
                 ),
-                cleaning_only=cleaning_only_val, # Pass cleaning_only value
+                cleaning_only=cleaning_only_val,
                 verbose=verb,
                 device=target_device
             ),
@@ -1139,7 +1139,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         batch_font_dropdown,
         max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
         output_format, jpeg_quality, png_compression,
-        verbose, cleaning_only_toggle, # Added cleaning_only_toggle
+        verbose, cleaning_only_toggle,
         batch_input_language, batch_output_language
     ]
     batch_process_button.click(
@@ -1148,7 +1148,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
         lambda files, yolo_mdl, conf, dks, di, otsu, mca, cks, ci, ceks, cei,
                prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk, rd,
                b_font, max_fs, min_fs, ls, subpix, hint, liga,
-               out_fmt, jq, pngc, verb, cleaning_only_val, # Added cleaning_only_val
+               out_fmt, jq, pngc, verb, cleaning_only_val,
                b_in_lang, b_out_lang:
             process_batch(
                 input_dir_or_files=files,
@@ -1174,7 +1174,7 @@ with gr.Blocks(title="Manga Translator", js=js_credits, css_paths="style.css") a
                 output_cfg=OutputConfig(
                     output_format=out_fmt, jpeg_quality=jq, png_compression=pngc
                 ),
-                cleaning_only=cleaning_only_val, # Pass cleaning_only value
+                cleaning_only=cleaning_only_val,
                 verbose=verb,
                 device=target_device
             ),
