@@ -15,15 +15,16 @@ Translate manga/comics speech bubbles using AI (YOLO for detection, LLMs for tra
 *   Python >= 3.10
 *   YOLO model with mask segmentation (trained for speech bubbles)
 *   Vision-capable LLM (API or local)
-*   (Optional) NVIDIA GPU with CUDA support
 
-# Installation
+## Installation
 
-## Windows Portable
+### Windows Portable
 
-Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https://github.com/meangrinch/MangaTranslator/releases). Includes recommended YOLO model and Komika font pack.
+Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https://github.com/meangrinch/MangaTranslator/releases). 
 
-## Manual Installation
+*Includes recommended YOLO model and Komika font pack.*
+
+### Manual Installation
 
 1.  **Clone Repository:**
     ```bash
@@ -43,26 +44,26 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
     ```
 3.  **Install PyTorch:**
     *   Refer to the official [PyTorch installation guide](https://pytorch.org/get-started/locally/) for system-specific commands.
-    *   Example (CUDA 12.4): 
-    ```bash
+    ```python
+    # Example (CUDA 12.4)
     pip install torch==2.6.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
-    ```
-    * Example (CPU):
-    ```bash
+
+    # Example (CPU)
     pip install torch
-     ```
+    ```
 4.  **Install Dependencies:**
-    ```bash
+    ```python
     pip install -r requirements.txt
     ```
 
 ## Post-Installation Setup
 
 1.  **Download YOLO Model:**
-    *   Download the [recommended model](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt) and place it in the `models/` directory.
+    *   Download the [recommended model](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt) and place it in the `models` directory.
 2.  **Prepare Fonts:**
     *   Place font folders (containing `.otf`/`.ttf` files) inside `fonts/`. Each sub-folder is a font pack (e.g., `fonts/CC Wild Words/`).
-    *   Font variants need 'italic' or 'bold' in their filename to be used for emphasis. Example structure:
+    *   Font variants need 'italic' or 'bold' in their filename to be used for emphasis. 
+    *   Example structure:
         ```
         fonts/
         ├── CC Wild Words/
@@ -77,61 +78,58 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
     *Note: "CC Wild Words" is a common manga translation font.*
 3.  **Setup LLM:**
     *   Supports external providers (Gemini, OpenAI, etc.) and local models (Ollama, LMStudio).
-    *   **Web UI:** Configure in the "Config" tab (API keys/endpoints saved locally to `config.json`).
+    *   **Web UI:** Configure in the "Config" tab (API keys saved locally to `config.json`).
     *   **CLI:** Pass API keys/endpoints as arguments.
     
     *Note: Environment variables (e.g., `GOOGLE_API_KEY`) can also be used. See the "Config" tab for details.*
 
-# Running the Application
+## Running
 
-*   **Web UI (Recommended):**
-    *   **Windows:** Double-click `start-webui.bat` (requires `venv`).
-    *   **Linux/macOS:** Run `python app.py --open-browser`.
-*   **Command-Line Interface (CLI):**
-    *   Use `python main.py` for single or batch processing.
-    *   Example (Single - Gemini): 
-        ```bash
-        python main.py --input <image_path> --output <output_path> --yolo-model <model_path> --provider Gemini --gemini-api-key <key> --font-dir <font_path>
-        ```
-    *   Example (Batch - Ollama): 
-        ```bash
-        python main.py --input <folder_path> --output <output_folder> --batch --yolo-model <model_path> --provider OpenAI-compatible --openai-compatible-url <url>` --font-dir <font_path>
-        ```
-    *   See all options: 
-        ```bash
-        python main.py --help
-        ```
+### **Web UI (Gradio):**
+*   Use `start-webui.bat` (requires `venv`) or run `python app.py --open-browser`
 
-# Basic Usage (Web UI)
+### **CLI:**
+```python
+# Example (Single - Gemini): 
+python main.py --input <image_path> --output <output_path> --yolo-model <model_path> --provider Gemini --gemini-api-key <key> --font-dir <font_path>
+
+# Example (Batch - Ollama): 
+python main.py --input <folder_path> --output <output_folder> --batch --yolo-model <model_path> --provider OpenAI-compatible --openai-compatible-url <url>` --font-dir <font_path>
+
+# For all options: 
+python main.py --help
+```
+
+## Basic Usage (Web UI)
 
 1.  Launch the Web UI.
 2.  Use the **"Translator"** (single image) or **"Batch"** (multiple) tab.
 3.  Upload image(s).
 4.  Select **Font**, **Source Language**, **Target Language**.
 5.  Go to **"Config"** tab:
-    *   Set **Translation Provider**, **Model**, **API Key/Endpoint**.
+    *   Set **Translation -> LLM Provider**, **Model**, **API Key/Endpoint**.
     *   Set **Detection -> Reading Direction** (rtl/ltr).
-    *   Click **"Save Config"**.
+    *   Click **"Save Config"** (Optional).
 6.  Return to the previous tab and click **"Translate"** / **"Start Batch Translating"**.
 7.  Output is saved to `./output/` by default.
 
-*Note: A "cleaning only" mode is available in **"Other"** sub-tab.*
+*Note: A "cleaning only" mode is also available in the **"Other"** sub-tab.*
 
-# Updating
+## Updating
 
 Navigate to the `MangaTranslator` directory and run:
 ```bash
 git pull
 ```
 
-# Customization
+## Customization
 
 Place custom YOLO models (`.pt`/`.onnx`) in `models/`. Must support segmentation and be trained for speech bubbles.
 
-# License
+## License
 
 GPL-3.0. See [LICENSE](https://github.com/meangrinch/MangaTranslator/blob/main/LICENSE).
 
-# Author
+## Author
 
 grinnch
