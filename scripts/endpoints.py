@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 
 def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
                          generation_config: Dict[str, Any],
+                         system_prompt: Optional[str] = None,
                          debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
     """
     Calls the Gemini API endpoint with the provided data and handles retries.
@@ -43,8 +44,10 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
     payload = {
         "contents": [{"parts": parts}],
         "generationConfig": generation_config,
-        "safetySettings": safety_settings_config
+        "safetySettings": safety_settings_config,
     }
+    if system_prompt:
+        payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
 
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2 ** attempt), 16.0) # Exponential backoff, max 16s
@@ -127,6 +130,7 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
 
 def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
                          generation_config: Dict[str, Any],
+                         system_prompt: Optional[str] = None,
                          debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
     """
     Calls the OpenAI Chat Completions API endpoint with the provided data and handles retries.
@@ -136,7 +140,7 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
         model_name (str): OpenAI model to use (e.g., "gpt-4o").
         parts (List[Dict[str, Any]]): List of content parts (text, images).
                                       # Assumes the first part is the text prompt, subsequent are images.
-        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_output_tokens).
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens).
                                             # 'top_k' is ignored by OpenAI Chat API.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
@@ -154,8 +158,10 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
     """
     if not api_key:
         raise ValueError("API key is required for OpenAI endpoint")
-    if not parts or "text" not in parts[0]:
-         raise ValueError("Invalid 'parts' format for OpenAI: First part must be text prompt.")
+    text_part = next((p for p in parts if "text" in p), None)
+    image_parts = [p for p in parts if "inline_data" in p]
+    if not text_part:
+        raise ValueError("Invalid 'parts' format for OpenAI: No text prompt found.")
 
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
@@ -166,8 +172,9 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
     # Transform parts to OpenAI messages format
     messages = []
     user_content = []
-    user_content.append({"type": "text", "text": parts[0]["text"]})
-    for part in parts[1:]:
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    for part in image_parts:
         if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
@@ -176,7 +183,8 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
                 "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
             })
         else:
-             print(f"Warning: Skipping invalid image part format in OpenAI request: {part}")
+            print(f"Warning: Skipping invalid image part format in OpenAI request: {part}")
+    user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
     # Map generation config
@@ -261,6 +269,7 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
 
 def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
                             generation_config: Dict[str, Any],
+                            system_prompt: Optional[str] = None,
                             debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
     """
     Calls the Anthropic Messages API endpoint with the provided data and handles retries.
@@ -270,7 +279,7 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
         model_name (str): Anthropic model to use (e.g., "claude-3-opus-20240229").
         parts (List[Dict[str, Any]]): List of content parts (text, images).
                                       # Assumes the first part is the system/main prompt, subsequent are images.
-        generation_config (Dict[str, Any]): Configuration for generation (temp <= 1.0, top_p, top_k, max_output_tokens).
+        generation_config (Dict[str, Any]): Configuration for generation (temp <= 1.0, top_p, top_k, max_tokens).
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
@@ -287,8 +296,18 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
     """
     if not api_key:
         raise ValueError("API key is required for Anthropic endpoint")
-    if not parts or "text" not in parts[0]:
-         raise ValueError("Invalid 'parts' format for Anthropic: First part must be text prompt.")
+    user_prompt_part = None
+    image_parts = []
+    for part in reversed(parts):
+        if "text" in part and user_prompt_part is None:
+            user_prompt_part = part
+        elif "inline_data" in part:
+            image_parts.insert(0, part)
+
+    if not user_prompt_part:
+         raise ValueError("Invalid 'parts' format for Anthropic: No text prompt found for user message.")
+
+    content_parts = image_parts
 
     url = "https://api.anthropic.com/v1/messages"
     headers = {
@@ -298,10 +317,10 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
     }
 
     # Transform parts to Anthropic messages format
-    system_prompt = parts[0]["text"]
     messages = []
+    user_prompt_text = user_prompt_part["text"]
     user_content = []
-    for part in parts[1:]:
+    for part in content_parts:
         if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
@@ -313,13 +332,12 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
                     "data": base64_image,
                 }
             })
-        elif "text" in part:
-             user_content.append({"type": "text", "text": part["text"]})
         else:
-             print(f"Warning: Skipping invalid part format in Anthropic request: {part}")
+             print(f"Warning: Skipping invalid image part format in Anthropic request: {part}")
 
+    user_content.append({"type": "text", "text": user_prompt_text})
     if not user_content:
-         raise ValueError("No valid content (images/text) found for Anthropic user message after the system prompt.")
+         raise ValueError("No valid content (images/text) could be prepared for Anthropic user message.")
 
     messages.append({"role": "user", "content": user_content})
 
@@ -334,7 +352,7 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
         "temperature": clamped_temp,
         "top_p": generation_config.get("top_p"),
         "top_k": generation_config.get("top_k"),
-        "max_tokens": generation_config.get("max_output_tokens", 2048)
+        "max_tokens": generation_config.get("max_tokens", 2048)
     }
     payload = {k: v for k, v in payload.items() if v is not None}
 
@@ -358,7 +376,6 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
                     error_type = error_data.get("type", "unknown_error")
                     error_message = error_data.get("message", "No error message provided.")
                     print(f"Anthropic API Error Response: Type: {error_type}, Message: {error_message}")
-                    # TODO: Decide if retryable based on type? For now, treat as non-retryable error from API.
                     raise RuntimeError(f"Anthropic API returned error: {error_type} - {error_message}")
 
                 if "content" in result and isinstance(result["content"], list) and len(result["content"]) > 0:
@@ -426,6 +443,7 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
 
 def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
                              generation_config: Dict[str, Any],
+                             system_prompt: Optional[str] = None,
                              debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
     """
     Calls the OpenRouter Chat Completions API endpoint (OpenAI compatible) and handles retries.
@@ -435,7 +453,7 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
         model_name (str): OpenRouter model ID (e.g., "openai/gpt-4o", "anthropic/claude-3-haiku").
         parts (List[Dict[str, Any]]): List of content parts (text, images).
                                       # Assumes the first part is the text prompt, subsequent are images.
-        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, top_k, max_output_tokens).
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, top_k, max_tokens).
                                              # Parameter restrictions (temp clamp, no top_k) are applied
                                              # based on the model_name if it indicates OpenAI or Anthropic.
         debug (bool): Whether to print debugging information.
@@ -454,8 +472,10 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
     """
     if not api_key:
         raise ValueError("API key is required for OpenRouter endpoint")
-    if not parts or "text" not in parts[0]:
-         raise ValueError("Invalid 'parts' format for OpenRouter: First part must be text prompt.")
+    text_part = next((p for p in parts if "text" in p), None)
+    image_parts = [p for p in parts if "inline_data" in p]
+    if not text_part:
+        raise ValueError("Invalid 'parts' format for OpenRouter: No text prompt found.")
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -468,8 +488,9 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
     # Transform parts to OpenAI messages format
     messages = []
     user_content = []
-    user_content.append({"type": "text", "text": parts[0]["text"]})
-    for part in parts[1:]:
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    for part in image_parts:
         if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
@@ -478,14 +499,15 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
                 "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
             })
         else:
-             print(f"Warning: Skipping invalid image part format in OpenRouter request: {part}")
+            print(f"Warning: Skipping invalid image part format in OpenRouter request: {part}")
+    user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
     # Map generation config with provider-specific restrictions
     payload = {
         "model": model_name,
         "messages": messages,
-        "max_tokens": generation_config.get("max_output_tokens", 2048)
+        "max_tokens": generation_config.get("max_tokens", 2048)
     }
 
     is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")
@@ -589,7 +611,8 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
 
 def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model_name: str, parts: List[Dict[str, Any]],
                                     generation_config: Dict[str, Any],
-                                    debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+                                    system_prompt: Optional[str] = None,
+                                    debug: bool = False, timeout: int = 300, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
     """
     Calls a generic OpenAI-Compatible Chat Completions API endpoint and handles retries.
 
@@ -599,7 +622,7 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
         model_name (str): The model ID to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
                                       # Assumes the first part is the text prompt, subsequent are images.
-        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, top_k, max_output_tokens).
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, top_k, max_tokens).
                                              # Parameter restrictions (temp clamp, no top_k) might apply depending on the underlying model.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
@@ -617,8 +640,10 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
     """
     if not base_url:
         raise ValueError("Base URL is required for OpenAI-Compatible endpoint")
-    if not parts or "text" not in parts[0]:
-         raise ValueError("Invalid 'parts' format for OpenAI-Compatible: First part must be text prompt.")
+    text_part = next((p for p in parts if "text" in p), None)
+    image_parts = [p for p in parts if "inline_data" in p]
+    if not text_part:
+        raise ValueError("Invalid 'parts' format for OpenAI-Compatible: No text prompt found.")
 
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
@@ -630,8 +655,9 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
     # Transform parts to OpenAI messages format
     messages = []
     user_content = []
-    user_content.append({"type": "text", "text": parts[0]["text"]})
-    for part in parts[1:]:
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    for part in image_parts:
         if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
@@ -640,14 +666,14 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
                 "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
             })
         else:
-             print(f"Warning: Skipping invalid image part format in OpenAI-Compatible request: {part}")
+            print(f"Warning: Skipping invalid image part format in OpenAI-Compatible request: {part}")
+    user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
-    # Map generation config (apply common restrictions cautiously)
     payload = {
         "model": model_name,
         "messages": messages,
-        "max_tokens": generation_config.get("max_output_tokens", 2048)
+        "max_tokens": generation_config.get("max_tokens", 2048)
     }
 
     temp = generation_config.get("temperature")

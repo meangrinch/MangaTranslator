@@ -75,6 +75,7 @@ def call_translation_api_batch(config: TranslationConfig, images_b64: list, full
 
     # --- Prepare Prompt (consistent across providers) ---
     reading_order_desc = "right-to-left, top-to-bottom" if reading_direction == "rtl" else "left-to-right, top-to-bottom"
+    # system_prompt = """Act as an expert manga/comic translator. Prioritize accuracy, natural flow, consistent character voices, and effective adaptation of humor and cultural nuances. Translate all speech bubbles, including dialogue, narration, and sound effects, faithfully reflecting the original tone and intent."""
     prompt_text = f"""Analyze the full manga/comic page image provided, followed by the {len(images_b64)} individual speech bubble images extracted from it in reading order ({reading_order_desc}).
 For each individual speech bubble image:
 1. Extract the {input_language} text and translate it to {output_language}, making *necessary* adjustments to ensure it flows naturally in the target language and fits the context of the page.
@@ -93,11 +94,11 @@ Do not include any other text or explanations in your response."""
 
     # --- Prepare API Input Parts (consistent structure) ---
     parts = [
-        {"text": prompt_text},
-        {"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}} # Assuming JPEG
+        {"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}}
     ]
     for i, img_b64 in enumerate(images_b64):
         parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
+    parts.append({"text": prompt_text})
 
     # --- Provider Dispatch Logic ---
     response_text = None
@@ -106,7 +107,7 @@ Do not include any other text or explanations in your response."""
             api_key = config.gemini_api_key
             if not api_key:
                 raise ValueError("Gemini API key is missing in configuration and environment variables.")
-            generation_config = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_output_tokens": 2048}
+            generation_config = {"temperature": temperature, "topP": top_p, "topK": top_k, "maxOutputTokens": 2048}
             response_text = call_gemini_endpoint(
                 api_key=api_key, model_name=model_name, parts=parts,
                 generation_config=generation_config, debug=debug
@@ -127,7 +128,7 @@ Do not include any other text or explanations in your response."""
                 raise ValueError("Anthropic API key is missing in configuration and environment variables.")
             # Clamp temperature to 1.0 for Anthropic
             clamped_temp = min(temperature, 1.0)
-            generation_config = {"temperature": clamped_temp, "top_p": top_p, "top_k": top_k, "max_output_tokens": 2048}
+            generation_config = {"temperature": clamped_temp, "top_p": top_p, "top_k": top_k, "max_tokens": 2048}
             response_text = call_anthropic_endpoint(
                 api_key=api_key, model_name=model_name, parts=parts,
                 generation_config=generation_config, debug=debug
@@ -137,7 +138,7 @@ Do not include any other text or explanations in your response."""
             if not api_key:
                 raise ValueError("OpenRouter API key is missing in configuration and environment variables.")
             # Parameter restrictions (temp clamp, no top_k for OpenAI/Anthropic models) are handled *inside* call_openrouter_endpoint
-            generation_config = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_output_tokens": 2048}
+            generation_config = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_tokens": 2048}
             response_text = call_openrouter_endpoint(
                 api_key=api_key, model_name=model_name, parts=parts,
                 generation_config=generation_config, debug=debug
@@ -147,8 +148,7 @@ Do not include any other text or explanations in your response."""
             api_key = config.openai_compatible_api_key # Can be None or empty string
             if not base_url:
                 raise ValueError("OpenAI-Compatible URL is missing in configuration.")
-            # Compatible endpoints generally follow OpenAI's parameter structure (no top_k)
-            generation_config = {"temperature": temperature, "top_p": top_p, "max_output_tokens": 2048}
+            generation_config = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_tokens": 2048}
             response_text = call_openai_compatible_endpoint(
                 base_url=base_url, api_key=api_key, model_name=model_name, parts=parts,
                 generation_config=generation_config, debug=debug
@@ -166,7 +166,7 @@ Do not include any other text or explanations in your response."""
         try:
             translations = []
             # Regex to find numbered lines
-            translation_pattern = re.compile(r'^\s*(\d+)\s*:\s*(.*?)(?=\s*\n\s*\d+\s*:|\s*$)', re.MULTILINE | re.DOTALL)
+            translation_pattern = re.compile(r'^\s*(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*:|\s*$)', re.MULTILINE | re.DOTALL)
             matches = translation_pattern.findall(response_text)
 
             if debug:
