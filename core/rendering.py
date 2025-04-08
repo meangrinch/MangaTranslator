@@ -393,35 +393,107 @@ def render_text_skia(
     if not clean_text:
         return pil_image, True
 
-    # --- Padding (Always based on original bbox) ---
-    padding_ratio = 0.08 # Adjust padding as needed
-    max_render_width = bubble_width * (1 - 2 * padding_ratio)
-    max_render_height = bubble_height * (1 - 2 * padding_ratio)
-
-    if max_render_width <= 0 or max_render_height <= 0:
-         log_message(f"Original bbox too small for padding: w={bubble_width}, h={bubble_height}", verbose=verbose)
-         max_render_width = max(1, bubble_width) # Use base width/height if padding makes it too small
-         max_render_height = max(1, bubble_height)
-
-    # --- Determine Target Center Point (Prefer LIR center, fallback to bbox center) ---
+    # --- Determine Rendering Boundaries and Target Center ---
     use_lir = False
-    target_center_x, target_center_y = 0.0, 0.0
+    max_render_width = 0.0
+    max_render_height = 0.0
+    target_center_x = 0.0
+    target_center_y = 0.0
 
     if lir_bbox is not None and len(lir_bbox) == 4 and lir_bbox[2] > 0 and lir_bbox[3] > 0:
         lir_x, lir_y, lir_w, lir_h = lir_bbox
-        target_center_x = lir_x + lir_w / 2.0
-        target_center_y = lir_y + lir_h / 2.0
-        use_lir = True
-        log_message(f"Using LIR center for positioning: ({target_center_x:.1f}, {target_center_y:.1f})", verbose=verbose)
-    else:
-        if lir_bbox: # Log if LIR was provided but invalid
-            log_message(f"Invalid LIR received: {lir_bbox}. Falling back to original bbox center.", verbose=verbose)
+        log_message(f"Valid LIR received: x={lir_x}, y={lir_y}, w={lir_w}, h={lir_h}. Calculating expanded boundaries.", verbose=verbose)
+
+        # --- LIR Expansion Parameters (Tunable) ---
+        base_expand_factor = 0.10 # Base expansion factor (applied to width/height)
+        tall_threshold = 1.5      # H/W ratio above which we add extra width expansion
+        wide_threshold = 1.5      # W/H ratio above which we add extra height expansion
+        ratio_scaling_factor = 0.10 # How much extra expansion per unit of ratio above threshold
+
+        # --- Calculate Aspect Ratios ---
+        height_width_ratio = lir_h / lir_w if lir_w > 0 else float('inf')
+        width_height_ratio = lir_w / lir_h if lir_h > 0 else float('inf')
+
+        # --- Calculate Base Expansion (Applied Always) ---
+        base_expand_x = (base_expand_factor * lir_w) / 2.0
+        base_expand_y = (base_expand_factor * lir_h) / 2.0
+
+        # --- Calculate Additional Expansion (Based on Ratio) ---
+        additional_expand_x = 0.0
+        additional_expand_y = 0.0
+        if height_width_ratio > tall_threshold:
+            additional_expand_x = (ratio_scaling_factor * (height_width_ratio - tall_threshold) * lir_w) / 2.0
+            log_message(f"  LIR is tall (H/W={height_width_ratio:.2f} > {tall_threshold}). Adding extra width expansion: {additional_expand_x*2:.1f}px", verbose=verbose)
+        elif width_height_ratio > wide_threshold:
+            additional_expand_y = (ratio_scaling_factor * (width_height_ratio - wide_threshold) * lir_h) / 2.0
+            log_message(f"  LIR is wide (W/H={width_height_ratio:.2f} > {wide_threshold}). Adding extra height expansion: {additional_expand_y*2:.1f}px", verbose=verbose)
         else:
-             log_message(f"LIR not provided. Falling back to original bbox center.", verbose=verbose)
-        # Fallback to original bbox center
+            log_message(f"  LIR aspect ratio within thresholds. Using base expansion only.", verbose=verbose)
+
+        # --- Calculate Total Expansion ---
+        total_expand_x = base_expand_x + additional_expand_x
+        total_expand_y = base_expand_y + additional_expand_y
+        log_message(f"  Total expansion: X={total_expand_x*2:.1f}px, Y={total_expand_y*2:.1f}px", verbose=verbose)
+
+        # --- Calculate Expanded Boundaries ---
+        expanded_x1 = lir_x - total_expand_x
+        expanded_y1 = lir_y - total_expand_y
+        expanded_x2 = lir_x + lir_w + total_expand_x
+        expanded_y2 = lir_y + lir_h + total_expand_y
+
+        # --- Constrain Expansion by Original bbox ---
+        final_render_x1 = max(expanded_x1, float(x1))
+        final_render_y1 = max(expanded_y1, float(y1))
+        final_render_x2 = min(expanded_x2, float(x2))
+        final_render_y2 = min(expanded_y2, float(y2))
+        log_message(f"  Expanded LIR: ({expanded_x1:.1f}, {expanded_y1:.1f}, {expanded_x2:.1f}, {expanded_y2:.1f})", verbose=verbose)
+        log_message(f"  Capped by bbox: ({x1}, {y1}, {x2}, {y2})", verbose=verbose)
+        log_message(f"  Final boundaries: ({final_render_x1:.1f}, {final_render_y1:.1f}, {final_render_x2:.1f}, {final_render_y2:.1f})", verbose=verbose)
+
+        # --- Set Final Rendering Constraints ---
+        max_render_width = final_render_x2 - final_render_x1
+        max_render_height = final_render_y2 - final_render_y1
+
+        if max_render_width <= 0 or max_render_height <= 0:
+            log_message(f"Warning: Expanded LIR resulted in non-positive dimensions after capping ({max_render_width:.1f}x{max_render_height:.1f}). Falling back to bbox.", verbose=verbose, always_print=True)
+            # Fallback logic (same as the 'else' block below)
+            padding_ratio = 0.08 # Default padding
+            max_render_width = bubble_width * (1 - 2 * padding_ratio)
+            max_render_height = bubble_height * (1 - 2 * padding_ratio)
+            if max_render_width <= 0 or max_render_height <= 0:
+                max_render_width = max(1.0, float(bubble_width))
+                max_render_height = max(1.0, float(bubble_height))
+            target_center_x = x1 + bubble_width / 2.0
+            target_center_y = y1 + bubble_height / 2.0
+            use_lir = False
+        else:
+            # --- Set Target Center Point (Center of the final rendering area) ---
+            target_center_x = final_render_x1 + max_render_width / 2.0
+            target_center_y = final_render_y1 + max_render_height / 2.0
+            use_lir = True
+            log_message(f"Using Expanded LIR: Max W={max_render_width:.1f}, Max H={max_render_height:.1f}, Center=({target_center_x:.1f}, {target_center_y:.1f})", verbose=verbose)
+
+    else:
+        # --- Fallback to Original Bbox with Padding ---
+        if lir_bbox:
+            log_message(f"Invalid LIR received: {lir_bbox}. Falling back to original bbox with padding.", verbose=verbose)
+        else:
+            log_message(f"LIR not provided. Falling back to original bbox with padding.", verbose=verbose)
+
+        padding_ratio = 0.08 # Adjust padding as needed
+        max_render_width = bubble_width * (1 - 2 * padding_ratio)
+        max_render_height = bubble_height * (1 - 2 * padding_ratio)
+
+        if max_render_width <= 0 or max_render_height <= 0:
+            log_message(f"Original bbox too small for padding: w={bubble_width}, h={bubble_height}", verbose=verbose)
+            max_render_width = max(1.0, float(bubble_width)) # Use base width/height if padding makes it too small
+            max_render_height = max(1.0, float(bubble_height))
+
         target_center_x = x1 + bubble_width / 2.0
         target_center_y = y1 + bubble_height / 2.0
-
+        use_lir = False
+        log_message(f"Using Fallback (Padded Bbox): Max W={max_render_width:.1f}, Max H={max_render_height:.1f}, Center=({target_center_x:.1f}, {target_center_y:.1f})", verbose=verbose)
+    
     # --- Find and Load Font Variants ---
     font_variants = _find_font_variants(font_dir, verbose=verbose)
     regular_font_path = font_variants.get("regular")
@@ -438,7 +510,7 @@ def render_text_skia(
         return pil_image, False
 
     # --- Determine HarfBuzz Features ---
-    available_features = get_font_features(str(regular_font_path)) # Check features on regular font
+    available_features = get_font_features(str(regular_font_path))
     features_to_enable = {
         # Enable kerning if available (GPOS 'kern' or legacy 'kern' table)
         "kern": "kern" in available_features['GPOS'],
