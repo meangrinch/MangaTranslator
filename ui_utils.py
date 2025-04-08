@@ -290,7 +290,7 @@ def fetch_and_update_openrouter_models():
         data = response.json()
         all_models = data.get('data', [])
 
-        vision_keywords = ["omni", "vision", "vl", "multimodal"]
+        vision_keywords = ["omni", "vision", "vl", "multimodal", "gemini"]
         filtered_models = []
         for model in all_models:
             model_id = model.get('id', '').lower()
