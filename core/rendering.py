@@ -405,10 +405,10 @@ def render_text_skia(
         log_message(f"Valid LIR received: x={lir_x}, y={lir_y}, w={lir_w}, h={lir_h}. Calculating expanded boundaries.", verbose=verbose)
 
         # --- LIR Expansion Parameters (Tunable) ---
-        base_expand_factor = 0.10 # Base expansion factor (applied to width/height)
-        tall_threshold = 1.5      # H/W ratio above which we add extra width expansion
-        wide_threshold = 1.5      # W/H ratio above which we add extra height expansion
-        ratio_scaling_factor = 0.10 # How much extra expansion per unit of ratio above threshold
+        base_expand_factor = 0.15   # Base expansion factor (applied to width/height)
+        tall_threshold = 1.1        # H/W ratio above which we add extra width expansion
+        wide_threshold = 1.1        # W/H ratio above which we add extra height expansion
+        ratio_scaling_factor = 0.15 # How much extra expansion per unit of ratio above threshold
 
         # --- Calculate Aspect Ratios ---
         height_width_ratio = lir_h / lir_w if lir_w > 0 else float('inf')
