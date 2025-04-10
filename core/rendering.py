@@ -408,7 +408,7 @@ def render_text_skia(
         base_expand_factor = 0.15   # Base expansion factor (applied to width/height)
         tall_threshold = 1.1        # H/W ratio above which we add extra width expansion
         wide_threshold = 1.1        # W/H ratio above which we add extra height expansion
-        ratio_scaling_factor = 0.15 # How much extra expansion per unit of ratio above threshold
+        ratio_scaling_factor = 0.10 # How much extra expansion per unit of ratio above threshold
 
         # --- Calculate Aspect Ratios ---
         height_width_ratio = lir_h / lir_w if lir_w > 0 else float('inf')
