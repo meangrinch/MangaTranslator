@@ -66,36 +66,32 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
                 prompt_feedback = result.get("promptFeedback")
                 if prompt_feedback and prompt_feedback.get("blockReason"):
                     block_reason = prompt_feedback.get("blockReason")
-                    print(f"API Warning: Request blocked by prompt feedback. Reason: {block_reason}")
                     return None
 
                 if "candidates" in result and len(result["candidates"]) > 0:
                     candidate = result["candidates"][0]
                     if candidate.get("finishReason") == "SAFETY":
-                         safety_ratings = candidate.get("safetyRatings", [])
-                         block_reason = "Unknown Safety Reason"
-                         if safety_ratings:
-                             block_reason = safety_ratings[0].get("category", block_reason)
-                         print(f"API Error: Content generation blocked by safety settings ({block_reason})")
-                         return None
+                        safety_ratings = candidate.get("safetyRatings", [])
+                        block_reason = "Unknown Safety Reason"
+                        if safety_ratings:
+                            block_reason = safety_ratings[0].get("category", block_reason)
+                        return None
 
                     content_parts = candidate.get("content", {}).get("parts", [{}])
                     if content_parts and "text" in content_parts[0]:
                         return content_parts[0].get("text", "").strip()
                     else:
-                         if debug: print("API Warning: No text content found in the first candidate part.")
-                         return ""
+                        if debug: print("API Warning: No text content found in the first candidate part.")
+                        return ""
 
                 else:
                     print("API Warning: No candidates found in successful response.")
                     if prompt_feedback and prompt_feedback.get("blockReason"):
                         block_reason = prompt_feedback.get("blockReason")
-                        print(f"API Warning: No candidates and request blocked by prompt feedback. Reason: {block_reason}")
                         return None
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                print(f"Error processing successful Gemini API response: {str(e)}")
                 raise RuntimeError(f"Error processing successful Gemini API response: {str(e)}") from e
 
         except requests.exceptions.HTTPError as e:
@@ -112,7 +108,6 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
                 if status_code == 429 and attempt == max_retries:
                      error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
 
-                print(f"Gemini API HTTP Error: {error_reason}")
                 raise RuntimeError(f"Gemini API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
@@ -122,10 +117,8 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
                 time.sleep(current_delay)
                 continue
             else:
-                print(f"Gemini API Connection Error after {max_retries + 1} attempts: {str(e)}")
                 raise RuntimeError(f"Gemini API Connection Error after retries: {str(e)}") from e
 
-    print(f"Failed to get response from Gemini API after {max_retries + 1} attempts due to repeated errors.")
     raise RuntimeError(f"Failed to get response from Gemini API after {max_retries + 1} attempts.")
 
 def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
@@ -217,7 +210,6 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
                     finish_reason = choice.get("finish_reason")
 
                     if finish_reason == "content_filter":
-                        print("API Error: Content generation blocked by OpenAI content filter.")
                         return None
 
                     message = choice.get("message")
@@ -232,7 +224,6 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                print(f"Error processing successful OpenAI API response: {str(e)}")
                 raise RuntimeError(f"Error processing successful OpenAI API response: {str(e)}") from e
 
         except requests.exceptions.HTTPError as e:
@@ -247,11 +238,10 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
             else:
                 error_reason = f"Status Code: {status_code}, Response: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
                 elif status_code == 400:
-                     error_reason += " (Check model name and request payload)" # Often indicates a bad request
+                    error_reason += " (Check model name and request payload)" # Often indicates a bad request
 
-                print(f"OpenAI API HTTP Error: {error_reason}")
                 raise RuntimeError(f"OpenAI API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
@@ -261,10 +251,8 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
                 time.sleep(current_delay)
                 continue
             else:
-                print(f"OpenAI API Connection Error after {max_retries + 1} attempts: {str(e)}")
                 raise RuntimeError(f"OpenAI API Connection Error after retries: {str(e)}") from e
 
-    print(f"Failed to get response from OpenAI API after {max_retries + 1} attempts due to repeated errors.")
     raise RuntimeError(f"Failed to get response from OpenAI API after {max_retries + 1} attempts.")
 
 def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
@@ -375,7 +363,6 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
                     error_data = result.get("error", {})
                     error_type = error_data.get("type", "unknown_error")
                     error_message = error_data.get("message", "No error message provided.")
-                    print(f"Anthropic API Error Response: Type: {error_type}, Message: {error_message}")
                     raise RuntimeError(f"Anthropic API returned error: {error_type} - {error_message}")
 
                 if "content" in result and isinstance(result["content"], list) and len(result["content"]) > 0:
@@ -400,7 +387,6 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                print(f"Error processing successful Anthropic API response: {str(e)}")
                 raise RuntimeError(f"Error processing successful Anthropic API response: {str(e)}") from e
 
         except requests.exceptions.HTTPError as e:
@@ -415,16 +401,14 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
             else:
                 error_reason = f"Status Code: {status_code}, Response: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
                 elif status_code == 400:
-                     error_reason += " (Check model name, API key, payload structure, or max_tokens)"
+                    error_reason += " (Check model name, API key, payload structure, or max_tokens)"
                 elif status_code == 401:
-                     error_reason += " (Check API key)"
+                    error_reason += " (Check API key)"
                 elif status_code == 403:
-                     error_reason += " (Permission denied, check API key/plan)"
+                    error_reason += " (Permission denied, check API key/plan)"
 
-
-                print(f"Anthropic API HTTP Error: {error_reason}")
                 raise RuntimeError(f"Anthropic API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
@@ -434,10 +418,8 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
                 time.sleep(current_delay)
                 continue
             else:
-                print(f"Anthropic API Connection Error after {max_retries + 1} attempts: {str(e)}")
                 raise RuntimeError(f"Anthropic API Connection Error after retries: {str(e)}") from e
 
-    print(f"Failed to get response from Anthropic API after {max_retries + 1} attempts due to repeated errors.")
     raise RuntimeError(f"Failed to get response from Anthropic API after {max_retries + 1} attempts.")
 
 
@@ -561,10 +543,8 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
                         if debug: print("API Warning: No message content found in the first choice.")
                         return ""
                 else:
-                    print("API Warning: No choices found in successful OpenRouter response.")
                     if "error" in result:
                         error_msg = result.get("error", {}).get("message", "Unknown error")
-                        print(f"OpenRouter API returned an error in the response body: {error_msg}")
                         raise RuntimeError(f"OpenRouter API returned error: {error_msg}")
                     return None
 
@@ -710,11 +690,9 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
                     finish_reason = choice.get("finish_reason")
 
                     if finish_reason == "content_filter":
-                        print("API Error: Content generation blocked by compatible endpoint content filter.")
                         return None
                     if finish_reason == "safety":
-                         print("API Error: Content generation blocked by compatible endpoint safety settings.")
-                         return None
+                        return None
 
                     message = choice.get("message")
                     if message and "content" in message:
@@ -727,12 +705,10 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
                     print("API Warning: No choices found in successful OpenAI-Compatible response.")
                     if "error" in result:
                         error_msg = result.get("error", {}).get("message", "Unknown error")
-                        print(f"OpenAI-Compatible API returned an error in the response body: {error_msg}")
                         raise RuntimeError(f"OpenAI-Compatible API returned error: {error_msg}")
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                print(f"Error processing successful OpenAI-Compatible API response: {str(e)}")
                 raise RuntimeError(f"Error processing successful OpenAI-Compatible API response: {str(e)}") from e
 
         except requests.exceptions.HTTPError as e:
@@ -755,7 +731,6 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
                 elif status_code == 403:
                      error_reason += " (Permission denied)"
 
-                print(f"OpenAI-Compatible API HTTP Error: {error_reason}")
                 raise RuntimeError(f"OpenAI-Compatible API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
@@ -765,8 +740,6 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
                 time.sleep(current_delay)
                 continue
             else:
-                print(f"OpenAI-Compatible API Connection Error after {max_retries + 1} attempts: {str(e)}")
                 raise RuntimeError(f"OpenAI-Compatible API Connection Error after retries: {str(e)}") from e
 
-    print(f"Failed to get response from OpenAI-Compatible API ({url}) after {max_retries + 1} attempts due to repeated errors.")
     raise RuntimeError(f"Failed to get response from OpenAI-Compatible API ({url}) after {max_retries + 1} attempts.")
