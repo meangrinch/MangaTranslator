@@ -440,6 +440,7 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.1, help="Controls randomness in output (0.0-2.0)")
     parser.add_argument("--top-p", type=float, default=0.95, help="Nucleus sampling parameter (0.0-1.0)")
     parser.add_argument("--top-k", type=int, default=1, help="Limits to top k tokens")
+    parser.add_argument("--translation-mode", type=str, default="one-step", choices=["one-step", "two-step"], help="Translation process mode (one-step or two-step)")
     # Rendering args
     parser.add_argument("--max-font-size", type=int, default=14, help="Max font size for rendering text.")
     parser.add_argument("--min-font-size", type=int, default=8, help="Min font size for rendering text.")
@@ -535,7 +536,8 @@ def main():
             top_k=args.top_k,
             input_language=args.input_language,
             output_language=args.output_language,
-            reading_direction=args.reading_direction
+            reading_direction=args.reading_direction,
+            translation_mode=args.translation_mode # Pass the mode
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,

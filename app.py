@@ -230,6 +230,7 @@ def translate_manga(
             f"• Target language: {config.translation.output_language}\n",
             f"• Reading Direction: {config.translation.reading_direction.upper()}\n",
             f"• Font pack: {font_dir_path.name}\n",
+            f"• Translation Mode: {config.translation.translation_mode}\n",
             f"• YOLO Model: {selected_yolo_model}\n",
             f"• Cleaning Params: DKS:{config.cleaning.dilation_kernel_size}, DI:{config.cleaning.dilation_iterations}, Otsu:{config.cleaning.use_otsu_threshold}, ",
             f"MCA:{config.cleaning.min_contour_area}, CKS:{config.cleaning.closing_kernel_size}, CI:{config.cleaning.closing_iterations}, ",
@@ -459,6 +460,7 @@ def process_batch(
             f"• Reading Direction: {config.translation.reading_direction.upper()}\n",
             f"• Font pack: {font_dir_path.name}\n",
             f"• YOLO Model: {selected_yolo_model}\n",
+            f"• Translation Mode: {config.translation.translation_mode}\n",
             f"• Cleaning Params: DKS:{config.cleaning.dilation_kernel_size}, DI:{config.cleaning.dilation_iterations}, Otsu:{config.cleaning.use_otsu_threshold}, ",
             f"MCA:{config.cleaning.min_contour_area}, CKS:{config.cleaning.closing_kernel_size}, CI:{config.cleaning.closing_iterations}, ",
             f"CEKS:{config.cleaning.constraint_erosion_kernel_size}, CEI:{config.cleaning.constraint_erosion_iterations}\n"
@@ -812,6 +814,13 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
                             interactive=(config_initial_provider != "OpenAI"),
                             elem_id="config_top_k"
                         )
+                        config_translation_mode = gr.Radio(
+                            choices=["one-step", "two-step"],
+                            label="Translation Mode",
+                            value=saved_settings_config.get("translation_mode", config_utils.DEFAULT_SETTINGS["translation_mode"]),
+                            info="Method for translation ('one-step' combines OCR/Translate, 'two-step' separates them).",
+                            elem_id="config_translation_mode"
+                        )
                     setting_groups.append(group_translation)
 
                     with gr.Group(visible=False, elem_classes="settings-group") as group_rendering:
@@ -920,7 +929,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
         dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
         closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
         provider_selector, gemini_api_key, openai_api_key, anthropic_api_key, openrouter_api_key, openai_compatible_url_input, openai_compatible_api_key_input, config_model_name,
-        temperature, top_p, top_k,
+        temperature, top_p, top_k, config_translation_mode, # Add translation mode
         max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
         output_format, jpeg_quality, png_compression,
         verbose, cleaning_only_toggle,
@@ -929,7 +938,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
     ]
     save_config_btn.click(
         fn=lambda yolo, conf, rd, dks, di, otsu, mca, cks, ci, ceks, cei,
-                 prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk,
+                 prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk, trans_mode, # Add trans_mode
                  max_fs, min_fs, ls, subpix, hint, liga,
                  out_fmt, jq, pngc, verb, cleaning_only_val,
                  s_in_lang, s_out_lang, s_font,
@@ -940,7 +949,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
                 'closing_kernel_size': cks, 'closing_iterations': ci, 'constraint_erosion_kernel_size': ceks, 'constraint_erosion_iterations': cei,
                 'provider': prov, 'gemini_api_key': gem_key, 'openai_api_key': oai_key, 'anthropic_api_key': ant_key, 'openrouter_api_key': or_key,
                 'openai_compatible_url': comp_url, 'openai_compatible_api_key': comp_key, 'model_name': model,
-                'temperature': temp, 'top_p': tp, 'top_k': tk,
+                'temperature': temp, 'top_p': tp, 'top_k': tk, 'translation_mode': trans_mode, # Add translation_mode
                 'font_pack': s_font,
                 'max_font_size': max_fs, 'min_font_size': min_fs, 'line_spacing': ls, 'use_subpixel_rendering': subpix, 'font_hinting': hint, 'use_ligatures': liga,
                 'output_format': out_fmt, 'jpeg_quality': jq, 'png_compression': pngc,
@@ -990,7 +999,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
         dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
         closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
         provider_selector, gemini_api_key, openai_api_key, anthropic_api_key, openrouter_api_key, openai_compatible_url_input, openai_compatible_api_key_input, config_model_name,
-        temperature, top_p, top_k,
+        temperature, top_p, top_k, config_translation_mode, # Add translation mode
         max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
         output_format, jpeg_quality, png_compression,
         verbose, cleaning_only_toggle,
@@ -1044,6 +1053,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
             gr.update(value=temp_val, maximum=temp_max),
             defaults['top_p'],
             gr.update(value=defaults['top_k'], interactive=top_k_interactive),
+            gr.update(value=defaults['translation_mode']), # Add translation mode reset
             defaults['max_font_size'], defaults['min_font_size'], defaults['line_spacing'], defaults['use_subpixel_rendering'], defaults['font_hinting'], defaults['use_ligatures'],
             defaults['output_format'], defaults['jpeg_quality'], defaults['png_compression'],
             defaults['verbose'],
@@ -1079,7 +1089,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
         dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
         closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
         provider_selector, gemini_api_key, openai_api_key, anthropic_api_key, openrouter_api_key, openai_compatible_url_input, openai_compatible_api_key_input, config_model_name,
-        temperature, top_p, top_k, config_reading_direction,
+        temperature, top_p, top_k, config_reading_direction, config_translation_mode, # Add translation mode
         font_dropdown,
         max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
         output_format, jpeg_quality, png_compression,
@@ -1090,7 +1100,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
         fn=lambda: gr.update(interactive=False, value="Translating..."), outputs=translate_button, queue=False
     ).then(
         lambda img, yolo_mdl, conf, dks, di, otsu, mca, cks, ci, ceks, cei,
-               prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk, rd,
+               prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk, rd, trans_mode, # Add trans_mode
                s_font, max_fs, min_fs, ls, subpix, hint, liga,
                out_fmt, jq, pngc, verb, cleaning_only_val,
                s_in_lang, s_out_lang:
@@ -1109,7 +1119,8 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
                     openai_compatible_url=comp_url, openai_compatible_api_key=comp_key,
                     model_name=model, temperature=temp, top_p=tp, top_k=tk,
                     input_language=s_in_lang, output_language=s_out_lang,
-                    reading_direction=rd
+                    reading_direction=rd,
+                    translation_mode=trans_mode # Pass translation mode
                 ),
                 rendering_cfg=RenderingConfig(
                     font_dir=s_font,
@@ -1135,7 +1146,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
         dilation_kernel_size, dilation_iterations, use_otsu_threshold, min_contour_area,
         closing_kernel_size, closing_iterations, constraint_erosion_kernel_size, constraint_erosion_iterations,
         provider_selector, gemini_api_key, openai_api_key, anthropic_api_key, openrouter_api_key, openai_compatible_url_input, openai_compatible_api_key_input, config_model_name,
-        temperature, top_p, top_k, config_reading_direction,
+        temperature, top_p, top_k, config_reading_direction, config_translation_mode, # Add translation mode
         batch_font_dropdown,
         max_font_size, min_font_size, line_spacing, use_subpixel_rendering, font_hinting, use_ligatures,
         output_format, jpeg_quality, png_compression,
@@ -1146,7 +1157,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
         fn=lambda: gr.update(interactive=False, value="Processing..."), outputs=batch_process_button, queue=False
     ).then(
         lambda files, yolo_mdl, conf, dks, di, otsu, mca, cks, ci, ceks, cei,
-               prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk, rd,
+               prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk, rd, trans_mode, # Add trans_mode
                b_font, max_fs, min_fs, ls, subpix, hint, liga,
                out_fmt, jq, pngc, verb, cleaning_only_val,
                b_in_lang, b_out_lang:
@@ -1164,7 +1175,8 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
                     openai_compatible_url=comp_url, openai_compatible_api_key=comp_key,
                     model_name=model, temperature=temp, top_p=tp, top_k=tk,
                     input_language=b_in_lang, output_language=b_out_lang,
-                    reading_direction=rd
+                    reading_direction=rd,
+                    translation_mode=trans_mode # Pass translation mode
                 ),
                 rendering_cfg=RenderingConfig(
                     font_dir=b_font,

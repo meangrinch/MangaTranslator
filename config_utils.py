@@ -49,6 +49,7 @@ DEFAULT_SETTINGS = {
     "input_language": "Japanese",
     "output_language": "English",
     "reading_direction": "rtl",
+    "translation_mode": "one-step",
     "confidence": 0.35,
     "dilation_kernel_size": 7,
     "dilation_iterations": 1,
@@ -102,6 +103,7 @@ def save_config(incoming_settings: Dict[str, Any]):
         all_defaults = {**DEFAULT_SETTINGS, **DEFAULT_BATCH_SETTINGS}
         known_keys.add('openai_compatible_url')
         known_keys.add('openai_compatible_api_key')
+        known_keys.add('translation_mode')
 
         config_to_write = {}
         changed_setting_keys = []
@@ -248,5 +250,6 @@ def reset_to_defaults() -> Dict[str, Any]:
     settings["provider"] = default_provider
     settings["model_name"] = settings["provider_models"].get(default_provider)
     settings["cleaning_only"] = DEFAULT_SETTINGS["cleaning_only"]
+    settings["translation_mode"] = DEFAULT_SETTINGS["translation_mode"]
  
     return settings

@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
                          generation_config: Dict[str, Any],
                          system_prompt: Optional[str] = None,
-                         debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+                         debug: bool = False, timeout: int = 120, max_retries: int = 3, base_delay: float = 1.0) -> Optional[str]:
     """
     Calls the Gemini API endpoint with the provided data and handles retries.
 
@@ -131,7 +131,7 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
 def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
                          generation_config: Dict[str, Any],
                          system_prompt: Optional[str] = None,
-                         debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+                         debug: bool = False, timeout: int = 120, max_retries: int = 3, base_delay: float = 1.0) -> Optional[str]:
     """
     Calls the OpenAI Chat Completions API endpoint with the provided data and handles retries.
 
@@ -270,7 +270,7 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
 def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
                             generation_config: Dict[str, Any],
                             system_prompt: Optional[str] = None,
-                            debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+                            debug: bool = False, timeout: int = 120, max_retries: int = 3, base_delay: float = 1.0) -> Optional[str]:
     """
     Calls the Anthropic Messages API endpoint with the provided data and handles retries.
 
@@ -444,7 +444,7 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
 def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
                              generation_config: Dict[str, Any],
                              system_prompt: Optional[str] = None,
-                             debug: bool = False, timeout: int = 120, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+                             debug: bool = False, timeout: int = 120, max_retries: int = 3, base_delay: float = 1.0) -> Optional[str]:
     """
     Calls the OpenRouter Chat Completions API endpoint (OpenAI compatible) and handles retries.
 
