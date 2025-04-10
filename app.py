@@ -818,7 +818,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
                             choices=["one-step", "two-step"],
                             label="Translation Mode",
                             value=saved_settings_config.get("translation_mode", config_utils.DEFAULT_SETTINGS["translation_mode"]),
-                            info="Method for translation ('one-step' combines OCR/Translate, 'two-step' separates them).",
+                            info="Method for translation ('one-step' combines OCR/Translate, 'two-step' separates them). 'two-step' might improve translation quality for less-capable LLMs.",
                             elem_id="config_translation_mode"
                         )
                     setting_groups.append(group_translation)
