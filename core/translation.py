@@ -92,7 +92,6 @@ def _call_llm_endpoint(config: TranslationConfig, parts: List[Dict[str, Any]], p
             raise ValueError(f"Unknown translation provider specified: {provider}")
 
     except (ValueError, RuntimeError) as e:
-        print(f"API call failed for {provider}: {e}")
         raise
 
 def _parse_llm_response(response_text: Optional[str], expected_count: int, provider: str, debug: bool = False) -> Optional[List[str]]:
@@ -101,8 +100,8 @@ def _parse_llm_response(response_text: Optional[str], expected_count: int, provi
         if debug: print(f"Parsing response: Received None from {provider} API call.")
         return None
     elif response_text == "":
-         if debug: print(f"Parsing response: Received empty string from {provider} API, likely no text detected or processing failed.")
-         return [f"[{provider}: No text/empty response]" for _ in range(expected_count)]
+        if debug: print(f"Parsing response: Received empty string from {provider} API, likely no text detected or processing failed.")
+        return [f"[{provider}: No text/empty response]" for _ in range(expected_count)]
 
     try:
         if debug:
@@ -113,21 +112,21 @@ def _parse_llm_response(response_text: Optional[str], expected_count: int, provi
 
         parsed_dict = {}
         for num_str, text in matches:
-             try:
-                 num = int(num_str)
-                 if 1 <= num <= expected_count:
-                     parsed_dict[num] = text.strip()
-                 else:
-                      if debug: print(f"Parsing response warning: Parsed number {num} is out of expected range (1-{expected_count}).")
-             except ValueError:
-                 if debug: print(f"Parsing response warning: Could not parse number '{num_str}' in response line.")
+            try:
+                num = int(num_str)
+                if 1 <= num <= expected_count:
+                    parsed_dict[num] = text.strip()
+                else:
+                    if debug: print(f"Parsing response warning: Parsed number {num} is out of expected range (1-{expected_count}).")
+            except ValueError:
+                if debug: print(f"Parsing response warning: Could not parse number '{num_str}' in response line.")
 
         final_list = []
         for i in range(1, expected_count + 1):
             final_list.append(parsed_dict.get(i, f"[{provider}: No text for bubble {i}]"))
 
         if len(final_list) != expected_count and debug:
-             print(f"Parsing response warning: Expected {expected_count} items, but constructed {len(final_list)}. Check raw response and parsing logic.")
+            print(f"Parsing response warning: Expected {expected_count} items, but constructed {len(final_list)}. Check raw response and parsing logic.")
 
         return final_list
 
@@ -174,17 +173,22 @@ def call_translation_api_batch(config: TranslationConfig, images_b64: List[str],
     try:
         if translation_mode == "two-step":
             # --- Step 1: OCR ---
-            ocr_prompt = f"""Analyze the full manga/comic page image provided, followed by the {num_bubbles} individual speech bubble images extracted from it in reading order ({reading_order_desc}).
+            ocr_prompt = f"""Analyze the {num_bubbles} individual speech bubble images extracted from a manga/comic page in reading order ({reading_order_desc}).
 For each individual speech bubble image, *only* extract the original {input_language} text.
 Provide your response in this *exact* format, with each extraction on a new line:
 1: [Extracted text for bubble 1]
 ...
 {num_bubbles}: [Extracted text for bubble {num_bubbles}]
 
-Do not include translations, styling, or any other text or explanations in your response."""
+Do not include translations, explanations, or any other text in your response."""
 
             if debug: print("--- Starting Two-Step Translation: Step 1 (OCR) ---")
-            ocr_response_text = _call_llm_endpoint(config, base_parts, ocr_prompt, debug)
+            # Prepare parts specifically for OCR (only bubble images)
+            ocr_parts = []
+            for img_b64 in images_b64:
+                ocr_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
+
+            ocr_response_text = _call_llm_endpoint(config, ocr_parts, ocr_prompt, debug)
             extracted_texts = _parse_llm_response(ocr_response_text, num_bubbles, provider + "-OCR", debug)
 
             if extracted_texts is None:
@@ -193,8 +197,8 @@ Do not include translations, styling, or any other text or explanations in your 
 
             is_ocr_failed = all(f"[{provider}-OCR:" in text for text in extracted_texts)
             if is_ocr_failed:
-                 if debug: print("OCR parsing resulted in only placeholders. Returning them.")
-                 return extracted_texts
+                if debug: print("OCR parsing resulted in only placeholders. Returning them.")
+                return extracted_texts
 
             # --- Step 2: Translation & Styling ---
             if debug: print("--- Starting Two-Step Translation: Step 2 (Translate & Style) ---")
@@ -208,13 +212,13 @@ Do not include translations, styling, or any other text or explanations in your 
                     formatted_texts_for_prompt.append(f"{i+1}: {text}")
             extracted_text_block = "\n".join(formatted_texts_for_prompt)
 
-            translation_prompt = f"""Analyze the manga/comic page image provided for context (read from {reading_order_desc}).
-Then, translate the following extracted speech bubble text (numbered {1} to {num_bubbles}) from {input_language} to {output_language}, making *necessary* adjustments to ensure it flows naturally in the target language and fits the context of the page.
+            translation_prompt = f"""Analyze the full manga/comic page image provided for context ({reading_order_desc} reading direction).
+Then, translate the following extracted speech bubble texts (numbered {1} to {num_bubbles}) from {input_language} to {output_language}, choosing words and sentence structures that accurately convey the original's tone and sound authentic for that specific context in the target language.
 Decide if styling should be applied using these markdown-like markers:
 - Italic (`*text*`): Use for thoughts, flashbacks, distant sounds, or dialogue via devices.
 - Bold (`**text**`): Use for SFX, shouting, ans timestamps.
 - Bold Italic (`***text***`): Use for loud SFX/dialogue in flashbacks or via devices.
-- Use regular text otherwise. You can style parts of text if necessary (e.g., "He said **'Stop!'**").
+- Use regular text otherwise. You can style parts of text if needed (e.g., "He said **'Stop!'**").
 
 Extracted {input_language} Text:
 ---
@@ -245,31 +249,30 @@ Do not include any other text or explanations in your response."""
                         combined_results.append(f"[{provider}: Translation call failed/blocked]")
                 return combined_results
 
-            # Final combination: Prioritize OCR failure, then use translation result
             combined_results = []
             for i in range(num_bubbles):
                 if i in ocr_failed_indices:
                     if final_translations[i] == "[OCR FAILED]":
-                         combined_results.append("[OCR FAILED]")
+                        combined_results.append("[OCR FAILED]")
                     else:
-                         if debug: print(f"Warning: LLM translated bubble {i+1} despite [OCR FAILED] instruction. Using placeholder.")
-                         combined_results.append("[OCR FAILED]")
+                        if debug: print(f"Warning: LLM translated bubble {i+1} despite [OCR FAILED] instruction. Using placeholder.")
+                        combined_results.append("[OCR FAILED]")
 
                 else:
                     combined_results.append(final_translations[i])
             return combined_results
 
         elif translation_mode == "one-step":
-            # --- Original One-Step Logic ---
+            # --- One-Step Logic ---
             if debug: print("--- Starting One-Step Translation ---")
             one_step_prompt = f"""Analyze the full manga/comic page image provided, followed by the {num_bubbles} individual speech bubble images extracted from it in reading order ({reading_order_desc}).
 For each individual speech bubble image:
-1. Extract the {input_language} text and translate it to {output_language}, making *necessary* adjustments to ensure it flows naturally in the target language and fits the context of the page.
+1. Extract the {input_language} text and translate it to {output_language}, choosing words and sentence structures that accurately convey the original's tone and sound authentic for that specific context in the target language.
 2. Decide if styling should be applied to the translated text using these markdown-like markers:
     - Italic (`*text*`): Use for thoughts, flashbacks, distant sounds, or dialogue via devices.
     - Bold (`**text**`): Use for SFX, shouting, ans timestamps.
     - Bold Italic (`***text***`): Use for loud SFX/dialogue in flashbacks or via devices.
-    - Use regular text otherwise. You can style parts of text if necessary (e.g., "He said **'Stop!'**").
+    - Use regular text otherwise. You can style parts of text if needed (e.g., "He said **'Stop!'**").
 
 Provide your response in this *exact* format, with each translation on a new line:
 1: [Translation for bubble 1]
@@ -282,15 +285,12 @@ Do not include any other text or explanations in your response."""
             translations = _parse_llm_response(response_text, num_bubbles, provider, debug)
 
             if translations is None:
-                 if debug: print("One-step API call failed or was blocked. Returning placeholders.")
-                 return [f"[{provider}: API call failed/blocked]"] * num_bubbles
+                if debug: print("One-step API call failed or was blocked. Returning placeholders.")
+                return [f"[{provider}: API call failed/blocked]"] * num_bubbles
             else:
-                 return translations
+                return translations
         else:
             raise ValueError(f"Unknown translation_mode specified in config: {translation_mode}")
-
     except (ValueError, RuntimeError) as e:
-        # Catch errors raised during config validation or irrecoverable API errors from helpers
-        print(f"Translation failed: {e}")
-        # Return generic failure placeholders as the specific step might be unknown here
+        print(f"Translation failed: {e}") # Catch errors raised during config validation
         return [f"[Translation Error: {e}]"] * num_bubbles
