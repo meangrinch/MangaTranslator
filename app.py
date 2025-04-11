@@ -13,7 +13,7 @@ from PIL import Image
 import torch
 
 import core
-from core.config import (
+from utils.settings import (
     MangaTranslatorConfig,
     DetectionConfig,
     CleaningConfig,
@@ -23,9 +23,9 @@ from core.config import (
 )
 from core.generate_manga import translate_and_render, batch_translate_images
 from core.common_utils import validate_core_inputs, ValidationError
-import config_utils
-import ui_utils
-from ui_utils import switch_settings_view
+from ui import ui_settings
+from ui import utils
+from ui.utils import switch_settings_view
 
 
 def custom_except_hook(exc_type, exc_value, exc_traceback):
@@ -43,7 +43,6 @@ sys.excepthook = custom_except_hook
 # Helps prevent fragmentation OOM errors on some GPUs
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
-# Constants moved to config_utils.py
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
 
@@ -95,11 +94,11 @@ def translate_manga(
     translated_image = None
 
     # --- UI Validation ---
-    img_valid, img_msg = ui_utils.validate_image(image)
+    img_valid, img_msg = utils.validate_image(image)
     if not img_valid:
         raise gr.Error(f"{ERROR_PREFIX}{img_msg}", print_exception=False)
 
-    api_valid, api_msg = ui_utils.validate_api_key(
+    api_valid, api_msg = utils.validate_api_key(
         (
             translation_cfg.gemini_api_key
             if translation_cfg.provider == "Gemini"
@@ -318,7 +317,7 @@ def process_batch(
     start_time = time.time()
 
     # --- UI Validation (API Key / URL) ---
-    api_valid, api_msg = ui_utils.validate_api_key(
+    api_valid, api_msg = utils.validate_api_key(
         (
             translation_cfg.gemini_api_key
             if translation_cfg.provider == "Gemini"
@@ -395,7 +394,7 @@ def process_batch(
                 p = Path(f_path)
                 if p.is_file() and p.suffix.lower() in image_extensions:
                     # Basic validation before copying
-                    img_valid, img_msg = ui_utils.validate_image(p)
+                    img_valid, img_msg = utils.validate_image(p)
                     if img_valid:
                         image_files_to_copy.append(p)
                     else:
@@ -584,9 +583,9 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
 
     gr.Markdown("# MangaTranslator")
 
-    model_choices = ui_utils.get_available_models(MODELS_DIR)
-    font_choices, initial_default_font = ui_utils.get_available_font_packs(FONTS_BASE_DIR)
-    saved_settings = config_utils.get_saved_settings()
+    model_choices = utils.get_available_models(MODELS_DIR)
+    font_choices, initial_default_font = utils.get_available_font_packs(FONTS_BASE_DIR)
+    saved_settings = ui_settings.get_saved_settings()
 
     saved_yolo_model = saved_settings.get("yolo_model")
     default_yolo_model = (
@@ -604,13 +603,13 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
         else (initial_default_font if initial_default_font else None)
     )
 
-    initial_provider = saved_settings.get("provider", config_utils.DEFAULT_SETTINGS["provider"])
+    initial_provider = saved_settings.get("provider", ui_settings.DEFAULT_SETTINGS["provider"])
     initial_model_name = saved_settings.get("model_name")
 
     if initial_provider == "OpenRouter" or initial_provider == "OpenAI-compatible":
         initial_models_choices = [initial_model_name] if initial_model_name else []
     else:
-        initial_models_choices = config_utils.PROVIDER_MODELS.get(initial_provider, [])
+        initial_models_choices = ui_settings.PROVIDER_MODELS.get(initial_provider, [])
 
     with gr.Tabs():
         with gr.TabItem("Translator"):
@@ -736,14 +735,14 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
 
         with gr.TabItem("Config", elem_id="settings-tab-container"):
             # Load settings again here to ensure components get the latest values
-            saved_settings_config = config_utils.get_saved_settings()
-            config_initial_provider = saved_settings_config.get("provider", config_utils.DEFAULT_SETTINGS["provider"])
+            saved_settings_config = ui_settings.get_saved_settings()
+            config_initial_provider = saved_settings_config.get("provider", ui_settings.DEFAULT_SETTINGS["provider"])
             config_initial_model_name = saved_settings_config.get("model_name")
 
             if config_initial_provider == "OpenRouter" or config_initial_provider == "OpenAI-compatible":
                 config_initial_models_choices = [config_initial_model_name] if config_initial_model_name else []
             else:
-                config_initial_models_choices = config_utils.PROVIDER_MODELS.get(config_initial_provider, [])
+                config_initial_models_choices = ui_settings.PROVIDER_MODELS.get(config_initial_provider, [])
 
             config_initial_yolo = saved_settings_config.get("yolo_model")
             config_default_yolo = (
@@ -889,7 +888,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
                     with gr.Group(visible=False, elem_classes="settings-group") as group_translation:
                         gr.Markdown("### LLM Settings")
                         provider_selector = gr.Radio(
-                            choices=list(config_utils.PROVIDER_MODELS.keys()),
+                            choices=list(ui_settings.PROVIDER_MODELS.keys()),
                             label="Translation Provider",
                             value=config_initial_provider,
                             elem_id="provider_selector",
@@ -943,7 +942,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
                             placeholder="Enter Base URL (e.g., http://localhost:11434/v1)",
                             type="text",
                             value=saved_settings_config.get(
-                                "openai_compatible_url", config_utils.DEFAULT_SETTINGS["openai_compatible_url"]
+                                "openai_compatible_url", ui_settings.DEFAULT_SETTINGS["openai_compatible_url"]
                             ),
                             show_copy_button=False,
                             visible=(config_initial_provider == "OpenAI-compatible"),
@@ -1001,7 +1000,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
                             choices=["one-step", "two-step"],
                             label="Translation Mode",
                             value=saved_settings_config.get(
-                                "translation_mode", config_utils.DEFAULT_SETTINGS["translation_mode"]
+                                "translation_mode", ui_settings.DEFAULT_SETTINGS["translation_mode"]
                             ),
                             info="Method for translation ('one-step' combines OCR/Translate, "
                             "'two-step' separates them). 'two-step' might improve "
@@ -1141,7 +1140,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
 
             # Update Translation UI based on provider selection
             provider_selector.change(
-                fn=ui_utils.update_translation_ui,
+                fn=utils.update_translation_ui,
                 inputs=[provider_selector, temperature],
                 outputs=[
                     gemini_api_key,
@@ -1157,9 +1156,9 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
                 queue=False,
             ).then(  # Trigger model fetch *after* provider change updates visibility etc.
                 fn=lambda prov, url, key: (
-                    ui_utils.fetch_and_update_compatible_models(url, key)
+                    utils.fetch_and_update_compatible_models(url, key)
                     if prov == "OpenAI-compatible"
-                    else (ui_utils.fetch_and_update_openrouter_models() if prov == "OpenRouter" else gr.update())
+                    else (utils.fetch_and_update_openrouter_models() if prov == "OpenRouter" else gr.update())
                 ),
                 inputs=[provider_selector, openai_compatible_url_input, openai_compatible_api_key_input],
                 outputs=[config_model_name],
@@ -1209,7 +1208,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
         batch_font_dropdown,
     ]
     save_config_btn.click(
-        fn=lambda yolo, conf, rd, dks, di, otsu, mca, cks, ci, ceks, cei, prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk, trans_mode, max_fs, min_fs, ls, subpix, hint, liga, out_fmt, jq, pngc, verb, cleaning_only_val, s_in_lang, s_out_lang, s_font, b_in_lang, b_out_lang, b_font: config_utils.save_config(  # noqa
+        fn=lambda yolo, conf, rd, dks, di, otsu, mca, cks, ci, ceks, cei, prov, gem_key, oai_key, ant_key, or_key, comp_url, comp_key, model, temp, tp, tk, trans_mode, max_fs, min_fs, ls, subpix, hint, liga, out_fmt, jq, pngc, verb, cleaning_only_val, s_in_lang, s_out_lang, s_font, b_in_lang, b_out_lang, b_font: ui_settings.save_config(  # noqa
             {
                 "yolo_model": yolo,
                 "confidence": conf,
@@ -1340,15 +1339,15 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
     ]
 
     def apply_defaults():
-        defaults = config_utils.reset_to_defaults()
-        available_yolo_models = ui_utils.get_available_models(MODELS_DIR)
+        defaults = ui_settings.reset_to_defaults()
+        available_yolo_models = utils.get_available_models(MODELS_DIR)
         reset_yolo_model = (
             defaults.get("yolo_model")
             if defaults.get("yolo_model") in available_yolo_models
             else (available_yolo_models[0] if available_yolo_models else None)
         )
 
-        available_fonts, _ = ui_utils.get_available_font_packs(FONTS_BASE_DIR)
+        available_fonts, _ = utils.get_available_font_packs(FONTS_BASE_DIR)
         reset_single_font = (
             defaults.get("font_pack")
             if defaults.get("font_pack") in available_fonts
@@ -1360,14 +1359,14 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
             else (available_fonts[0] if available_fonts else None)
         )
 
-        default_provider = defaults.get("provider", config_utils.DEFAULT_SETTINGS["provider"])
-        default_provider_models = defaults.get("provider_models", config_utils.DEFAULT_SETTINGS["provider_models"])
+        default_provider = defaults.get("provider", ui_settings.DEFAULT_SETTINGS["provider"])
+        default_provider_models = defaults.get("provider_models", ui_settings.DEFAULT_SETTINGS["provider_models"])
         default_model_name = default_provider_models.get(default_provider)
 
         if default_provider == "OpenRouter":
             default_models_choices = [default_model_name] if default_model_name else []
         else:
-            default_models_choices = config_utils.PROVIDER_MODELS.get(default_provider, [])
+            default_models_choices = ui_settings.PROVIDER_MODELS.get(default_provider, [])
 
         gemini_visible = default_provider == "Gemini"
         openai_visible = default_provider == "OpenAI"
@@ -1399,7 +1398,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
             gr.update(value=defaults.get("anthropic_api_key", ""), visible=anthropic_visible),
             gr.update(value=defaults.get("openrouter_api_key", ""), visible=openrouter_visible),
             gr.update(
-                value=defaults.get("openai_compatible_url", config_utils.DEFAULT_SETTINGS["openai_compatible_url"]),
+                value=defaults.get("openai_compatible_url", ui_settings.DEFAULT_SETTINGS["openai_compatible_url"]),
                 visible=compatible_visible,
             ),
             gr.update(value=defaults.get("openai_compatible_api_key", ""), visible=compatible_visible),
@@ -1643,7 +1642,7 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
 
     refresh_outputs = [config_yolo_model_dropdown, font_dropdown, batch_font_dropdown]
     refresh_resources_button.click(
-        fn=lambda: ui_utils.refresh_models_and_fonts(MODELS_DIR, FONTS_BASE_DIR),
+        fn=lambda: utils.refresh_models_and_fonts(MODELS_DIR, FONTS_BASE_DIR),
         inputs=[],
         outputs=refresh_outputs,
         js="""
@@ -1675,14 +1674,14 @@ with gr.Blocks(title="MangaTranslator", js=js_credits, css_paths="style.css") as
     )
 
     config_model_name.change(
-        fn=ui_utils.update_params_for_model,
+        fn=utils.update_params_for_model,
         inputs=[provider_selector, config_model_name, temperature],
         outputs=[temperature, top_k],
         queue=False,
     )
 
     app.load(
-        fn=ui_utils.initial_dynamic_fetch,
+        fn=utils.initial_dynamic_fetch,
         inputs=[provider_selector, openai_compatible_url_input, openai_compatible_api_key_input],
         outputs=[config_model_name],
         queue=False,

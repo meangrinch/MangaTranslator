@@ -6,7 +6,7 @@ from typing import Optional, Any, List, Tuple
 import gradio as gr
 from PIL import Image
 
-from config_utils import get_saved_settings, PROVIDER_MODELS, DEFAULT_SETTINGS
+from .ui_settings import get_saved_settings, PROVIDER_MODELS, DEFAULT_SETTINGS
 
 # --- Constants ---
 ERROR_PREFIX = "❌ Error: "

@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict, Any, Optional
-from .config import TranslationConfig
-from scripts.endpoints import (
+from utils.settings import TranslationConfig
+from utils.endpoints import (
     call_gemini_endpoint,
     call_openai_endpoint,
     call_anthropic_endpoint,

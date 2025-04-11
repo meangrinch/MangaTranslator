@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List, Tuple, Optional
 
-from .config import TranslationConfig, RenderingConfig
+from utils.settings import TranslationConfig, RenderingConfig
 
 
 # --- Custom Exception ---

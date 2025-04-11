@@ -9,7 +9,7 @@ import cv2
 from PIL import Image
 import torch
 
-from .config import (
+from utils.settings import (
     DetectionConfig,
     CleaningConfig,
     TranslationConfig,
