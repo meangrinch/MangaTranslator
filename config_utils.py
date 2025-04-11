@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 # --- Constants ---
-CONFIG_FILE = Path(os.environ.get('LOCALAPPDATA', os.path.expanduser("~"))) / "MangaTranslator" / "config.json"
+CONFIG_FILE = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "MangaTranslator" / "config.json"
 
 PROVIDER_MODELS: Dict[str, List[str]] = {
     "Gemini": [
@@ -12,7 +12,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "gemini-2.0-flash-lite",
         "gemini-2.0-flash-thinking-exp-01-21",
         "gemini-2.5-pro-exp-03-25",
-        "gemini-2.5-pro-preview-03-25"
+        "gemini-2.5-pro-preview-03-25",
     ],
     "OpenAI": [
         "gpt-4o",
@@ -27,7 +27,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "claude-3-opus-latest",
     ],
     "OpenRouter": [],
-    "OpenAI-compatible": []
+    "OpenAI-compatible": [],
 }
 
 DEFAULT_SETTINGS = {
@@ -38,13 +38,13 @@ DEFAULT_SETTINGS = {
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:11434/v1",
     "openai_compatible_api_key": "",
-    "model_name": PROVIDER_MODELS["Gemini"][0] if PROVIDER_MODELS["Gemini"] else None, # Default active model
+    "model_name": PROVIDER_MODELS["Gemini"][0] if PROVIDER_MODELS["Gemini"] else None,  # Default active model
     "provider_models": {
         "Gemini": PROVIDER_MODELS["Gemini"][0] if PROVIDER_MODELS["Gemini"] else None,
         "OpenAI": PROVIDER_MODELS["OpenAI"][0] if PROVIDER_MODELS["OpenAI"] else None,
         "Anthropic": PROVIDER_MODELS["Anthropic"][0] if PROVIDER_MODELS["Anthropic"] else None,
         "OpenRouter": None,
-        "OpenAI-compatible": None
+        "OpenAI-compatible": None,
     },
     "input_language": "Japanese",
     "output_language": "English",
@@ -79,8 +79,9 @@ DEFAULT_SETTINGS = {
 DEFAULT_BATCH_SETTINGS = {
     "batch_input_language": "Japanese",
     "batch_output_language": "English",
-    "batch_font_pack": None
+    "batch_font_pack": None,
 }
+
 
 # --- Functions ---
 def save_config(incoming_settings: Dict[str, Any]):
@@ -89,41 +90,45 @@ def save_config(incoming_settings: Dict[str, Any]):
         current_config_on_disk = {}
         if CONFIG_FILE.exists():
             try:
-                with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     current_config_on_disk = json.load(f)
             except json.JSONDecodeError:
-                 print(f"Warning: Could not decode existing config file at {CONFIG_FILE}. Overwriting with new settings.")
+                print(
+                    f"Warning: Could not decode existing config file at {CONFIG_FILE}. Overwriting with new settings."
+                )
             except Exception as e:
-                 print(f"Warning: Error reading config file {CONFIG_FILE}: {e}. Overwriting with new settings.")
+                print(f"Warning: Error reading config file {CONFIG_FILE}: {e}. Overwriting with new settings.")
 
         known_keys = set(DEFAULT_SETTINGS.keys()) | set(DEFAULT_BATCH_SETTINGS.keys())
-        known_keys.add('provider_models')
-        known_keys.add('yolo_model')
-        known_keys.add('cleaning_only')
+        known_keys.add("provider_models")
+        known_keys.add("yolo_model")
+        known_keys.add("cleaning_only")
         all_defaults = {**DEFAULT_SETTINGS, **DEFAULT_BATCH_SETTINGS}
-        known_keys.add('openai_compatible_url')
-        known_keys.add('openai_compatible_api_key')
-        known_keys.add('translation_mode')
+        known_keys.add("openai_compatible_url")
+        known_keys.add("openai_compatible_api_key")
+        known_keys.add("translation_mode")
 
         config_to_write = {}
         changed_setting_keys = []
 
-        provider_models_to_save = current_config_on_disk.get('provider_models', DEFAULT_SETTINGS['provider_models'].copy())
-        if not isinstance(provider_models_to_save, dict): # Handle potential corruption
-            provider_models_to_save = DEFAULT_SETTINGS['provider_models'].copy()
+        provider_models_to_save = current_config_on_disk.get(
+            "provider_models", DEFAULT_SETTINGS["provider_models"].copy()
+        )
+        if not isinstance(provider_models_to_save, dict):  # Handle potential corruption
+            provider_models_to_save = DEFAULT_SETTINGS["provider_models"].copy()
 
-        selected_provider = incoming_settings.get('provider')
-        selected_model = incoming_settings.get('model_name')
+        selected_provider = incoming_settings.get("provider")
+        selected_model = incoming_settings.get("model_name")
         if selected_provider and selected_model:
             provider_models_to_save[selected_provider] = selected_model
 
-        old_provider_models = current_config_on_disk.get('provider_models', {})
+        old_provider_models = current_config_on_disk.get("provider_models", {})
         if old_provider_models != provider_models_to_save:
-            changed_setting_keys.append('provider_models')
-        config_to_write['provider_models'] = provider_models_to_save
+            changed_setting_keys.append("provider_models")
+        config_to_write["provider_models"] = provider_models_to_save
 
         for key in known_keys:
-            if key == 'provider_models':
+            if key == "provider_models":
                 continue
 
             incoming_value = incoming_settings.get(key)
@@ -138,7 +143,7 @@ def save_config(incoming_settings: Dict[str, Any]):
                 if current_value_on_disk != incoming_value:
                     changed = True
             elif incoming_value != default_value:
-                 changed = True
+                changed = True
 
             if changed:
                 changed_setting_keys.append(key)
@@ -146,7 +151,7 @@ def save_config(incoming_settings: Dict[str, Any]):
         # Ensure parent directory exists
         os.makedirs(CONFIG_FILE.parent, exist_ok=True)
 
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config_to_write, f, indent=2)
 
         if changed_setting_keys:
@@ -158,8 +163,10 @@ def save_config(incoming_settings: Dict[str, Any]):
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return False, f"Failed to save settings: {str(e)}"
+
 
 def get_saved_settings() -> Dict[str, Any]:
     """Get all saved settings from config file, falling back to defaults."""
@@ -169,7 +176,7 @@ def get_saved_settings() -> Dict[str, Any]:
 
     try:
         if CONFIG_FILE.exists():
-            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 saved_config = json.load(f)
 
             for key in settings.keys():
@@ -177,16 +184,16 @@ def get_saved_settings() -> Dict[str, Any]:
                     settings[key] = saved_config[key]
 
             # Special handling for potentially missing keys or nested structures from older configs
-            if 'yolo_model' in saved_config:
-                settings['yolo_model'] = saved_config['yolo_model']
-            if 'provider_models' not in settings:
-                 settings['provider_models'] = DEFAULT_SETTINGS['provider_models'].copy()
-            elif not isinstance(settings['provider_models'], dict):
-                 print(f"Warning: 'provider_models' in config is not a dictionary. Resetting.")
-                 settings['provider_models'] = DEFAULT_SETTINGS['provider_models'].copy()
+            if "yolo_model" in saved_config:
+                settings["yolo_model"] = saved_config["yolo_model"]
+            if "provider_models" not in settings:
+                settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
+            elif not isinstance(settings["provider_models"], dict):
+                print("Warning: 'provider_models' in config is not a dictionary. Resetting.")
+                settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
 
             loaded_provider = settings.get("provider", DEFAULT_SETTINGS["provider"])
-            provider_models_dict = settings.get('provider_models', DEFAULT_SETTINGS['provider_models'])
+            provider_models_dict = settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
             saved_model_for_provider = provider_models_dict.get(loaded_provider)
 
             if loaded_provider == "OpenRouter" or loaded_provider == "OpenAI-compatible":
@@ -196,15 +203,21 @@ def get_saved_settings() -> Dict[str, Any]:
                 if saved_model_for_provider and saved_model_for_provider in valid_models:
                     settings["model_name"] = saved_model_for_provider
                 else:
-                    default_model_for_provider = DEFAULT_SETTINGS['provider_models'].get(loaded_provider)
+                    default_model_for_provider = DEFAULT_SETTINGS["provider_models"].get(loaded_provider)
                     if default_model_for_provider and default_model_for_provider in valid_models:
-                         settings["model_name"] = default_model_for_provider
+                        settings["model_name"] = default_model_for_provider
                     elif valid_models:
-                         settings["model_name"] = valid_models[0]
+                        settings["model_name"] = valid_models[0]
                     else:
-                         settings["model_name"] = None
-                    if saved_model_for_provider and saved_model_for_provider != settings["model_name"]: # Only warn if there *was* a saved value that's now invalid/different
-                         print(f"Warning: Saved model '{saved_model_for_provider}' not valid or available for provider '{loaded_provider}'. Using '{settings['model_name']}'.")
+                        settings["model_name"] = None
+                    if (
+                        saved_model_for_provider and saved_model_for_provider != settings["model_name"]
+                    ):  # Only warn if there *was* a saved value that's now invalid/different
+                        print(
+                            f"Warning: Saved model '{saved_model_for_provider}' not valid "
+                            f"or available for provider '{loaded_provider}'. "
+                            f"Using '{settings['model_name']}'."
+                        )
 
     except json.JSONDecodeError:
         print(f"Warning: Could not decode config file at {CONFIG_FILE}. Using defaults.")
@@ -225,6 +238,7 @@ def get_saved_settings() -> Dict[str, Any]:
 
     return settings
 
+
 def reset_to_defaults() -> Dict[str, Any]:
     """Reset all settings to default values, preserving API keys and YOLO model if they exist."""
     settings = {}
@@ -234,16 +248,23 @@ def reset_to_defaults() -> Dict[str, Any]:
     # Preserve existing keys if they exist in the current saved config
     current_saved = {}
     if CONFIG_FILE.exists():
-         try:
-             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                 current_saved = json.load(f)
-         except Exception:
-             pass
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                current_saved = json.load(f)
+        except Exception:
+            pass
 
-         preserved_keys = ['gemini_api_key', 'openai_api_key', 'anthropic_api_key', 'openrouter_api_key', 'openai_compatible_api_key', 'yolo_model']
-         for key in preserved_keys:
-             if key in current_saved:
-                 settings[key] = current_saved[key]
+        preserved_keys = [
+            "gemini_api_key",
+            "openai_api_key",
+            "anthropic_api_key",
+            "openrouter_api_key",
+            "openai_compatible_api_key",
+            "yolo_model",
+        ]
+        for key in preserved_keys:
+            if key in current_saved:
+                settings[key] = current_saved[key]
 
     settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
     default_provider = DEFAULT_SETTINGS["provider"]
@@ -251,5 +272,5 @@ def reset_to_defaults() -> Dict[str, Any]:
     settings["model_name"] = settings["provider_models"].get(default_provider)
     settings["cleaning_only"] = DEFAULT_SETTINGS["cleaning_only"]
     settings["translation_mode"] = DEFAULT_SETTINGS["translation_mode"]
- 
+
     return settings

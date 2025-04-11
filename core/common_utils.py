@@ -3,10 +3,13 @@ from typing import List, Tuple, Optional
 
 from .config import TranslationConfig, RenderingConfig
 
+
 # --- Custom Exception ---
 class ValidationError(ValueError):
     """Custom exception for validation errors."""
+
     pass
+
 
 # --- Logging ---
 def log_message(message, verbose=False, always_print=False):
@@ -23,6 +26,7 @@ def log_message(message, verbose=False, always_print=False):
 
     print(f"{message}")
 
+
 # --- Core Input Validation ---
 def get_available_yolo_models(models_directory: Path) -> List[str]:
     """Helper to get list of available YOLO models."""
@@ -33,12 +37,13 @@ def get_available_yolo_models(models_directory: Path) -> List[str]:
     models.sort()
     return models
 
+
 def validate_core_inputs(
     translation_cfg: TranslationConfig,
     rendering_cfg: RenderingConfig,
     selected_yolo_model_name: Optional[str],
     models_dir: Path,
-    fonts_base_dir: Path
+    fonts_base_dir: Path,
 ) -> Tuple[Path, Path]:
     """
     Validates core inputs required for translation, raising standard exceptions.
@@ -87,12 +92,14 @@ def validate_core_inputs(
         raise FileNotFoundError(f"Fonts base directory not found: {fonts_base_dir}")
 
     if not rendering_cfg.font_dir:
-         raise ValidationError("Font pack (font_dir in rendering config) not specified.")
+        raise ValidationError("Font pack (font_dir in rendering config) not specified.")
 
     # font_dir in rendering_cfg is expected to be the *name* of the font pack subdirectory
     font_dir_path = fonts_base_dir / rendering_cfg.font_dir
     if not font_dir_path.is_dir():
-        raise FileNotFoundError(f"Specified font pack directory '{rendering_cfg.font_dir}' not found within {fonts_base_dir}")
+        raise FileNotFoundError(
+            f"Specified font pack directory '{rendering_cfg.font_dir}' not found within {fonts_base_dir}"
+        )
 
     font_files = list(font_dir_path.glob("*.ttf")) + list(font_dir_path.glob("*.otf"))
     if not font_files:
@@ -104,9 +111,9 @@ def validate_core_inputs(
     if not (isinstance(rendering_cfg.min_font_size, int) and rendering_cfg.min_font_size > 0):
         raise ValueError("Min Font Size must be a positive integer.")
     if not (isinstance(rendering_cfg.line_spacing, (int, float)) and float(rendering_cfg.line_spacing) > 0):
-         raise ValueError("Line Spacing must be a positive number.")
+        raise ValueError("Line Spacing must be a positive number.")
     if rendering_cfg.min_font_size > rendering_cfg.max_font_size:
-         raise ValueError("Min Font Size cannot be larger than Max Font Size.")
+        raise ValueError("Min Font Size cannot be larger than Max Font Size.")
     if rendering_cfg.font_hinting not in ["none", "slight", "normal", "full"]:
         raise ValueError("Invalid Font Hinting value. Must be one of: none, slight, normal, full.")
 
@@ -114,7 +121,7 @@ def validate_core_inputs(
     if not translation_cfg.provider:
         raise ValueError("Translation provider cannot be empty.")
     if not translation_cfg.model_name and translation_cfg.provider not in ["OpenRouter", "OpenAI-compatible"]:
-         pass
+        pass
     if not translation_cfg.input_language:
         raise ValueError("Input language cannot be empty.")
     if not translation_cfg.output_language:

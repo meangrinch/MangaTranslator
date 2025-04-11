@@ -3,10 +3,18 @@ import time
 import json
 from typing import List, Dict, Any, Optional
 
-def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
-                         generation_config: Dict[str, Any],
-                         system_prompt: Optional[str] = None,
-                         debug: bool = False, timeout: int = 120, max_retries: int = 3, base_delay: float = 1.0) -> Optional[str]:
+
+def call_gemini_endpoint(
+    api_key: str,
+    model_name: str,
+    parts: List[Dict[str, Any]],
+    generation_config: Dict[str, Any],
+    system_prompt: Optional[str] = None,
+    debug: bool = False,
+    timeout: int = 120,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+) -> Optional[str]:
     """
     Calls the Gemini API endpoint with the provided data and handles retries.
 
@@ -38,7 +46,7 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
         {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
     ]
 
     payload = {
@@ -50,7 +58,7 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
         payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
 
     for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2 ** attempt), 16.0) # Exponential backoff, max 16s
+        current_delay = min(base_delay * (2**attempt), 16.0)  # Exponential backoff, max 16s
         try:
             if debug:
                 print(f"Making Gemini API request (Attempt {attempt + 1}/{max_retries + 1})...")
@@ -81,7 +89,8 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
                     if content_parts and "text" in content_parts[0]:
                         return content_parts[0].get("text", "").strip()
                     else:
-                        if debug: print("API Warning: No text content found in the first candidate part.")
+                        if debug:
+                            print("API Warning: No text content found in the first candidate part.")
                         return ""
 
                 else:
@@ -96,7 +105,7 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
 
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
-            error_text = e.response.text[:500] # Limit error text length
+            error_text = e.response.text[:500]  # Limit error text length
 
             if status_code == 429 and attempt < max_retries:
                 if debug:
@@ -106,7 +115,9 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
             else:
                 error_reason = f"Status Code: {status_code}, Response: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    error_reason = (
+                        f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    )
 
                 raise RuntimeError(f"Gemini API HTTP Error: {error_reason}") from e
 
@@ -121,10 +132,18 @@ def call_gemini_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
 
     raise RuntimeError(f"Failed to get response from Gemini API after {max_retries + 1} attempts.")
 
-def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
-                         generation_config: Dict[str, Any],
-                         system_prompt: Optional[str] = None,
-                         debug: bool = False, timeout: int = 120, max_retries: int = 3, base_delay: float = 1.0) -> Optional[str]:
+
+def call_openai_endpoint(
+    api_key: str,
+    model_name: str,
+    parts: List[Dict[str, Any]],
+    generation_config: Dict[str, Any],
+    system_prompt: Optional[str] = None,
+    debug: bool = False,
+    timeout: int = 120,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+) -> Optional[str]:
     """
     Calls the OpenAI Chat Completions API endpoint with the provided data and handles retries.
 
@@ -157,10 +176,7 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
         raise ValueError("Invalid 'parts' format for OpenAI: No text prompt found.")
 
     url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
     # Transform parts to OpenAI messages format
     messages = []
@@ -171,10 +187,7 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
         if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            user_content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
-            })
+            user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}})
         else:
             print(f"Warning: Skipping invalid image part format in OpenAI request: {part}")
     user_content.append({"type": "text", "text": text_part["text"]})
@@ -186,12 +199,12 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
         "messages": messages,
         "temperature": generation_config.get("temperature"),
         "top_p": generation_config.get("top_p"),
-        "max_tokens": generation_config.get("max_output_tokens", 2048)
+        "max_tokens": generation_config.get("max_output_tokens", 2048),
     }
     payload = {k: v for k, v in payload.items() if v is not None}
 
     for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2 ** attempt), 16.0)
+        current_delay = min(base_delay * (2**attempt), 16.0)
         try:
             if debug:
                 print(f"Making OpenAI API request (Attempt {attempt + 1}/{max_retries + 1})...")
@@ -217,7 +230,8 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
                         content = message["content"]
                         return content.strip() if content else ""
                     else:
-                        if debug: print("API Warning: No message content found in the first choice.")
+                        if debug:
+                            print("API Warning: No message content found in the first choice.")
                         return ""
                 else:
                     print("API Warning: No choices found in successful OpenAI response.")
@@ -238,9 +252,11 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
             else:
                 error_reason = f"Status Code: {status_code}, Response: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                    error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    error_reason = (
+                        f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    )
                 elif status_code == 400:
-                    error_reason += " (Check model name and request payload)" # Often indicates a bad request
+                    error_reason += " (Check model name and request payload)"  # Often indicates a bad request
 
                 raise RuntimeError(f"OpenAI API HTTP Error: {error_reason}") from e
 
@@ -255,10 +271,18 @@ def call_openai_endpoint(api_key: str, model_name: str, parts: List[Dict[str, An
 
     raise RuntimeError(f"Failed to get response from OpenAI API after {max_retries + 1} attempts.")
 
-def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
-                            generation_config: Dict[str, Any],
-                            system_prompt: Optional[str] = None,
-                            debug: bool = False, timeout: int = 120, max_retries: int = 3, base_delay: float = 1.0) -> Optional[str]:
+
+def call_anthropic_endpoint(
+    api_key: str,
+    model_name: str,
+    parts: List[Dict[str, Any]],
+    generation_config: Dict[str, Any],
+    system_prompt: Optional[str] = None,
+    debug: bool = False,
+    timeout: int = 120,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+) -> Optional[str]:
     """
     Calls the Anthropic Messages API endpoint with the provided data and handles retries.
 
@@ -293,16 +317,12 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
             image_parts.insert(0, part)
 
     if not user_prompt_part:
-         raise ValueError("Invalid 'parts' format for Anthropic: No text prompt found for user message.")
+        raise ValueError("Invalid 'parts' format for Anthropic: No text prompt found for user message.")
 
     content_parts = image_parts
 
     url = "https://api.anthropic.com/v1/messages"
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-    }
+    headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
 
     # Transform parts to Anthropic messages format
     messages = []
@@ -312,20 +332,22 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
         if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            user_content.append({
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": mime_type,
-                    "data": base64_image,
+            user_content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": mime_type,
+                        "data": base64_image,
+                    },
                 }
-            })
+            )
         else:
-             print(f"Warning: Skipping invalid image part format in Anthropic request: {part}")
+            print(f"Warning: Skipping invalid image part format in Anthropic request: {part}")
 
     user_content.append({"type": "text", "text": user_prompt_text})
     if not user_content:
-         raise ValueError("No valid content (images/text) could be prepared for Anthropic user message.")
+        raise ValueError("No valid content (images/text) could be prepared for Anthropic user message.")
 
     messages.append({"role": "user", "content": user_content})
 
@@ -340,12 +362,12 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
         "temperature": clamped_temp,
         "top_p": generation_config.get("top_p"),
         "top_k": generation_config.get("top_k"),
-        "max_tokens": generation_config.get("max_tokens", 2048)
+        "max_tokens": generation_config.get("max_tokens", 2048),
     }
     payload = {k: v for k, v in payload.items() if v is not None}
 
     for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2 ** attempt), 16.0)
+        current_delay = min(base_delay * (2**attempt), 16.0)
         try:
             if debug:
                 print(f"Making Anthropic API request (Attempt {attempt + 1}/{max_retries + 1})...")
@@ -374,11 +396,12 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
 
                     stop_reason = result.get("stop_reason")
                     if stop_reason == "max_tokens":
-                         print("API Warning: Anthropic response truncated due to max_tokens limit.")
+                        print("API Warning: Anthropic response truncated due to max_tokens limit.")
                     elif stop_reason == "stop_sequence":
-                         pass
+                        pass
                     elif stop_reason:
-                         if debug: print(f"Anthropic response finished with reason: {stop_reason}")
+                        if debug:
+                            print(f"Anthropic response finished with reason: {stop_reason}")
 
                     return text_content.strip()
 
@@ -401,7 +424,9 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
             else:
                 error_reason = f"Status Code: {status_code}, Response: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                    error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    error_reason = (
+                        f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    )
                 elif status_code == 400:
                     error_reason += " (Check model name, API key, payload structure, or max_tokens)"
                 elif status_code == 401:
@@ -423,10 +448,17 @@ def call_anthropic_endpoint(api_key: str, model_name: str, parts: List[Dict[str,
     raise RuntimeError(f"Failed to get response from Anthropic API after {max_retries + 1} attempts.")
 
 
-def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str, Any]],
-                             generation_config: Dict[str, Any],
-                             system_prompt: Optional[str] = None,
-                             debug: bool = False, timeout: int = 120, max_retries: int = 3, base_delay: float = 1.0) -> Optional[str]:
+def call_openrouter_endpoint(
+    api_key: str,
+    model_name: str,
+    parts: List[Dict[str, Any]],
+    generation_config: Dict[str, Any],
+    system_prompt: Optional[str] = None,
+    debug: bool = False,
+    timeout: int = 120,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+) -> Optional[str]:
     """
     Calls the OpenRouter Chat Completions API endpoint (OpenAI compatible) and handles retries.
 
@@ -464,7 +496,7 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/meangrinch/MangaTranslator",
-        "X-Title": "MangaTranslator"
+        "X-Title": "MangaTranslator",
     }
 
     # Transform parts to OpenAI messages format
@@ -476,21 +508,14 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
         if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            user_content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
-            })
+            user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}})
         else:
             print(f"Warning: Skipping invalid image part format in OpenRouter request: {part}")
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
     # Map generation config with provider-specific restrictions
-    payload = {
-        "model": model_name,
-        "messages": messages,
-        "max_tokens": generation_config.get("max_tokens", 2048)
-    }
+    payload = {"model": model_name, "messages": messages, "max_tokens": generation_config.get("max_tokens", 2048)}
 
     is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")
     is_anthropic_model = "anthropic/" in model_name or model_name.startswith("claude-")
@@ -513,7 +538,7 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
     payload = {k: v for k, v in payload.items() if v is not None}
 
     for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2 ** attempt), 16.0)
+        current_delay = min(base_delay * (2**attempt), 16.0)
         try:
             if debug:
                 print(f"Making OpenRouter API request (Attempt {attempt + 1}/{max_retries + 1})...")
@@ -540,7 +565,8 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
                         content = message["content"]
                         return content.strip() if content else ""
                     else:
-                        if debug: print("API Warning: No message content found in the first choice.")
+                        if debug:
+                            print("API Warning: No message content found in the first choice.")
                         return ""
                 else:
                     if "error" in result:
@@ -564,13 +590,15 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
             else:
                 error_reason = f"Status Code: {status_code}, Response: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    error_reason = (
+                        f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    )
                 elif status_code == 400:
-                     error_reason += " (Check model name and request payload)" # Potential 400 reasons
+                    error_reason += " (Check model name and request payload)"  # Potential 400 reasons
                 elif status_code == 401:
-                     error_reason += " (Check API key)" # Potential 401 reason
+                    error_reason += " (Check API key)"  # Potential 401 reason
                 elif status_code == 403:
-                     error_reason += " (Permission denied, check API key/plan)" # Potential 403 reason
+                    error_reason += " (Permission denied, check API key/plan)"  # Potential 403 reason
 
                 print(f"OpenRouter API HTTP Error: {error_reason}")
                 raise RuntimeError(f"OpenRouter API HTTP Error: {error_reason}") from e
@@ -589,10 +617,18 @@ def call_openrouter_endpoint(api_key: str, model_name: str, parts: List[Dict[str
     raise RuntimeError(f"Failed to get response from OpenRouter API after {max_retries + 1} attempts.")
 
 
-def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model_name: str, parts: List[Dict[str, Any]],
-                                    generation_config: Dict[str, Any],
-                                    system_prompt: Optional[str] = None,
-                                    debug: bool = False, timeout: int = 300, max_retries: int = 5, base_delay: float = 1.0) -> Optional[str]:
+def call_openai_compatible_endpoint(
+    base_url: str,
+    api_key: Optional[str],
+    model_name: str,
+    parts: List[Dict[str, Any]],
+    generation_config: Dict[str, Any],
+    system_prompt: Optional[str] = None,
+    debug: bool = False,
+    timeout: int = 300,
+    max_retries: int = 5,
+    base_delay: float = 1.0,
+) -> Optional[str]:
     """
     Calls a generic OpenAI-Compatible Chat Completions API endpoint and handles retries.
 
@@ -603,7 +639,8 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
         parts (List[Dict[str, Any]]): List of content parts (text, images).
                                       # Assumes the first part is the text prompt, subsequent are images.
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, top_k, max_tokens).
-                                             # Parameter restrictions (temp clamp, no top_k) might apply depending on the underlying model.
+                                            # Parameter restrictions (temp clamp, no top_k) might apply
+                                            # depending on the underlying model.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
@@ -641,20 +678,13 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
         if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            user_content.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
-            })
+            user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}})
         else:
             print(f"Warning: Skipping invalid image part format in OpenAI-Compatible request: {part}")
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
-    payload = {
-        "model": model_name,
-        "messages": messages,
-        "max_tokens": generation_config.get("max_tokens", 2048)
-    }
+    payload = {"model": model_name, "messages": messages, "max_tokens": generation_config.get("max_tokens", 2048)}
 
     temp = generation_config.get("temperature")
     if temp is not None:
@@ -671,7 +701,7 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
     payload = {k: v for k, v in payload.items() if v is not None}
 
     for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2 ** attempt), 16.0)
+        current_delay = min(base_delay * (2**attempt), 16.0)
         try:
             if debug:
                 print(f"Making OpenAI-Compatible API request to {url} (Attempt {attempt + 1}/{max_retries + 1})...")
@@ -699,7 +729,8 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
                         content = message["content"]
                         return content.strip() if content else ""
                     else:
-                        if debug: print("API Warning: No message content found in the first choice.")
+                        if debug:
+                            print("API Warning: No message content found in the first choice.")
                         return ""
                 else:
                     print("API Warning: No choices found in successful OpenAI-Compatible response.")
@@ -723,20 +754,24 @@ def call_openai_compatible_endpoint(base_url: str, api_key: Optional[str], model
             else:
                 error_reason = f"Status Code: {status_code}, Response: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                     error_reason = f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    error_reason = (
+                        f"Persistent rate limiting after {max_retries + 1} attempts. Last error: {error_text}"
+                    )
                 elif status_code == 400:
-                     error_reason += " (Check model name and request payload)"
+                    error_reason += " (Check model name and request payload)"
                 elif status_code == 401:
-                     error_reason += " (Check API key if provided)"
+                    error_reason += " (Check API key if provided)"
                 elif status_code == 403:
-                     error_reason += " (Permission denied)"
+                    error_reason += " (Permission denied)"
 
                 raise RuntimeError(f"OpenAI-Compatible API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 if debug:
-                    print(f"OpenAI-Compatible API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                    print(
+                        f"OpenAI-Compatible API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds..."
+                    )
                 time.sleep(current_delay)
                 continue
             else:

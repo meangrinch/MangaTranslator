@@ -3,14 +3,18 @@ from typing import Optional
 import torch
 import cv2
 
+
 @dataclass
 class DetectionConfig:
     """Configuration for speech bubble detection."""
+
     confidence: float = 0.35
+
 
 @dataclass
 class CleaningConfig:
     """Configuration for speech bubble cleaning."""
+
     dilation_kernel_size: int = 7
     dilation_iterations: int = 1
     use_otsu_threshold: bool = False
@@ -21,9 +25,11 @@ class CleaningConfig:
     constraint_erosion_kernel_size: int = 5
     constraint_erosion_iterations: int = 1
 
+
 @dataclass
 class TranslationConfig:
     """Configuration for text translation."""
+
     provider: str = "Gemini"
     gemini_api_key: str = ""
     openai_api_key: str = ""
@@ -41,9 +47,11 @@ class TranslationConfig:
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
 
+
 @dataclass
 class RenderingConfig:
     """Configuration for rendering translated text."""
+
     font_dir: str = "./fonts"
     max_font_size: int = 14
     min_font_size: int = 8
@@ -52,17 +60,21 @@ class RenderingConfig:
     font_hinting: str = "none"
     use_ligatures: bool = False
 
+
 @dataclass
 class OutputConfig:
     """Configuration for saving output images."""
+
     jpeg_quality: int = 95
     png_compression: int = 6
-    image_mode: str = "RGBA" # Default image mode
+    image_mode: str = "RGBA"  # Default image mode
     output_format: str = "auto"
+
 
 @dataclass
 class MangaTranslatorConfig:
     """Main configuration for the MangaTranslator pipeline."""
+
     yolo_model_path: str
     detection: DetectionConfig = field(default_factory=DetectionConfig)
     cleaning: CleaningConfig = field(default_factory=CleaningConfig)
@@ -76,6 +88,7 @@ class MangaTranslatorConfig:
     def __post_init__(self):
         # Load API keys from environment variables if not already set
         import os
+
         if not self.translation.gemini_api_key:
             self.translation.gemini_api_key = os.environ.get("GOOGLE_API_KEY", "")
         if not self.translation.openai_api_key:
@@ -84,10 +97,10 @@ class MangaTranslatorConfig:
             self.translation.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not self.translation.openrouter_api_key:
             self.translation.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
-        if not self.translation.openai_compatible_api_key: # Check if it's None or empty string
+        if not self.translation.openai_compatible_api_key:  # Check if it's None or empty string
             self.translation.openai_compatible_api_key = os.environ.get("OPENAI_COMPATIBLE_API_KEY", "")
- 
+
         # Autodetect device if not specified
         if self.device is None:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         pass

@@ -1,10 +1,30 @@
 import re
 from typing import List, Dict, Any, Optional
 from .config import TranslationConfig
-from scripts.endpoints import call_gemini_endpoint, call_openai_endpoint, call_anthropic_endpoint, call_openrouter_endpoint, call_openai_compatible_endpoint
+from scripts.endpoints import (
+    call_gemini_endpoint,
+    call_openai_endpoint,
+    call_anthropic_endpoint,
+    call_openrouter_endpoint,
+    call_openai_compatible_endpoint,
+)
 
 # Regex to find numbered lines in LLM responses
-TRANSLATION_PATTERN = re.compile(r'^\s*(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*:|\s*$)', re.MULTILINE | re.DOTALL)
+TRANSLATION_PATTERN = re.compile(
+    r'^\s*(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*:|\s*$)', re.MULTILINE | re.DOTALL
+)
+
+
+# Helper functions for sorting keys
+def _sort_key_ltr(d):
+    """Sort key for left-to-right reading order."""
+    return (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
+
+
+def _sort_key_rtl(d):
+    """Sort key for right-to-left reading order."""
+    return (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
+
 
 def sort_bubbles_by_reading_order(detections, image_height, image_width, reading_direction="rtl"):
     """
@@ -33,17 +53,20 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
 
         if reading_direction == "ltr":
             col_idx = int((center_x / image_width) * grid_cols)
-            sort_key = lambda d: (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
-        else: # Default to "rtl" (right-to-left)
+            sort_key = _sort_key_ltr
+        else:  # Default to "rtl" (right-to-left)
             col_idx = grid_cols - 1 - int((center_x / image_width) * grid_cols)
-            sort_key = lambda d: (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
+            sort_key = _sort_key_rtl
 
         detection["grid_pos"] = (row_idx, col_idx)
         detection["center_y"] = center_y
 
     return sorted(sorted_detections, key=sort_key)
 
-def _call_llm_endpoint(config: TranslationConfig, parts: List[Dict[str, Any]], prompt_text: str, debug: bool = False) -> Optional[str]:
+
+def _call_llm_endpoint(
+    config: TranslationConfig, parts: List[Dict[str, Any]], prompt_text: str, debug: bool = False
+) -> Optional[str]:
     """Internal helper to dispatch API calls based on provider."""
     provider = config.provider
     model_name = config.model_name
@@ -52,7 +75,6 @@ def _call_llm_endpoint(config: TranslationConfig, parts: List[Dict[str, Any]], p
     top_k = config.top_k
     api_key = ""
 
-    # Add the prompt text to the parts list
     api_parts = parts + [{"text": prompt_text}]
 
     try:
@@ -61,46 +83,90 @@ def _call_llm_endpoint(config: TranslationConfig, parts: List[Dict[str, Any]], p
             if not api_key:
                 raise ValueError("Gemini API key is missing.")
             generation_config = {"temperature": temperature, "topP": top_p, "topK": top_k, "maxOutputTokens": 2048}
-            return call_gemini_endpoint(api_key=api_key, model_name=model_name, parts=api_parts, generation_config=generation_config, debug=debug)
+            return call_gemini_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                debug=debug,
+            )
         elif provider == "OpenAI":
             api_key = config.openai_api_key
             if not api_key:
                 raise ValueError("OpenAI API key is missing.")
-            generation_config = {"temperature": temperature, "top_p": top_p, "max_output_tokens": 2048} # top_k ignored
-            return call_openai_endpoint(api_key=api_key, model_name=model_name, parts=api_parts, generation_config=generation_config, debug=debug)
+            generation_config = {"temperature": temperature, "top_p": top_p, "max_output_tokens": 2048}  # top_k ignored
+            return call_openai_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                debug=debug,
+            )
         elif provider == "Anthropic":
             api_key = config.anthropic_api_key
             if not api_key:
                 raise ValueError("Anthropic API key is missing.")
-            clamped_temp = min(temperature, 1.0) # Clamp temp
+            clamped_temp = min(temperature, 1.0)  # Clamp temp
             generation_config = {"temperature": clamped_temp, "top_p": top_p, "top_k": top_k, "max_tokens": 2048}
-            return call_anthropic_endpoint(api_key=api_key, model_name=model_name, parts=api_parts, generation_config=generation_config, debug=debug)
+            return call_anthropic_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                debug=debug,
+            )
         elif provider == "OpenRouter":
             api_key = config.openrouter_api_key
             if not api_key:
                 raise ValueError("OpenRouter API key is missing.")
-            generation_config = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_tokens": 2048} # Restrictions handled inside endpoint
-            return call_openrouter_endpoint(api_key=api_key, model_name=model_name, parts=api_parts, generation_config=generation_config, debug=debug)
+            generation_config = {
+                "temperature": temperature,
+                "top_p": top_p,
+                "top_k": top_k,
+                "max_tokens": 2048,
+            }  # Restrictions handled inside endpoint
+            return call_openrouter_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                debug=debug,
+            )
         elif provider == "OpenAI-compatible":
             base_url = config.openai_compatible_url
-            api_key = config.openai_compatible_api_key # Optional
+            api_key = config.openai_compatible_api_key  # Optional
             if not base_url:
                 raise ValueError("OpenAI-Compatible URL is missing.")
             generation_config = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_tokens": 2048}
-            return call_openai_compatible_endpoint(base_url=base_url, api_key=api_key, model_name=model_name, parts=api_parts, generation_config=generation_config, debug=debug)
+            return call_openai_compatible_endpoint(
+                base_url=base_url,
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                debug=debug,
+            )
         else:
             raise ValueError(f"Unknown translation provider specified: {provider}")
 
-    except (ValueError, RuntimeError) as e:
+    except (ValueError, RuntimeError):
         raise
 
-def _parse_llm_response(response_text: Optional[str], expected_count: int, provider: str, debug: bool = False) -> Optional[List[str]]:
+
+def _parse_llm_response(
+    response_text: Optional[str], expected_count: int, provider: str, debug: bool = False
+) -> Optional[List[str]]:
     """Internal helper to parse numbered list responses from LLM."""
     if response_text is None:
-        if debug: print(f"Parsing response: Received None from {provider} API call.")
+        if debug:
+            print(f"Parsing response: Received None from {provider} API call.")
         return None
     elif response_text == "":
-        if debug: print(f"Parsing response: Received empty string from {provider} API, likely no text detected or processing failed.")
+        if debug:
+            print(
+                f"Parsing response: Received empty string from {provider} API,"
+                f" likely no text detected or processing failed."
+            )
         return [f"[{provider}: No text/empty response]" for _ in range(expected_count)]
 
     try:
@@ -108,7 +174,8 @@ def _parse_llm_response(response_text: Optional[str], expected_count: int, provi
             print(f"Parsing response: Raw text received from {provider}:\n---\n{response_text}\n---")
 
         matches = TRANSLATION_PATTERN.findall(response_text)
-        if debug: print(f"Parsing response: Regex matches found: {len(matches)}")
+        if debug:
+            print(f"Parsing response: Regex matches found: {len(matches)}")
 
         parsed_dict = {}
         for num_str, text in matches:
@@ -117,16 +184,24 @@ def _parse_llm_response(response_text: Optional[str], expected_count: int, provi
                 if 1 <= num <= expected_count:
                     parsed_dict[num] = text.strip()
                 else:
-                    if debug: print(f"Parsing response warning: Parsed number {num} is out of expected range (1-{expected_count}).")
+                    if debug:
+                        print(
+                            f"Parsing response warning: "
+                            f"Parsed number {num} is out of expected range (1-{expected_count})."
+                        )
             except ValueError:
-                if debug: print(f"Parsing response warning: Could not parse number '{num_str}' in response line.")
+                if debug:
+                    print(f"Parsing response warning: Could not parse number '{num_str}' in response line.")
 
         final_list = []
         for i in range(1, expected_count + 1):
             final_list.append(parsed_dict.get(i, f"[{provider}: No text for bubble {i}]"))
 
         if len(final_list) != expected_count and debug:
-            print(f"Parsing response warning: Expected {expected_count} items, but constructed {len(final_list)}. Check raw response and parsing logic.")
+            print(
+                f"Parsing response warning: Expected {expected_count} items, but constructed {len(final_list)}."
+                f" Check raw response and parsing logic."
+            )
 
         return final_list
 
@@ -136,7 +211,9 @@ def _parse_llm_response(response_text: Optional[str], expected_count: int, provi
         return [f"[{provider}: Error parsing response]" for _ in range(expected_count)]
 
 
-def call_translation_api_batch(config: TranslationConfig, images_b64: List[str], full_image_b64: str, debug: bool = False) -> List[str]:
+def call_translation_api_batch(
+    config: TranslationConfig, images_b64: List[str], full_image_b64: str, debug: bool = False
+) -> List[str]:
     """
     Generates prompts and calls the appropriate LLM API endpoint based on the provider and mode
     specified in the configuration, translating text from speech bubbles.
@@ -163,7 +240,9 @@ def call_translation_api_batch(config: TranslationConfig, images_b64: List[str],
     reading_direction = config.reading_direction
     translation_mode = config.translation_mode
     num_bubbles = len(images_b64)
-    reading_order_desc = "right-to-left, top-to-bottom" if reading_direction == "rtl" else "left-to-right, top-to-bottom"
+    reading_order_desc = (
+        "right-to-left, top-to-bottom" if reading_direction == "rtl" else "left-to-right, top-to-bottom"
+    )
 
     # --- Prepare common API input parts (images) ---
     base_parts = [{"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}}]
@@ -180,9 +259,10 @@ Provide your response in this *exact* format, with each extraction on a new line
 ...
 {num_bubbles}: [Extracted text for bubble {num_bubbles}]
 
-Do not include translations, explanations, or any other text in your response."""
+Do not include translations, explanations, or any other text in your response."""  # noqa
 
-            if debug: print("--- Starting Two-Step Translation: Step 1 (OCR) ---")
+            if debug:
+                print("--- Starting Two-Step Translation: Step 1 (OCR) ---")
             # Prepare parts specifically for OCR (only bubble images)
             ocr_parts = []
             for img_b64 in images_b64:
@@ -192,16 +272,19 @@ Do not include translations, explanations, or any other text in your response.""
             extracted_texts = _parse_llm_response(ocr_response_text, num_bubbles, provider + "-OCR", debug)
 
             if extracted_texts is None:
-                if debug: print("OCR API call failed or was blocked. Returning placeholders.")
+                if debug:
+                    print("OCR API call failed or was blocked. Returning placeholders.")
                 return [f"[{provider}: OCR call failed/blocked]"] * num_bubbles
 
             is_ocr_failed = all(f"[{provider}-OCR:" in text for text in extracted_texts)
             if is_ocr_failed:
-                if debug: print("OCR parsing resulted in only placeholders. Returning them.")
+                if debug:
+                    print("OCR parsing resulted in only placeholders. Returning them.")
                 return extracted_texts
 
             # --- Step 2: Translation & Styling ---
-            if debug: print("--- Starting Two-Step Translation: Step 2 (Translate & Style) ---")
+            if debug:
+                print("--- Starting Two-Step Translation: Step 2 (Translate & Style) ---")
             formatted_texts_for_prompt = []
             ocr_failed_indices = set()
             for i, text in enumerate(extracted_texts):
@@ -231,16 +314,19 @@ Provide your response in this *exact* format, with each translation on a new lin
 {num_bubbles}: [Translation for bubble {num_bubbles} with styling]
 
 For any extraction labeled as "[OCR FAILED]", output exactly "[OCR FAILED]" for that number. Do not attempt to translate it.
-Do not include any other text or explanations in your response."""
+Do not include any other text or explanations in your response."""  # noqa
 
             # Prepare parts for translation call (only full image + prompt)
             translation_parts = [{"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}}]
 
             translation_response_text = _call_llm_endpoint(config, translation_parts, translation_prompt, debug)
-            final_translations = _parse_llm_response(translation_response_text, num_bubbles, provider + "-Translate", debug)
+            final_translations = _parse_llm_response(
+                translation_response_text, num_bubbles, provider + "-Translate", debug
+            )
 
             if final_translations is None:
-                if debug: print("Translation API call failed or was blocked.")
+                if debug:
+                    print("Translation API call failed or was blocked.")
                 combined_results = []
                 for i in range(num_bubbles):
                     if i in ocr_failed_indices:
@@ -255,7 +341,11 @@ Do not include any other text or explanations in your response."""
                     if final_translations[i] == "[OCR FAILED]":
                         combined_results.append("[OCR FAILED]")
                     else:
-                        if debug: print(f"Warning: LLM translated bubble {i+1} despite [OCR FAILED] instruction. Using placeholder.")
+                        if debug:
+                            print(
+                                f"Warning: LLM translated bubble {i+1} despite [OCR FAILED] instruction."
+                                f" Using placeholder."
+                            )
                         combined_results.append("[OCR FAILED]")
 
                 else:
@@ -264,7 +354,8 @@ Do not include any other text or explanations in your response."""
 
         elif translation_mode == "one-step":
             # --- One-Step Logic ---
-            if debug: print("--- Starting One-Step Translation ---")
+            if debug:
+                print("--- Starting One-Step Translation ---")
             one_step_prompt = f"""Analyze the full manga/comic page image provided, followed by the {num_bubbles} individual speech bubble images extracted from it in reading order ({reading_order_desc}).
 For each individual speech bubble image:
 1. Extract the {input_language} text and translate it to {output_language}, choosing words and sentence structures that accurately convey the original's tone and sound authentic for that specific context in the target language.
@@ -279,18 +370,19 @@ Provide your response in this *exact* format, with each translation on a new lin
 ...
 {num_bubbles}: [Translation for bubble {num_bubbles}]
 
-Do not include any other text or explanations in your response."""
+Do not include any other text or explanations in your response."""  # noqa
 
             response_text = _call_llm_endpoint(config, base_parts, one_step_prompt, debug)
             translations = _parse_llm_response(response_text, num_bubbles, provider, debug)
 
             if translations is None:
-                if debug: print("One-step API call failed or was blocked. Returning placeholders.")
+                if debug:
+                    print("One-step API call failed or was blocked. Returning placeholders.")
                 return [f"[{provider}: API call failed/blocked]"] * num_bubbles
             else:
                 return translations
         else:
             raise ValueError(f"Unknown translation_mode specified in config: {translation_mode}")
     except (ValueError, RuntimeError) as e:
-        print(f"Translation failed: {e}") # Catch errors raised during config validation
+        print(f"Translation failed: {e}")  # Catch errors raised during config validation
         return [f"[Translation Error: {e}]"] * num_bubbles
