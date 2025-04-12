@@ -2,29 +2,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 
 from utils.settings import TranslationConfig, RenderingConfig
-
-
-# --- Custom Exception ---
-class ValidationError(ValueError):
-    """Custom exception for validation errors."""
-
-    pass
-
-
-# --- Logging ---
-def log_message(message, verbose=False, always_print=False):
-    """
-    Print a formatted log message
-
-    Args:
-        message (str): The message to print
-        verbose (bool): Whether to print detailed logs
-        always_print (bool): Whether to print regardless of verbose setting
-    """
-    if not verbose and not always_print:
-        return
-
-    print(f"{message}")
+from utils.exceptions import ValidationError
 
 
 # --- Core Input Validation ---
@@ -84,7 +62,7 @@ def validate_core_inputs(
 
     yolo_model_path = models_dir / selected_yolo_model_name
     if not yolo_model_path.is_file():
-        # This check might be redundant if get_available_yolo_models works correctly, but good safeguard
+        # Redundant, but good safeguard
         raise FileNotFoundError(f"YOLO model file not found: {yolo_model_path}")
 
     # --- Font Validation ---
@@ -94,7 +72,6 @@ def validate_core_inputs(
     if not rendering_cfg.font_dir:
         raise ValidationError("Font pack (font_dir in rendering config) not specified.")
 
-    # font_dir in rendering_cfg is expected to be the *name* of the font pack subdirectory
     font_dir_path = fonts_base_dir / rendering_cfg.font_dir
     if not font_dir_path.is_dir():
         raise FileNotFoundError(
@@ -120,8 +97,8 @@ def validate_core_inputs(
     # --- Translation Config Validation (Basic) ---
     if not translation_cfg.provider:
         raise ValueError("Translation provider cannot be empty.")
-    if not translation_cfg.model_name and translation_cfg.provider not in ["OpenRouter", "OpenAI-compatible"]:
-        pass
+    if not translation_cfg.model_name:
+        raise ValueError("Translation model name cannot be empty.")
     if not translation_cfg.input_language:
         raise ValueError("Input language cannot be empty.")
     if not translation_cfg.output_language:

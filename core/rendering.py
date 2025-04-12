@@ -7,7 +7,7 @@ import skia
 import uharfbuzz as hb
 from PIL import Image
 
-from .common_utils import log_message
+from utils.logging import log_message
 
 # Cache loaded font data
 _font_data_cache = {}

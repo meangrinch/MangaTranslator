@@ -21,7 +21,7 @@ from .detection import detect_speech_bubbles
 from .cleaning import clean_speech_bubbles
 from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
 from .translation import call_translation_api_batch, sort_bubbles_by_reading_order
-from .common_utils import log_message
+from utils.logging import log_message
 from .rendering import render_text_skia
 
 
@@ -537,7 +537,7 @@ def main():
         type=str,
         default=None,
         help="Model name for the selected provider (e.g., 'gemini-2.0 flash'). "
-             "If not provided, a default will be attempted based on the provider.",
+        "If not provided, a default will be attempted based on the provider.",
     )
     parser.add_argument("--font-dir", type=str, default="./fonts", help="Directory containing font files")
     parser.add_argument("--input-language", type=str, default="Japanese", help="Source language")

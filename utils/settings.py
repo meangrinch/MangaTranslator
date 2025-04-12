@@ -22,7 +22,7 @@ class CleaningConfig:
     closing_kernel_size: int = 7
     closing_iterations: int = 1
     closing_kernel_shape: int = cv2.MORPH_ELLIPSE
-    constraint_erosion_kernel_size: int = 5
+    constraint_erosion_kernel_size: int = 9
     constraint_erosion_iterations: int = 1
 
 

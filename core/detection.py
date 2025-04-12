@@ -3,7 +3,7 @@ import cv2
 import torch
 from ultralytics import YOLO
 
-from .common_utils import log_message
+from utils.logging import log_message
 
 # Global cache
 _model_cache = {}

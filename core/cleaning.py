@@ -5,7 +5,7 @@ from PIL import Image
 
 from .image_utils import pil_to_cv2
 from .detection import detect_speech_bubbles
-from .common_utils import log_message
+from utils.logging import log_message
 
 
 def clean_speech_bubbles(

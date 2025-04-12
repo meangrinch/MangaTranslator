@@ -148,7 +148,6 @@ def save_config(incoming_settings: Dict[str, Any]):
             if changed:
                 changed_setting_keys.append(key)
 
-        # Ensure parent directory exists
         os.makedirs(CONFIG_FILE.parent, exist_ok=True)
 
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -157,15 +156,15 @@ def save_config(incoming_settings: Dict[str, Any]):
         if changed_setting_keys:
             changed_setting_keys = [k for k in changed_setting_keys if k is not None]
             changed_setting_keys.sort()
-            return True, f"Saved changes: {', '.join(changed_setting_keys)}"
+            return f"Saved changes: {', '.join(changed_setting_keys)}"
         else:
-            return True, "Saved changes: none"
+            return "Saved changes: none"
 
     except Exception as e:
         import traceback
 
         traceback.print_exc()
-        return False, f"Failed to save settings: {str(e)}"
+        return f"Failed to save settings: {str(e)}"
 
 
 def get_saved_settings() -> Dict[str, Any]:

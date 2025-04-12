@@ -1,5 +1,6 @@
 import re
 from typing import List, Dict, Any, Optional
+
 from utils.settings import TranslationConfig
 from utils.endpoints import (
     call_gemini_endpoint,
