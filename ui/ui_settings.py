@@ -99,7 +99,10 @@ def save_config(incoming_settings: Dict[str, Any]):
                     always_print=True,
                 )
             except Exception as e:
-                log_message(f"Warning: Error reading config file {CONFIG_FILE}: {e}. Overwriting with new settings.", always_print=True)
+                log_message(
+                    f"Warning: Error reading config file {CONFIG_FILE}: {e}. Overwriting with new settings.",
+                    always_print=True,
+                )
 
         known_keys = set(DEFAULT_SETTINGS.keys()) | set(DEFAULT_BATCH_SETTINGS.keys())
         known_keys.add("provider_models")

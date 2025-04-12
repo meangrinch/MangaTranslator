@@ -53,8 +53,6 @@ def translate_manga_logic(
         LogicError: For processing failures within this function.
         Exception: For unexpected errors during processing.
     """
-    start_time = time.time()
-
     try:
         # Create a temporary RenderingConfig just for validation, using the font pack name
         rendering_cfg_for_val = RenderingConfig(
@@ -120,7 +118,6 @@ def translate_manga_logic(
         if not translated_image:
             raise LogicError("Translation process failed to return an image.")
 
-
         return translated_image, save_path
 
     except Exception as e:
@@ -133,7 +130,9 @@ def translate_manga_logic(
             try:
                 os.remove(temp_image_path)
             except Exception as e_clean:
-                log_message(f"Warning: Could not remove temporary image file {temp_image_path}: {e_clean}", always_print=True)
+                log_message(
+                    f"Warning: Could not remove temporary image file {temp_image_path}: {e_clean}", always_print=True
+                )
 
 
 def process_batch_logic(
@@ -254,7 +253,9 @@ def process_batch_logic(
                     shutil.copy2(img_file, temp_dir_path / img_file.name)
                 except Exception as copy_err:
                     # Log warning but continue if a file fails to copy
-                    log_message(f"Warning: Could not copy file {img_file.name} to temp dir: {copy_err}", always_print=True)
+                    log_message(
+                        f"Warning: Could not copy file {img_file.name} to temp dir: {copy_err}", always_print=True
+                    )
             process_dir = temp_dir_path
 
         elif isinstance(input_dir_or_files, str):
@@ -302,4 +303,7 @@ def process_batch_logic(
                 temp_dir_path_obj.cleanup()
                 log_message(f"Cleaned up temporary directory: {temp_dir_path_obj.name}", verbose=config.verbose)
             except Exception as e_clean:
-                log_message(f"Warning: Could not clean up temporary directory {temp_dir_path_obj.name}: {e_clean}", always_print=True)
+                log_message(
+                    f"Warning: Could not clean up temporary directory {temp_dir_path_obj.name}: {e_clean}",
+                    always_print=True,
+                )

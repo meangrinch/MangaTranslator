@@ -189,18 +189,20 @@ def _parse_llm_response(
                         verbose=debug,
                     )
             except ValueError:
-                log_message(f"Parsing response warning: Could not parse number '{num_str}' in response line.", verbose=debug)
+                log_message(
+                    f"Parsing response warning: Could not parse number '{num_str}' in response line.", verbose=debug
+                )
 
         final_list = []
         for i in range(1, expected_count + 1):
             final_list.append(parsed_dict.get(i, f"[{provider}: No text for bubble {i}]"))
 
         if len(final_list) != expected_count:
-             log_message(
-                 f"Parsing response warning: Expected {expected_count} items, but constructed {len(final_list)}."
-                 f" Check raw response and parsing logic.",
-                 verbose=debug,
-             )
+            log_message(
+                f"Parsing response warning: Expected {expected_count} items, but constructed {len(final_list)}."
+                f" Check raw response and parsing logic.",
+                verbose=debug,
+            )
 
         return final_list
 
