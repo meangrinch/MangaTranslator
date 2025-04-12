@@ -9,6 +9,7 @@ from typing import Union, List, Dict, Any
 from PIL import Image
 
 from utils.settings import MangaTranslatorConfig, RenderingConfig
+from utils.logging import log_message
 from core.generate_manga import translate_and_render, batch_translate_images
 from core.validation import validate_core_inputs
 from utils.exceptions import ValidationError
@@ -119,9 +120,6 @@ def translate_manga_logic(
         if not translated_image:
             raise LogicError("Translation process failed to return an image.")
 
-        if config.verbose:
-            processing_time = time.time() - start_time
-            print(f"Single image processing time: {processing_time:.2f} seconds. Saved to: {save_path}")
 
         return translated_image, save_path
 
@@ -135,7 +133,7 @@ def translate_manga_logic(
             try:
                 os.remove(temp_image_path)
             except Exception as e_clean:
-                print(f"Warning: Could not remove temporary image file {temp_image_path}: {e_clean}")
+                log_message(f"Warning: Could not remove temporary image file {temp_image_path}: {e_clean}", always_print=True)
 
 
 def process_batch_logic(
@@ -209,7 +207,7 @@ def process_batch_logic(
         if gradio_progress is not None:
             gradio_progress(value, desc=desc)
         elif config.verbose:
-            print(f"Batch Progress: {desc} [{value*100:.1f}%]")
+            log_message(f"Batch Progress: {desc} [{value*100:.1f}%]", always_print=True)
 
     temp_dir_path_obj = None
     try:
@@ -235,12 +233,10 @@ def process_batch_logic(
                         image_files_to_copy.append(p)
                     except Exception as img_err:
                         skipped_files.append(f"{p.name} (Invalid: {img_err})")
-                        if config.verbose:
-                            print(f"Warning: Skipping invalid file '{p.name}': {img_err}")
+                        log_message(f"Warning: Skipping invalid file '{p.name}': {img_err}", verbose=config.verbose)
                 else:
                     skipped_files.append(f"{p.name} (Not a supported image file)")
-                    if config.verbose:
-                        print(f"Warning: Skipping non-image file or directory: '{p.name}'")
+                    log_message(f"Warning: Skipping non-image file or directory: '{p.name}'", verbose=config.verbose)
 
             if not image_files_to_copy:
                 raise ValueError(
@@ -248,10 +244,9 @@ def process_batch_logic(
                     f"Skipped: {', '.join(skipped_files) if skipped_files else 'None'}"
                 )
 
-            if config.verbose:
-                print(f"Preparing {len(image_files_to_copy)} files for batch processing...")
-                if skipped_files:
-                    print(f"Skipped files: {', '.join(skipped_files)}")
+            log_message(f"Preparing {len(image_files_to_copy)} files for batch processing...", verbose=config.verbose)
+            if skipped_files:
+                log_message(f"Skipped files: {', '.join(skipped_files)}", verbose=config.verbose)
 
             for img_file in image_files_to_copy:
                 try:
@@ -259,7 +254,7 @@ def process_batch_logic(
                     shutil.copy2(img_file, temp_dir_path / img_file.name)
                 except Exception as copy_err:
                     # Log warning but continue if a file fails to copy
-                    print(f"Warning: Could not copy file {img_file.name} to temp dir: {copy_err}")
+                    log_message(f"Warning: Could not copy file {img_file.name} to temp dir: {copy_err}", always_print=True)
             process_dir = temp_dir_path
 
         elif isinstance(input_dir_or_files, str):
@@ -287,13 +282,12 @@ def process_batch_logic(
         results["processing_time"] = processing_time
         results["output_path"] = batch_output_path
 
-        if config.verbose:
-            print(f"Batch processing completed in {processing_time:.2f} seconds.")
-            print(f"Success: {results['success_count']}, Errors: {results['error_count']}")
-            if results["errors"]:
-                print("Errors occurred on files:")
-                for fname, err in results["errors"].items():
-                    print(f"  - {fname}: {err}")
+        log_message(f"Batch processing completed in {processing_time:.2f} seconds.", verbose=config.verbose)
+        log_message(f"Success: {results['success_count']}, Errors: {results['error_count']}", verbose=config.verbose)
+        if results["errors"]:
+            log_message("Errors occurred on files:", verbose=config.verbose)
+            for fname, err in results["errors"].items():
+                log_message(f"  - {fname}: {err}", verbose=config.verbose)
 
         return results
 
@@ -306,7 +300,6 @@ def process_batch_logic(
         if temp_dir_path_obj:
             try:
                 temp_dir_path_obj.cleanup()
-                if config.verbose:
-                    print(f"Cleaned up temporary directory: {temp_dir_path_obj.name}")
+                log_message(f"Cleaned up temporary directory: {temp_dir_path_obj.name}", verbose=config.verbose)
             except Exception as e_clean:
-                print(f"Warning: Could not clean up temporary directory {temp_dir_path_obj.name}: {e_clean}")
+                log_message(f"Warning: Could not clean up temporary directory {temp_dir_path_obj.name}: {e_clean}", always_print=True)

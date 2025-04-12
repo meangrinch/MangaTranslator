@@ -80,7 +80,6 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
     """
     resolved_dir = str(Path(font_dir).resolve())
     if resolved_dir in _font_variants_cache:
-        log_message(f"Using cached font variants for directory: {resolved_dir}", verbose=verbose)
         return _font_variants_cache[resolved_dir]
 
     log_message(f"Scanning font directory: {resolved_dir}", verbose=verbose)
@@ -591,7 +590,6 @@ def render_text_skia(
         log_message(f"CRITICAL: Regular font variant not found in '{font_dir}'. Cannot render text.", always_print=True)
         return pil_image, False
 
-    log_message(f"Using regular font: {regular_font_path.name}", verbose=verbose)
     _, regular_typeface, regular_hb_face = _load_font_resources(str(regular_font_path))
 
     if not regular_typeface or not regular_hb_face:

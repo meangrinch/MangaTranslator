@@ -2,6 +2,7 @@ import requests
 import time
 import json
 from typing import List, Dict, Any, Optional
+from utils.logging import log_message
 
 
 def call_gemini_endpoint(
@@ -60,15 +61,13 @@ def call_gemini_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)  # Exponential backoff, max 16s
         try:
-            if debug:
-                print(f"Making Gemini API request (Attempt {attempt + 1}/{max_retries + 1})...")
+            log_message(f"Making Gemini API request (Attempt {attempt + 1}/{max_retries + 1})...", verbose=debug)
                 # print(f"Payload: {json.dumps(payload, indent=2)}")
 
             response = requests.post(url, json=payload, timeout=timeout)
             response.raise_for_status()
 
-            if debug:
-                print("Gemini API response OK (200), processing result...")
+            log_message("Gemini API response OK (200), processing result...", verbose=debug)
             try:
                 result = response.json()
                 prompt_feedback = result.get("promptFeedback")
@@ -89,12 +88,11 @@ def call_gemini_endpoint(
                     if content_parts and "text" in content_parts[0]:
                         return content_parts[0].get("text", "").strip()
                     else:
-                        if debug:
-                            print("API Warning: No text content found in the first candidate part.")
+                        log_message("API Warning: No text content found in the first candidate part.", verbose=debug)
                         return ""
 
                 else:
-                    print("API Warning: No candidates found in successful response.")
+                    log_message("API Warning: No candidates found in successful response.", always_print=True)
                     if prompt_feedback and prompt_feedback.get("blockReason"):
                         block_reason = prompt_feedback.get("blockReason")
                         return None
@@ -108,8 +106,7 @@ def call_gemini_endpoint(
             error_text = e.response.text[:500]  # Limit error text length
 
             if status_code == 429 and attempt < max_retries:
-                if debug:
-                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                log_message(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...", verbose=debug)
                 time.sleep(current_delay)
                 continue
             else:
@@ -123,8 +120,7 @@ def call_gemini_endpoint(
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                if debug:
-                    print(f"Gemini API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                log_message(f"Gemini API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...", verbose=debug)
                 time.sleep(current_delay)
                 continue
             else:
@@ -189,7 +185,7 @@ def call_openai_endpoint(
             base64_image = part["inline_data"]["data"]
             user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}})
         else:
-            print(f"Warning: Skipping invalid image part format in OpenAI request: {part}")
+            log_message(f"Warning: Skipping invalid image part format in OpenAI request: {part}", always_print=True)
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
@@ -206,15 +202,13 @@ def call_openai_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
-            if debug:
-                print(f"Making OpenAI API request (Attempt {attempt + 1}/{max_retries + 1})...")
+            log_message(f"Making OpenAI API request (Attempt {attempt + 1}/{max_retries + 1})...", verbose=debug)
                 # print(f"Payload: {json.dumps(payload, indent=2)}")
 
             response = requests.post(url, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
 
-            if debug:
-                print("OpenAI API response OK (200), processing result...")
+            log_message("OpenAI API response OK (200), processing result...", verbose=debug)
             try:
                 result = response.json()
 
@@ -230,11 +224,10 @@ def call_openai_endpoint(
                         content = message["content"]
                         return content.strip() if content else ""
                     else:
-                        if debug:
-                            print("API Warning: No message content found in the first choice.")
+                        log_message("API Warning: No message content found in the first choice.", verbose=debug)
                         return ""
                 else:
-                    print("API Warning: No choices found in successful OpenAI response.")
+                    log_message("API Warning: No choices found in successful OpenAI response.", always_print=True)
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
@@ -245,8 +238,7 @@ def call_openai_endpoint(
             error_text = e.response.text[:500]
 
             if status_code == 429 and attempt < max_retries:
-                if debug:
-                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                log_message(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...", verbose=debug)
                 time.sleep(current_delay)
                 continue
             else:
@@ -262,8 +254,7 @@ def call_openai_endpoint(
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                if debug:
-                    print(f"OpenAI API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                log_message(f"OpenAI API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...", verbose=debug)
                 time.sleep(current_delay)
                 continue
             else:
@@ -343,7 +334,7 @@ def call_anthropic_endpoint(
                 }
             )
         else:
-            print(f"Warning: Skipping invalid image part format in Anthropic request: {part}")
+            log_message(f"Warning: Skipping invalid image part format in Anthropic request: {part}", always_print=True)
 
     user_content.append({"type": "text", "text": user_prompt_text})
     if not user_content:
@@ -369,15 +360,13 @@ def call_anthropic_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
-            if debug:
-                print(f"Making Anthropic API request (Attempt {attempt + 1}/{max_retries + 1})...")
+            log_message(f"Making Anthropic API request (Attempt {attempt + 1}/{max_retries + 1})...", verbose=debug)
                 # print(f"Payload: {json.dumps(payload, indent=2)}")
 
             response = requests.post(url, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
 
-            if debug:
-                print("Anthropic API response OK (200), processing result...")
+            log_message("Anthropic API response OK (200), processing result...", verbose=debug)
             try:
                 result = response.json()
 
@@ -396,17 +385,16 @@ def call_anthropic_endpoint(
 
                     stop_reason = result.get("stop_reason")
                     if stop_reason == "max_tokens":
-                        print("API Warning: Anthropic response truncated due to max_tokens limit.")
+                        log_message("API Warning: Anthropic response truncated due to max_tokens limit.", always_print=True)
                     elif stop_reason == "stop_sequence":
                         pass
                     elif stop_reason:
-                        if debug:
-                            print(f"Anthropic response finished with reason: {stop_reason}")
+                        log_message(f"Anthropic response finished with reason: {stop_reason}", verbose=debug)
 
                     return text_content.strip()
 
                 else:
-                    print("API Warning: No text content block found in successful Anthropic response.")
+                    log_message("API Warning: No text content block found in successful Anthropic response.", always_print=True)
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
@@ -417,8 +405,7 @@ def call_anthropic_endpoint(
             error_text = e.response.text[:500]
 
             if status_code == 429 and attempt < max_retries:
-                if debug:
-                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                log_message(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...", verbose=debug)
                 time.sleep(current_delay)
                 continue
             else:
@@ -438,8 +425,7 @@ def call_anthropic_endpoint(
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                if debug:
-                    print(f"Anthropic API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                log_message(f"Anthropic API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...", verbose=debug)
                 time.sleep(current_delay)
                 continue
             else:
@@ -510,7 +496,7 @@ def call_openrouter_endpoint(
             base64_image = part["inline_data"]["data"]
             user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}})
         else:
-            print(f"Warning: Skipping invalid image part format in OpenRouter request: {part}")
+            log_message(f"Warning: Skipping invalid image part format in OpenRouter request: {part}", always_print=True)
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
@@ -540,15 +526,13 @@ def call_openrouter_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
-            if debug:
-                print(f"Making OpenRouter API request (Attempt {attempt + 1}/{max_retries + 1})...")
+            log_message(f"Making OpenRouter API request (Attempt {attempt + 1}/{max_retries + 1})...", verbose=debug)
                 # print(f"Payload: {json.dumps(payload, indent=2)}")
 
             response = requests.post(url, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
 
-            if debug:
-                print("OpenRouter API response OK (200), processing result...")
+            log_message("OpenRouter API response OK (200), processing result...", verbose=debug)
             try:
                 result = response.json()
 
@@ -557,7 +541,7 @@ def call_openrouter_endpoint(
                     finish_reason = choice.get("finish_reason")
 
                     if finish_reason == "content_filter":
-                        print("API Error: Content generation blocked by OpenRouter content filter.")
+                        log_message("API Error: Content generation blocked by OpenRouter content filter.", always_print=True)
                         return None
 
                     message = choice.get("message")
@@ -565,8 +549,7 @@ def call_openrouter_endpoint(
                         content = message["content"]
                         return content.strip() if content else ""
                     else:
-                        if debug:
-                            print("API Warning: No message content found in the first choice.")
+                        log_message("API Warning: No message content found in the first choice.", verbose=debug)
                         return ""
                 else:
                     if "error" in result:
@@ -575,7 +558,7 @@ def call_openrouter_endpoint(
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                print(f"Error processing successful OpenRouter API response: {str(e)}")
+                log_message(f"Error processing successful OpenRouter API response: {str(e)}", always_print=True)
                 raise RuntimeError(f"Error processing successful OpenRouter API response: {str(e)}") from e
 
         except requests.exceptions.HTTPError as e:
@@ -583,8 +566,7 @@ def call_openrouter_endpoint(
             error_text = e.response.text[:500]
 
             if status_code == 429 and attempt < max_retries:
-                if debug:
-                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                log_message(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...", verbose=debug)
                 time.sleep(current_delay)
                 continue
             else:
@@ -600,20 +582,19 @@ def call_openrouter_endpoint(
                 elif status_code == 403:
                     error_reason += " (Permission denied, check API key/plan)"  # Potential 403 reason
 
-                print(f"OpenRouter API HTTP Error: {error_reason}")
+                log_message(f"OpenRouter API HTTP Error: {error_reason}", always_print=True)
                 raise RuntimeError(f"OpenRouter API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                if debug:
-                    print(f"OpenRouter API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...")
+                log_message(f"OpenRouter API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...", verbose=debug)
                 time.sleep(current_delay)
                 continue
             else:
-                print(f"OpenRouter API Connection Error after {max_retries + 1} attempts: {str(e)}")
+                log_message(f"OpenRouter API Connection Error after {max_retries + 1} attempts: {str(e)}", always_print=True)
                 raise RuntimeError(f"OpenRouter API Connection Error after retries: {str(e)}") from e
 
-    print(f"Failed to get response from OpenRouter API after {max_retries + 1} attempts due to repeated errors.")
+    log_message(f"Failed to get response from OpenRouter API after {max_retries + 1} attempts due to repeated errors.", always_print=True)
     raise RuntimeError(f"Failed to get response from OpenRouter API after {max_retries + 1} attempts.")
 
 
@@ -680,7 +661,7 @@ def call_openai_compatible_endpoint(
             base64_image = part["inline_data"]["data"]
             user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}})
         else:
-            print(f"Warning: Skipping invalid image part format in OpenAI-Compatible request: {part}")
+            log_message(f"Warning: Skipping invalid image part format in OpenAI-Compatible request: {part}", always_print=True)
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
@@ -703,15 +684,13 @@ def call_openai_compatible_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
-            if debug:
-                print(f"Making OpenAI-Compatible API request to {url} (Attempt {attempt + 1}/{max_retries + 1})...")
+            log_message(f"Making OpenAI-compatible API request to {url} (Attempt {attempt + 1}/{max_retries + 1})...", verbose=debug)
                 # print(f"Payload: {json.dumps(payload, indent=2)}")
 
             response = requests.post(url, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
 
-            if debug:
-                print(f"OpenAI-Compatible API response OK (200) from {url}, processing result...")
+            log_message(f"OpenAI-Compatible API response OK (200) from {url}, processing result...", verbose=debug)
             try:
                 result = response.json()
 
@@ -729,11 +708,10 @@ def call_openai_compatible_endpoint(
                         content = message["content"]
                         return content.strip() if content else ""
                     else:
-                        if debug:
-                            print("API Warning: No message content found in the first choice.")
+                        log_message("API Warning: No message content found in the first choice.", verbose=debug)
                         return ""
                 else:
-                    print("API Warning: No choices found in successful OpenAI-Compatible response.")
+                    log_message("API Warning: No choices found in successful OpenAI-Compatible response.", always_print=True)
                     if "error" in result:
                         error_msg = result.get("error", {}).get("message", "Unknown error")
                         raise RuntimeError(f"OpenAI-Compatible API returned error: {error_msg}")
@@ -747,8 +725,7 @@ def call_openai_compatible_endpoint(
             error_text = e.response.text[:500]
 
             if status_code == 429 and attempt < max_retries:
-                if debug:
-                    print(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...")
+                log_message(f"API Error: 429 Rate Limit Exceeded. Retrying in {current_delay:.1f} seconds...", verbose=debug)
                 time.sleep(current_delay)
                 continue
             else:
@@ -768,10 +745,10 @@ def call_openai_compatible_endpoint(
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                if debug:
-                    print(
-                        f"OpenAI-Compatible API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds..."
-                    )
+                log_message(
+                    f"OpenAI-Compatible API Connection Error: {str(e)}. Retrying in {current_delay:.1f} seconds...",
+                    verbose=debug,
+                )
                 time.sleep(current_delay)
                 continue
             else:

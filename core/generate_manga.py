@@ -349,7 +349,6 @@ def translate_and_render(
             )
             final_image_to_save = final_image_to_save.convert(target_mode)
 
-        log_message(f"Saving final image to {output_path} (Mode: {final_image_to_save.mode})", verbose=verbose)
         save_image_with_compression(
             final_image_to_save,
             output_path,

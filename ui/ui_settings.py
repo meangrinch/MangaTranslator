@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, Any, List
+from utils.logging import log_message
 
 # --- Constants ---
 CONFIG_FILE = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "MangaTranslator" / "config.json"
@@ -93,11 +94,12 @@ def save_config(incoming_settings: Dict[str, Any]):
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     current_config_on_disk = json.load(f)
             except json.JSONDecodeError:
-                print(
-                    f"Warning: Could not decode existing config file at {CONFIG_FILE}. Overwriting with new settings."
+                log_message(
+                    f"Warning: Could not decode existing config file at {CONFIG_FILE}. Overwriting with new settings.",
+                    always_print=True,
                 )
             except Exception as e:
-                print(f"Warning: Error reading config file {CONFIG_FILE}: {e}. Overwriting with new settings.")
+                log_message(f"Warning: Error reading config file {CONFIG_FILE}: {e}. Overwriting with new settings.", always_print=True)
 
         known_keys = set(DEFAULT_SETTINGS.keys()) | set(DEFAULT_BATCH_SETTINGS.keys())
         known_keys.add("provider_models")
@@ -188,7 +190,7 @@ def get_saved_settings() -> Dict[str, Any]:
             if "provider_models" not in settings:
                 settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
             elif not isinstance(settings["provider_models"], dict):
-                print("Warning: 'provider_models' in config is not a dictionary. Resetting.")
+                log_message("Warning: 'provider_models' in config is not a dictionary. Resetting.", always_print=True)
                 settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
 
             loaded_provider = settings.get("provider", DEFAULT_SETTINGS["provider"])
@@ -212,14 +214,15 @@ def get_saved_settings() -> Dict[str, Any]:
                     if (
                         saved_model_for_provider and saved_model_for_provider != settings["model_name"]
                     ):  # Only warn if there *was* a saved value that's now invalid/different
-                        print(
+                        log_message(
                             f"Warning: Saved model '{saved_model_for_provider}' not valid "
                             f"or available for provider '{loaded_provider}'. "
-                            f"Using '{settings['model_name']}'."
+                            f"Using '{settings['model_name']}'.",
+                            always_print=True,
                         )
 
     except json.JSONDecodeError:
-        print(f"Warning: Could not decode config file at {CONFIG_FILE}. Using defaults.")
+        log_message(f"Warning: Could not decode config file at {CONFIG_FILE}. Using defaults.", always_print=True)
         default_provider = DEFAULT_SETTINGS["provider"]
         if default_provider != "OpenRouter" and default_provider != "OpenAI-compatible":
             valid_models = PROVIDER_MODELS.get(default_provider, [])
@@ -227,7 +230,7 @@ def get_saved_settings() -> Dict[str, Any]:
         else:
             settings["model_name"] = None
     except Exception as e:
-        print(f"Warning: Error reading config file {CONFIG_FILE}: {e}. Using defaults.")
+        log_message(f"Warning: Error reading config file {CONFIG_FILE}: {e}. Using defaults.", always_print=True)
         default_provider = DEFAULT_SETTINGS["provider"]
         if default_provider != "OpenRouter" and default_provider != "OpenAI-compatible":
             valid_models = PROVIDER_MODELS.get(default_provider, [])
