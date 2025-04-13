@@ -82,28 +82,28 @@ Download the standalone zip (NVIDIA GPU or CPU) from the [releases page](https:/
     *Note: "CC Wild Words" is a common manga translation font.*
 
 3.  **Setup LLM:**
-    *   Supports external providers (Gemini, OpenAI, etc.) and local models (Ollama, LMStudio).
+    *   Supports external providers (Gemini, OpenAI, etc.,) and local models (Ollama, LMStudio, etc.,).
     *   **Web UI:** Configure in the "Config" tab (API keys saved locally to `config.json`).
     *   **CLI:** Pass API keys/endpoints as arguments.
     
-    *Note: Environment variables (e.g., `GOOGLE_API_KEY`) can also be used. See the "Config" tab for details.*
+    *Note: Environment variables (e.g., `GEMINI_API_KEY`) can also be used. See the "Config" tab for details.*
 
 ## Running
 
 ### **Web UI (Gradio):**
 Use `start-webui.bat` or run `python app.py --open-browser`
 
-*Note: First launch will take longer to open (~1 minute).*
+*Note: First launch will take longer to open (~1-2 minutes).*
 
 ### **CLI:**
 ```python
 # Example (Single - Gemini): 
-python main.py --input <image_path> --output <output_path> --yolo-model <model_path> --provider Gemini --gemini-api-key <key> --font-dir <font_path>
+python main.py --input <image_path> --yolo-model <model_path> --provider Gemini --gemini-api-key <key>
 
 # Example (Batch - Ollama): 
-python main.py --input <folder_path> --output <output_folder> --batch --yolo-model <model_path> --provider OpenAI-compatible --openai-compatible-url <url>` --font-dir <font_path>
+python main.py --input <folder_path> --batch --yolo-model <model_path> --font-dir <custom_font_dir> --provider OpenAI-compatible --openai-compatible-url <url> --output <custom_output_folder>
 
-# For all options: 
+# See all options: 
 python main.py --help
 ```
 
