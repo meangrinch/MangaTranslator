@@ -105,11 +105,6 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
         _font_variants_cache[resolved_dir] = font_variants
         return font_variants
 
-    def get_filename_parts(filepath: Path) -> set[str]:
-        name = filepath.stem.lower()
-        name = re.sub(r"[-_]", " ", name)
-        return set(name.split())
-
     # Sort by name length (desc) to potentially prioritize more specific names like "BoldItalic" over "Bold"
     font_files.sort(key=lambda x: len(x.name), reverse=True)
 
@@ -118,9 +113,9 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
     for font_file in font_files:
         if font_file in identified_files:
             continue
-        parts = get_filename_parts(font_file)
-        is_bold = any(kw in parts for kw in FONT_KEYWORDS["bold"])
-        is_italic = any(kw in parts for kw in FONT_KEYWORDS["italic"])
+        stem_lower = font_file.stem.lower()
+        is_bold = any(kw in stem_lower for kw in FONT_KEYWORDS["bold"])
+        is_italic = any(kw in stem_lower for kw in FONT_KEYWORDS["italic"])
         assigned = False
         if is_bold and is_italic:
             if not font_variants["bold_italic"]:
@@ -134,9 +129,9 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
     for font_file in font_files:
         if font_file in identified_files:
             continue
-        parts = get_filename_parts(font_file)
-        is_bold = any(kw in parts for kw in FONT_KEYWORDS["bold"])
-        is_italic = any(kw in parts for kw in FONT_KEYWORDS["italic"])
+        stem_lower = font_file.stem.lower()
+        is_bold = any(kw in stem_lower for kw in FONT_KEYWORDS["bold"])
+        is_italic = any(kw in stem_lower for kw in FONT_KEYWORDS["italic"])
         assigned = False
         if is_bold and not is_italic:  # Only bold
             if not font_variants["bold"]:
@@ -155,10 +150,10 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
     for font_file in font_files:
         if font_file in identified_files:
             continue
-        parts = get_filename_parts(font_file)
-        is_regular = any(kw in parts for kw in FONT_KEYWORDS["regular"])
-        is_bold = any(kw in parts for kw in FONT_KEYWORDS["bold"])
-        is_italic = any(kw in parts for kw in FONT_KEYWORDS["italic"])
+        stem_lower = font_file.stem.lower()
+        is_regular = any(kw in stem_lower for kw in FONT_KEYWORDS["regular"])
+        is_bold = any(kw in stem_lower for kw in FONT_KEYWORDS["bold"])
+        is_italic = any(kw in stem_lower for kw in FONT_KEYWORDS["italic"])
         assigned = False
         if is_regular and not is_bold and not is_italic:
             if not font_variants["regular"]:
@@ -173,10 +168,10 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
         for font_file in font_files:
             if font_file in identified_files:
                 continue
-            parts = get_filename_parts(font_file)
-            is_bold = any(kw in parts for kw in FONT_KEYWORDS["bold"])
-            is_italic = any(kw in parts for kw in FONT_KEYWORDS["italic"])
-            if not is_bold and not is_italic and not any(kw in parts for kw in FONT_KEYWORDS["regular"]):
+            stem_lower = font_file.stem.lower()
+            is_bold = any(kw in stem_lower for kw in FONT_KEYWORDS["bold"])
+            is_italic = any(kw in stem_lower for kw in FONT_KEYWORDS["italic"])
+            if not is_bold and not is_italic and not any(kw in stem_lower for kw in FONT_KEYWORDS["regular"]):
                 font_name_lower = font_file.name.lower()
                 is_likely_specific = any(
                     spec in font_name_lower
@@ -838,14 +833,55 @@ def render_text_skia(
                     continue
 
                 # --- Select Font Resources for Segment ---
-                typeface_to_use = loaded_typefaces.get(style_name, regular_typeface)
-                hb_face_to_use = loaded_hb_faces.get(style_name, regular_hb_face)
+                typeface_to_use = None
+                hb_face_to_use = None
+                fallback_style_used = None
 
+                if style_name == "bold_italic":
+                    typeface_to_use = loaded_typefaces.get("bold_italic")
+                    hb_face_to_use = loaded_hb_faces.get("bold_italic")
+                    if not typeface_to_use or not hb_face_to_use:
+                        fallback_style_used = "bold"
+                        typeface_to_use = loaded_typefaces.get("bold")
+                        hb_face_to_use = loaded_hb_faces.get("bold")
+                    if not typeface_to_use or not hb_face_to_use:
+                        fallback_style_used = "italic"
+                        typeface_to_use = loaded_typefaces.get("italic")
+                        hb_face_to_use = loaded_hb_faces.get("italic")
+                    if not typeface_to_use or not hb_face_to_use:
+                        fallback_style_used = "regular"
+                        typeface_to_use = regular_typeface  # Final fallback
+                        hb_face_to_use = regular_hb_face   # Final fallback
+                elif style_name == "bold":
+                    typeface_to_use = loaded_typefaces.get("bold")
+                    hb_face_to_use = loaded_hb_faces.get("bold")
+                    if not typeface_to_use or not hb_face_to_use:
+                        fallback_style_used = "regular"
+                        typeface_to_use = regular_typeface
+                        hb_face_to_use = regular_hb_face
+                elif style_name == "italic":
+                    typeface_to_use = loaded_typefaces.get("italic")
+                    hb_face_to_use = loaded_hb_faces.get("italic")
+                    if not typeface_to_use or not hb_face_to_use:
+                        fallback_style_used = "regular"
+                        typeface_to_use = regular_typeface
+                        hb_face_to_use = regular_hb_face
+                else:  # Regular or unknown style
+                    typeface_to_use = regular_typeface
+                    hb_face_to_use = regular_hb_face
+
+                if fallback_style_used:
+                    log_message(
+                        f"  Style '{style_name}' not found, falling back to '{fallback_style_used}'.",
+                        verbose=verbose
+                    )
+
+                # Ensure we actually got *some* font resource (should always get regular at least)
                 if not typeface_to_use or not hb_face_to_use:
                     log_message(
                         (
-                            f"ERROR: Could not get font resources for style '{style_name}' "
-                            "(fallback failed?). Skipping segment."
+                            f"ERROR: Could not get any valid font resources (including regular) "
+                            f"for style '{style_name}'. Skipping segment."
                         ),
                         always_print=True,
                     )
