@@ -600,7 +600,6 @@ def main():
     args = parser.parse_args()
 
     # --- Create Config Object ---
-    # Determine API key based on provider
     provider = args.provider
     api_key = None
     api_key_arg_name = ""
@@ -671,10 +670,10 @@ def main():
             openai_api_key=api_key if provider == "OpenAI" else os.environ.get("OPENAI_API_KEY", ""),
             anthropic_api_key=api_key if provider == "Anthropic" else os.environ.get("ANTHROPIC_API_KEY", ""),
             openrouter_api_key=api_key if provider == "OpenRouter" else os.environ.get("OPENROUTER_API_KEY", ""),
-            openai_compatible_url=compatible_url,  # Pass the URL
+            openai_compatible_url=compatible_url,
             openai_compatible_api_key=(
                 api_key if provider == "OpenAI-Compatible" else os.environ.get("OPENAI_COMPATIBLE_API_KEY", "")
-            ),  # Pass the key
+            ),
             model_name=model_name,
             temperature=args.temperature,
             top_p=args.top_p,
@@ -682,7 +681,7 @@ def main():
             input_language=args.input_language,
             output_language=args.output_language,
             reading_direction=args.reading_direction,
-            translation_mode=args.translation_mode,  # Pass the mode
+            translation_mode=args.translation_mode,
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,
