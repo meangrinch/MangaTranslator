@@ -277,9 +277,13 @@ def translate_and_render(
                 # --- Render Translations ---
                 # Map original bbox tuple to color and LIR bbox
                 bubble_render_info_map = {
-                    tuple(info["bbox"]): {"color": info["color"], "lir_bbox": info.get("lir_bbox")}
+                    tuple(info["bbox"]): {
+                        "color": info["color"],
+                        "lir_bbox": info.get("lir_bbox"),
+                        "mask": info.get("mask"),
+                    }
                     for info in processed_bubbles_info
-                    if "bbox" in info and "color" in info
+                    if "bbox" in info and "color" in info and "mask" in info
                 }
                 log_message("Rendering translations onto image...", verbose=verbose)
                 if len(translated_texts) == len(sorted_bubble_data):
@@ -304,14 +308,20 @@ def translate_and_render(
                         log_message(f"Rendering text for bubble {bbox}: '{text[:30]}...'", verbose=verbose)
 
                         render_info = bubble_render_info_map.get(tuple(bbox))
-                        bubble_color_bgr = render_info["color"] if render_info else (255, 255, 255)
-                        lir_bbox_coords = render_info.get("lir_bbox") if render_info else None
+                        bubble_color_bgr = (255, 255, 255)
+                        lir_bbox_coords = None
+                        cleaned_mask = None
+                        if render_info:
+                            bubble_color_bgr = render_info["color"]
+                            lir_bbox_coords = render_info.get("lir_bbox")
+                            cleaned_mask = render_info.get("mask")
 
                         rendered_image, success = render_text_skia(
                             pil_image=pil_cleaned_image,
                             text=text,
                             bbox=bbox,
                             lir_bbox=lir_bbox_coords,
+                            cleaned_mask=cleaned_mask,
                             bubble_color_bgr=bubble_color_bgr,
                             font_dir=config.rendering.font_dir,
                             min_font_size=config.rendering.min_font_size,

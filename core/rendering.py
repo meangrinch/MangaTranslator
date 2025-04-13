@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict
 
+import numpy as np
 import skia
 import uharfbuzz as hb
 from PIL import Image
@@ -381,12 +382,77 @@ def _skia_surface_to_pil(surface: skia.Surface) -> Optional[Image.Image]:
         return None
 
 
+# --- Helper for LIR Padding ---
+def _calculate_lir_padding_for_flat_edges(
+    cleaned_mask: np.ndarray, lir_bbox: List[int], padding_percentage: float = 0.08, flatness_threshold: float = 0.80
+) -> Tuple[float, float, float, float]:
+    """
+    Calculates padding ratios for LIR edges based on how "flat" they are against the mask background.
+
+    Args:
+        cleaned_mask: The binary (0/255) mask of the cleaned bubble.
+        lir_bbox: The LIR coordinates [x, y, w, h].
+        padding_percentage: The amount of padding to apply (as a ratio of LIR dimension) if an edge is flat.
+        flatness_threshold: The ratio of edge points adjacent to background required to consider an edge flat.
+
+    Returns:
+        Tuple[float, float, float, float]: Padding ratios for (left, right, top, bottom).
+    """
+    pad_left, pad_right, pad_top, pad_bottom = 0.0, 0.0, 0.0, 0.0
+    if cleaned_mask is None or lir_bbox is None or len(lir_bbox) != 4:
+        return pad_left, pad_right, pad_top, pad_bottom
+
+    lir_x, lir_y, lir_w, lir_h = map(int, lir_bbox)
+    mask_h, mask_w = cleaned_mask.shape
+
+    if lir_w <= 0 or lir_h <= 0:
+        return pad_left, pad_right, pad_top, pad_bottom
+
+    # Distance to check overlap (pixels)
+    check_offset = 2
+
+    # --- Check Left Edge ---
+    x = lir_x
+    if x >= check_offset:
+        total_edge_points = 0
+        flat_edge_points = 0
+        nx = x - check_offset
+        for y in range(max(0, lir_y), min(mask_h, lir_y + lir_h)):
+            if cleaned_mask[y, x] == 255:
+                total_edge_points += 1
+                if cleaned_mask[y, nx] == 0:
+                    flat_edge_points += 1
+        if total_edge_points > 0:
+            ratio = flat_edge_points / total_edge_points
+            if ratio >= flatness_threshold:
+                pad_left = padding_percentage
+
+    # --- Check Right Edge ---
+    x = lir_x + lir_w - 1
+    if x < mask_w - check_offset:
+        total_edge_points = 0
+        flat_edge_points = 0
+        nx = x + check_offset
+        for y in range(max(0, lir_y), min(mask_h, lir_y + lir_h)):
+            if cleaned_mask[y, x] == 255:
+                total_edge_points += 1
+                if cleaned_mask[y, nx] == 0:
+                    flat_edge_points += 1
+        if total_edge_points > 0:
+            ratio = flat_edge_points / total_edge_points
+            if ratio >= flatness_threshold:
+                pad_right = padding_percentage
+
+    return pad_left, pad_right, pad_top, pad_bottom
+
+
 def render_text_skia(
     pil_image: Image.Image,
     text: str,
     bbox: Tuple[int, int, int, int],
     font_dir: str,
     lir_bbox: Optional[List[int]] = None,
+    cleaned_mask: Optional[np.ndarray] = None,
     bubble_color_bgr: Optional[Tuple[int, int, int]] = (255, 255, 255),
     min_font_size: int = 8,
     max_font_size: int = 14,
@@ -439,9 +505,37 @@ def render_text_skia(
     target_center_y = 0.0
 
     if lir_bbox is not None and len(lir_bbox) == 4 and lir_bbox[2] > 0 and lir_bbox[3] > 0:
-        lir_x, lir_y, lir_w, lir_h = lir_bbox
+        orig_lir_x, orig_lir_y, orig_lir_w, orig_lir_h = lir_bbox
+
+        # --- Calculate Padding for Flat Edges ---
+        pad_left, pad_right, pad_top, pad_bottom = 0.0, 0.0, 0.0, 0.0
+        if cleaned_mask is not None and orig_lir_w > 0 and orig_lir_h > 0:
+            pad_left, pad_right, pad_top, pad_bottom = _calculate_lir_padding_for_flat_edges(cleaned_mask, lir_bbox)
+            if any(p > 0 for p in [pad_left, pad_right, pad_top, pad_bottom]):
+                log_message(
+                    (f"  Applying LIR padding for flat edges: L={pad_left:.1%}, R={pad_right:.1%}, "
+                     f"T={pad_top:.1%}, B={pad_bottom:.1%}"),
+                    verbose=verbose,
+                )
+
+        # --- Adjust LIR based on padding ---
+        lir_x = orig_lir_x + orig_lir_w * pad_left
+        lir_y = orig_lir_y + orig_lir_h * pad_top
+        lir_w = orig_lir_w * (1.0 - pad_left - pad_right)
+        lir_h = orig_lir_h * (1.0 - pad_top - pad_bottom)
+
+        if lir_w <= 0 or lir_h <= 0:
+            log_message(
+                (f"Warning: LIR padding resulted in non-positive dimensions ({lir_w}x{lir_h}). "
+                 f"Reverting to original LIR."),
+                verbose=verbose,
+                always_print=True,
+            )
+            lir_x, lir_y, lir_w, lir_h = orig_lir_x, orig_lir_y, orig_lir_w, orig_lir_h
+
         log_message(
-            f"Valid LIR received: x={lir_x}, y={lir_y}, w={lir_w}, h={lir_h}. Calculating expanded boundaries.",
+            (f"Using LIR (potentially padded): x={lir_x:.1f}, y={lir_y:.1f}, w={lir_w:.1f}, h={lir_h:.1f}. "
+             f"Calculating expanded boundaries."),
             verbose=verbose,
         )
 
@@ -850,8 +944,8 @@ def render_text_skia(
                         hb_face_to_use = loaded_hb_faces.get("italic")
                     if not typeface_to_use or not hb_face_to_use:
                         fallback_style_used = "regular"
-                        typeface_to_use = regular_typeface  # Final fallback
-                        hb_face_to_use = regular_hb_face   # Final fallback
+                        typeface_to_use = regular_typeface
+                        hb_face_to_use = regular_hb_face
                 elif style_name == "bold":
                     typeface_to_use = loaded_typefaces.get("bold")
                     hb_face_to_use = loaded_hb_faces.get("bold")
@@ -872,8 +966,7 @@ def render_text_skia(
 
                 if fallback_style_used:
                     log_message(
-                        f"  Style '{style_name}' not found, falling back to '{fallback_style_used}'.",
-                        verbose=verbose
+                        f"  Style '{style_name}' not found, falling back to '{fallback_style_used}'.", verbose=verbose
                     )
 
                 # Ensure we actually got *some* font resource (should always get regular at least)
