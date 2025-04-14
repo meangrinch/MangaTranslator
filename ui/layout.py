@@ -38,14 +38,11 @@ function() {
 
 js_status_fade = """
 () => {
-    // Find status elements by specific IDs assigned in the layout
-    const statusElements = [
-        document.getElementById('translator_status_message'), // Translator status
-        document.getElementById('batch_status_message'),     // Batch status
-        document.getElementById('config_status_message')     // Config status
-    ];
+    // Find the specific config status element by its ID
+    const statusElement = document.getElementById('config_status_message');  // Config status
 
-    statusElements.forEach(statusElement => {
+    // Apply fade logic only to the config status element
+    if (statusElement) {
         if (statusElement && statusElement.textContent.trim() !== "") {
             clearTimeout(statusElement.fadeTimer);
             clearTimeout(statusElement.resetTimer);
@@ -68,11 +65,11 @@ js_status_fade = """
                 }, fadeDuration);
 
             }, fadeDelay);
-        } else if (statusElement) {
+        } else {
             // Ensure hidden if empty
             statusElement.style.display = 'none';
         }
-    });
+    }
 }
 """
 
