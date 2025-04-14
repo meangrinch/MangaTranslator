@@ -745,7 +745,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
         default_ui_state.batch_input_language,
         default_ui_state.batch_output_language,
         gr.update(value=default_ui_state.batch_font_pack),
-        f"{SUCCESS_PREFIX}Settings reset to defaults (API keys preserved).",
+        "Settings reset to defaults (API keys preserved).",
     ]
 
 
