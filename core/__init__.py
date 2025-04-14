@@ -2,7 +2,7 @@
 MangaTranslator Core Package
 
 This package contains the core functionality for translating manga/comic speech bubbles.
-It uses YOLO for speech bubble detection and Gemini API for text translation.
+It uses YOLO for speech bubble detection and LLMs for text translation.
 """
 
 from .generate_manga import translate_and_render, batch_translate_images
