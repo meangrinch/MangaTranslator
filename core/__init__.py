@@ -5,7 +5,7 @@ This package contains the core functionality for translating manga/comic speech 
 It uses YOLO for speech bubble detection and LLMs for text translation.
 """
 
-from .generate_manga import translate_and_render, batch_translate_images
+from .pipeline import translate_and_render, batch_translate_images
 from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
 from .detection import detect_speech_bubbles
 from .cleaning import clean_speech_bubbles

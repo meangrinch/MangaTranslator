@@ -10,7 +10,7 @@ from PIL import Image
 
 from utils.settings import MangaTranslatorConfig, RenderingConfig
 from utils.logging import log_message
-from core.generate_manga import translate_and_render, batch_translate_images
+from core.pipeline import translate_and_render, batch_translate_images
 from core.validation import validate_core_inputs
 from utils.exceptions import ValidationError
 
