@@ -4,7 +4,7 @@ from typing import Any
 
 import gradio as gr
 
-from . import ui_settings
+from . import config
 from . import utils
 from . import callbacks
 
@@ -107,7 +107,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
         # Initial data loading (moved from app.py global scope)
         model_choices = utils.get_available_models(models_dir)
         font_choices, initial_default_font = utils.get_available_font_packs(fonts_base_dir)
-        saved_settings = ui_settings.get_saved_settings()
+        saved_settings = config.get_saved_settings()
 
         saved_yolo_model = saved_settings.get("yolo_model")
         default_yolo_model = (
@@ -127,14 +127,14 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             else (initial_default_font if initial_default_font else None)
         )
 
-        initial_provider = saved_settings.get("provider", ui_settings.DEFAULT_SETTINGS["provider"])
+        initial_provider = saved_settings.get("provider", config.DEFAULT_SETTINGS["provider"])
         initial_model_name = saved_settings.get("model_name")
 
         # Initial model choices for dropdown (dynamic ones updated on load)
         if initial_provider == "OpenRouter" or initial_provider == "OpenAI-compatible":
             initial_models_choices = [initial_model_name] if initial_model_name else []
         else:
-            initial_models_choices = ui_settings.PROVIDER_MODELS.get(initial_provider, [])
+            initial_models_choices = config.PROVIDER_MODELS.get(initial_provider, [])
 
         # --- Define UI Components ---
         with gr.Tabs():
@@ -398,7 +398,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                         with gr.Group(visible=False, elem_classes="settings-group") as group_translation:
                             gr.Markdown("### LLM Settings")
                             provider_selector = gr.Radio(
-                                choices=list(ui_settings.PROVIDER_MODELS.keys()),
+                                choices=list(config.PROVIDER_MODELS.keys()),
                                 label="Translation Provider",
                                 value=config_initial_provider,
                                 elem_id="provider_selector",
@@ -452,7 +452,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 placeholder="Enter Base URL (e.g., http://localhost:11434/v1)",
                                 type="text",
                                 value=saved_settings.get(
-                                    "openai_compatible_url", ui_settings.DEFAULT_SETTINGS["openai_compatible_url"]
+                                    "openai_compatible_url", config.DEFAULT_SETTINGS["openai_compatible_url"]
                                 ),
                                 show_copy_button=False,
                                 visible=(config_initial_provider == "OpenAI-compatible"),
@@ -510,7 +510,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 choices=["one-step", "two-step"],
                                 label="Translation Mode",
                                 value=saved_settings.get(
-                                    "translation_mode", ui_settings.DEFAULT_SETTINGS["translation_mode"]
+                                    "translation_mode", config.DEFAULT_SETTINGS["translation_mode"]
                                 ),
                                 info=("Method for translation ('one-step' combines OCR/Translate, 'two-step' "
                                       "separates them). 'two-step' might improve translation quality for "
