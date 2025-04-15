@@ -384,7 +384,7 @@ def _skia_surface_to_pil(surface: skia.Surface) -> Optional[Image.Image]:
 
 # --- Helper for LIR Padding ---
 def _calculate_lir_padding_for_flat_edges(
-    cleaned_mask: np.ndarray, lir_bbox: List[int], padding_percentage: float = 0.08, flatness_threshold: float = 0.80
+    cleaned_mask: np.ndarray, lir_bbox: List[int], padding_percentage: float = 0.05, flatness_threshold: float = 0.80
 ) -> Tuple[float, float, float, float]:
     """
     Calculates padding ratios for LIR edges based on how "flat" they are against the mask background.
@@ -620,7 +620,7 @@ def render_text_skia(
                 always_print=True,
             )
             # Fallback logic (same as the 'else' block below)
-            padding_ratio = 0.08  # Default padding
+            padding_ratio = 0.05  # Default padding
             max_render_width = bubble_width * (1 - 2 * padding_ratio)
             max_render_height = bubble_height * (1 - 2 * padding_ratio)
             if max_render_width <= 0 or max_render_height <= 0:
