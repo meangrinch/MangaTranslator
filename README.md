@@ -97,11 +97,11 @@ Use `start-webui.bat` or run `python app.py --open-browser`
 
 ### **CLI:**
 ```python
-# Example (Single - Gemini): 
+# Example (Single - Japanese -> English - Gemini): 
 python main.py --input <image_path> --yolo-model <model_path> --provider Gemini --gemini-api-key <key>
 
-# Example (Batch - Ollama): 
-python main.py --input <folder_path> --batch --yolo-model <model_path> --font-dir <custom_font_dir> --provider OpenAI-compatible --openai-compatible-url <url> --output <custom_output_folder>
+# Example (Batch - Custom Language - Ollama): 
+python main.py --input <folder_path> --batch --yolo-model <model_path> --font-dir <custom_font_dir> --input-language <custom_language> --output-language <custom_language> --provider OpenAI-compatible --openai-compatible-url <url> --output <custom_output_folder>
 
 # See all options: 
 python main.py --help
