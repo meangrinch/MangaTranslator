@@ -9,7 +9,7 @@ from PIL import Image
 
 from . import logic
 from . import utils
-from . import ui_config
+from . import settings_manager
 from .ui_models import (
     UIConfigState,
     UIDetectionSettings,
@@ -21,7 +21,7 @@ from .ui_models import (
     UIGeneralSettings,
     map_ui_to_backend_config,
 )
-from core.config import MangaTranslatorConfig
+from core.models import MangaTranslatorConfig
 from utils.exceptions import ValidationError
 
 ERROR_PREFIX = "❌ Error: "
@@ -654,14 +654,14 @@ def handle_save_config_click(*args: Any) -> str:
 
     # Convert UI state to dictionary for saving
     settings_dict = ui_state.to_save_dict()
-    message = ui_config.save_config(settings_dict)
+    message = settings_manager.save_config(settings_dict)
     return message
 
 
 def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[gr.update]:
     """Callback for the 'Reset Defaults' button. Uses dataclasses."""
 
-    default_settings_dict = ui_config.reset_to_defaults()
+    default_settings_dict = settings_manager.reset_to_defaults()
     default_ui_state = UIConfigState.from_dict(default_settings_dict)
 
     # --- Handle dynamic choices based on defaults ---
@@ -683,13 +683,13 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     default_ui_state.batch_font_pack = batch_reset_font
 
     default_provider = default_ui_state.provider_settings.provider
-    default_model_name = ui_config.DEFAULT_SETTINGS["provider_models"].get(default_provider)
+    default_model_name = settings_manager.DEFAULT_SETTINGS["provider_models"].get(default_provider)
     default_ui_state.llm_settings.model_name = default_model_name
 
     if default_provider == "OpenRouter" or default_provider == "OpenAI-compatible":
         default_models_choices = [default_model_name] if default_model_name else []
     else:
-        default_models_choices = ui_config.PROVIDER_MODELS.get(default_provider, [])
+        default_models_choices = settings_manager.PROVIDER_MODELS.get(default_provider, [])
 
     gemini_visible = default_provider == "Gemini"
     openai_visible = default_provider == "OpenAI"

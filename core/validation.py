@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List, Tuple, Optional
 
-from core.config import TranslationConfig, RenderingConfig
+from core.models import TranslationConfig, RenderingConfig
 from utils.exceptions import ValidationError
 
 

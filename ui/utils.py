@@ -6,7 +6,7 @@ from typing import Optional, Any, List, Tuple
 import gradio as gr
 from PIL import Image
 
-from .ui_config import get_saved_settings, PROVIDER_MODELS, DEFAULT_SETTINGS
+from .settings_manager import get_saved_settings, PROVIDER_MODELS, DEFAULT_SETTINGS
 from utils.logging import log_message
 
 # --- Constants ---

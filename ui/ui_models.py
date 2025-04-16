@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 import torch
 
-from core.config import (
+from core.models import (
     MangaTranslatorConfig,
     DetectionConfig,
     CleaningConfig,
@@ -159,10 +159,10 @@ class UIConfigState:
     def from_dict(data: Dict[str, Any]) -> "UIConfigState":
         """Creates a UIConfigState instance from a dictionary (e.g., loaded from config.json)."""
 
-        from . import ui_config  # Local import to avoid circular dependency issues
+        from . import settings_manager  # Local import to avoid circular dependency issues
 
-        defaults = ui_config.DEFAULT_SETTINGS.copy()
-        defaults.update(ui_config.DEFAULT_BATCH_SETTINGS)
+        defaults = settings_manager.DEFAULT_SETTINGS.copy()
+        defaults.update(settings_manager.DEFAULT_BATCH_SETTINGS)
 
         return UIConfigState(
             yolo_model=data.get("yolo_model"),
