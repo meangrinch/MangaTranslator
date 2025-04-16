@@ -2,7 +2,7 @@ import re
 from typing import List, Dict, Any, Optional
 from utils.logging import log_message
 
-from core.models import TranslationConfig
+from core.config import TranslationConfig
 from utils.endpoints import (
     call_gemini_endpoint,
     call_openai_endpoint,
