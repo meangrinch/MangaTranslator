@@ -509,7 +509,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                             top_k = gr.Slider(
                                 0,
                                 64,
-                                value=saved_settings.get("top_k", 1),
+                                value=saved_settings.get("top_k", 64),
                                 step=1,
                                 label="Top K",
                                 info="Limits sampling pool to top K tokens.",
