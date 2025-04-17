@@ -46,6 +46,7 @@ class TranslationConfig:
     output_language: str = "English"
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
+    include_thoughts: bool = False  # Specific to Gemini 2.5 Flash
 
 
 @dataclass

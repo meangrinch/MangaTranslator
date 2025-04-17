@@ -605,7 +605,12 @@ def main():
         action="store_true",
         help="Only perform detection and cleaning, skip translation and rendering.",
     )
-    parser.set_defaults(verbose=False, cpu=False, cleaning_only=False)
+    parser.add_argument(
+        "--include-thoughts",
+        action="store_true",
+        help="Enable Thinking in Gemini 2.5 Flash responses (model-specific)",
+    )
+    parser.set_defaults(verbose=False, cpu=False, cleaning_only=False, include_thoughts=False)
 
     args = parser.parse_args()
 
@@ -692,6 +697,7 @@ def main():
             output_language=args.output_language,
             reading_direction=args.reading_direction,
             translation_mode=args.translation_mode,
+            include_thoughts=args.include_thoughts,
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,

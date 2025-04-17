@@ -9,21 +9,22 @@ CONFIG_FILE = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "M
 
 PROVIDER_MODELS: Dict[str, List[str]] = {
     "Gemini": [
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
-        "gemini-2.0-flash-thinking-exp-01-21",
         "gemini-2.5-pro-exp-03-25",
         "gemini-2.5-pro-preview-03-25",
+        "gemini-2.5-flash-preview-04-17",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-thinking-exp-01-21",
+        "gemini-2.0-flash-lite",
     ],
     "OpenAI": [
-        "gpt-4o",
-        "gpt-4o-mini",
+        "o4-mini",
+        "o3",
         "gpt-4.1",
         "gpt-4.1-mini",
         "gpt-4.1-nano",
-        "o3",
-        "o4-mini",
         "o1",
+        "gpt-4o",
+        "gpt-4o-mini",
     ],
     "Anthropic": [
         "claude-3-7-sonnet-latest",
@@ -79,6 +80,7 @@ DEFAULT_SETTINGS = {
     "png_compression": 6,
     "output_format": "auto",
     "cleaning_only": False,
+    "include_thoughts": False,  # Specific to Gemini 2.5 Flash
 }
 
 DEFAULT_BATCH_SETTINGS = {

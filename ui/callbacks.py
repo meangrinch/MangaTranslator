@@ -240,6 +240,7 @@ def handle_translate_click(
         png_compression,
         verbose,
         cleaning_only_toggle,
+        include_thoughts_checkbox_val,
     ) = args
     """Callback for the 'Translate' button click."""
     start_time = time.time()
@@ -317,7 +318,9 @@ def handle_translate_click(
                 jpeg_quality=jpeg_quality,
                 png_compression=png_compression,
             ),
-            general=UIGeneralSettings(verbose=verbose, cleaning_only=cleaning_only_toggle),
+            general=UIGeneralSettings(
+                verbose=verbose, cleaning_only=cleaning_only_toggle, include_thoughts=include_thoughts_checkbox_val
+            ),
             input_language=input_language,
             output_language=output_language,
             font_pack=font_dropdown,
@@ -416,6 +419,7 @@ def handle_batch_click(
         png_compression,
         verbose,
         cleaning_only_toggle,
+        include_thoughts_checkbox_val,
     ) = args
     """Callback for the 'Start Batch Translating' button click."""
     progress(0, desc="Starting batch process...")
@@ -495,7 +499,9 @@ def handle_batch_click(
                 jpeg_quality=jpeg_quality,
                 png_compression=png_compression,
             ),
-            general=UIGeneralSettings(verbose=verbose, cleaning_only=cleaning_only_toggle),
+            general=UIGeneralSettings(
+                verbose=verbose, cleaning_only=cleaning_only_toggle, include_thoughts=include_thoughts_checkbox_val
+            ),
             batch_input_language=batch_input_language,
             batch_output_language=batch_output_language,
             batch_font_pack=batch_font_dropdown,
@@ -597,6 +603,7 @@ def handle_save_config_click(*args: Any) -> str:
         b_in_lang,
         b_out_lang,
         b_font,
+        include_thoughts_val,
     ) = args
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
@@ -643,7 +650,7 @@ def handle_save_config_click(*args: Any) -> str:
             jpeg_quality=jq,
             png_compression=pngc,
         ),
-        general=UIGeneralSettings(verbose=verb, cleaning_only=cleaning_only_val),
+        general=UIGeneralSettings(verbose=verb, cleaning_only=cleaning_only_val, include_thoughts=include_thoughts_val),
         input_language=s_in_lang,
         output_language=s_out_lang,
         font_pack=s_font,
@@ -703,6 +710,9 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     temp_max = temp_update.get("maximum", 2.0)
     top_k_interactive = top_k_update.get("interactive", True)
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
+    include_thoughts_visible = (
+        default_provider == "Gemini" and default_model_name == "gemini-2.5-flash-preview-04-17"
+    )
 
     return [
         gr.update(value=default_ui_state.yolo_model),
@@ -745,6 +755,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
         default_ui_state.batch_input_language,
         default_ui_state.batch_output_language,
         gr.update(value=default_ui_state.batch_font_pack),
+        gr.update(value=default_ui_state.general.include_thoughts, visible=include_thoughts_visible),
         "Settings reset to defaults (API keys preserved).",
     ]
 

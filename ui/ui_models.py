@@ -86,6 +86,7 @@ class UIGeneralSettings:
 
     verbose: bool = False
     cleaning_only: bool = False
+    include_thoughts: bool = False
 
 
 @dataclass
@@ -147,6 +148,7 @@ class UIConfigState:
             "png_compression": self.output.png_compression,
             "verbose": self.general.verbose,
             "cleaning_only": self.general.cleaning_only,
+            "include_thoughts": self.general.include_thoughts,
             "input_language": self.input_language,
             "output_language": self.output_language,
             "batch_input_language": self.batch_input_language,
@@ -218,6 +220,7 @@ class UIConfigState:
             general=UIGeneralSettings(
                 verbose=data.get("verbose", defaults["verbose"]),
                 cleaning_only=data.get("cleaning_only", defaults["cleaning_only"]),
+                include_thoughts=data.get("include_thoughts", defaults.get("include_thoughts", False)),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
             output_language=data.get("output_language", defaults["output_language"]),
@@ -273,6 +276,7 @@ def map_ui_to_backend_config(
         output_language=output_lang,
         reading_direction=ui_state.llm_settings.reading_direction,
         translation_mode=ui_state.llm_settings.translation_mode,
+        include_thoughts=ui_state.general.include_thoughts,
     )
 
     rendering_cfg = RenderingConfig(
