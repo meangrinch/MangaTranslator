@@ -85,6 +85,11 @@ def _call_llm_endpoint(
             if not api_key:
                 raise ValueError("Gemini API key is missing.")
             generation_config = {"temperature": temperature, "topP": top_p, "topK": top_k, "maxOutputTokens": 2048}
+            # Conditionally add thinkingConfig for the specific model
+            if model_name == "gemini-2.5-flash-preview-04-17" and config.include_thoughts:
+                generation_config["thinkingConfig"] = {"includeThoughts": True}
+                log_message("Including thoughts for gemini-2.5-flash-preview-04-17", verbose=debug)
+
             return call_gemini_endpoint(
                 api_key=api_key,
                 model_name=model_name,
@@ -174,8 +179,43 @@ def _parse_llm_response(
         log_message(f"Parsing response: Raw text received from {provider}:\n---\n{response_text}\n---", verbose=debug)
 
         matches = TRANSLATION_PATTERN.findall(response_text)
-        log_message(f"Parsing response: Regex matches found: {len(matches)}", verbose=debug)
+        log_message(
+            f"Parsing response: Regex matches found: {len(matches)} vs expected {expected_count}", verbose=debug
+        )
 
+        # Fallback for non-numbered lists
+        if len(matches) < expected_count:
+            log_message(
+                f"Parsing response warning: Regex found fewer items ({len(matches)}) than expected ({expected_count}). "
+                f"Attempting newline split fallback.",
+                verbose=debug,
+                always_print=True,
+            )
+            lines = [line.strip() for line in response_text.split("\n") if line.strip()]
+            # Remove potential leading/trailing markdown code blocks
+            if lines and lines[0].startswith("```"):
+                lines.pop(0)
+            if lines and lines[-1].endswith("```"):
+                lines.pop(-1)
+
+            # Basic check: does the number of lines match expected bubbles?
+            if len(lines) == expected_count:
+                log_message(
+                    f"Parsing response: Fallback successful. Using {len(lines)} lines as translations.",
+                    verbose=debug,
+                    always_print=True,
+                )
+                return lines
+            else:
+                log_message(
+                    f"Parsing response warning: Fallback failed. Newline count ({len(lines)}) "
+                    f"still doesn't match expected count ({expected_count}). "
+                    f"Proceeding with regex matches found ({len(matches)}).",
+                    verbose=debug,
+                    always_print=True,
+                )
+
+        # Original logic if regex worked or fallback failed
         parsed_dict = {}
         for num_str, text in matches:
             try:
