@@ -13,7 +13,7 @@ from .translation import sort_bubbles_by_reading_order, call_translation_api_bat
 from .rendering import render_text_skia
 
 __version__ = "1.0.0"
-__version_info__ = (1, 0, 0)
+__version_info__ = (1, 0, 1)
 __author__ = "grinnch"
 __copyright__ = "Copyright 2025-present grinnch"
 __license__ = "GPL-3.0"
