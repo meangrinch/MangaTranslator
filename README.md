@@ -111,7 +111,7 @@ python main.py --help
 
 1.  Launch the Web UI.
 2.  Use the **"Translator"** (single image) or **"Batch"** (multiple) tab.
-3.  Upload image(s).
+3.  Upload manga/comic page image(s).
 4.  Select **Font**, **Source Language**, **Target Language**.
 5.  Go to **"Config"** tab:
     *   Set **Translation -> LLM Provider**, **Model**, **API Key/Endpoint**.
