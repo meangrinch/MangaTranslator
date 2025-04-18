@@ -41,7 +41,7 @@ class TranslationConfig:
     provider_models: dict[str, Optional[str]] = field(default_factory=dict)
     temperature: float = 0.1
     top_p: float = 0.95
-    top_k: int = 1
+    top_k: int = 64
     input_language: str = "Japanese"
     output_language: str = "English"
     reading_direction: str = "rtl"
