@@ -54,7 +54,7 @@ class UITranslationLLMSettings:
     model_name: Optional[str] = None
     temperature: float = 0.1
     top_p: float = 0.95
-    top_k: int = 1
+    top_k: int = 64
     translation_mode: str = "one-step"
     reading_direction: str = "rtl"
 
