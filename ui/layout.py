@@ -624,7 +624,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                         setting_groups.append(group_other)
 
         # --- Define Event Handlers ---
-
         save_config_inputs = [
             config_yolo_model_dropdown,
             confidence,

@@ -9,11 +9,11 @@ CONFIG_FILE = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "M
 
 PROVIDER_MODELS: Dict[str, List[str]] = {
     "Gemini": [
-        "gemini-2.5-pro-exp-03-25",
+        "gemini-2.5-pro-preview-05-06",
         "gemini-2.5-pro-preview-03-25",
+        "gemini-2.5-pro-exp-03-25",
         "gemini-2.5-flash-preview-04-17",
         "gemini-2.0-flash",
-        "gemini-2.0-flash-thinking-exp-01-21",
         "gemini-2.0-flash-lite",
     ],
     "OpenAI": [
@@ -67,7 +67,7 @@ DEFAULT_SETTINGS = {
     "constraint_erosion_iterations": 1,
     "temperature": 0.1,
     "top_p": 0.95,
-    "top_k": 1,
+    "top_k": 64,
     "max_font_size": 14,
     "min_font_size": 8,
     "line_spacing": 1.0,
