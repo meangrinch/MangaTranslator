@@ -96,7 +96,7 @@ def save_image_with_compression(image, output_path, jpeg_quality=95, png_compres
     elif extension == ".webp":
         output_format = "WEBP"
         save_options["lossless"] = True
-        log_message(f"Saving WEBP image with quality {save_options['quality']} to {output_path}", verbose=verbose)
+        log_message(f"Saving WEBP image with lossless quality to {output_path}", verbose=verbose)
 
     else:
         log_message(
