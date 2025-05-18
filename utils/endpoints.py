@@ -197,9 +197,9 @@ def call_openai_endpoint(
     payload = {
         "model": model_name,
         "messages": messages,
-        "temperature": generation_config.get("temperature"),
-        "top_p": generation_config.get("top_p"),
-        "max_tokens": generation_config.get("max_output_tokens", 2048),
+        "temperature": generation_config.get("temperature") if model_name != "o4-mini" else 1.0,
+        "top_p": generation_config.get("top_p") if model_name != "o4-mini" else None,
+        "max_completion_tokens": generation_config.get("max_output_tokens", 2048),
     }
     payload = {k: v for k, v in payload.items() if v is not None}
 
