@@ -1,4 +1,6 @@
 from functools import lru_cache
+from pathlib import Path
+
 import cv2
 import torch
 from ultralytics import YOLO
@@ -26,12 +28,12 @@ def get_yolo_model(model_path):
     return _model_cache[model_path]
 
 
-def detect_speech_bubbles(image_path, model_path, confidence=0.35, verbose=False, device=None):
+def detect_speech_bubbles(image_path: Path, model_path, confidence=0.35, verbose=False, device=None):
     """
     Detect speech bubbles in the given image using YOLO model.
 
     Args:
-        image_path (str): Path to the input image
+        image_path (Path): Path to the input image
         model_path (str): Path to the YOLO segmentation model
         confidence (float): Confidence threshold for detections
         verbose (bool): Whether to show detailed YOLO output
@@ -50,7 +52,7 @@ def detect_speech_bubbles(image_path, model_path, confidence=0.35, verbose=False
         raise RuntimeError(f"Error loading model: {e}")
 
     try:
-        image = cv2.imread(image_path)
+        image = cv2.imread(str(image_path))
         if image is None:
             raise ValueError(f"Could not read image at {image_path}")
     except Exception as e:
