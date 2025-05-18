@@ -367,15 +367,13 @@ def _pil_to_skia_surface(pil_image: Image.Image) -> Optional[skia.Surface]:
 def _skia_surface_to_pil(surface: skia.Surface) -> Optional[Image.Image]:
     """Converts a Skia Surface back to a PIL image."""
     try:
-        skia_image = surface.makeImageSnapshot()
+        skia_image: Optional[skia.Image] = surface.makeImageSnapshot()
         if skia_image is None:
             log_message("Failed to create Skia snapshot from surface", always_print=True)
             return None
-        skia_bytes = skia_image.tobytes()
-        if skia_bytes is None:
-            log_message("Failed to get bytes from Skia snapshot", always_print=True)
-            return None
-        pil_image = Image.frombytes("RGBA", (surface.width(), surface.height()), skia_bytes)
+
+        skia_image = skia_image.convert(alphaType=skia.kUnpremul_AlphaType, colorType=skia.kRGBA_8888_ColorType)
+        pil_image = Image.fromarray(skia_image)
         return pil_image
     except Exception as e:
         log_message(f"Error converting Skia Surface to PIL: {e}", always_print=True)
