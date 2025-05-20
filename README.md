@@ -131,7 +131,7 @@ git pull
 
 ## Customization
 
-Place custom YOLO models (`.pt`/`.onnx`) in `models/` (if using web ui). Must support segmentation and be trained for speech bubbles.
+Place custom YOLO models (`.pt`/`.onnx`) in `models/` (if using web UI). Must support segmentation and be trained for speech bubbles.
 
 ## License
 
