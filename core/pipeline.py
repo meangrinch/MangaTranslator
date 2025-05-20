@@ -545,7 +545,7 @@ def main():
         "--model-name",
         type=str,
         default=None,
-        help="Model name for the selected provider (e.g., 'gemini-2.0 flash'). "
+        help="Model name for the selected provider (e.g., 'gemini-2.0-flash'). "
         "If not provided, a default will be attempted based on the provider.",
     )
     parser.add_argument("--font-dir", type=str, default="./fonts", help="Directory containing font files")
@@ -606,11 +606,11 @@ def main():
         help="Only perform detection and cleaning, skip translation and rendering.",
     )
     parser.add_argument(
-        "--include-thoughts",
+        "--enable-thinking",
         action="store_true",
-        help="Enable Thinking in Gemini 2.5 Flash responses (model-specific)",
+        help="Enable 'thinking' capabilities for Gemini 2.5 Flash models.",
     )
-    parser.set_defaults(verbose=False, cpu=False, cleaning_only=False, include_thoughts=False)
+    parser.set_defaults(verbose=False, cpu=False, cleaning_only=False, enable_thinking=False)
 
     args = parser.parse_args()
 

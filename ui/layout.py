@@ -478,15 +478,15 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 elem_id="config_model_name",
                                 allow_custom_value=True,
                             )
-                            include_thoughts_checkbox = gr.Checkbox(
+                            enable_thinking_checkbox = gr.Checkbox(
                                 label="Enable Thinking",
-                                value=saved_settings.get("include_thoughts", False),
-                                info="Enable 'thinking' capabilities for Gemini 2.5 Flash (model-specific).",
+                                value=saved_settings.get("enable_thinking", True),
+                                info="Enables 'thinking' capabilities for Gemini 2.5 Flash models.",
                                 visible=(
                                     config_initial_provider == "Gemini"
-                                    and config_initial_model_name == "gemini-2.5-flash-preview-04-17"
+                                    and "gemini-2.5-flash" in config_initial_model_name
                                 ),
-                                elem_id="include_thoughts_checkbox",
+                                elem_id="enable_thinking_checkbox",
                             )
                             temperature = gr.Slider(
                                 0,
@@ -665,7 +665,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
-            include_thoughts_checkbox,
+            enable_thinking_checkbox,
         ]
 
         reset_outputs = [
@@ -709,7 +709,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
-            include_thoughts_checkbox,
+            enable_thinking_checkbox,
             config_status,
         ]
 
@@ -752,7 +752,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             png_compression,
             verbose,
             cleaning_only_toggle,
-            include_thoughts_checkbox,
+            enable_thinking_checkbox,
         ]
 
         batch_inputs = [
@@ -794,7 +794,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             png_compression,
             verbose,
             cleaning_only_toggle,
-            include_thoughts_checkbox,
+            enable_thinking_checkbox,
         ]
 
         # Config Tab Navigation & Updates
@@ -866,7 +866,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
         config_model_name.change(
             fn=callbacks.handle_model_change,
             inputs=[provider_selector, config_model_name, temperature],
-            outputs=[temperature, top_k, include_thoughts_checkbox],
+            outputs=[temperature, top_k, enable_thinking_checkbox],
             queue=False,
         )
 

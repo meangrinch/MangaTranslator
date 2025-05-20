@@ -85,10 +85,12 @@ def _call_llm_endpoint(
             if not api_key:
                 raise ValueError("Gemini API key is missing.")
             generation_config = {"temperature": temperature, "topP": top_p, "topK": top_k, "maxOutputTokens": 2048}
-            # Conditionally add thinkingConfig for the specific model
-            if model_name == "gemini-2.5-flash-preview-04-17" and config.include_thoughts:
-                generation_config["thinkingConfig"] = {"includeThoughts": True}
-                log_message("Including thoughts for gemini-2.5-flash-preview-04-17", verbose=debug)
+            # Conditionally add thinkingConfig for specific models
+            if "gemini-2.5-flash" in model_name and config.enable_thinking:
+                log_message(f"Including thoughts for {model_name} (thinkingBudget: default)", verbose=debug)
+            elif "gemini-2.5-flash" in model_name and not config.enable_thinking:
+                generation_config["thinkingConfig"] = {"thinkingBudget": 0}
+                log_message(f"Not including thoughts for {model_name} (thinkingBudget: 0)", verbose=debug)
 
             return call_gemini_endpoint(
                 api_key=api_key,
@@ -346,9 +348,10 @@ Extracted {input_language} Text:
 ---
 
 Provide your response in this *exact* format, with each translation on a new line:
-1: [Translation for bubble 1 with styling]
+1: [Translation for bubble 1]
+2: [Translation for bubble 2]
 ...
-{num_bubbles}: [Translation for bubble {num_bubbles} with styling]
+{num_bubbles}: [Translation for bubble {num_bubbles}]
 
 For any extraction labeled as "[OCR FAILED]", output exactly "[OCR FAILED]" for that number. Do not attempt to translate it.
 Do not include any other text or explanations in your response."""  # noqa
@@ -402,6 +405,7 @@ For each individual speech bubble image:
 
 Provide your response in this *exact* format, with each translation on a new line:
 1: [Translation for bubble 1]
+2: [Translation for bubble 2]
 ...
 {num_bubbles}: [Translation for bubble {num_bubbles}]
 

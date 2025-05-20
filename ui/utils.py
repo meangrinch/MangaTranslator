@@ -234,7 +234,7 @@ def update_translation_ui(provider: str, current_temp: float):
     top_k_update = gr.update(interactive=top_k_interactive)
 
     # Initially hide the thoughts checkbox when provider changes; model change will handle showing it
-    include_thoughts_update = gr.update(visible=False)
+    enable_thinking_update = gr.update(visible=False)
 
     return (
         gemini_visible_update,
@@ -246,7 +246,7 @@ def update_translation_ui(provider: str, current_temp: float):
         model_update,
         temp_update,
         top_k_update,
-        include_thoughts_update,
+        enable_thinking_update,
     )
 
 
@@ -278,11 +278,11 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
 
     top_k_update = gr.update(interactive=top_k_interactive)
 
-    # Determine visibility for the include_thoughts checkbox
-    is_flash_model = provider == "Gemini" and model_name == "gemini-2.5-flash-preview-04-17"
-    include_thoughts_update = gr.update(visible=is_flash_model)
+    # Determine visibility for the enable_thinking checkbox
+    is_flash_model = provider == "Gemini" and "gemini-2.5-flash" in model_name
+    enable_thinking_update = gr.update(visible=is_flash_model)
 
-    return temp_update, top_k_update, include_thoughts_update
+    return temp_update, top_k_update, enable_thinking_update
 
 
 def switch_settings_view(selected_group_index: int, setting_groups: List[gr.Group], nav_buttons: List[gr.Button]):
