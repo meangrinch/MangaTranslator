@@ -86,7 +86,7 @@ class UIGeneralSettings:
 
     verbose: bool = False
     cleaning_only: bool = False
-    enable_thinking: bool = False
+    enable_thinking: bool = True
 
 
 @dataclass
