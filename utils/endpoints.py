@@ -434,7 +434,7 @@ def call_anthropic_endpoint(
                     error_reason += " (Check API key)"
                 elif status_code == 403:
                     error_reason += " (Permission denied, check API key/plan)"
-
+                log_message(f"Anthropic API HTTP Error: {error_reason}", always_print=True)
                 raise RuntimeError(f"Anthropic API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
