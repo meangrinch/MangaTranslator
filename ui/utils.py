@@ -9,7 +9,6 @@ from PIL import Image
 from .settings_manager import get_saved_settings, PROVIDER_MODELS, DEFAULT_SETTINGS
 from utils.logging import log_message
 
-# --- Constants ---
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
 
@@ -18,7 +17,6 @@ OPENROUTER_MODEL_CACHE = {"models": None}
 COMPATIBLE_MODEL_CACHE = {"url": None, "models": None}
 
 
-# --- Resource Discovery ---
 def get_available_models(models_directory: Path) -> List[str]:
     """Get list of available YOLO models in the models directory"""
     model_files = list(models_directory.glob("*.pt"))
@@ -43,7 +41,6 @@ def get_available_font_packs(fonts_base_dir: Path) -> Tuple[List[str], Optional[
     return font_dirs, default_font
 
 
-# --- UI Input Validation ---
 def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     """Validate API key format based on provider."""
     if not api_key and provider != "OpenAI-compatible":
@@ -108,7 +105,6 @@ def validate_font_directory(font_dir: Path) -> tuple[bool, str]:
     return True, f"Found {len(font_files)} font files in directory"
 
 
-# --- UI Update Functions ---
 def update_model_dropdown(models_dir: Path):
     """Update the YOLO model dropdown list"""
     try:
@@ -216,7 +212,6 @@ def update_translation_ui(provider: str, current_temp: float):
     openai_visible_update = gr.update(visible=(provider == "OpenAI"))
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
-    # Visibility updates for the new fields
     openai_compatible_url_visible_update = gr.update(visible=(provider == "OpenAI-compatible"))
     openai_compatible_key_visible_update = gr.update(visible=(provider == "OpenAI-compatible"))
     if provider == "OpenRouter" or provider == "OpenAI-compatible":
@@ -224,16 +219,13 @@ def update_translation_ui(provider: str, current_temp: float):
     else:
         model_update = gr.update(choices=models, value=selected_model)
 
-    # Adjust temperature slider max and potentially clamp current value
     temp_max = 1.0 if provider == "Anthropic" else 2.0
     new_temp_value = min(current_temp, temp_max)
     temp_update = gr.update(maximum=temp_max, value=new_temp_value)
 
-    # Adjust top_k interactivity
     top_k_interactive = provider != "OpenAI"
     top_k_update = gr.update(interactive=top_k_interactive)
 
-    # Initially hide the thoughts checkbox when provider changes; model change will handle showing it
     enable_thinking_update = gr.update(visible=False)
 
     return (
@@ -263,7 +255,6 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
     elif provider == "OpenAI":
         top_k_interactive = False
     elif provider == "OpenRouter":
-        # Assume OpenAI/Anthropic models on OpenRouter have same limitations
         is_openai_model = model_name and ("openai/" in model_name or model_name.startswith("gpt-"))
         is_anthropic_model = model_name and ("anthropic/" in model_name or model_name.startswith("claude-"))
         if is_anthropic_model:
@@ -300,7 +291,6 @@ def switch_settings_view(selected_group_index: int, setting_groups: List[gr.Grou
     return updates
 
 
-# --- API Fetching for UI ---
 def fetch_and_update_openrouter_models():
     """Fetches vision-capable models from OpenRouter API and updates dropdown."""
     global OPENROUTER_MODEL_CACHE
@@ -404,7 +394,7 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
 
         all_models_data = data.get("data", [])
         if not isinstance(all_models_data, list):
-            # Some endpoints (like Ollama) might just return a list of models directly under a 'models' key
+            # Some endpoints (like Ollama) return a list of models directly under a 'models' key
             if isinstance(data.get("models"), list):
                 all_models_data = data["models"]
             else:
@@ -420,7 +410,6 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
 
         COMPATIBLE_MODEL_CACHE["url"] = url
         COMPATIBLE_MODEL_CACHE["models"] = fetched_models
-        # Timestamp removed for session caching
         log_message(f"Fetched {len(fetched_models)} OpenAI-Compatible models from {url}.", verbose=verbose)
         if not fetched_models:
             gr.Warning(f"No models found at {fetch_url}. Check the URL and API key (if required).")

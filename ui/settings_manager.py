@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Dict, Any, List
 from utils.logging import log_message
 
-# --- Constants ---
 CONFIG_FILE = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "MangaTranslator" / "config.json"
 
 PROVIDER_MODELS: Dict[str, List[str]] = {
@@ -93,7 +92,6 @@ DEFAULT_BATCH_SETTINGS = {
 }
 
 
-# --- Functions ---
 def save_config(incoming_settings: Dict[str, Any]):
     """Save all settings to config file, updating provider_models and cleaning old keys."""
     try:

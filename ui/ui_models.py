@@ -240,7 +240,6 @@ def map_ui_to_backend_config(
 ) -> MangaTranslatorConfig:
     """Maps the UIConfigState to the backend MangaTranslatorConfig."""
 
-    # Resolve paths and select operation-specific settings
     yolo_path = models_dir / ui_state.yolo_model if ui_state.yolo_model else ""
     font_pack_name = ui_state.batch_font_pack if is_batch else ui_state.font_pack
     font_dir_path = fonts_base_dir / font_pack_name if font_pack_name else ""
@@ -295,7 +294,6 @@ def map_ui_to_backend_config(
         png_compression=ui_state.output.png_compression,
     )
 
-    # Assemble the main backend config
     backend_config = MangaTranslatorConfig(
         yolo_model_path=str(yolo_path),
         verbose=ui_state.general.verbose,

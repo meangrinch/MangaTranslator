@@ -178,7 +178,6 @@ def call_openai_endpoint(
     url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-    # Transform parts to OpenAI messages format
     messages = []
     user_content = []
     if system_prompt:
@@ -193,7 +192,6 @@ def call_openai_endpoint(
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
-    # Map generation config
     payload = {
         "model": model_name,
         "messages": messages,
@@ -323,7 +321,6 @@ def call_anthropic_endpoint(
     url = "https://api.anthropic.com/v1/messages"
     headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
 
-    # Transform parts to Anthropic messages format
     messages = []
     user_prompt_text = user_prompt_part["text"]
     user_content = []
@@ -350,7 +347,6 @@ def call_anthropic_endpoint(
 
     messages.append({"role": "user", "content": user_content})
 
-    # Map generation config
     temp = generation_config.get("temperature")
     clamped_temp = min(temp, 1.0) if temp is not None else None
 

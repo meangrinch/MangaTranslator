@@ -104,7 +104,6 @@ def translate_manga_logic(
         os.makedirs(output_base_dir, exist_ok=True)
         save_path = output_base_dir / f"MangaTranslator_{timestamp}{output_ext}"
 
-        # Set image mode based on output format in the config
         if output_ext in [".jpg", ".jpeg"]:
             config.output.image_mode = "RGB"
         else:
@@ -214,7 +213,6 @@ def process_batch_logic(
             if not input_dir_or_files:
                 raise ValueError("No files provided for batch processing.")
 
-            # Create a temporary directory to copy valid files into
             temp_dir_path_obj = tempfile.TemporaryDirectory()
             temp_dir_path = Path(temp_dir_path_obj.name)
 

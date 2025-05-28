@@ -280,7 +280,7 @@ def _parse_styled_segments(text: str) -> List[Tuple[str, str]]:
     return [(txt, style) for txt, style in segments if txt]
 
 
-# --- Skia/HarfBuzz Rendering Implementation ---
+# --- Skia/HarfBuzz Rendering ---
 def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia.Typeface], Optional[hb.Face]]:
     """Loads font data, Skia Typeface, and HarfBuzz Face, using caching."""
     if font_path not in _font_data_cache:

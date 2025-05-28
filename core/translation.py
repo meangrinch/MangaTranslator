@@ -85,7 +85,7 @@ def _call_llm_endpoint(
             if not api_key:
                 raise ValueError("Gemini API key is missing.")
             generation_config = {"temperature": temperature, "topP": top_p, "topK": top_k, "maxOutputTokens": 2048}
-            # Conditionally add thinkingConfig for specific models
+            # Conditionally add thinkingConfig for specific Gemini models
             if "gemini-2.5-flash" in model_name and config.enable_thinking:
                 log_message(f"Including thoughts for {model_name} (thinkingBudget: default)", verbose=debug)
             elif "gemini-2.5-flash" in model_name and not config.enable_thinking:

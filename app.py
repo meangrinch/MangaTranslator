@@ -27,7 +27,6 @@ sys.excepthook = custom_except_hook
 # Helps prevent fragmentation OOM errors on some GPUs
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
-# --- Main Application Setup ---
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MangaTranslator")
     parser.add_argument("--models", type=str, default="./models", help="Directory containing YOLO model files")

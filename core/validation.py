@@ -5,7 +5,6 @@ from core.models import TranslationConfig, RenderingConfig
 from utils.exceptions import ValidationError
 
 
-# --- Core Input Validation ---
 def get_available_yolo_models(models_directory: Path) -> List[str]:
     """Helper to get list of available YOLO models."""
     if not models_directory.is_dir():

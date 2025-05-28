@@ -28,7 +28,6 @@ ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
 
 
-# --- Helper Functions ---
 def _format_single_success_message(
     result_image: Image.Image,
     backend_config: MangaTranslatorConfig,
@@ -205,7 +204,6 @@ def _format_batch_success_message(
     return "".join(msg_parts)
 
 
-# --- Gradio Event Callbacks ---
 def handle_translate_click(
     *args: Any,
     models_dir: Path,
@@ -783,8 +781,8 @@ def handle_output_format_change(output_format_value: str):
     is_jpeg = output_format_value == "jpeg"
     is_png = output_format_value == "png"
 
-    jpeg_interactive = not is_png  # Interactive if format is 'auto' or 'jpeg'
-    png_interactive = not is_jpeg  # Interactive if format is 'auto' or 'png'
+    jpeg_interactive = not is_png
+    png_interactive = not is_jpeg
 
     return gr.update(interactive=jpeg_interactive), gr.update(interactive=png_interactive)
 
@@ -804,7 +802,7 @@ def handle_app_load(provider: str, url: str, key: Optional[str]):
     return utils.initial_dynamic_fetch(provider, url, key)
 
 
-# --- Button/Status Update Callbacks (Minor UI Polish) ---
+# --- Button/Status Update Callbacks ---
 def update_button_state(processing: bool, button_text_processing: str, button_text_idle: str):
     """Generic function to update button text and interactivity."""
     return gr.update(interactive=not processing, value=button_text_processing if processing else button_text_idle)
@@ -812,4 +810,4 @@ def update_button_state(processing: bool, button_text_processing: str, button_te
 
 def trigger_status_fade(status_element_id: str):
     """Returns JS code to fade out a status message element after a delay."""
-    return None  # Python side doesn't need to return anything for this JS trigger
+    return None

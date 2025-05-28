@@ -964,7 +964,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             fn=callbacks.handle_app_load,
             inputs=[provider_selector, openai_compatible_url_input, openai_compatible_api_key_input],
             outputs=[config_model_name],
-            queue=False,  # Run immediately on load
+            queue=False,
         )
 
     return app
