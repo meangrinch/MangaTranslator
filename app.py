@@ -14,9 +14,7 @@ def custom_except_hook(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, gr.Error) or issubclass(exc_type, gr.CancelledError):
         print(f"Gradio-handled Error/Cancellation: {exc_value}")
     else:
-        # For other exceptions, print the full traceback
         import traceback
-
         print("--- Uncaught Exception ---")
         traceback.print_exception(exc_type, exc_value, exc_traceback)
         print("--------------------------")
@@ -33,7 +31,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fonts", type=str, default="./fonts", help="Base directory containing font pack subdirectories"
     )
-    parser.add_argument("--open-browser", action="store_true", help="Automatically open the default web browser")
+    parser.add_argument("--open-browser", action="store_true", help="Automatically open in the default web browser")
     parser.add_argument("--port", type=int, default=7676, help="Port number for the web UI")
     parser.add_argument("--cpu", action="store_true", help="Force CPU usage even if CUDA is available")
     args = parser.parse_args()

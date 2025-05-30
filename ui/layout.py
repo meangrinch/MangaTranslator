@@ -104,7 +104,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
 
         gr.Markdown("# MangaTranslator")
 
-        # Initial data loading (moved from app.py global scope)
         model_choices = utils.get_available_models(models_dir)
         font_choices, initial_default_font = utils.get_available_font_packs(fonts_base_dir)
         saved_settings = settings_manager.get_saved_settings()
@@ -130,7 +129,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
         initial_provider = saved_settings.get("provider", settings_manager.DEFAULT_SETTINGS["provider"])
         initial_model_name = saved_settings.get("model_name")
 
-        # Initial model choices for dropdown (dynamic ones updated on load)
         if initial_provider == "OpenRouter" or initial_provider == "OpenAI-compatible":
             initial_models_choices = [initial_model_name] if initial_model_name else []
         else:
@@ -155,8 +153,8 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                             input_language = gr.Dropdown(
                                 [
                                     "Japanese",
-                                    "Chinese",
                                     "Korean",
+                                    "Chinese",
                                     "Spanish",
                                     "French",
                                     "German",
@@ -176,9 +174,9 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                     "Italian",
                                     "Portuguese",
                                     "Russian",
-                                    "Japanese",
                                     "Chinese",
                                     "Korean",
+                                    "Japanese",
                                 ],
                                 label="Target Language",
                                 value=saved_settings.get("output_language", "English"),
@@ -959,7 +957,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             fn=None, inputs=None, outputs=None, queue=False
         )
 
-        # App Load Action (Fetch dynamic models)
         app.load(
             fn=callbacks.handle_app_load,
             inputs=[provider_selector, openai_compatible_url_input, openai_compatible_api_key_input],
