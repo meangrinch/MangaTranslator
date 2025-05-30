@@ -135,7 +135,7 @@ Place custom YOLO models (`.pt`/`.onnx`) in `models/` (if using web UI). Must su
 
 ## License
 
-GPL-3.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE).
 
 ## Author
 
