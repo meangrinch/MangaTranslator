@@ -164,6 +164,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 ],
                                 label="Source Language",
                                 value=saved_settings.get("input_language", "Japanese"),
+                                allow_custom_value=True,
                             )
                             output_language = gr.Dropdown(
                                 [
@@ -180,6 +181,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 ],
                                 label="Target Language",
                                 value=saved_settings.get("output_language", "English"),
+                                allow_custom_value=True,
                             )
                     with gr.Column(scale=1):
                         output_image = gr.Image(
@@ -220,6 +222,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 ],
                                 label="Source Language",
                                 value=saved_settings.get("batch_input_language", "Japanese"),
+                                allow_custom_value=True,
                             )
                             batch_output_language = gr.Dropdown(
                                 [
@@ -236,6 +239,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 ],
                                 label="Target Language",
                                 value=saved_settings.get("batch_output_language", "English"),
+                                allow_custom_value=True,
                             )
                     with gr.Column(scale=1):
                         batch_output_gallery = gr.Gallery(
