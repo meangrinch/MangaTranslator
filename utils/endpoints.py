@@ -712,7 +712,7 @@ def call_openai_compatible_endpoint(
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
             log_message(
-                f"Making OpenAI-compatible API request to {url} (Attempt {attempt + 1}/{max_retries + 1})...",
+                f"Making OpenAI-Compatible API request to {url} (Attempt {attempt + 1}/{max_retries + 1})...",
                 verbose=debug,
             )
             # print(f"Payload: {json.dumps(payload, indent=2)}")

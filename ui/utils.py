@@ -43,9 +43,9 @@ def get_available_font_packs(fonts_base_dir: Path) -> Tuple[List[str], Optional[
 
 def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     """Validate API key format based on provider."""
-    if not api_key and provider != "OpenAI-compatible":
+    if not api_key and provider != "OpenAI-Compatible":
         return False, f"{provider} API key is required"
-    elif not api_key and provider == "OpenAI-compatible":
+    elif not api_key and provider == "OpenAI-Compatible":
         return True, f"{provider} API key is optional and not provided."  # Valid state
 
     if provider == "Gemini" and not (api_key.startswith("AI") and len(api_key) == 39):
@@ -56,7 +56,7 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         return False, "Invalid Anthropic API key format (should start with 'sk-ant-')"
     if provider == "OpenRouter" and not (api_key.startswith("sk-or-") and len(api_key) > 50):
         return False, "Invalid OpenRouter API key format (should start with 'sk-or-')"
-    # No specific format check for OpenAI-compatible keys
+    # No specific format check for OpenAI-Compatible keys
 
     return True, f"{provider} API key format looks valid"
 
@@ -212,9 +212,10 @@ def update_translation_ui(provider: str, current_temp: float):
     openai_visible_update = gr.update(visible=(provider == "OpenAI"))
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
-    openai_compatible_url_visible_update = gr.update(visible=(provider == "OpenAI-compatible"))
-    openai_compatible_key_visible_update = gr.update(visible=(provider == "OpenAI-compatible"))
-    if provider == "OpenRouter" or provider == "OpenAI-compatible":
+    # Visibility updates for the new fields
+    openai_compatible_url_visible_update = gr.update(visible=(provider == "OpenAI-Compatible"))
+    openai_compatible_key_visible_update = gr.update(visible=(provider == "OpenAI-Compatible"))
+    if provider == "OpenRouter" or provider == "OpenAI-Compatible":
         model_update = gr.update(value=remembered_model, choices=[remembered_model] if remembered_model else [])
     else:
         model_update = gr.update(choices=models, value=selected_model)
@@ -261,7 +262,7 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
             temp_max = 1.0
         if is_openai_model or is_anthropic_model:
             top_k_interactive = False
-    elif provider == "OpenAI-compatible":
+    elif provider == "OpenAI-Compatible":
         pass
 
     new_temp_value = min(current_temp, temp_max)
@@ -358,7 +359,7 @@ def fetch_and_update_openrouter_models():
 
 
 def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
-    """Fetches models from a generic OpenAI-compatible endpoint and updates dropdown."""
+    """Fetches models from a generic OpenAI-Compatible endpoint and updates dropdown."""
     global COMPATIBLE_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
     if not url or not url.startswith(("http://", "https://")):
@@ -372,7 +373,7 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
         cached_models = COMPATIBLE_MODEL_CACHE["models"]
         saved_settings = get_saved_settings()
         provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
-        remembered_comp_model = provider_models_dict.get("OpenAI-compatible")
+        remembered_comp_model = provider_models_dict.get("OpenAI-Compatible")
         selected_comp_model = (
             remembered_comp_model
             if remembered_comp_model in cached_models
@@ -416,7 +417,7 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
 
         saved_settings = get_saved_settings()
         provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
-        remembered_comp_model = provider_models_dict.get("OpenAI-compatible")
+        remembered_comp_model = provider_models_dict.get("OpenAI-Compatible")
         selected_comp_model = (
             remembered_comp_model
             if remembered_comp_model in fetched_models
@@ -431,7 +432,7 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
         return gr.update(choices=[], value=None)
     except (json.JSONDecodeError, ValueError, KeyError) as e:
         error_detail = (
-            "Check if the URL points to a valid OpenAI-compatible '/v1' "
+            "Check if the URL points to a valid OpenAI-Compatible '/v1' "
             "or '/api/tags' (Ollama) endpoint."
         )
         error_msg = f"Error parsing response from {url}: {e}. {error_detail}"
@@ -453,7 +454,7 @@ def initial_dynamic_fetch(provider: str, url: str, key: Optional[str]):
         if verbose_load:
             print("Initial load: OpenRouter selected, fetching models...")
         return fetch_and_update_openrouter_models()
-    elif provider == "OpenAI-compatible":
+    elif provider == "OpenAI-Compatible":
         if verbose_load:
             print("Initial load: OpenAI-Compatible selected, fetching models...")
         return fetch_and_update_compatible_models(url, key)

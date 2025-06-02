@@ -35,7 +35,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "claude-3-opus-latest",
     ],
     "OpenRouter": [],
-    "OpenAI-compatible": [],
+    "OpenAI-Compatible": [],
 }
 
 DEFAULT_SETTINGS = {
@@ -52,7 +52,7 @@ DEFAULT_SETTINGS = {
         "OpenAI": PROVIDER_MODELS["OpenAI"][0] if PROVIDER_MODELS["OpenAI"] else None,
         "Anthropic": PROVIDER_MODELS["Anthropic"][0] if PROVIDER_MODELS["Anthropic"] else None,
         "OpenRouter": None,
-        "OpenAI-compatible": None,
+        "OpenAI-Compatible": None,
     },
     "input_language": "Japanese",
     "output_language": "English",
@@ -207,7 +207,7 @@ def get_saved_settings() -> Dict[str, Any]:
             provider_models_dict = settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
             saved_model_for_provider = provider_models_dict.get(loaded_provider)
 
-            if loaded_provider == "OpenRouter" or loaded_provider == "OpenAI-compatible":
+            if loaded_provider == "OpenRouter" or loaded_provider == "OpenAI-Compatible":
                 settings["model_name"] = saved_model_for_provider
             else:
                 valid_models = PROVIDER_MODELS.get(loaded_provider, [])
@@ -234,7 +234,7 @@ def get_saved_settings() -> Dict[str, Any]:
     except json.JSONDecodeError:
         log_message(f"Warning: Could not decode config file at {CONFIG_FILE}. Using defaults.", always_print=True)
         default_provider = DEFAULT_SETTINGS["provider"]
-        if default_provider != "OpenRouter" and default_provider != "OpenAI-compatible":
+        if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
             valid_models = PROVIDER_MODELS.get(default_provider, [])
             settings["model_name"] = valid_models[0] if valid_models else None
         else:
@@ -242,7 +242,7 @@ def get_saved_settings() -> Dict[str, Any]:
     except Exception as e:
         log_message(f"Warning: Error reading config file {CONFIG_FILE}: {e}. Using defaults.", always_print=True)
         default_provider = DEFAULT_SETTINGS["provider"]
-        if default_provider != "OpenRouter" and default_provider != "OpenAI-compatible":
+        if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
             valid_models = PROVIDER_MODELS.get(default_provider, [])
             settings["model_name"] = valid_models[0] if valid_models else None
         else:

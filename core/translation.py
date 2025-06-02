@@ -141,7 +141,7 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 debug=debug,
             )
-        elif provider == "OpenAI-compatible":
+        elif provider == "OpenAI-Compatible":
             base_url = config.openai_compatible_url
             api_key = config.openai_compatible_api_key  # Optional
             if not base_url:

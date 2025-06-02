@@ -129,7 +129,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
         initial_provider = saved_settings.get("provider", settings_manager.DEFAULT_SETTINGS["provider"])
         initial_model_name = saved_settings.get("model_name")
 
-        if initial_provider == "OpenRouter" or initial_provider == "OpenAI-compatible":
+        if initial_provider == "OpenRouter" or initial_provider == "OpenAI-Compatible":
             initial_models_choices = [initial_model_name] if initial_model_name else []
         else:
             initial_models_choices = settings_manager.PROVIDER_MODELS.get(initial_provider, [])
@@ -450,24 +450,24 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                      "environment variable.",
                             )
                             openai_compatible_url_input = gr.Textbox(
-                                label="OpenAI-compatible URL",
+                                label="OpenAI-Compatible URL",
                                 placeholder="Enter Base URL (e.g., http://localhost:11434/v1)",
                                 type="text",
                                 value=saved_settings.get(
                                     "openai_compatible_url", settings_manager.DEFAULT_SETTINGS["openai_compatible_url"]
                                 ),
                                 show_copy_button=False,
-                                visible=(config_initial_provider == "OpenAI-compatible"),
+                                visible=(config_initial_provider == "OpenAI-Compatible"),
                                 elem_id="openai_compatible_url_input",
-                                info="The base URL of your OpenAI-compatible API endpoint.",
+                                info="The base URL of your OpenAI-Compatible API endpoint.",
                             )
                             openai_compatible_api_key_input = gr.Textbox(
-                                label="OpenAI-compatible API Key (Optional)",
+                                label="OpenAI-Compatible API Key (Optional)",
                                 placeholder="Enter API key if required",
                                 type="password",
                                 value=saved_settings.get("openai_compatible_api_key", ""),
                                 show_copy_button=False,
-                                visible=(config_initial_provider == "OpenAI-compatible"),
+                                visible=(config_initial_provider == "OpenAI-Compatible"),
                                 elem_id="openai_compatible_api_key_input",
                                 info="Stored locally in config file. Can also be set via "
                                      "OPENAI_COMPATIBLE_API_KEY environment variable.",
@@ -857,7 +857,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.
             fn=lambda prov, url, key: (
                 utils.fetch_and_update_compatible_models(url, key)
-                if prov == "OpenAI-compatible"
+                if prov == "OpenAI-Compatible"
                 else (utils.fetch_and_update_openrouter_models() if prov == "OpenRouter" else gr.update())
             ),
             inputs=[provider_selector, openai_compatible_url_input, openai_compatible_api_key_input],
