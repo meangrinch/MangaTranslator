@@ -338,7 +338,7 @@ Do not include translations, explanations, or any other text in your response.""
 Then, translate the following extracted speech bubble texts (numbered {1} to {num_bubbles}) from {input_language} to {output_language}, choosing words and sentence structures that accurately convey the original's tone and sound authentic for that specific context in the target language.
 Decide if styling should be applied using these markdown-like markers:
 - Italic (`*text*`): Use for thoughts, flashbacks, distant sounds, or dialogue via devices.
-- Bold (`**text**`): Use for SFX, shouting, ans timestamps.
+- Bold (`**text**`): Use for SFX, shouting, and timestamps.
 - Bold Italic (`***text***`): Use for loud SFX/dialogue in flashbacks or via devices.
 - Use regular text otherwise. You can style parts of text if needed (e.g., "He said **'Stop!'**").
 
@@ -399,7 +399,7 @@ For each individual speech bubble image:
 1. Extract the {input_language} text and translate it to {output_language}, choosing words and sentence structures that accurately convey the original's tone and sound authentic for that specific context in the target language.
 2. Decide if styling should be applied to the translated text using these markdown-like markers:
     - Italic (`*text*`): Use for thoughts, flashbacks, distant sounds, or dialogue via devices.
-    - Bold (`**text**`): Use for SFX, shouting, ans timestamps.
+    - Bold (`**text**`): Use for SFX, shouting, and timestamps.
     - Bold Italic (`***text***`): Use for loud SFX/dialogue in flashbacks or via devices.
     - Use regular text otherwise. You can style parts of text if needed (e.g., "He said **'Stop!'**").
 
