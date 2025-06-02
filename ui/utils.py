@@ -212,7 +212,6 @@ def update_translation_ui(provider: str, current_temp: float):
     openai_visible_update = gr.update(visible=(provider == "OpenAI"))
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
-    # Visibility updates for the new fields
     openai_compatible_url_visible_update = gr.update(visible=(provider == "OpenAI-Compatible"))
     openai_compatible_key_visible_update = gr.update(visible=(provider == "OpenAI-Compatible"))
     if provider == "OpenRouter" or provider == "OpenAI-Compatible":
