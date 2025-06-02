@@ -66,7 +66,7 @@ def _format_single_success_message(
             param_notes = " (Temp clamped <= 1.0, Top-K N/A)"
         else:
             llm_params_str += f", Top-K={top_k_val}"
-    elif provider == "OpenAI-compatible":
+    elif provider == "OpenAI-Compatible":
         llm_params_str += f", Top-K={top_k_val}"
     llm_params_str += param_notes
 
@@ -150,7 +150,7 @@ def _format_batch_success_message(
             param_notes = " (Temp clamped <= 1.0, Top-K N/A)"
         else:
             llm_params_str += f", Top-K={top_k_val}"
-    elif provider == "OpenAI-compatible":
+    elif provider == "OpenAI-Compatible":
         param_notes = " (Top-K N/A)"
     llm_params_str += param_notes
 
@@ -269,14 +269,14 @@ def handle_translate_click(
             api_key_to_validate = anthropic_api_key
         elif provider_selector == "OpenRouter":
             api_key_to_validate = openrouter_api_key
-        elif provider_selector == "OpenAI-compatible":
+        elif provider_selector == "OpenAI-Compatible":
             api_key_to_validate = openai_compatible_api_key_input
 
         api_valid, api_msg = utils.validate_api_key(api_key_to_validate, provider_selector)
-        if not api_valid and not (provider_selector == "OpenAI-compatible" and not api_key_to_validate):
+        if not api_valid and not (provider_selector == "OpenAI-Compatible" and not api_key_to_validate):
             raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
 
-        if provider_selector == "OpenAI-compatible":
+        if provider_selector == "OpenAI-Compatible":
             if not openai_compatible_url_input:
                 raise gr.Error(f"{ERROR_PREFIX}OpenAI-Compatible URL is required.")
             if not openai_compatible_url_input.startswith(("http://", "https://")):
@@ -450,14 +450,14 @@ def handle_batch_click(
             api_key_to_validate = anthropic_api_key
         elif provider_selector == "OpenRouter":
             api_key_to_validate = openrouter_api_key
-        elif provider_selector == "OpenAI-compatible":
+        elif provider_selector == "OpenAI-Compatible":
             api_key_to_validate = openai_compatible_api_key_input
 
         api_valid, api_msg = utils.validate_api_key(api_key_to_validate, provider_selector)
-        if not api_valid and not (provider_selector == "OpenAI-compatible" and not api_key_to_validate):
+        if not api_valid and not (provider_selector == "OpenAI-Compatible" and not api_key_to_validate):
             raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
 
-        if provider_selector == "OpenAI-compatible":
+        if provider_selector == "OpenAI-Compatible":
             if not openai_compatible_url_input:
                 raise gr.Error(f"{ERROR_PREFIX}OpenAI-Compatible URL is required.")
             if not openai_compatible_url_input.startswith(("http://", "https://")):
@@ -703,7 +703,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     default_model_name = settings_manager.DEFAULT_SETTINGS["provider_models"].get(default_provider)
     default_ui_state.llm_settings.model_name = default_model_name
 
-    if default_provider == "OpenRouter" or default_provider == "OpenAI-compatible":
+    if default_provider == "OpenRouter" or default_provider == "OpenAI-Compatible":
         default_models_choices = [default_model_name] if default_model_name else []
     else:
         default_models_choices = settings_manager.PROVIDER_MODELS.get(default_provider, [])
@@ -712,7 +712,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     openai_visible = default_provider == "OpenAI"
     anthropic_visible = default_provider == "Anthropic"
     openrouter_visible = default_provider == "OpenRouter"
-    compatible_visible = default_provider == "OpenAI-compatible"
+    compatible_visible = default_provider == "OpenAI-Compatible"
     temp_update, top_k_update = utils.update_params_for_model(
         default_provider, default_model_name, default_ui_state.llm_settings.temperature
     )

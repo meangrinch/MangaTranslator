@@ -502,7 +502,7 @@ def main():
         "--provider",
         type=str,
         default="Gemini",
-        choices=["Gemini", "OpenAI", "Anthropic", "OpenRouter", "OpenAI-compatible"],
+        choices=["Gemini", "OpenAI", "Anthropic", "OpenRouter", "OpenAI-Compatible"],
         help="LLM provider to use for translation",
     )
     parser.add_argument(
