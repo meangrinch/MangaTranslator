@@ -15,6 +15,7 @@ def custom_except_hook(exc_type, exc_value, exc_traceback):
         print(f"Gradio-handled Error/Cancellation: {exc_value}")
     else:
         import traceback
+
         print("--- Uncaught Exception ---")
         traceback.print_exception(exc_type, exc_value, exc_traceback)
         print("--------------------------")
