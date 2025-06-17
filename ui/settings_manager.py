@@ -8,22 +8,25 @@ CONFIG_FILE = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "M
 
 PROVIDER_MODELS: Dict[str, List[str]] = {
     "Gemini": [
-        "gemini-2.5-pro-preview-06-05",
-        "gemini-2.5-pro-preview-05-06",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite-preview-06-17",
         "gemini-2.5-flash-preview-05-20",
-        "gemini-2.5-flash-preview-04-17",
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
     ],
     "OpenAI": [
+        "chatgpt-4o-latest",
         "o4-mini",
+        "o3-pro",
         "o3",
         "gpt-4.1",
         "gpt-4.1-mini",
         "gpt-4.1-nano",
-        "o1",
         "gpt-4o",
         "gpt-4o-mini",
+        "o1-pro",
+        "o1",
     ],
     "Anthropic": [
         "claude-opus-4-20250514",

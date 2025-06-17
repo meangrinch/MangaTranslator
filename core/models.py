@@ -37,7 +37,7 @@ class TranslationConfig:
     openrouter_api_key: str = ""
     openai_compatible_url: str = "http://localhost:11434/v1"
     openai_compatible_api_key: Optional[str] = ""
-    model_name: str = "gemini-2.0-flash"
+    model_name: str = "gemini-2.5-flash"
     provider_models: dict[str, Optional[str]] = field(default_factory=dict)
     temperature: float = 0.1
     top_p: float = 0.95
