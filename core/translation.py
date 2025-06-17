@@ -328,10 +328,10 @@ Do not include translations, explanations, or any other text in your response.""
             ocr_failed_indices = set()
             for i, text in enumerate(extracted_texts):
                 if f"[{provider}-OCR:" in text:
-                    formatted_texts_for_prompt.append(f"{i+1}: [OCR FAILED]")
+                    formatted_texts_for_prompt.append(f"{i + 1}: [OCR FAILED]")
                     ocr_failed_indices.add(i)
                 else:
-                    formatted_texts_for_prompt.append(f"{i+1}: {text}")
+                    formatted_texts_for_prompt.append(f"{i + 1}: {text}")
             extracted_text_block = "\n".join(formatted_texts_for_prompt)
 
             translation_prompt = f"""Analyze the full manga/comic page image provided for context ({reading_order_desc} reading direction).
@@ -381,7 +381,7 @@ Do not include any other text or explanations in your response."""  # noqa
                         combined_results.append("[OCR FAILED]")
                     else:
                         log_message(
-                            f"Warning: LLM translated bubble {i+1} despite [OCR FAILED] instruction."
+                            f"Warning: LLM translated bubble {i + 1} despite [OCR FAILED] instruction."
                             f" Using placeholder.",
                             verbose=debug,
                         )
