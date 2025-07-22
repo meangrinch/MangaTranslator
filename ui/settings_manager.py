@@ -10,8 +10,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
     "Gemini": [
         "gemini-2.5-pro",
         "gemini-2.5-flash",
-        "gemini-2.5-flash-lite-preview-06-17",
-        "gemini-2.5-flash-preview-05-20",
+        "gemini-2.5-flash-lite",
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
     ],
@@ -84,7 +83,7 @@ DEFAULT_SETTINGS = {
     "png_compression": 6,
     "output_format": "auto",
     "cleaning_only": False,
-    "enable_thinking": True,  # Specific to Gemini 2.5 Flash
+    "enable_thinking": True,  # Specific to Gemini 2.5 Flash models
 }
 
 DEFAULT_BATCH_SETTINGS = {
