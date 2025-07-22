@@ -50,11 +50,11 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
 
     if provider == "Gemini" and not (api_key.startswith("AI") and len(api_key) == 39):
         return False, "Invalid Gemini API key format (should start with 'AI' and be 39 chars)"
-    if provider == "OpenAI" and not (api_key.startswith("sk-") and len(api_key) > 50):
+    if provider == "OpenAI" and not (api_key.startswith("sk-") and len(api_key) >= 48):
         return False, "Invalid OpenAI API key format (should start with 'sk-')"
-    if provider == "Anthropic" and not (api_key.startswith("sk-ant-") and len(api_key) > 100):
+    if provider == "Anthropic" and not (api_key.startswith("sk-ant-") and len(api_key) >= 100):
         return False, "Invalid Anthropic API key format (should start with 'sk-ant-')"
-    if provider == "OpenRouter" and not (api_key.startswith("sk-or-") and len(api_key) > 50):
+    if provider == "OpenRouter" and not (api_key.startswith("sk-or-") and len(api_key) >= 48):
         return False, "Invalid OpenRouter API key format (should start with 'sk-or-')"
     # No specific format check for OpenAI-Compatible keys
 

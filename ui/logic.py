@@ -204,7 +204,7 @@ def process_batch_logic(
         if gradio_progress is not None:
             gradio_progress(value, desc=desc)
         elif config.verbose:
-            log_message(f"Batch Progress: {desc} [{value*100:.1f}%]", always_print=True)
+            log_message(f"Batch Progress: {desc} [{value * 100:.1f}%]", always_print=True)
 
     temp_dir_path_obj = None
     try:
