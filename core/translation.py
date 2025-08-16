@@ -84,7 +84,15 @@ def _call_llm_endpoint(
             api_key = config.gemini_api_key
             if not api_key:
                 raise ValueError("Gemini API key is missing.")
-            generation_config = {"temperature": temperature, "topP": top_p, "topK": top_k, "maxOutputTokens": 2048}
+            # Reasoning-aware max tokens: Gemini 2.5 series gets 10240 (8192 thinking + 2048 output)
+            is_gemini_25_series = (model_name or "").startswith("gemini-2.5") or "gemini-2.5" in (model_name or "")
+            max_output_tokens = 10240 if is_gemini_25_series else 2048
+            generation_config = {
+                "temperature": temperature,
+                "topP": top_p,
+                "topK": top_k,
+                "maxOutputTokens": max_output_tokens,
+            }
             # Conditionally add thinkingConfig for specific Gemini models
             if "gemini-2.5-flash" in model_name and config.enable_thinking:
                 log_message(f"Including thoughts for {model_name} (thinkingBudget: default)", verbose=debug)
@@ -103,7 +111,19 @@ def _call_llm_endpoint(
             api_key = config.openai_api_key
             if not api_key:
                 raise ValueError("OpenAI API key is missing.")
-            generation_config = {"temperature": temperature, "top_p": top_p, "max_output_tokens": 2048}  # top_k ignored
+            # Reasoning-aware max tokens for OpenAI reasoning models
+            lm = (model_name or "").lower()
+            is_gpt5 = lm.startswith("gpt-5")
+            is_reasoning_capable = is_gpt5 or lm.startswith("o1") or lm.startswith("o3") or lm.startswith("o4-mini")
+            max_output_tokens = 10240 if is_reasoning_capable else 2048
+            generation_config = {
+                "temperature": temperature,
+                "top_p": top_p,
+                "max_output_tokens": max_output_tokens,
+            }  # top_k ignored
+            # Add reasoning effort for applicable OpenAI reasoning models
+            if config.reasoning_effort:
+                generation_config["reasoning_effort"] = config.reasoning_effort
             return call_openai_endpoint(
                 api_key=api_key,
                 model_name=model_name,
@@ -116,7 +136,24 @@ def _call_llm_endpoint(
             if not api_key:
                 raise ValueError("Anthropic API key is missing.")
             clamped_temp = min(temperature, 1.0)  # Clamp temp
-            generation_config = {"temperature": clamped_temp, "top_p": top_p, "top_k": top_k, "max_tokens": 2048}
+            # Reasoning-aware max tokens and thinking toggle for applicable Anthropic models
+            lm = (model_name or "").lower()
+            anthropic_reasoning_prefixes = [
+                "claude-opus-4-1",
+                "claude-opus-4",
+                "claude-sonnet-4",
+                "claude-3-7-sonnet",
+            ]
+            is_anthropic_reasoning_model = any(lm.startswith(p) for p in anthropic_reasoning_prefixes)
+            max_tokens = 10240 if is_anthropic_reasoning_model else 2048
+            generation_config = {
+                "temperature": clamped_temp,
+                "top_p": top_p,
+                "top_k": top_k,
+                "max_tokens": max_tokens,
+                # Flag used by endpoint to include Anthropic thinking payload
+                "anthropic_thinking": bool(config.enable_thinking and is_anthropic_reasoning_model),
+            }
             return call_anthropic_endpoint(
                 api_key=api_key,
                 model_name=model_name,
@@ -128,11 +165,43 @@ def _call_llm_endpoint(
             api_key = config.openrouter_api_key
             if not api_key:
                 raise ValueError("OpenRouter API key is missing.")
+            # Reasoning-aware max tokens for OpenRouter when underlying model is a reasoning model
+            lm = (model_name or "").lower()
+            is_openai_underlying = "openai/" in lm or lm.startswith("gpt-")
+            is_anthropic_underlying = "anthropic/" in lm or lm.startswith("claude-")
+            is_openai_reasoning = (
+                is_openai_underlying
+                and (
+                    lm.endswith("/o4-mini")
+                    or "/o4-mini" in lm
+                    or "/o1" in lm
+                    or "/o3" in lm
+                    or "/gpt-5" in lm
+                    or lm.startswith("o1")
+                    or lm.startswith("o3")
+                    or lm.startswith("o4-mini")
+                    or lm.startswith("gpt-5")
+                )
+            )
+            is_anthropic_reasoning = (
+                is_anthropic_underlying
+                and (
+                    "/claude-opus-4-1" in lm
+                    or "/claude-opus-4" in lm
+                    or "/claude-sonnet-4" in lm
+                    or "/claude-3-7-sonnet" in lm
+                    or lm.startswith("claude-opus-4-1")
+                    or lm.startswith("claude-opus-4")
+                    or lm.startswith("claude-sonnet-4")
+                    or lm.startswith("claude-3-7-sonnet")
+                )
+            )
+            max_tokens = 10240 if (is_openai_reasoning or is_anthropic_reasoning) else 2048
             generation_config = {
                 "temperature": temperature,
                 "top_p": top_p,
                 "top_k": top_k,
-                "max_tokens": 2048,
+                "max_tokens": max_tokens,
             }  # Restrictions handled inside endpoint
             return call_openrouter_endpoint(
                 api_key=api_key,

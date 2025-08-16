@@ -41,11 +41,17 @@ def _format_single_success_message(
     provider = backend_config.translation.provider
     model_name = backend_config.translation.model_name
     thinking_status_str = ""
-    if provider == "Gemini" and "gemini-2.5-flash" in model_name:
-        if backend_config.translation.enable_thinking:
-            thinking_status_str = " (thinking)"
-        else:
-            thinking_status_str = " (no thinking)"
+    if provider == "Gemini" and model_name and "gemini-2.5-flash" in model_name:
+        thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
+    elif provider == "Anthropic" and model_name:
+        lm = model_name.lower()
+        if (
+            lm.startswith("claude-opus-4-1")
+            or lm.startswith("claude-opus-4")
+            or lm.startswith("claude-sonnet-4")
+            or lm.startswith("claude-3-7-sonnet")
+        ):
+            thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
     temp_val = backend_config.translation.temperature
     top_p_val = backend_config.translation.top_p
     top_k_val = backend_config.translation.top_k
@@ -125,11 +131,17 @@ def _format_batch_success_message(
     provider = backend_config.translation.provider
     model_name = backend_config.translation.model_name
     thinking_status_str = ""
-    if provider == "Gemini" and "gemini-2.5-flash" in model_name:
-        if backend_config.translation.enable_thinking:
-            thinking_status_str = " (thinking)"
-        else:
-            thinking_status_str = " (no thinking)"
+    if provider == "Gemini" and model_name and "gemini-2.5-flash" in model_name:
+        thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
+    elif provider == "Anthropic" and model_name:
+        lm = model_name.lower()
+        if (
+            lm.startswith("claude-opus-4-1")
+            or lm.startswith("claude-opus-4")
+            or lm.startswith("claude-sonnet-4")
+            or lm.startswith("claude-3-7-sonnet")
+        ):
+            thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
     temp_val = backend_config.translation.temperature
     top_p_val = backend_config.translation.top_p
     top_k_val = backend_config.translation.top_k
@@ -251,6 +263,7 @@ def handle_translate_click(
         verbose,
         cleaning_only_toggle,
         enable_thinking_checkbox_val,
+        reasoning_effort_val,
     ) = args
     """Callback for the 'Translate' button click."""
     start_time = time.time()
@@ -329,7 +342,10 @@ def handle_translate_click(
                 png_compression=png_compression,
             ),
             general=UIGeneralSettings(
-                verbose=verbose, cleaning_only=cleaning_only_toggle, enable_thinking=enable_thinking_checkbox_val
+                verbose=verbose,
+                cleaning_only=cleaning_only_toggle,
+                enable_thinking=enable_thinking_checkbox_val,
+                reasoning_effort=reasoning_effort_val,
             ),
             input_language=input_language,
             output_language=output_language,
@@ -430,6 +446,7 @@ def handle_batch_click(
         verbose,
         cleaning_only_toggle,
         enable_thinking_checkbox_val,
+        reasoning_effort_val,
     ) = args
     """Callback for the 'Start Batch Translating' button click."""
     progress(0, desc="Starting batch process...")
@@ -510,7 +527,10 @@ def handle_batch_click(
                 png_compression=png_compression,
             ),
             general=UIGeneralSettings(
-                verbose=verbose, cleaning_only=cleaning_only_toggle, enable_thinking=enable_thinking_checkbox_val
+                verbose=verbose,
+                cleaning_only=cleaning_only_toggle,
+                enable_thinking=enable_thinking_checkbox_val,
+                reasoning_effort=reasoning_effort_val,
             ),
             batch_input_language=batch_input_language,
             batch_output_language=batch_output_language,
@@ -614,6 +634,7 @@ def handle_save_config_click(*args: Any) -> str:
         b_out_lang,
         b_font,
         enable_thinking_val,
+        reasoning_effort_val,
     ) = args
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
@@ -660,7 +681,12 @@ def handle_save_config_click(*args: Any) -> str:
             jpeg_quality=jq,
             png_compression=pngc,
         ),
-        general=UIGeneralSettings(verbose=verb, cleaning_only=cleaning_only_val, enable_thinking=enable_thinking_val),
+        general=UIGeneralSettings(
+            verbose=verb,
+            cleaning_only=cleaning_only_val,
+            enable_thinking=enable_thinking_val,
+            reasoning_effort=reasoning_effort_val,
+        ),
         input_language=s_in_lang,
         output_language=s_out_lang,
         font_pack=s_font,
@@ -723,6 +749,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     enable_thinking_visible = (
         default_provider == "Gemini" and "gemini-2.5-flash" in default_model_name
     )
+    reasoning_visible = default_provider == "OpenAI"
 
     return [
         gr.update(value=default_ui_state.yolo_model),
@@ -766,6 +793,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
         default_ui_state.batch_output_language,
         gr.update(value=default_ui_state.batch_font_pack),
         gr.update(value=default_ui_state.general.enable_thinking, visible=enable_thinking_visible),
+        gr.update(value=default_ui_state.general.reasoning_effort, visible=reasoning_visible),
         "Settings reset to defaults (API keys preserved).",
     ]
 

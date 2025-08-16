@@ -90,7 +90,8 @@ DEFAULT_SETTINGS = {
     "png_compression": 6,
     "output_format": "auto",
     "cleaning_only": False,
-    "enable_thinking": True,  # Specific to Gemini 2.5 Flash models
+    "enable_thinking": True,  # Gemini 2.5 Flash models
+    "reasoning_effort": "medium",  # OpenAI reasoning models; gpt-5 also supports 'minimal'
 }
 
 DEFAULT_BATCH_SETTINGS = {

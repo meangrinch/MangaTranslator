@@ -227,6 +227,8 @@ def update_translation_ui(provider: str, current_temp: float):
     top_k_update = gr.update(interactive=top_k_interactive)
 
     enable_thinking_update = gr.update(visible=False)
+    # Visibility for reasoning effort (OpenAI only)
+    reasoning_effort_visible_update = gr.update(visible=(provider == "OpenAI"))
 
     return (
         gemini_visible_update,
@@ -239,11 +241,12 @@ def update_translation_ui(provider: str, current_temp: float):
         temp_update,
         top_k_update,
         enable_thinking_update,
+        reasoning_effort_visible_update,
     )
 
 
 def update_params_for_model(provider: str, model_name: Optional[str], current_temp: float):
-    """Adjusts temp/top_k sliders based on selected provider/model."""
+    """Adjusts temp/top_k sliders and visibility toggles based on selected provider/model."""
     if not provider:  # Should not happen, but safeguard
         return gr.update(), gr.update()
 
@@ -270,10 +273,46 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
     top_k_update = gr.update(interactive=top_k_interactive)
 
     # Determine visibility for the enable_thinking checkbox
-    is_flash_model = provider == "Gemini" and "gemini-2.5-flash" in model_name
-    enable_thinking_update = gr.update(visible=is_flash_model)
+    is_flash_model = provider == "Gemini" and model_name and "gemini-2.5-flash" in model_name
+    # Anthropic reasoning-capable models for thinking toggle
 
-    return temp_update, top_k_update, enable_thinking_update
+    def _is_anthropic_reasoning_model(name: Optional[str]) -> bool:
+        if not name:
+            return False
+        lower = name.lower()
+        return (
+            lower.startswith("claude-opus-4-1")
+            or lower.startswith("claude-opus-4")
+            or lower.startswith("claude-sonnet-4")
+            or lower.startswith("claude-3-7-sonnet")
+        )
+    is_anthropic_thinking_model = provider == "Anthropic" and _is_anthropic_reasoning_model(model_name)
+    enable_thinking_update = gr.update(visible=is_flash_model or is_anthropic_thinking_model)
+
+    # Determine reasoning-effort dropdown visibility and choices
+    reasoning_visible = False
+    reasoning_choices = ["low", "medium", "high"]
+    if provider == "OpenAI" and model_name:
+        lm = model_name.lower()
+        is_gpt5 = lm.startswith("gpt-5")
+        is_reasoning_capable = is_gpt5 or lm.startswith("o1") or lm.startswith("o3") or lm.startswith("o4-mini")
+        reasoning_visible = is_reasoning_capable
+        if is_gpt5:
+            reasoning_choices = ["minimal", "low", "medium", "high"]
+        else:
+            reasoning_choices = ["low", "medium", "high"]
+
+    # Pick a safe value if saved value not allowed in current choices
+    saved = get_saved_settings()
+    current_val = saved.get("reasoning_effort", "medium")
+    if current_val in reasoning_choices:
+        value = current_val
+    else:
+        value = "low" if "low" in reasoning_choices else reasoning_choices[0]
+
+    reasoning_effort_update = gr.update(visible=reasoning_visible, choices=reasoning_choices, value=value)
+
+    return temp_update, top_k_update, enable_thinking_update, reasoning_effort_update
 
 
 def switch_settings_view(selected_group_index: int, setting_groups: List[gr.Group], nav_buttons: List[gr.Button]):

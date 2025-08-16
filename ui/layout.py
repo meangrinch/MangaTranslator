@@ -480,15 +480,42 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 elem_id="config_model_name",
                                 allow_custom_value=True,
                             )
+                            # Compute initial visibility for enable thinking (Gemini 2.5 Flash and Anthropic reasoning)
+                            _initial_enable_thinking_visible = False
+                            try:
+                                if config_initial_provider == "Gemini" and config_initial_model_name:
+                                    _initial_enable_thinking_visible = "gemini-2.5-flash" in config_initial_model_name
+                                elif config_initial_provider == "Anthropic" and config_initial_model_name:
+                                    lm = config_initial_model_name.lower()
+                                    _initial_enable_thinking_visible = (
+                                        lm.startswith("claude-opus-4-1")
+                                        or lm.startswith("claude-opus-4")
+                                        or lm.startswith("claude-sonnet-4")
+                                        or lm.startswith("claude-3-7-sonnet")
+                                    )
+                            except Exception:
+                                _initial_enable_thinking_visible = False
+
                             enable_thinking_checkbox = gr.Checkbox(
                                 label="Enable Thinking",
                                 value=saved_settings.get("enable_thinking", True),
-                                info="Enables 'thinking' capabilities for Gemini 2.5 Flash models.",
-                                visible=(
-                                    config_initial_provider == "Gemini"
-                                    and "gemini-2.5-flash" in config_initial_model_name
+                                info=(
+                                    "Enables 'thinking' capabilities for Gemini 2.5 Flash (Lite) and Claude "
+                                    "reasoning models."
                                 ),
+                                visible=_initial_enable_thinking_visible,
                                 elem_id="enable_thinking_checkbox",
+                            )
+                            reasoning_effort_dropdown = gr.Dropdown(
+                                choices=["low", "medium", "high"],
+                                label="Reasoning Effort (OpenAI)",
+                                value=saved_settings.get("reasoning_effort", "medium"),
+                                info=(
+                                    "Controls internal reasoning effort for OpenAI reasoning models."
+                                    " gpt-5 series also supports 'minimal'."
+                                ),
+                                visible=(config_initial_provider == "OpenAI"),
+                                elem_id="reasoning_effort_dropdown",
                             )
                             temperature = gr.Slider(
                                 0,
@@ -668,6 +695,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             batch_output_language,
             batch_font_dropdown,
             enable_thinking_checkbox,
+            reasoning_effort_dropdown,
         ]
 
         reset_outputs = [
@@ -712,6 +740,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             batch_output_language,
             batch_font_dropdown,
             enable_thinking_checkbox,
+            reasoning_effort_dropdown,
             config_status,
         ]
 
@@ -755,6 +784,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             verbose,
             cleaning_only_toggle,
             enable_thinking_checkbox,
+            reasoning_effort_dropdown,
         ]
 
         batch_inputs = [
@@ -797,6 +827,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             verbose,
             cleaning_only_toggle,
             enable_thinking_checkbox,
+            reasoning_effort_dropdown,
         ]
 
         # Config Tab Navigation & Updates
@@ -852,6 +883,8 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                 config_model_name,
                 temperature,
                 top_k,
+                enable_thinking_checkbox,
+                reasoning_effort_dropdown,
             ],
             queue=False,
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.
@@ -868,7 +901,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
         config_model_name.change(
             fn=callbacks.handle_model_change,
             inputs=[provider_selector, config_model_name, temperature],
-            outputs=[temperature, top_k, enable_thinking_checkbox],
+            outputs=[temperature, top_k, enable_thinking_checkbox, reasoning_effort_dropdown],
             queue=False,
         )
 

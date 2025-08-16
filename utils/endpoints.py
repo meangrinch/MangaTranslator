@@ -145,7 +145,7 @@ def call_openai_endpoint(
     base_delay: float = 1.0,
 ) -> Optional[str]:
     """
-    Calls the OpenAI Chat Completions API endpoint with the provided data and handles retries.
+    Calls the OpenAI Responses API endpoint with the provided data and handles retries.
 
     Args:
         api_key (str): OpenAI API key.
@@ -175,62 +175,97 @@ def call_openai_endpoint(
     if not text_part:
         raise ValueError("Invalid 'parts' format for OpenAI: No text prompt found.")
 
-    url = "https://api.openai.com/v1/chat/completions"
+    url = "https://api.openai.com/v1/responses"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-    messages = []
-    user_content = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
+    # Build Responses API input content
+    input_content = []
     for part in image_parts:
         if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}})
+            # Responses API image input
+            input_content.append({
+                "type": "input_image",
+                "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+            })
         else:
             log_message(f"Warning: Skipping invalid image part format in OpenAI request: {part}", always_print=True)
-    user_content.append({"type": "text", "text": text_part["text"]})
-    messages.append({"role": "user", "content": user_content})
+    input_content.append({"type": "input_text", "text": text_part["text"]})
 
     payload = {
         "model": model_name,
-        "messages": messages,
+        "input": [{"role": "user", "content": input_content}],
         "temperature": generation_config.get("temperature") if model_name != "o4-mini" else 1.0,
         "top_p": generation_config.get("top_p") if model_name != "o4-mini" else None,
-        "max_completion_tokens": generation_config.get("max_output_tokens", 2048),
+        "max_output_tokens": generation_config.get("max_output_tokens", 2048),
     }
+    if system_prompt:
+        payload["instructions"] = system_prompt
     payload = {k: v for k, v in payload.items() if v is not None}
+
+    # Conditionally include OpenAI reasoning and verbosity controls
+    try:
+        lower_model = (model_name or "").lower()
+        is_gpt5_series = lower_model.startswith("gpt-5")
+        is_reasoning_capable = (
+            is_gpt5_series
+            or lower_model.startswith("o1")
+            or lower_model.startswith("o3")
+            or lower_model.startswith("o4-mini")
+        )
+
+        if is_reasoning_capable:
+            effort = generation_config.get("reasoning_effort")
+            if effort:
+                if effort == "minimal" and not is_gpt5_series:
+                    effort_to_send = "low"
+                else:
+                    effort_to_send = effort
+                payload["reasoning"] = {"effort": effort_to_send}
+
+        if is_gpt5_series:
+            payload["text"] = {"verbosity": "low"}
+    except Exception:
+        # Do not fail the request if model detection or mapping has issues
+        pass
 
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
-            log_message(f"Making OpenAI API request (Attempt {attempt + 1}/{max_retries + 1})...", verbose=debug)
+            attempt_info = f"(Attempt {attempt + 1}/{max_retries + 1})"
+            log_message(
+                f"Making OpenAI Responses API request {attempt_info}...",
+                verbose=debug,
+            )
             # print(f"Payload: {json.dumps(payload, indent=2)}")
 
             response = requests.post(url, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
 
-            log_message("OpenAI API response OK (200), processing result...", verbose=debug)
+            log_message("OpenAI Responses API response OK (200), processing result...", verbose=debug)
             try:
                 result = response.json()
 
-                if "choices" in result and len(result["choices"]) > 0:
-                    choice = result["choices"][0]
-                    finish_reason = choice.get("finish_reason")
+                # Prefer convenience field if available
+                output_text = result.get("output_text")
+                if isinstance(output_text, str) and output_text.strip():
+                    return output_text.strip()
 
-                    if finish_reason == "content_filter":
-                        return None
+                # Fallback: parse output list content
+                output_items = result.get("output")
+                if isinstance(output_items, list):
+                    for item in output_items:
+                        content_blocks = item.get("content") if isinstance(item, dict) else None
+                        if isinstance(content_blocks, list):
+                            for block in content_blocks:
+                                if isinstance(block, dict):
+                                    text_val = block.get("text") or block.get("output_text")
+                                    if isinstance(text_val, str) and text_val.strip():
+                                        return text_val.strip()
 
-                    message = choice.get("message")
-                    if message and "content" in message:
-                        content = message["content"]
-                        return content.strip() if content else ""
-                    else:
-                        log_message("API Warning: No message content found in the first choice.", verbose=debug)
-                        return ""
-                else:
-                    log_message("API Warning: No choices found in successful OpenAI response.", always_print=True)
-                    return None
+                log_message("API Warning: No textual content found in Responses output.", always_print=True)
+                return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise RuntimeError(f"Error processing successful OpenAI API response: {str(e)}") from e
@@ -254,7 +289,7 @@ def call_openai_endpoint(
                 elif status_code == 400:
                     error_reason += " (Check model name and request payload)"  # Often indicates a bad request
 
-                raise RuntimeError(f"OpenAI API HTTP Error: {error_reason}") from e
+                raise RuntimeError(f"OpenAI Responses API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
@@ -264,9 +299,9 @@ def call_openai_endpoint(
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(f"OpenAI API Connection Error after retries: {str(e)}") from e
+                raise RuntimeError(f"OpenAI Responses API Connection Error after retries: {str(e)}") from e
 
-    raise RuntimeError(f"Failed to get response from OpenAI API after {max_retries + 1} attempts.")
+    raise RuntimeError(f"Failed to get response from OpenAI Responses API after {max_retries + 1} attempts.")
 
 
 def call_anthropic_endpoint(
@@ -359,6 +394,14 @@ def call_anthropic_endpoint(
         "top_k": generation_config.get("top_k"),
         "max_tokens": generation_config.get("max_tokens", 2048),
     }
+    # Include Anthropic thinking parameter for supported models when requested
+    try:
+        if generation_config.get("anthropic_thinking"):
+            payload["thinking"] = {"type": "enabled", "budget_tokens": 8192}
+            beta_header_value = generation_config.get("anthropic_beta") or "thinking-v1"
+            headers["anthropic-beta"] = beta_header_value
+    except Exception:
+        pass
     payload = {k: v for k, v in payload.items() if v is not None}
 
     for attempt in range(max_retries + 1):
@@ -514,6 +557,7 @@ def call_openrouter_endpoint(
     messages.append({"role": "user", "content": user_content})
 
     # Map generation config with provider-specific restrictions
+    # Reasoning-aware max tokens: allow higher limit if indicated by caller
     payload = {"model": model_name, "messages": messages, "max_tokens": generation_config.get("max_tokens", 2048)}
 
     is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")

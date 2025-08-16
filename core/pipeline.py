@@ -221,7 +221,10 @@ def translate_and_render(
                         raise ValueError("cv2.imencode failed")
                     image_b64 = base64.b64encode(buffer).decode("utf-8")
                     bubble["image_b64"] = image_b64
-                    log_message(f"Collected bubble at ({x1}, {y1}), size {x2-x1}x{y2-y1}", verbose=verbose)
+                    log_message(
+                        f"Collected bubble at ({x1}, {y1}), size {x2 - x1}x{y2 - y1}",
+                        verbose=verbose,
+                    )
                 except Exception as e:
                     log_message(f"Error encoding bubble at {bubble['bbox']}: {e}", verbose=verbose, always_print=True)
                     bubble["image_b64"] = None
@@ -430,7 +433,7 @@ def batch_translate_images(
         try:
             if progress_callback:
                 current_progress = i / total_images
-                progress_callback(current_progress, f"Processing image {i+1}/{total_images}: {img_path.name}")
+                progress_callback(current_progress, f"Processing image {i + 1}/{total_images}: {img_path.name}")
 
             # Determine correct output extension based on config
             original_ext = img_path.suffix.lower()
@@ -450,7 +453,7 @@ def batch_translate_images(
                 )
 
             output_path = output_dir / f"{img_path.stem}_translated{output_ext}"
-            log_message(f"Image {i+1}/{total_images}: Processing {img_path.name}", always_print=True)
+            log_message(f"Image {i + 1}/{total_images}: Processing {img_path.name}", always_print=True)
 
             translate_and_render(img_path, config, output_path)
 
@@ -458,7 +461,7 @@ def batch_translate_images(
 
             if progress_callback:
                 completed_progress = (i + 1) / total_images
-                progress_callback(completed_progress, f"Completed {i+1}/{total_images} images")
+                progress_callback(completed_progress, f"Completed {i + 1}/{total_images} images")
 
         except Exception as e:
             log_message(f"Error processing {img_path.name}: {str(e)}", always_print=True)
@@ -467,7 +470,7 @@ def batch_translate_images(
 
             if progress_callback:
                 completed_progress = (i + 1) / total_images
-                progress_callback(completed_progress, f"Completed {i+1}/{total_images} images (with errors)")
+                progress_callback(completed_progress, f"Completed {i + 1}/{total_images} images (with errors)")
 
     if progress_callback:
         progress_callback(1.0, "Processing complete")
@@ -587,6 +590,16 @@ def main():
         choices=["one-step", "two-step"],
         help="Translation process mode (one-step or two-step)",
     )
+    parser.add_argument(
+        "--reasoning-effort",
+        type=str,
+        default="medium",
+        choices=["minimal", "low", "medium", "high"],
+        help=(
+            "Internal reasoning effort for OpenAI reasoning models (o1/o3/o4-mini/gpt-5*). "
+            "Note: 'minimal' is only supported by gpt-5 series."
+        ),
+    )
     # Rendering args
     parser.add_argument("--max-font-size", type=int, default=14, help="Max font size for rendering text.")
     parser.add_argument("--min-font-size", type=int, default=8, help="Min font size for rendering text.")
@@ -697,7 +710,8 @@ def main():
             output_language=args.output_language,
             reading_direction=args.reading_direction,
             translation_mode=args.translation_mode,
-            include_thoughts=args.include_thoughts,
+            enable_thinking=args.enable_thinking,
+            reasoning_effort=args.reasoning_effort,
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,

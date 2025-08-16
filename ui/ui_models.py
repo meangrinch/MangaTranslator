@@ -87,6 +87,7 @@ class UIGeneralSettings:
     verbose: bool = False
     cleaning_only: bool = False
     enable_thinking: bool = True
+    reasoning_effort: str = "medium"
 
 
 @dataclass
@@ -149,6 +150,7 @@ class UIConfigState:
             "verbose": self.general.verbose,
             "cleaning_only": self.general.cleaning_only,
             "enable_thinking": self.general.enable_thinking,
+            "reasoning_effort": self.general.reasoning_effort,
             "input_language": self.input_language,
             "output_language": self.output_language,
             "batch_input_language": self.batch_input_language,
@@ -221,6 +223,7 @@ class UIConfigState:
                 verbose=data.get("verbose", defaults["verbose"]),
                 cleaning_only=data.get("cleaning_only", defaults["cleaning_only"]),
                 enable_thinking=data.get("enable_thinking", defaults.get("enable_thinking", True)),
+                reasoning_effort=data.get("reasoning_effort", defaults.get("reasoning_effort", "medium")),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
             output_language=data.get("output_language", defaults["output_language"]),

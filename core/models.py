@@ -46,7 +46,8 @@ class TranslationConfig:
     output_language: str = "English"
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
-    enable_thinking: bool = True  # Specific to Gemini 2.5 Flash
+    enable_thinking: bool = True  # Gemini 2.5 Flash models
+    reasoning_effort: Optional[str] = "medium"  # OpenAI reasoning models (o1/o3/o4-mini/gpt-5*)
 
 
 @dataclass
