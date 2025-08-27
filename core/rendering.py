@@ -559,7 +559,7 @@ def render_text_skia(
             log_message(
                 (
                     f"  LIR is tall (H/W={height_width_ratio:.2f} > {tall_threshold}). "
-                    f"Adding extra width expansion: {additional_expand_x*2:.1f}px"
+                    f"Adding extra width expansion: {additional_expand_x * 2:.1f}px"
                 ),
                 verbose=verbose,
             )
@@ -568,7 +568,7 @@ def render_text_skia(
             log_message(
                 (
                     f"  LIR is wide (W/H={width_height_ratio:.2f} > {wide_threshold}). "
-                    f"Adding extra height expansion: {additional_expand_y*2:.1f}px"
+                    f"Adding extra height expansion: {additional_expand_y * 2:.1f}px"
                 ),
                 verbose=verbose,
             )
@@ -578,7 +578,7 @@ def render_text_skia(
         # --- Calculate Total Expansion ---
         total_expand_x = base_expand_x + additional_expand_x
         total_expand_y = base_expand_y + additional_expand_y
-        log_message(f"  Total expansion: X={total_expand_x*2:.1f}px, Y={total_expand_y*2:.1f}px", verbose=verbose)
+        log_message(f"  Total expansion: X={total_expand_x * 2:.1f}px, Y={total_expand_y * 2:.1f}px", verbose=verbose)
 
         # --- Calculate Expanded Boundaries ---
         expanded_x1 = lir_x - total_expand_x
