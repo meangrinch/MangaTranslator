@@ -14,7 +14,7 @@ Translate manga/comic speech bubbles using AI: YOLOv8‑seg for bubble detection
 - PyTorch (CPU or CUDA build for your system)
 - Segmentation YOLO model trained for speech bubbles (`.pt`)
 - Font pack with `.ttf`/`.otf`
-- Vision-capable LLM: Gemini, OpenAI, Anthropic, OpenRouter, or OpenAI-compatible (e.g., Ollama/LM Studio)
+- Vision-capable LLM (API or Local)
 
 ## Install
 
@@ -50,12 +50,13 @@ pip install -r requirements.txt
 
 ## Post-install setup
 ### YOLO model
-- Place a segmentation model in `models/` (e.g., `models/yolov8m_seg-speech-bubble.pt`)
+- Place a segmentation model (`.pt`) in `models/`
 - Recommended: [kitsumed/yolov8m_seg-speech-bubble](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt)
 
 ### Fonts
 - Put font packs as subfolders in `fonts/` with `.otf`/`.ttf` files
 - Prefer filenames that include `italic`/`bold` so variants are detected
+- Example structure:
 ```text
 fonts/
 ├─ CC Wild Words/
@@ -72,13 +73,13 @@ fonts/
 - Providers: Gemini, OpenAI, Anthropic, OpenRouter, OpenAI-Compatible
 - Web UI: configure provider/model/key in the Config tab (stored locally)
 - CLI: pass keys/URLs as flags or via env vars
-- Optional env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
-- OpenAI-compatible default URL: `http://localhost:11434/v1`
+- Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
+- OpenAI-Compatible default URL: `http://localhost:11434/v1`
 
 ## Run
 
 ### Web UI (Gradio)
-- Windows: double-click `start-webui.bat`
+- Windows: double-click `start-webui.bat` (`venv` must be present)
 - Or run:
 ```bash
 python app.py --open-browser
@@ -127,6 +128,8 @@ python main.py --help
 - No bubbles detected: lower `--conf` and confirm the model supports segmentation
 
 ## Updating
+- Windows portable: download the latest release and replace the existing folder
+- Manual install: from the repo root:
 ```bash
 git pull
 ```
