@@ -143,7 +143,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                             type="filepath",
                             label="Upload Image",
                             show_download_button=False,
-                            image_mode="RGBA",
+                            image_mode=None,
                             elem_id="translator_input_image",
                         )
                         font_dropdown = gr.Dropdown(
