@@ -8,6 +8,8 @@ __pycache__/
 *.ttf
 *.pt
 *.onnx
+/models/models--facebook--sam2.1-hiera-large/
+/models/.locks/
 /output/
 .DS_Store
 Thumbs.db
