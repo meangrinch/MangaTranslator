@@ -18,7 +18,7 @@ function() {
         }
         const newContent = document.createElement('div');
         newContent.className = 'mangatl-credits'; // Add a class for identification
-        newContent.innerHTML = 'Made by <a href="https://github.com/meangrinch">grinnch</a> with ❤️'; // credits
+        newContent.innerHTML = 'made by <a href="https://github.com/meangrinch">grinnch</a> with ❤️'; // credits
 
         newContent.style.textAlign = 'center';
         newContent.style.paddingTop = '50px';
@@ -152,6 +152,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                         with gr.Accordion("Translation Settings", open=True):
                             input_language = gr.Dropdown(
                                 [
+                                    "Auto",
                                     "Japanese",
                                     "Korean",
                                     "Chinese",
@@ -183,6 +184,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("output_language", "English"),
                                 allow_custom_value=True,
                             )
+                            # Moved 'Send full page to LLM' to Config > LLM Settings
                     with gr.Column(scale=1):
                         output_image = gr.Image(
                             type="pil", label="Translated Image", interactive=False, elem_id="translator_output_image"
@@ -210,6 +212,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                         with gr.Accordion("Translation Settings", open=True):
                             batch_input_language = gr.Dropdown(
                                 [
+                                    "Auto",
                                     "Japanese",
                                     "Chinese",
                                     "Korean",
@@ -241,6 +244,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("batch_output_language", "English"),
                                 allow_custom_value=True,
                             )
+                            # Moved 'Send full page to LLM' to Config > LLM Settings
                     with gr.Column(scale=1):
                         batch_output_gallery = gr.Gallery(
                             label="Translated Images",
@@ -311,6 +315,11 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 step=0.05,
                                 label="Bubble Detection Confidence",
                                 info="Lower values detect more bubbles, potentially including false positives.",
+                            )
+                            use_sam2_checkbox = gr.Checkbox(
+                                value=saved_settings.get("use_sam2", True),
+                                label="Use SAM 2.1 for Segmentation",
+                                info="Enhances bubble segmentation quality by combining YOLO detection with SAM 2.1.",
                             )
                             config_reading_direction = gr.Radio(
                                 choices=["rtl", "ltr"],
@@ -512,10 +521,19 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("reasoning_effort", "medium"),
                                 info=(
                                     "Controls internal reasoning effort for OpenAI reasoning models."
-                                    " gpt-5 series also supports 'minimal'."
                                 ),
                                 visible=(config_initial_provider == "OpenAI"),
                                 elem_id="reasoning_effort_dropdown",
+                            )
+                            openrouter_reasoning_override = gr.Checkbox(
+                                label="Force Extend Context",
+                                value=saved_settings.get("openrouter_reasoning_override", False),
+                                info=(
+                                    "Forces max output tokens to 8192. "
+                                    "Enable if you encounter issues with reasoning-capable LLMs."
+                                ),
+                                visible=(config_initial_provider == "OpenRouter"),
+                                elem_id="openrouter_reasoning_override",
                             )
                             temperature = gr.Slider(
                                 0,
@@ -523,7 +541,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("temperature", 0.1),
                                 step=0.05,
                                 label="Temperature",
-                                info="Controls randomness. Lower is more deterministic.",
+                                info="Controls creativity. Lower is more deterministic, higher is more random.",
                                 elem_id="config_temperature",
                             )
                             top_p = gr.Slider(
@@ -532,7 +550,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("top_p", 0.95),
                                 step=0.05,
                                 label="Top P",
-                                info="Nucleus sampling parameter.",
+                                info="Controls diversity. Lower is more focused, higher is more random.",
                                 elem_id="config_top_p",
                             )
                             top_k = gr.Slider(
@@ -555,6 +573,14 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                       "separates them). 'two-step' might improve translation quality for "
                                       "less-capable LLMs."),
                                 elem_id="config_translation_mode",
+                            )
+                            send_full_page_context = gr.Checkbox(
+                                value=saved_settings.get("send_full_page_context", True),
+                                label="Send Full Page to LLM",
+                                info=(
+                                    "Include the full page image as context for translation. "
+                                    "Disable if encountering refusals or using less-capable LLMs."
+                                ),
                             )
                         setting_groups.append(group_translation)
 
@@ -603,6 +629,11 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 info="Enables common letter combinations to be rendered as single glyphs "
                                      "(must be supported by the font).",
                             )
+                            hyphenate_before_scaling = gr.Checkbox(
+                                value=saved_settings.get("hyphenate_before_scaling", True),
+                                label="Hyphenate Long Words",
+                                info="Try inserting hyphens when wrapping before reducing font size.",
+                            )
                         setting_groups.append(group_rendering)
 
                         # --- Output Settings ---
@@ -647,7 +678,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                             )
                             cleaning_only_toggle = gr.Checkbox(
                                 value=saved_settings.get("cleaning_only", False),
-                                label="Cleaning Only Mode",
+                                label="Cleaning-only Mode",
                                 info="Skip translation and text rendering, output only the cleaned speech bubbles.",
                             )
                         setting_groups.append(group_other)
@@ -656,6 +687,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
         save_config_inputs = [
             config_yolo_model_dropdown,
             confidence,
+            use_sam2_checkbox,
             config_reading_direction,
             dilation_kernel_size,
             dilation_iterations,
@@ -696,11 +728,15 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             batch_font_dropdown,
             enable_thinking_checkbox,
             reasoning_effort_dropdown,
+            send_full_page_context,
+            hyphenate_before_scaling,
+            openrouter_reasoning_override,
         ]
 
         reset_outputs = [
             config_yolo_model_dropdown,
             confidence,
+            use_sam2_checkbox,
             config_reading_direction,
             dilation_kernel_size,
             dilation_iterations,
@@ -742,12 +778,16 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             enable_thinking_checkbox,
             reasoning_effort_dropdown,
             config_status,
+            send_full_page_context,
+            hyphenate_before_scaling,
+            openrouter_reasoning_override,
         ]
 
         translate_inputs = [
             input_image,
             config_yolo_model_dropdown,
             confidence,
+            use_sam2_checkbox,
             dilation_kernel_size,
             dilation_iterations,
             use_otsu_threshold,
@@ -785,12 +825,16 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             cleaning_only_toggle,
             enable_thinking_checkbox,
             reasoning_effort_dropdown,
+            send_full_page_context,
+            hyphenate_before_scaling,
+            openrouter_reasoning_override,
         ]
 
         batch_inputs = [
             input_files,
             config_yolo_model_dropdown,
             confidence,
+            use_sam2_checkbox,
             dilation_kernel_size,
             dilation_iterations,
             use_otsu_threshold,
@@ -828,6 +872,9 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             cleaning_only_toggle,
             enable_thinking_checkbox,
             reasoning_effort_dropdown,
+            send_full_page_context,
+            hyphenate_before_scaling,
+            openrouter_reasoning_override,
         ]
 
         # Config Tab Navigation & Updates
@@ -885,6 +932,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                 top_k,
                 enable_thinking_checkbox,
                 reasoning_effort_dropdown,
+                openrouter_reasoning_override,
             ],
             queue=False,
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.

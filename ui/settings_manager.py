@@ -1,7 +1,9 @@
 import json
 import os
+from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from utils.logging import log_message
 
 CONFIG_FILE = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "MangaTranslator" / "config.json"
@@ -67,6 +69,7 @@ DEFAULT_SETTINGS = {
     "reading_direction": "rtl",
     "translation_mode": "one-step",
     "confidence": 0.35,
+    "use_sam2": True,
     "dilation_kernel_size": 7,
     "dilation_iterations": 1,
     "use_otsu_threshold": False,
@@ -84,14 +87,17 @@ DEFAULT_SETTINGS = {
     "use_subpixel_rendering": True,
     "font_hinting": "none",
     "use_ligatures": False,
+    "hyphenate_before_scaling": True,
     "font_pack": None,
     "verbose": False,
     "jpeg_quality": 95,
     "png_compression": 6,
     "output_format": "auto",
     "cleaning_only": False,
-    "enable_thinking": True,  # Gemini 2.5 Flash models
+    "enable_thinking": True,  # Gemini 2.5 Flash & Claude reasoning models
     "reasoning_effort": "medium",  # OpenAI reasoning models; gpt-5 also supports 'minimal'
+    "send_full_page_context": True,
+    "openrouter_reasoning_override": False,  # Forces max output tokens to 8192
 }
 
 DEFAULT_BATCH_SETTINGS = {
@@ -99,6 +105,73 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_output_language": "English",
     "batch_font_pack": None,
 }
+
+
+# Canonical save order for config.json (unknown keys appended alphabetically at the end)
+CANONICAL_CONFIG_KEY_ORDER: List[str] = [
+    # Provider and model selection
+    "provider_models",
+    "provider",
+    "model_name",
+    "gemini_api_key",
+    "openai_api_key",
+    "anthropic_api_key",
+    "openrouter_api_key",
+    "openai_compatible_url",
+    "openai_compatible_api_key",
+
+    # Translation behavior / LLM options
+    "input_language",
+    "output_language",
+    "reading_direction",
+    "translation_mode",
+    "temperature",
+    "top_p",
+    "top_k",
+    "send_full_page_context",
+    "enable_thinking",
+    "reasoning_effort",
+    "openrouter_reasoning_override",
+
+    # Rendering
+    "font_pack",
+    "max_font_size",
+    "min_font_size",
+    "line_spacing",
+    "use_subpixel_rendering",
+    "font_hinting",
+    "use_ligatures",
+    "hyphenate_before_scaling",
+
+    # Models / Detection
+    "yolo_model",
+    "confidence",
+    "use_sam2",
+
+    # Cleaning
+    "dilation_kernel_size",
+    "dilation_iterations",
+    "use_otsu_threshold",
+    "min_contour_area",
+    "closing_kernel_size",
+    "closing_iterations",
+    "constraint_erosion_kernel_size",
+    "constraint_erosion_iterations",
+
+    # Output
+    "output_format",
+    "jpeg_quality",
+    "png_compression",
+
+    # General
+    "verbose",
+    "cleaning_only",
+
+    # Batch
+    "batch_input_language",
+    "batch_output_language",
+    "batch_font_pack",
+]
 
 
 def save_config(incoming_settings: Dict[str, Any]):
@@ -124,6 +197,7 @@ def save_config(incoming_settings: Dict[str, Any]):
         known_keys.add("provider_models")
         known_keys.add("yolo_model")
         known_keys.add("cleaning_only")
+        known_keys.add("use_sam2")
         all_defaults = {**DEFAULT_SETTINGS, **DEFAULT_BATCH_SETTINGS}
         known_keys.add("openai_compatible_url")
         known_keys.add("openai_compatible_api_key")
@@ -171,8 +245,14 @@ def save_config(incoming_settings: Dict[str, Any]):
 
         os.makedirs(CONFIG_FILE.parent, exist_ok=True)
 
+        # Reorder keys according to canonical order, then append unknown keys alphabetically
+        known_in_order = [k for k in CANONICAL_CONFIG_KEY_ORDER if k in config_to_write]
+        unknown_keys = sorted([k for k in config_to_write.keys() if k not in CANONICAL_CONFIG_KEY_ORDER])
+        ordered_keys = known_in_order + unknown_keys
+        ordered_config: Dict[str, Any] = OrderedDict((k, config_to_write[k]) for k in ordered_keys)
+
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(config_to_write, f, indent=2)
+            json.dump(ordered_config, f, indent=2)
 
         if changed_setting_keys:
             changed_setting_keys = [k for k in changed_setting_keys if k is not None]
@@ -206,6 +286,8 @@ def get_saved_settings() -> Dict[str, Any]:
             # Special handling for potentially missing keys or nested structures from older configs
             if "yolo_model" in saved_config:
                 settings["yolo_model"] = saved_config["yolo_model"]
+            if "use_sam2" in saved_config:
+                settings["use_sam2"] = bool(saved_config["use_sam2"])
             if "provider_models" not in settings:
                 settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
             elif not isinstance(settings["provider_models"], dict):

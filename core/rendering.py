@@ -458,6 +458,8 @@ def render_text_skia(
     use_subpixel_rendering: bool = False,
     font_hinting: str = "none",
     use_ligatures: bool = False,
+    hyphenate_before_scaling: bool = True,
+    lir_outer_clearance_ratio: float = 0.06,
     verbose: bool = False,
 ) -> Tuple[Optional[Image.Image], bool]:
     """
@@ -476,6 +478,10 @@ def render_text_skia(
         font_hinting: Font hinting level ("none", "slight", "normal", "full").
         use_ligatures: Whether to enable standard ligatures ('liga').
         verbose: Whether to print detailed logs.
+        lir_outer_clearance_ratio: Minimum margin (as a ratio of original bbox
+            width/height) to keep between the final rendering bounds and the
+            original bbox edges when using LIR expansion. Helps avoid text
+            touching borders in more square bubbles. Defaults to 6%.
 
     Returns:
         Tuple containing:
@@ -604,15 +610,26 @@ def render_text_skia(
             verbose=verbose,
         )
 
+        # --- Apply Minimum Edge Clearance relative to original bbox ---
+        # Inset the final rendering area so text doesn't hug the bubble edges,
+        # which can happen after expansion in near-square bubbles.
+        min_clearance_x = bubble_width * max(0.0, float(lir_outer_clearance_ratio))
+        min_clearance_y = bubble_height * max(0.0, float(lir_outer_clearance_ratio))
+
+        proposed_x1 = max(final_render_x1, float(x1) + min_clearance_x)
+        proposed_y1 = max(final_render_y1, float(y1) + min_clearance_y)
+        proposed_x2 = min(final_render_x2, float(x2) - min_clearance_x)
+        proposed_y2 = min(final_render_y2, float(y2) - min_clearance_y)
+
         # --- Set Final Rendering Constraints ---
-        max_render_width = final_render_x2 - final_render_x1
-        max_render_height = final_render_y2 - final_render_y1
+        max_render_width = proposed_x2 - proposed_x1
+        max_render_height = proposed_y2 - proposed_y1
 
         if max_render_width <= 0 or max_render_height <= 0:
             log_message(
                 (
-                    f"Warning: Expanded LIR resulted in non-positive dimensions after capping "
-                    f"({max_render_width:.1f}x{max_render_height:.1f}). Falling back to bbox."
+                    f"Warning: LIR clearance resulted in non-positive dimensions "
+                    f"({max_render_width:.1f}x{max_render_height:.1f}). Falling back to padded bbox."
                 ),
                 verbose=verbose,
                 always_print=True,
@@ -629,6 +646,10 @@ def render_text_skia(
             use_lir = False
         else:
             # --- Set Target Center Point (Center of the final rendering area) ---
+            final_render_x1 = proposed_x1
+            final_render_y1 = proposed_y1
+            final_render_x2 = proposed_x2
+            final_render_y2 = proposed_y2
             target_center_x = final_render_x1 + max_render_width / 2.0
             target_center_y = final_render_y1 + max_render_height / 2.0
             use_lir = True
@@ -741,12 +762,97 @@ def render_text_skia(
         current_line_stripped_words = []
         longest_word_width_at_size = 0
 
+        def _try_hyphenate_word(word_str: str, hb_font_local: hb.Font) -> Optional[List[str]]:
+            """Attempt to split a word into two parts with a hyphen such that each part fits.
+            Avoids producing a double hyphen when the original word already contains '-'.
+            """
+            if len(word_str) < 6:
+                return None
+
+            def _split_with_single_hyphen(base: str, idx: int) -> Tuple[str, str]:
+                ch_before = base[idx - 1] if idx > 0 else ""
+                ch_at = base[idx] if idx < len(base) else ""
+                # If splitting exactly on an existing hyphen, keep it at end of left part
+                if ch_at == "-":
+                    left = base[: idx + 1]
+                    right = base[idx + 1 :]
+                elif ch_before == "-":
+                    # Left already ends with hyphen, keep right as-is
+                    left = base[:idx]
+                    right = base[idx:]
+                else:
+                    # Insert a new hyphen at the break
+                    left = base[:idx] + "-"
+                    right = base[idx:]
+                # Guard against accidental double hyphen across boundary
+                if left.endswith("-") and right.startswith("-"):
+                    right = right[1:]
+                return left, right
+
+            # Prefer splitting at existing hyphen(s) first
+            if "-" in word_str:
+                hyphen_positions = [i for i, ch in enumerate(word_str) if ch == "-"]
+                # Try hyphen closest to center first
+                mid = len(word_str) // 2
+                hyphen_positions.sort(key=lambda i: abs(i - mid))
+                for pos in hyphen_positions:
+                    if pos <= 0 or pos >= len(word_str) - 1:
+                        continue
+                    left_part = word_str[: pos + 1]  # include existing hyphen on left
+                    right_part = word_str[pos + 1 :]
+                    _, pos_left = _shape_line(left_part, hb_font_local, features_to_enable)
+                    _, pos_right = _shape_line(right_part, hb_font_local, features_to_enable)
+                    w_left = _calculate_line_width(pos_left, 1.0)
+                    w_right = _calculate_line_width(pos_right, 1.0)
+                    if w_left <= max_render_width and w_right <= max_render_width:
+                        return [left_part, right_part]
+
+            # Try split positions around the middle, moving outward
+            mid = len(word_str) // 2
+            candidate_indices: List[int] = []
+            max_d = max(mid, len(word_str) - mid)
+            for d in range(0, max_d):
+                left_idx = mid - d
+                right_idx = mid + d
+                if 2 <= left_idx < len(word_str) - 2:
+                    candidate_indices.append(left_idx)
+                if 2 <= right_idx < len(word_str) - 2 and right_idx != left_idx:
+                    candidate_indices.append(right_idx)
+
+            for idx in candidate_indices:
+                left_part, right_part = _split_with_single_hyphen(word_str, idx)
+                _, pos_left = _shape_line(left_part, hb_font_local, features_to_enable)
+                _, pos_right = _shape_line(right_part, hb_font_local, features_to_enable)
+                w_left = _calculate_line_width(pos_left, 1.0)
+                w_right = _calculate_line_width(pos_right, 1.0)
+                if w_left <= max_render_width and w_right <= max_render_width:
+                    return [left_part, right_part]
+            return None
+
         for word in words:  # Iterate through stripped words for measurement
             _, w_positions = _shape_line(word, hb_font, features_to_enable)
             word_width = _calculate_line_width(w_positions, 1.0)
             longest_word_width_at_size = max(longest_word_width_at_size, word_width)
 
             if word_width > max_render_width:
+                if hyphenate_before_scaling:
+                    split_parts = _try_hyphenate_word(word, hb_font)
+                    if split_parts:
+                        # Commit current line if split doesn't fit in current test; handle below via regular flow
+                        for part in split_parts:
+                            test_line_stripped_words = (current_line_stripped_words or []) + [part]
+                            test_line_stripped_text = " ".join(test_line_stripped_words)
+                            _, test_positions = _shape_line(test_line_stripped_text, hb_font, features_to_enable)
+                            tentative_width = _calculate_line_width(test_positions, 1.0)
+                            if tentative_width <= max_render_width:
+                                current_line_stripped_words = test_line_stripped_words
+                            else:
+                                if current_line_stripped_words:
+                                    original_line_words = [word_map.get(w, w) for w in current_line_stripped_words]
+                                    wrapped_lines_text.append(" ".join(original_line_words))
+                                current_line_stripped_words = [part]
+                        # Continue to next word without shrinking size
+                        continue
                 original_word = word_map.get(word, word)
                 log_message(
                     (

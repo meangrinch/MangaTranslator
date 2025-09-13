@@ -9,6 +9,7 @@ from utils.endpoints import (
     call_anthropic_endpoint,
     call_openrouter_endpoint,
     call_openai_compatible_endpoint,
+    openrouter_is_reasoning_model,
 )
 
 # Regex to find numbered lines in LLM responses
@@ -17,53 +18,185 @@ TRANSLATION_PATTERN = re.compile(
 )
 
 
-# Helper functions for sorting keys
-def _sort_key_ltr(d):
-    """Sort key for left-to-right reading order."""
-    return (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
-
-
-def _sort_key_rtl(d):
-    """Sort key for right-to-left reading order."""
-    return (d["grid_pos"][0], d["grid_pos"][1], d["center_y"])
-
-
 def sort_bubbles_by_reading_order(detections, image_height, image_width, reading_direction="rtl"):
     """
-    Sort speech bubbles based on specified reading order.
+    Sort speech bubbles into a robust reading order.
+
+    Strategy:
+    - Group into vertical "row bands" when bubbles vertically overlap enough or their centers are close.
+    - Within each band, group into horizontal "columns" using horizontal overlap/center proximity.
+      • Order columns horizontally by reading direction (RTL: right→left, LTR: left→right).
+      • Within each column, order bubbles top→bottom.
+    - Across different bands, order bands top→bottom.
+
+    This avoids coarse fixed grids and is resilient to small vertical misalignments.
 
     Args:
-        detections (list): List of detection dictionaries, each must have a "bbox" key.
-        image_height (int): Height of the full image for reference.
-        image_width (int): Width of the full image for reference (used for column calculation).
-        reading_direction (str): "rtl" (right-to-left, default) or "ltr" (left-to-right).
+        detections (list): List of detection dicts with a "bbox" key: (x1, y1, x2, y2).
+        image_height (int): Full image height (unused, reserved for future heuristics).
+        image_width (int): Full image width (unused, reserved for future heuristics).
+        reading_direction (str): "rtl" or "ltr".
 
     Returns:
-        list: Sorted list of detections.
+        list: New list with the same detection dicts, sorted in reading order.
     """
-    grid_rows = 3
-    grid_cols = 2
 
-    sorted_detections = detections.copy()
+    if not detections:
+        return []
 
-    for detection in sorted_detections:
-        x1, y1, x2, y2 = detection["bbox"]
-        center_x = (x1 + x2) / 2
-        center_y = (y1 + y2) / 2
+    def _features(d: Dict[str, Any]):
+        x1, y1, x2, y2 = d["bbox"]
+        w = max(1.0, float(x2 - x1))
+        h = max(1.0, float(y2 - y1))
+        cx = (x1 + x2) / 2.0
+        cy = (y1 + y2) / 2.0
+        return x1, y1, x2, y2, w, h, cx, cy
 
-        row_idx = int((center_y / image_height) * grid_rows)
+    # Heuristics
+    y_overlap_ratio_threshold = 0.3  # Consider same row if >= 30% vertical overlap
+    y_center_band_factor = 0.35      # Or if centers are within 35% of the smaller height
+    x_overlap_ratio_threshold = 0.3  # Consider same column if >= 30% horizontal overlap
+    x_center_band_factor = 0.35      # Or if centers are within 35% of the smaller width
+    x_tie_epsilon = 1e-3
+    y_tie_epsilon = 1e-3
 
-        if reading_direction == "ltr":
-            col_idx = int((center_x / image_width) * grid_cols)
-            sort_key = _sort_key_ltr
-        else:  # Default to "rtl" (right-to-left)
-            col_idx = grid_cols - 1 - int((center_x / image_width) * grid_cols)
-            sort_key = _sort_key_rtl
+    rtl = (reading_direction or "rtl").lower() == "rtl"
 
-        detection["grid_pos"] = (row_idx, col_idx)
-        detection["center_y"] = center_y
+    def _compare(a: Dict[str, Any], b: Dict[str, Any]) -> int:
+        ax1, ay1, ax2, ay2, aw, ah, acx, acy = _features(a)
+        bx1, by1, bx2, by2, bw, bh, bcx, bcy = _features(b)
 
-    return sorted(sorted_detections, key=sort_key)
+        # Determine if on the same row band
+        overlap_v = max(0.0, min(ay2, by2) - max(ay1, by1))
+        min_h = max(1.0, min(ah, bh))
+        overlap_ratio = overlap_v / min_h
+        center_delta_y = abs(acy - bcy)
+        same_row = (overlap_ratio >= y_overlap_ratio_threshold) or (center_delta_y <= y_center_band_factor * min_h)
+
+        if same_row:
+            if abs(acx - bcx) <= x_tie_epsilon:
+                # If horizontally tied, fall back to top→bottom within the row
+                if abs(acy - bcy) <= y_tie_epsilon:
+                    # Absolute tie: break by leftmost/rightmost to keep deterministic order
+                    return -1 if (ax1 + bx1) <= (ax2 + bx2) else 1
+                return -1 if acy < bcy else 1
+            if rtl:
+                return -1 if acx > bcx else 1
+            else:
+                return -1 if acx < bcx else 1
+
+        # Different rows: top first
+        if abs(acy - bcy) <= y_tie_epsilon:
+            # If vertical centers are practically equal but not considered same_row, use direction on x
+            if rtl:
+                return -1 if acx > bcx else 1
+            else:
+                return -1 if acx < bcx else 1
+        return -1 if acy < bcy else 1
+
+    # Deterministic row-banding approach to ensure transitive ordering
+    enriched = []
+    for d in detections:
+        x1, y1, x2, y2, w, h, cx, cy = _features(d)
+        enriched.append({
+            "det": d,
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2,
+            "w": w,
+            "h": h,
+            "cx": cx,
+            "cy": cy,
+        })
+
+    # Sort by vertical center for stable band construction
+    enriched.sort(key=lambda e: e["cy"])  # stable vertical ordering
+
+    bands = []  # Each band: {y_min, y_max, items: [enriched indices]}
+
+    for e in enriched:
+        y1 = e["y1"]
+        y2 = e["y2"]
+        h = e["h"]
+
+        best_band_idx = -1
+        best_score = -1.0
+        for i, band in enumerate(bands):
+            band_h = max(1.0, float(band["y_max"] - band["y_min"]))
+            overlap_v = max(0.0, min(y2, band["y_max"]) - max(y1, band["y_min"]))
+            overlap_ratio = overlap_v / min(h, band_h)
+            center_delta_y = abs(e["cy"] - (band["y_min"] + band["y_max"]) / 2.0)
+            same_row = (overlap_ratio >= y_overlap_ratio_threshold) or (
+                center_delta_y <= y_center_band_factor * min(h, band_h)
+            )
+            if same_row:
+                # Prefer the band with greater overlap
+                score = overlap_ratio - (center_delta_y / (h + band_h)) * 0.1
+                if score > best_score:
+                    best_score = score
+                    best_band_idx = i
+
+        if best_band_idx == -1:
+            bands.append({"y_min": y1, "y_max": y2, "items": [e]})
+        else:
+            band = bands[best_band_idx]
+            band["items"].append(e)
+            band["y_min"] = min(band["y_min"], y1)
+            band["y_max"] = max(band["y_max"], y2)
+
+    # Sort bands by top-most y
+    bands.sort(key=lambda b: b["y_min"])  # top rows first
+
+    # Sort items within each band using column clustering, then vertical order inside columns
+    ordered_enriched = []
+    for band in bands:
+        items = band["items"]
+
+        # Build columns within this band
+        columns = []  # Each: {x_min, x_max, items: [enriched]}
+        for e in items:
+            x1 = e["x1"]
+            x2 = e["x2"]
+            w = e["w"]
+
+            best_col_idx = -1
+            best_score = -1.0
+            for i, col in enumerate(columns):
+                col_w = max(1.0, float(col["x_max"] - col["x_min"]))
+                overlap_h = max(0.0, min(x2, col["x_max"]) - max(x1, col["x_min"]))
+                overlap_ratio = overlap_h / min(w, col_w)
+                col_center_x = (col["x_min"] + col["x_max"]) / 2.0
+                center_delta_x = abs(e["cx"] - col_center_x)
+                same_col = (overlap_ratio >= x_overlap_ratio_threshold) or (
+                    center_delta_x <= x_center_band_factor * min(w, col_w)
+                )
+                if same_col:
+                    score = overlap_ratio - (center_delta_x / (w + col_w)) * 0.1
+                    if score > best_score:
+                        best_score = score
+                        best_col_idx = i
+
+            if best_col_idx == -1:
+                columns.append({"x_min": x1, "x_max": x2, "items": [e]})
+            else:
+                col = columns[best_col_idx]
+                col["items"].append(e)
+                col["x_min"] = min(col["x_min"], x1)
+                col["x_max"] = max(col["x_max"], x2)
+
+        # Sort columns by horizontal position according to reading direction
+        if rtl:
+            columns.sort(key=lambda c: -((c["x_min"] + c["x_max"]) / 2.0))
+        else:
+            columns.sort(key=lambda c: ((c["x_min"] + c["x_max"]) / 2.0))
+
+        # Within each column, sort by vertical center (top→bottom)
+        for col in columns:
+            col["items"].sort(key=lambda e: e["cy"])  # top first
+            ordered_enriched.extend(col["items"])
+
+    return [e["det"] for e in ordered_enriched]
 
 
 def _call_llm_endpoint(
@@ -84,9 +217,9 @@ def _call_llm_endpoint(
             api_key = config.gemini_api_key
             if not api_key:
                 raise ValueError("Gemini API key is missing.")
-            # Reasoning-aware max tokens: Gemini 2.5 series gets 10240 (8192 thinking + 2048 output)
+            # Reasoning-aware max tokens for Gemini models
             is_gemini_25_series = (model_name or "").startswith("gemini-2.5") or "gemini-2.5" in (model_name or "")
-            max_output_tokens = 10240 if is_gemini_25_series else 2048
+            max_output_tokens = 8192 if is_gemini_25_series else 2048
             generation_config = {
                 "temperature": temperature,
                 "topP": top_p,
@@ -115,7 +248,7 @@ def _call_llm_endpoint(
             lm = (model_name or "").lower()
             is_gpt5 = lm.startswith("gpt-5")
             is_reasoning_capable = is_gpt5 or lm.startswith("o1") or lm.startswith("o3") or lm.startswith("o4-mini")
-            max_output_tokens = 10240 if is_reasoning_capable else 2048
+            max_output_tokens = 8192 if is_reasoning_capable else 2048
             generation_config = {
                 "temperature": temperature,
                 "top_p": top_p,
@@ -145,7 +278,7 @@ def _call_llm_endpoint(
                 "claude-3-7-sonnet",
             ]
             is_anthropic_reasoning_model = any(lm.startswith(p) for p in anthropic_reasoning_prefixes)
-            max_tokens = 10240 if is_anthropic_reasoning_model else 2048
+            max_tokens = 8192 if is_anthropic_reasoning_model else 2048
             generation_config = {
                 "temperature": clamped_temp,
                 "top_p": top_p,
@@ -165,38 +298,12 @@ def _call_llm_endpoint(
             api_key = config.openrouter_api_key
             if not api_key:
                 raise ValueError("OpenRouter API key is missing.")
-            # Reasoning-aware max tokens for OpenRouter when underlying model is a reasoning model
-            lm = (model_name or "").lower()
-            is_openai_underlying = "openai/" in lm or lm.startswith("gpt-")
-            is_anthropic_underlying = "anthropic/" in lm or lm.startswith("claude-")
-            is_openai_reasoning = (
-                is_openai_underlying
-                and (
-                    lm.endswith("/o4-mini")
-                    or "/o4-mini" in lm
-                    or "/o1" in lm
-                    or "/o3" in lm
-                    or "/gpt-5" in lm
-                    or lm.startswith("o1")
-                    or lm.startswith("o3")
-                    or lm.startswith("o4-mini")
-                    or lm.startswith("gpt-5")
-                )
+            # Reasoning-aware max tokens for OpenRouter using keyword/metadata detection
+            is_reasoning_model = (
+                config.openrouter_reasoning_override
+                or openrouter_is_reasoning_model(model_name, debug)
             )
-            is_anthropic_reasoning = (
-                is_anthropic_underlying
-                and (
-                    "/claude-opus-4-1" in lm
-                    or "/claude-opus-4" in lm
-                    or "/claude-sonnet-4" in lm
-                    or "/claude-3-7-sonnet" in lm
-                    or lm.startswith("claude-opus-4-1")
-                    or lm.startswith("claude-opus-4")
-                    or lm.startswith("claude-sonnet-4")
-                    or lm.startswith("claude-3-7-sonnet")
-                )
-            )
-            max_tokens = 10240 if (is_openai_reasoning or is_anthropic_reasoning) else 2048
+            max_tokens = 8192 if is_reasoning_model else 2048
             generation_config = {
                 "temperature": temperature,
                 "top_p": top_p,
@@ -240,11 +347,10 @@ def _parse_llm_response(
         return None
     elif response_text == "":
         log_message(
-            f"Parsing response: Received empty string from {provider} API,"
-            f" likely no text detected or processing failed.",
+            f"Parsing response: Received empty string from {provider} API.",
             verbose=debug,
         )
-        return [f"[{provider}: No text/empty response]" for _ in range(expected_count)]
+        return [f"[{provider}: Empty response / no content]" for _ in range(expected_count)]
 
     try:
         log_message(f"Parsing response: Raw text received from {provider}:\n---\n{response_text}\n---", verbose=debug)
@@ -306,7 +412,7 @@ def _parse_llm_response(
 
         final_list = []
         for i in range(1, expected_count + 1):
-            final_list.append(parsed_dict.get(i, f"[{provider}: No text for bubble {i}]"))
+            final_list.append(parsed_dict.get(i, f"[{provider}: Incomplete response for bubble {i}]"))
 
         if len(final_list) != expected_count:
             log_message(
@@ -320,7 +426,7 @@ def _parse_llm_response(
     except Exception as e:
         log_message(f"Error parsing successful {provider} API response content: {str(e)}", always_print=True)
         # Treat parsing error as a failure for all bubbles
-        return [f"[{provider}: Error parsing response]" for _ in range(expected_count)]
+        return [f"[{provider}: Failed to parse response]" for _ in range(expected_count)]
 
 
 def call_translation_api_batch(
@@ -357,15 +463,22 @@ def call_translation_api_batch(
     )
 
     # --- Prepare common API input parts (images) ---
-    base_parts = [{"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}}]
+    base_parts = []
+    if config.send_full_page_context and full_image_b64:
+        base_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}})
     for img_b64 in images_b64:
         base_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
 
     try:
         if translation_mode == "two-step":
             # --- Step 1: OCR ---
+            lang_part = (
+                f"the original {input_language} text"
+                if input_language and input_language.lower() != "auto"
+                else "the original text"
+            )
             ocr_prompt = f"""Analyze the {num_bubbles} individual speech bubble images extracted from a manga/comic page in reading order ({reading_order_desc}).
-For each individual speech bubble image, *only* extract the original {input_language} text.
+For each individual speech bubble image, *only* extract {lang_part}.
 Provide your response in this *exact* format, with each extraction on a new line:
 1: [Extracted text for bubble 1]
 ...
@@ -403,15 +516,32 @@ Do not include translations, explanations, or any other text in your response.""
                     formatted_texts_for_prompt.append(f"{i + 1}: {text}")
             extracted_text_block = "\n".join(formatted_texts_for_prompt)
 
-            translation_prompt = f"""Analyze the full manga/comic page image provided for context ({reading_order_desc} reading direction).
-Then, translate the following extracted speech bubble texts (numbered {1} to {num_bubbles}) from {input_language} to {output_language}, choosing words and sentence structures that accurately convey the original's tone and sound authentic for that specific context in the target language.
+            preface = (
+                "Analyze the full manga/comic page image provided for context "
+                f"({reading_order_desc} reading direction)."
+                if config.send_full_page_context
+                else ""
+            )
+            from_part = (
+                f"from {input_language} to {output_language}"
+                if input_language and input_language.lower() != "auto"
+                else f"to {output_language}"
+            )
+            header_label = (
+                "Extracted Text:"
+                if not input_language or input_language.lower() == "auto"
+                else f"Extracted {input_language} Text:"
+            )
+
+            translation_prompt = f"""{preface}
+Then, translate the following extracted speech bubble texts (numbered {1} to {num_bubbles}) {from_part}, choosing words and sentence structures that accurately convey the original's tone and sounds authentic for that specific context in the target language.
 Decide if styling should be applied using these markdown-like markers:
 - Italic (`*text*`): Use for thoughts, flashbacks, distant sounds, or dialogue via devices.
 - Bold (`**text**`): Use for SFX, shouting, and timestamps.
 - Bold Italic (`***text***`): Use for loud SFX/dialogue in flashbacks or via devices.
 - Use regular text otherwise. You can style parts of text if needed (e.g., "He said **'Stop!'**").
 
-Extracted {input_language} Text:
+{header_label}
 ---
 {extracted_text_block}
 ---
@@ -426,7 +556,9 @@ For any extraction labeled as "[OCR FAILED]", output exactly "[OCR FAILED]" for 
 Do not include any other text or explanations in your response."""  # noqa
 
             # Prepare parts for translation call (only full image + prompt)
-            translation_parts = [{"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}}]
+            translation_parts = []
+            if config.send_full_page_context and full_image_b64:
+                translation_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}})
 
             translation_response_text = _call_llm_endpoint(config, translation_parts, translation_prompt, debug)
             final_translations = _parse_llm_response(
@@ -463,9 +595,31 @@ Do not include any other text or explanations in your response."""  # noqa
         elif translation_mode == "one-step":
             # --- One-Step Logic ---
             log_message("--- Starting One-Step Translation ---", verbose=debug)
-            one_step_prompt = f"""Analyze the full manga/comic page image provided, followed by the {num_bubbles} individual speech bubble images extracted from it in reading order ({reading_order_desc}).
+            # Build context-aware prompt pieces similar to two-step
+            lang_part = (
+                f"the original {input_language} text"
+                if input_language and input_language.lower() != "auto"
+                else "the original text"
+            )
+            from_part = (
+                f"from {input_language} to {output_language}"
+                if input_language and input_language.lower() != "auto"
+                else f"to {output_language}"
+            )
+            preface_full = (
+                f"Analyze the full manga/comic page image provided, followed by the {num_bubbles} "
+                f"individual speech bubble images extracted from it in reading order "
+                f"({reading_order_desc})."
+            )
+            preface_no_full = (
+                f"Analyze the {num_bubbles} individual speech bubble images extracted from a manga/comic page "
+                f"in reading order ({reading_order_desc})."
+            )
+            preface = preface_full if config.send_full_page_context else preface_no_full
+
+            one_step_prompt = f"""{preface}
 For each individual speech bubble image:
-1. Extract the {input_language} text and translate it to {output_language}, choosing words and sentence structures that accurately convey the original's tone and sound authentic for that specific context in the target language.
+1. Extract the original {lang_part} and translate it {from_part}, choosing words and sentence structures that accurately convey the original's tone and sounds authentic for that specific context in the target language.
 2. Decide if styling should be applied to the translated text using these markdown-like markers:
     - Italic (`*text*`): Use for thoughts, flashbacks, distant sounds, or dialogue via devices.
     - Bold (`**text**`): Use for SFX, shouting, and timestamps.

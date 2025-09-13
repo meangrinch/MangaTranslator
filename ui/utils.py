@@ -229,6 +229,8 @@ def update_translation_ui(provider: str, current_temp: float):
     enable_thinking_update = gr.update(visible=False)
     # Visibility for reasoning effort (OpenAI only)
     reasoning_effort_visible_update = gr.update(visible=(provider == "OpenAI"))
+    # Visibility for OpenRouter override
+    openrouter_override_visible_update = gr.update(visible=(provider == "OpenRouter"))
 
     return (
         gemini_visible_update,
@@ -242,6 +244,7 @@ def update_translation_ui(provider: str, current_temp: float):
         top_k_update,
         enable_thinking_update,
         reasoning_effort_visible_update,
+        openrouter_override_visible_update,
     )
 
 
@@ -356,16 +359,37 @@ def fetch_and_update_openrouter_models():
         data = response.json()
         all_models = data.get("data", [])
 
-        vision_keywords = ["omni", "vision", "vl", "multimodal", "gemini"]
+        # Vision keywords for the model id
+        id_keywords = ["omni", "vision", "vl", "multimodal", "gemini", "claude"]
+        # Vision keywords for description checks
+        desc_keywords = ["omni", "vision", "vl", "multimodal"]
         filtered_models = []
         for model in all_models:
             model_id = model.get("id", "").lower()
             description = model.get("description", "").lower()
-            # Check if model supports image input (basic check)
+            arch = model.get("architecture", {}) or {}
+
+            # Determine multimodality from architecture fields
+            modality_field = str(arch.get("modality", "")).lower()
+            input_modalities = arch.get("input_modalities", []) or []
+            if not isinstance(input_modalities, list):
+                input_modalities = []
+            input_modalities_lc = [str(m).lower() for m in input_modalities]
+
+            has_image_in_modality = (
+                any(k in modality_field for k in ["image", "vision", "multimodal"]) if modality_field else False
+            )
+            has_image_input = any(
+                ("image" in m) or (m == "video") for m in input_modalities_lc
+            )
+
+            # Check if model supports image input
             supports_image_input = (
-                model.get("architecture", {}).get("instruct_type") == "multimodal"
-                or any(keyword in model_id for keyword in vision_keywords)
-                or any(keyword in description for keyword in vision_keywords)
+                arch.get("instruct_type") == "multimodal"
+                or has_image_in_modality
+                or has_image_input
+                or any(keyword in model_id for keyword in id_keywords)
+                or any(keyword in description for keyword in desc_keywords)
             )
 
             if supports_image_input:
@@ -497,3 +521,8 @@ def initial_dynamic_fetch(provider: str, url: str, key: Optional[str]):
             print("Initial load: OpenAI-Compatible selected, fetching models...")
         return fetch_and_update_compatible_models(url, key)
     return gr.update()
+
+
+def update_openrouter_override_visibility(provider: str):
+    """Return a gr.update controlling the OpenRouter override checkbox visibility."""
+    return gr.update(visible=(provider == "OpenRouter"))

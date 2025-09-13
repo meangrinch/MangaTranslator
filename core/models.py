@@ -9,6 +9,8 @@ class DetectionConfig:
     """Configuration for speech bubble detection."""
 
     confidence: float = 0.35
+    use_sam2: bool = True  # Use SAM 2.1 for segmentation guided by YOLO bboxes
+    sam2_model_id: str = "facebook/sam2.1-hiera-large"
 
 
 @dataclass
@@ -46,8 +48,10 @@ class TranslationConfig:
     output_language: str = "English"
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
-    enable_thinking: bool = True  # Gemini 2.5 Flash models
+    enable_thinking: bool = True  # Gemini 2.5 Flash & Claude reasoning models
     reasoning_effort: Optional[str] = "medium"  # OpenAI reasoning models (o1/o3/o4-mini/gpt-5*)
+    send_full_page_context: bool = True
+    openrouter_reasoning_override: bool = False  # Forces max output tokens to 8192
 
 
 @dataclass
@@ -61,6 +65,7 @@ class RenderingConfig:
     use_subpixel_rendering: bool = False
     font_hinting: str = "none"
     use_ligatures: bool = False
+    hyphenate_before_scaling: bool = True
 
 
 @dataclass

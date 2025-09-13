@@ -100,6 +100,9 @@ def _format_single_success_message(
         ),
     ]
     if not backend_config.cleaning_only:
+        msg_parts.append(
+            f"• Full-page context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
+        )
         msg_parts.append(f"{llm_params_str}\n")
 
     if backend_config.output.output_format == "png":
@@ -109,9 +112,20 @@ def _format_single_success_message(
         msg_parts.append("• Output format: jpeg\n")
         msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
     else:  # Auto
-        msg_parts.append("• Output format: auto\n")
-        msg_parts.append(f"• PNG compression: {backend_config.output.png_compression}\n")
-        msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
+        try:
+            ext = save_path.suffix.lower()
+        except Exception:
+            ext = ""
+        if ext in {".jpg", ".jpeg"}:
+            msg_parts.append("• Output format: auto → jpeg\n")
+            msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
+        elif ext == ".png":
+            msg_parts.append("• Output format: auto → png\n")
+            msg_parts.append(f"• PNG compression: {backend_config.output.png_compression}\n")
+        elif ext == ".webp":
+            msg_parts.append("• Output format: auto → webp\n")
+        else:
+            msg_parts.append("• Output format: auto\n")
 
     msg_parts.extend([f"• Processing time: {processing_time:.2f} seconds\n", f"• Saved to: {save_path}"])
     return "".join(msg_parts)
@@ -166,6 +180,12 @@ def _format_batch_success_message(
         param_notes = " (Top-K N/A)"
     llm_params_str += param_notes
 
+    if not backend_config.cleaning_only:
+        llm_params_str = (
+            f"• Full-page context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
+            + llm_params_str
+        )
+
     error_summary = ""
     if error_count > 0:
         error_summary = f"\n• Warning: {error_count} image(s) failed to process."
@@ -202,9 +222,22 @@ def _format_batch_success_message(
         msg_parts.append("• Output format: jpeg\n")
         msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
     else:  # Auto
+        # Derive which compression/quality setting to display based on batch output files
         msg_parts.append("• Output format: auto\n")
-        msg_parts.append(f"• PNG compression: {backend_config.output.png_compression}\n")
-        msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
+        try:
+            out_dir = Path(output_path)
+            if out_dir.exists() and out_dir.is_dir():
+                exts = {p.suffix.lower() for p in out_dir.glob("*.*") if p.is_file()}
+                # Normalize jpeg extensions
+                only_jpeg = exts and all(e in {".jpg", ".jpeg"} for e in exts)
+                only_png = exts == {".png"}
+                if only_png:
+                    msg_parts.append(f"• PNG compression: {backend_config.output.png_compression}\n")
+                elif only_jpeg:
+                    msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
+                # If mixed or unknown, omit specific settings to avoid showing both
+        except Exception:
+            pass
 
     msg_parts.extend(
         [
@@ -227,6 +260,7 @@ def handle_translate_click(
         input_image_path,
         config_yolo_model_dropdown,
         confidence,
+        use_sam2_checkbox_val,
         dilation_kernel_size,
         dilation_iterations,
         use_otsu_threshold,
@@ -264,6 +298,9 @@ def handle_translate_click(
         cleaning_only_toggle,
         enable_thinking_checkbox_val,
         reasoning_effort_val,
+        send_full_page_context_val,
+        hyphenate_before_scaling_val,
+        openrouter_reasoning_override_val,
     ) = args
     """Callback for the 'Translate' button click."""
     start_time = time.time()
@@ -300,7 +337,7 @@ def handle_translate_click(
         # --- Build UI State Dataclass ---
         ui_state = UIConfigState(
             yolo_model=config_yolo_model_dropdown,
-            detection=UIDetectionSettings(confidence=confidence),
+            detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
             cleaning=UICleaningSettings(
                 dilation_kernel_size=dilation_kernel_size,
                 dilation_iterations=dilation_iterations,
@@ -327,6 +364,7 @@ def handle_translate_click(
                 top_k=top_k,
                 reading_direction=config_reading_direction,
                 translation_mode=config_translation_mode,
+                send_full_page_context=send_full_page_context_val,
             ),
             rendering=UIRenderingSettings(
                 max_font_size=max_font_size,
@@ -335,6 +373,7 @@ def handle_translate_click(
                 use_subpixel_rendering=use_subpixel_rendering,
                 font_hinting=font_hinting,
                 use_ligatures=use_ligatures,
+                hyphenate_before_scaling=hyphenate_before_scaling_val,
             ),
             output=UIOutputSettings(
                 output_format=output_format,
@@ -346,6 +385,7 @@ def handle_translate_click(
                 cleaning_only=cleaning_only_toggle,
                 enable_thinking=enable_thinking_checkbox_val,
                 reasoning_effort=reasoning_effort_val,
+                openrouter_reasoning_override=openrouter_reasoning_override_val,
             ),
             input_language=input_language,
             output_language=output_language,
@@ -410,6 +450,7 @@ def handle_batch_click(
         input_files,
         config_yolo_model_dropdown,
         confidence,
+        use_sam2_checkbox_val,
         dilation_kernel_size,
         dilation_iterations,
         use_otsu_threshold,
@@ -447,6 +488,9 @@ def handle_batch_click(
         cleaning_only_toggle,
         enable_thinking_checkbox_val,
         reasoning_effort_val,
+        batch_send_full_page_context_val,
+        hyphenate_before_scaling_val,
+        openrouter_reasoning_override_val,
     ) = args
     """Callback for the 'Start Batch Translating' button click."""
     progress(0, desc="Starting batch process...")
@@ -485,7 +529,7 @@ def handle_batch_click(
         # --- Build UI State Dataclass ---
         ui_state = UIConfigState(
             yolo_model=config_yolo_model_dropdown,
-            detection=UIDetectionSettings(confidence=confidence),
+            detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
             cleaning=UICleaningSettings(
                 dilation_kernel_size=dilation_kernel_size,
                 dilation_iterations=dilation_iterations,
@@ -512,6 +556,7 @@ def handle_batch_click(
                 top_k=top_k,
                 reading_direction=config_reading_direction,
                 translation_mode=config_translation_mode,
+                send_full_page_context=batch_send_full_page_context_val,
             ),
             rendering=UIRenderingSettings(
                 max_font_size=max_font_size,
@@ -520,6 +565,7 @@ def handle_batch_click(
                 use_subpixel_rendering=use_subpixel_rendering,
                 font_hinting=font_hinting,
                 use_ligatures=use_ligatures,
+                hyphenate_before_scaling=hyphenate_before_scaling_val,
             ),
             output=UIOutputSettings(
                 output_format=output_format,
@@ -531,6 +577,7 @@ def handle_batch_click(
                 cleaning_only=cleaning_only_toggle,
                 enable_thinking=enable_thinking_checkbox_val,
                 reasoning_effort=reasoning_effort_val,
+                openrouter_reasoning_override=openrouter_reasoning_override_val,
             ),
             batch_input_language=batch_input_language,
             batch_output_language=batch_output_language,
@@ -595,6 +642,7 @@ def handle_save_config_click(*args: Any) -> str:
     (
         yolo,
         conf,
+        use_sam2,
         rd,
         dks,
         di,
@@ -635,12 +683,15 @@ def handle_save_config_click(*args: Any) -> str:
         b_font,
         enable_thinking_val,
         reasoning_effort_val,
+        send_full_page_context_val,
+        hyphenate_before_scaling_val,
+        openrouter_reasoning_override_val,
     ) = args
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
     ui_state = UIConfigState(
         yolo_model=yolo,
-        detection=UIDetectionSettings(confidence=conf),
+        detection=UIDetectionSettings(confidence=conf, use_sam2=use_sam2),
         cleaning=UICleaningSettings(
             dilation_kernel_size=dks,
             dilation_iterations=di,
@@ -667,6 +718,7 @@ def handle_save_config_click(*args: Any) -> str:
             top_k=tk,
             reading_direction=rd,
             translation_mode=trans_mode,
+            send_full_page_context=send_full_page_context_val,
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_fs,
@@ -675,6 +727,7 @@ def handle_save_config_click(*args: Any) -> str:
             use_subpixel_rendering=subpix,
             font_hinting=hint,
             use_ligatures=liga,
+            hyphenate_before_scaling=hyphenate_before_scaling_val,
         ),
         output=UIOutputSettings(
             output_format=out_fmt,
@@ -686,6 +739,7 @@ def handle_save_config_click(*args: Any) -> str:
             cleaning_only=cleaning_only_val,
             enable_thinking=enable_thinking_val,
             reasoning_effort=reasoning_effort_val,
+            openrouter_reasoning_override=openrouter_reasoning_override_val,
         ),
         input_language=s_in_lang,
         output_language=s_out_lang,
@@ -697,6 +751,8 @@ def handle_save_config_click(*args: Any) -> str:
 
     # Convert UI state to dictionary for saving
     settings_dict = ui_state.to_save_dict()
+    # Persist send_full_page_context from the single UI value (used for both single and batch flows).
+    settings_dict["send_full_page_context"] = bool(send_full_page_context_val)
     message = settings_manager.save_config(settings_dict)
     return message
 
@@ -754,6 +810,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     return [
         gr.update(value=default_ui_state.yolo_model),
         default_ui_state.detection.confidence,
+        default_ui_state.detection.use_sam2,
         default_ui_state.llm_settings.reading_direction,
         default_ui_state.cleaning.dilation_kernel_size,
         default_ui_state.cleaning.dilation_iterations,
@@ -795,6 +852,8 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
         gr.update(value=default_ui_state.general.enable_thinking, visible=enable_thinking_visible),
         gr.update(value=default_ui_state.general.reasoning_effort, visible=reasoning_visible),
         "Settings reset to defaults (API keys preserved).",
+        gr.update(value=default_ui_state.llm_settings.send_full_page_context),
+        gr.update(value=default_ui_state.rendering.hyphenate_before_scaling),
     ]
 
 

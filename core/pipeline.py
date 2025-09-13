@@ -131,23 +131,32 @@ def translate_and_render(
 
     original_cv_image = pil_to_cv2(pil_image_processed)
 
-    # --- Encode Full Image for Context ---
+    # --- Encode Full Image for Context (optional) ---
     full_image_b64 = None
-    try:
-        is_success, buffer = cv2.imencode(".jpg", original_cv_image)
-        if not is_success:
-            raise ValueError("Full image encoding to JPEG failed")
-        full_image_b64 = base64.b64encode(buffer).decode("utf-8")
-        log_message("Encoded full image for translation context.", verbose=verbose)
-    except Exception as e:
-        log_message(f"Error encoding full image to base64: {e}. Translation might lack context.", always_print=True)
-        # Continue without full image context if encoding fails
+    if config.translation.send_full_page_context:
+        try:
+            is_success, buffer = cv2.imencode(".jpg", original_cv_image)
+            if not is_success:
+                raise ValueError("Full image encoding to JPEG failed")
+            full_image_b64 = base64.b64encode(buffer).decode("utf-8")
+            log_message("Encoded full image for translation context.", verbose=verbose)
+        except Exception as e:
+            log_message(
+                f"Error encoding full image to base64: {e}. Proceeding without full-page context.", always_print=True
+            )
+            # Continue without full image context if encoding fails
 
     # --- Detection ---
     log_message("Detecting speech bubbles...", verbose=verbose)
     try:
         bubble_data = detect_speech_bubbles(
-            image_path, config.yolo_model_path, config.detection.confidence, verbose=verbose, device=device
+            image_path,
+            config.yolo_model_path,
+            config.detection.confidence,
+            verbose=verbose,
+            device=device,
+            use_sam2=config.detection.use_sam2,
+            sam2_model_id=config.detection.sam2_model_id,
         )
     except Exception as e:
         log_message(f"Error during bubble detection: {e}. Proceeding without bubbles.", always_print=True)
@@ -254,11 +263,6 @@ def translate_and_render(
                         "Skipping translation and rendering.",
                         always_print=True,
                     )
-                elif full_image_b64 is None:
-                    log_message(
-                        "Full image context is missing due to encoding error. Skipping translation and rendering.",
-                        always_print=True,
-                    )
                 else:
                     # Only attempt translation if we have bubbles and context
                     log_message(
@@ -270,12 +274,14 @@ def translate_and_render(
                         translated_texts = call_translation_api_batch(
                             config=config.translation,
                             images_b64=bubble_images_b64,
-                            full_image_b64=full_image_b64,
+                            full_image_b64=full_image_b64 or "",
                             debug=verbose,
                         )
                     except Exception as e:
                         log_message(f"Error during API translation: {e}", always_print=True)
-                        translated_texts = ["[Translation Error]" for _ in sorted_bubble_data]
+                        translated_texts = [
+                            "[Translation Error: API call raised exception]" for _ in sorted_bubble_data
+                        ]
 
                 # --- Render Translations ---
                 # Map original bbox tuple to color and LIR bbox
@@ -298,9 +304,15 @@ def translate_and_render(
                         if (
                             not text
                             or text.startswith("API Error")
-                            or text == "No text detected or translation failed"
-                            or text.startswith("[No translation")
                             or text.startswith("[Translation Error]")
+                            or text.startswith("[Translation Error:")
+                            or text.strip() in {
+                                "[OCR FAILED]",
+                                "[Empty response / no content]",
+                                f"[{config.translation.provider}: API call failed/blocked]",
+                                f"[{config.translation.provider}: OCR call failed/blocked]",
+                                f"[{config.translation.provider}: Failed to parse response]",
+                            }
                         ):
                             log_message(
                                 f"Skipping rendering for bubble {bbox} due to empty or error translation: '{text}'",
@@ -333,6 +345,7 @@ def translate_and_render(
                             use_subpixel_rendering=config.rendering.use_subpixel_rendering,
                             font_hinting=config.rendering.font_hinting,
                             use_ligatures=config.rendering.use_ligatures,
+                            hyphenate_before_scaling=config.rendering.hyphenate_before_scaling,
                             verbose=verbose,
                         )
 
@@ -552,9 +565,21 @@ def main():
         "If not provided, a default will be attempted based on the provider.",
     )
     parser.add_argument("--font-dir", type=str, default="./fonts", help="Directory containing font files")
-    parser.add_argument("--input-language", type=str, default="Japanese", help="Source language")
+    parser.add_argument(
+        "--input-language",
+        type=str,
+        default="Japanese",
+        help="Source language (use 'Auto' to autodetect)",
+    )
     parser.add_argument("--output-language", type=str, default="English", help="Target language")
     parser.add_argument("--conf", type=float, default=0.35, help="Confidence threshold for detection")
+    parser.add_argument(
+        "--no-sam2",
+        dest="use_sam2",
+        action="store_false",
+        help="Disable SAM 2.1 guided segmentation",
+    )
+    parser.set_defaults(use_sam2=True)
     parser.add_argument(
         "--reading-direction",
         type=str,
@@ -591,6 +616,11 @@ def main():
         help="Translation process mode (one-step or two-step)",
     )
     parser.add_argument(
+        "--openrouter-reasoning-override",
+        action="store_true",
+        help="Forces max output tokens to 8192 (for reasoning-capable LLM issues).",
+    )
+    parser.add_argument(
         "--reasoning-effort",
         type=str,
         default="medium",
@@ -604,6 +634,13 @@ def main():
     parser.add_argument("--max-font-size", type=int, default=14, help="Max font size for rendering text.")
     parser.add_argument("--min-font-size", type=int, default=8, help="Min font size for rendering text.")
     parser.add_argument("--line-spacing", type=float, default=1.0, help="Line spacing multiplier for rendered text.")
+    parser.add_argument(
+        "--no-hyphenate-before-scaling",
+        dest="hyphenate_before_scaling",
+        action="store_false",
+        help="Disable hyphenation of long words before reducing font size.",
+    )
+    parser.set_defaults(hyphenate_before_scaling=True)
     # Output args
     parser.add_argument("--jpeg-quality", type=int, default=95, help="JPEG compression quality (1-100)")
     parser.add_argument("--png-compression", type=int, default=6, help="PNG compression level (0-9)")
@@ -623,6 +660,14 @@ def main():
         action="store_true",
         help="Enable 'thinking' capabilities for Gemini 2.5 Flash models.",
     )
+    # Full page context toggle
+    parser.add_argument(
+        "--no-full-page-context",
+        dest="send_full_page_context",
+        action="store_false",
+        help="Disable sending the full page image as LLM context.",
+    )
+    parser.set_defaults(send_full_page_context=True)
     parser.set_defaults(verbose=False, cpu=False, cleaning_only=False, enable_thinking=False)
 
     args = parser.parse_args()
@@ -681,7 +726,7 @@ def main():
         verbose=args.verbose,
         device=target_device,
         cleaning_only=args.cleaning_only,
-        detection=DetectionConfig(confidence=args.conf),
+        detection=DetectionConfig(confidence=args.conf, use_sam2=args.use_sam2),
         cleaning=CleaningConfig(
             dilation_kernel_size=args.dilation_kernel_size,
             dilation_iterations=args.dilation_iterations,
@@ -706,18 +751,21 @@ def main():
             temperature=args.temperature,
             top_p=args.top_p,
             top_k=args.top_k,
+            openrouter_reasoning_override=args.openrouter_reasoning_override,
             input_language=args.input_language,
             output_language=args.output_language,
             reading_direction=args.reading_direction,
             translation_mode=args.translation_mode,
             enable_thinking=args.enable_thinking,
             reasoning_effort=args.reasoning_effort,
+            send_full_page_context=args.send_full_page_context,
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,
             max_font_size=args.max_font_size,
             min_font_size=args.min_font_size,
             line_spacing=args.line_spacing,
+            hyphenate_before_scaling=args.hyphenate_before_scaling,
         ),
         output=OutputConfig(
             jpeg_quality=args.jpeg_quality, png_compression=args.png_compression, image_mode=args.image_mode

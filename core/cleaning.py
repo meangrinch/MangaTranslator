@@ -74,6 +74,207 @@ def clean_speech_bubbles(
         )
 
         for detection in detections:
+            # Prefer SAM mask if available
+            sam_mask = detection.get("sam_mask")
+            if sam_mask is not None:
+                try:
+                    # Normalize SAM mask to uint8 0/255
+                    base_mask = sam_mask
+                    if base_mask.dtype != np.uint8:
+                        base_mask = base_mask.astype(np.uint8)
+                    base_mask = np.where(base_mask > 0, 255, 0).astype(np.uint8)
+
+                    # ROI similar to YOLO path (expand for thresholding robustness)
+                    roi_mask = cv2.dilate(base_mask, dilation_kernel, iterations=dilation_iterations)
+
+                    # Determine bubble color from pixels under the SAM mask
+                    masked_pixels = img_gray[base_mask == 255]
+                    if masked_pixels.size == 0:
+                        log_message(
+                            f"Skipping detection {detection.get('bbox')} due to empty SAM mask after indexing.",
+                            verbose=verbose,
+                        )
+                        continue
+                    mean_pixel_value = np.mean(masked_pixels)
+                    is_black_bubble = mean_pixel_value < 128
+                    fill_color_bgr = (0, 0, 0) if is_black_bubble else (255, 255, 255)
+                    log_message(
+                        f"[SAM] Detection {detection.get('bbox')}: Mean={mean_pixel_value:.1f} -> "
+                        f"{'Black' if is_black_bubble else 'White'} Bubble. Fill: {fill_color_bgr}",
+                        verbose=verbose,
+                    )
+
+                    # Build ROI grayscale image
+                    roi_gray = np.zeros_like(img_gray)
+                    roi_indices = roi_mask == 255
+                    if not np.any(roi_indices):
+                        log_message(
+                            f"[SAM] Skipping detection {detection.get('bbox')} due to empty ROI mask.",
+                            verbose=verbose,
+                        )
+                        continue
+                    roi_gray[roi_indices] = img_gray[roi_indices]
+
+                    # Thresholding (invert for black bubbles)
+                    roi_for_thresholding = cv2.bitwise_not(roi_gray) if is_black_bubble else roi_gray
+                    thresholded_roi = np.zeros_like(img_gray)
+                    if use_otsu_threshold:
+                        if np.any(roi_indices):
+                            roi_pixels_for_otsu = roi_for_thresholding[roi_indices]
+                            if roi_pixels_for_otsu.size > 0:
+                                thresh_val, _ = cv2.threshold(
+                                    roi_pixels_for_otsu, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+                                )
+                                log_message(f"[SAM]   - Otsu threshold determined: {thresh_val}", verbose=verbose)
+                                _, thresholded_roi = cv2.threshold(
+                                    roi_for_thresholding, thresh_val, 255, cv2.THRESH_BINARY
+                                )
+                            else:
+                                log_message(
+                                    "[SAM]   - Skipping Otsu: No pixels in ROI for thresholding.",
+                                    verbose=verbose,
+                                )
+                        else:
+                            log_message("[SAM]   - Skipping Otsu: ROI mask is empty.", verbose=verbose)
+                    else:
+                        fixed_threshold = 210
+                        _, thresholded_roi = cv2.threshold(
+                            roi_for_thresholding, fixed_threshold, 255, cv2.THRESH_BINARY
+                        )
+
+                    # Restrict thresholded region to ROI
+                    thresholded_roi = cv2.bitwise_and(thresholded_roi, roi_mask)
+
+                    # Constrain interior to avoid erasing outlines (use eroded SAM mask)
+                    eroded_constraint_mask = cv2.erode(
+                        base_mask, constraint_erosion_kernel, iterations=constraint_erosion_iterations
+                    )
+
+                    final_mask = None
+                    if is_black_bubble:
+                        log_message(
+                            f"[SAM] Detection {detection.get('bbox')}: Applying BLACK bubble refinement logic.",
+                            verbose=verbose,
+                        )
+                        contours, _ = cv2.findContours(thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                        refined_background_shape_mask = None
+                        if contours:
+                            valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_contour_area]
+                            if valid_contours:
+                                largest_contour = max(valid_contours, key=cv2.contourArea)
+                                refined_background_shape_mask = np.zeros_like(img_gray)
+                                cv2.drawContours(
+                                    refined_background_shape_mask,
+                                    [largest_contour],
+                                    -1,
+                                    255,
+                                    thickness=cv2.FILLED,
+                                )
+                                log_message("[SAM]   - Found refined background shape.", verbose=verbose)
+                            else:
+                                log_message("[SAM]   - No valid contours found for refined shape.", verbose=verbose)
+                        else:
+                            log_message("[SAM]   - No contours found at all for refined shape.", verbose=verbose)
+
+                        base_mask_closed = cv2.morphologyEx(
+                            base_mask, cv2.MORPH_CLOSE, closing_kernel, iterations=1
+                        )
+                        refined_mask = None
+                        if refined_background_shape_mask is not None:
+                            dilate_iter = 1
+                            dilated_shape_mask = cv2.dilate(
+                                refined_background_shape_mask, closing_kernel, iterations=dilate_iter
+                            )
+                            refined_mask = cv2.bitwise_and(base_mask_closed, dilated_shape_mask)
+                            log_message(
+                                "[SAM]   - Refined mask using dilated shape intersection.",
+                                verbose=verbose,
+                            )
+                        else:
+                            refined_mask = base_mask_closed
+                            log_message(
+                                "[SAM]   - No refined shape, using closed base SAM mask (1 iter).",
+                                verbose=verbose,
+                            )
+
+                        internal_erosion_iterations = max(1, (constraint_erosion_iterations + 2))
+                        eroded_refined_mask = cv2.erode(
+                            refined_mask,
+                            constraint_erosion_kernel,
+                            iterations=internal_erosion_iterations,
+                        )
+                        closed_eroded_refined_mask = cv2.morphologyEx(
+                            eroded_refined_mask, cv2.MORPH_CLOSE, closing_kernel, iterations=closing_iterations
+                        )
+                        final_mask = cv2.bitwise_and(
+                            closed_eroded_refined_mask, eroded_constraint_mask
+                        )
+                    else:
+                        log_message(
+                            f"[SAM] Detection {detection.get('bbox')}: Applying WHITE bubble refinement logic.",
+                            verbose=verbose,
+                        )
+                        contours, _ = cv2.findContours(thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                        if contours:
+                            valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_contour_area]
+                            if valid_contours:
+                                largest_contour = max(valid_contours, key=cv2.contourArea)
+                                interior_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+                                cv2.drawContours(
+                                    interior_mask, [largest_contour], -1, 255, thickness=cv2.FILLED
+                                )
+                                closed_mask = cv2.morphologyEx(
+                                    interior_mask, cv2.MORPH_CLOSE, closing_kernel, iterations=closing_iterations
+                                )
+                                final_mask = cv2.bitwise_and(closed_mask, eroded_constraint_mask)
+                                log_message(
+                                    "[SAM]   - Generated mask from largest contour, closed, and constrained.",
+                                    verbose=verbose,
+                                )
+                            else:
+                                log_message("[SAM]   - No valid contours found.", verbose=verbose)
+                        else:
+                            log_message("[SAM]   - No contours found at all.", verbose=verbose)
+
+                    if final_mask is not None:
+                        lir_coords = None
+                        if np.any(final_mask):
+                            try:
+                                lir_coords = largestinteriorrectangle.lir(final_mask.astype(bool))
+                                log_message(
+                                    f"[SAM]   - Calculated LIR: {lir_coords}",
+                                    verbose=verbose,
+                                )
+                            except Exception as lir_e:
+                                log_message(
+                                    f"[SAM]   - LIR calculation failed: {lir_e}",
+                                    verbose=verbose,
+                                    is_error=True,
+                                )
+                                lir_coords = None
+
+                        processed_bubbles.append(
+                            {
+                                "mask": final_mask,
+                                "color": fill_color_bgr,
+                                "bbox": detection.get("bbox"),
+                                "lir_bbox": lir_coords,
+                            }
+                        )
+                        log_message(
+                            (
+                                f"[SAM] Detection {detection.get('bbox')}: Stored final mask, "
+                                f"color {fill_color_bgr}, and LIR {lir_coords}."
+                            ),
+                            verbose=verbose,
+                        )
+                        continue
+                except Exception as e:
+                    log_message(
+                        f"Warning: Failed to refine SAM mask for {detection.get('bbox')}: {e}",
+                        always_print=True,
+                    )
+
             if "mask_points" not in detection or not detection["mask_points"]:
                 log_message(f"Skipping detection without mask points: {detection.get('bbox')}", verbose=verbose)
                 continue

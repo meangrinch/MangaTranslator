@@ -667,6 +667,66 @@ def call_openrouter_endpoint(
     raise RuntimeError(f"Failed to get response from OpenRouter API after {max_retries + 1} attempts.")
 
 
+# --- OpenRouter model metadata cache & reasoning detection ---
+_OPENROUTER_MODELS_META: Dict[str, Dict[str, Any]] = {}
+
+
+def _ensure_openrouter_models_meta_loaded(debug: bool = False) -> None:
+    """Loads and caches OpenRouter models metadata once per process.
+
+    Populates a mapping of model id -> model dict (including description/architecture).
+    """
+    global _OPENROUTER_MODELS_META
+    if _OPENROUTER_MODELS_META:
+        return
+    try:
+        response = requests.get("https://openrouter.ai/api/v1/models", timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        all_models = data.get("data", [])
+        for model in all_models:
+            mid = str(model.get("id", "")).lower()
+            if mid:
+                _OPENROUTER_MODELS_META[mid] = model
+    except Exception as e:
+        # Do not raise; lack of metadata should not block translations
+        log_message(f"Warning: Could not load OpenRouter models metadata: {e}", always_print=True)
+
+
+def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
+    """Heuristically detects whether an OpenRouter model is a reasoning model.
+
+    Uses keywords on model id and description, similar to how vision-capable models are detected.
+    Keywords include: reasoning, reason, thinking, think, cot, chain-of-thought.
+    """
+    if not model_name:
+        return False
+    try:
+        _ensure_openrouter_models_meta_loaded(debug=debug)
+    except Exception:
+        pass
+
+    lm = model_name.lower()
+    # Exclude models that are instruction-tuned (contain 'instruct' in the model id)
+    if "instruct" in lm:
+        return False
+    description = ""
+    meta = _OPENROUTER_MODELS_META.get(lm)
+    if meta:
+        description = str(meta.get("description", "")).lower()
+    keywords = [
+        "reasoning",
+        "reason",
+        "thinking",
+        "think",
+        "cot",
+        "chain-of-thought",
+        "chain_of_thought",
+    ]
+    text = lm + " " + description
+    return any(kw in text for kw in keywords)
+
+
 def call_openai_compatible_endpoint(
     base_url: str,
     api_key: Optional[str],

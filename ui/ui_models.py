@@ -18,6 +18,7 @@ class UIDetectionSettings:
     """UI state for detection settings."""
 
     confidence: float = 0.35
+    use_sam2: bool = True
 
 
 @dataclass
@@ -57,6 +58,8 @@ class UITranslationLLMSettings:
     top_k: int = 64
     translation_mode: str = "one-step"
     reading_direction: str = "rtl"
+    send_full_page_context: bool = True
+    openrouter_reasoning_override: bool = False
 
 
 @dataclass
@@ -69,6 +72,7 @@ class UIRenderingSettings:
     use_subpixel_rendering: bool = True
     font_hinting: str = "none"
     use_ligatures: bool = False
+    hyphenate_before_scaling: bool = True
 
 
 @dataclass
@@ -88,6 +92,7 @@ class UIGeneralSettings:
     cleaning_only: bool = False
     enable_thinking: bool = True
     reasoning_effort: str = "medium"
+    openrouter_reasoning_override: bool = False
 
 
 @dataclass
@@ -116,6 +121,7 @@ class UIConfigState:
         data = {
             "yolo_model": self.yolo_model,
             "confidence": self.detection.confidence,
+            "use_sam2": self.detection.use_sam2,
             "reading_direction": self.llm_settings.reading_direction,
             "dilation_kernel_size": self.cleaning.dilation_kernel_size,
             "dilation_iterations": self.cleaning.dilation_iterations,
@@ -137,6 +143,8 @@ class UIConfigState:
             "top_p": self.llm_settings.top_p,
             "top_k": self.llm_settings.top_k,
             "translation_mode": self.llm_settings.translation_mode,
+            "send_full_page_context": self.llm_settings.send_full_page_context,
+            "openrouter_reasoning_override": self.general.openrouter_reasoning_override,
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
             "min_font_size": self.rendering.min_font_size,
@@ -144,6 +152,7 @@ class UIConfigState:
             "use_subpixel_rendering": self.rendering.use_subpixel_rendering,
             "font_hinting": self.rendering.font_hinting,
             "use_ligatures": self.rendering.use_ligatures,
+            "hyphenate_before_scaling": self.rendering.hyphenate_before_scaling,
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
             "png_compression": self.output.png_compression,
@@ -172,6 +181,7 @@ class UIConfigState:
             yolo_model=data.get("yolo_model"),
             detection=UIDetectionSettings(
                 confidence=data.get("confidence", defaults["confidence"]),
+                use_sam2=data.get("use_sam2", True),
             ),
             cleaning=UICleaningSettings(
                 dilation_kernel_size=data.get("dilation_kernel_size", defaults["dilation_kernel_size"]),
@@ -205,6 +215,7 @@ class UIConfigState:
                 top_k=data.get("top_k", defaults["top_k"]),
                 translation_mode=data.get("translation_mode", defaults["translation_mode"]),
                 reading_direction=data.get("reading_direction", defaults["reading_direction"]),
+                send_full_page_context=data.get("send_full_page_context", True),
             ),
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
@@ -213,6 +224,10 @@ class UIConfigState:
                 use_subpixel_rendering=data.get("use_subpixel_rendering", defaults["use_subpixel_rendering"]),
                 font_hinting=data.get("font_hinting", defaults["font_hinting"]),
                 use_ligatures=data.get("use_ligatures", defaults["use_ligatures"]),
+                hyphenate_before_scaling=data.get(
+                    "hyphenate_before_scaling",
+                    defaults.get("hyphenate_before_scaling", True),
+                ),
             ),
             output=UIOutputSettings(
                 output_format=data.get("output_format", defaults["output_format"]),
@@ -224,6 +239,9 @@ class UIConfigState:
                 cleaning_only=data.get("cleaning_only", defaults["cleaning_only"]),
                 enable_thinking=data.get("enable_thinking", defaults.get("enable_thinking", True)),
                 reasoning_effort=data.get("reasoning_effort", defaults.get("reasoning_effort", "medium")),
+                openrouter_reasoning_override=data.get(
+                    "openrouter_reasoning_override", defaults.get("openrouter_reasoning_override", False)
+                ),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
             output_language=data.get("output_language", defaults["output_language"]),
@@ -250,6 +268,7 @@ def map_ui_to_backend_config(
     output_lang = ui_state.batch_output_language if is_batch else ui_state.output_language
 
     detection_cfg = DetectionConfig(confidence=ui_state.detection.confidence)
+    detection_cfg.use_sam2 = ui_state.detection.use_sam2
 
     cleaning_cfg = CleaningConfig(
         dilation_kernel_size=ui_state.cleaning.dilation_kernel_size,
@@ -274,11 +293,13 @@ def map_ui_to_backend_config(
         temperature=ui_state.llm_settings.temperature,
         top_p=ui_state.llm_settings.top_p,
         top_k=ui_state.llm_settings.top_k,
+        openrouter_reasoning_override=ui_state.general.openrouter_reasoning_override,
         input_language=input_lang,
         output_language=output_lang,
         reading_direction=ui_state.llm_settings.reading_direction,
         translation_mode=ui_state.llm_settings.translation_mode,
         enable_thinking=ui_state.general.enable_thinking,
+        send_full_page_context=ui_state.llm_settings.send_full_page_context,
     )
 
     rendering_cfg = RenderingConfig(
@@ -289,6 +310,7 @@ def map_ui_to_backend_config(
         use_subpixel_rendering=ui_state.rendering.use_subpixel_rendering,
         font_hinting=ui_state.rendering.font_hinting,
         use_ligatures=ui_state.rendering.use_ligatures,
+        hyphenate_before_scaling=ui_state.rendering.hyphenate_before_scaling,
     )
 
     output_cfg = OutputConfig(
