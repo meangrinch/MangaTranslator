@@ -1,9 +1,9 @@
 ## MangaTranslator
 
-Translate manga/comic speech bubbles using AI: YOLOv8‑seg for bubble detection, LLMs for OCR+translation. Features a Gradio Web UI and a CLI.
+Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs for OCR+translation. Features a Gradio Web UI and a CLI.
 
 ## Features
-- Speech bubble detection (YOLOv8‑seg)
+- Speech bubble detection (YOLOv8)
 - Text cleaning (removes original bubble text)
 - LLM-powered translation (one-step or two-step)
 - Text rendering with your chosen font pack
@@ -12,7 +12,7 @@ Translate manga/comic speech bubbles using AI: YOLOv8‑seg for bubble detection
 ## Requirements
 - Python 3.10+
 - PyTorch (CPU or CUDA build for your system)
-- Segmentation YOLO model trained for speech bubbles (`.pt`)
+- YOLO model trained for speech bubble detection (`.pt`)
 - Font pack with `.ttf`/`.otf`
 - Vision-capable LLM (API or Local)
 
@@ -38,8 +38,8 @@ source venv/bin/activate
 ```
 3) Install PyTorch (see: [PyTorch Install](https://pytorch.org/get-started/locally/))
 ```bash
-# Example (CUDA 12.4)
-pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
+# Example (CUDA 12.8)
+pip install torch==2.7.1+cu128 torchvision==0.22.1+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
 # Example (CPU)
 pip install torch
 ```
