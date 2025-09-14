@@ -18,6 +18,61 @@ TRANSLATION_PATTERN = re.compile(
 )
 
 
+def _build_system_prompt_ocr(input_language: Optional[str], reading_direction: str) -> str:
+    """System prompt for OCR-only extraction.
+
+    Emphasizes deterministic, structured output and domain rules from the prompt-engineering guide.
+    """
+    lang_label = (
+        f"{input_language} " if input_language and input_language.lower() != "auto" else ""
+    )
+    direction = (
+        "right-to-left" if (reading_direction or "rtl").lower() == "rtl" else "left-to-right"
+    )
+    return (
+        "You are an expert manga/comic OCR transcriber.\n"
+        "- Task: For each speech bubble image, transcribe the visible text only; do not translate.\n"
+        "- Layout context: Reading order is "
+        + direction
+        + ".\n"
+        "- Text policy: Preserve punctuation, ellipses, and casing. "
+        "Collapse multi-line text into a single line with spaces.\n"
+        "- Ignore: borders/tails, watermarks, page numbers, and decorations outside the bubble.\n"
+        "- "
+        + ("Language: Focus on the original " + lang_label + "text.\n" if lang_label else "")
+        + "- Ruby/furigana: If present, ignore small ruby readings and keep the main base text.\n"
+        "- If a bubble has no legible text, return [NO TEXT]. If the text is unreadable, return [OCR FAILED].\n"
+        "- Output format: Return ONLY a numbered list with exactly one line per bubble, "
+        "in the form `i: <text>` for i = 1..N, and nothing else."
+    )
+
+
+def _build_system_prompt_translation(output_language: str) -> str:
+    """System prompt for translation and styling.
+
+    Applies role prompting and strict output schema per the prompt-engineering guide.
+    """
+    return (
+        "You are a professional manga localization translator and editor.\n"
+        "- Goal: Produce natural-sounding "
+        + (output_language or "target language")
+        + " while staying faithful to meaning and tone.\n"
+        "- Style markers (markdown-like):\n"
+        "  * Italic (`*text*`): thoughts, flashbacks, distant sounds, device-mediated dialogue.\n"
+        "  * Bold (`**text**`): SFX, shouting, timestamps, emphatic words.\n"
+        "  * Bold Italic (`***text***`): very loud SFX/dialogue in flashbacks or via devices.\n"
+        "- Typography awareness: If the source text appears visually emphasized (bold or heavy weight, "
+        "slanted or italic, ALL-CAPS SFX), consider mirroring that emphasis with the markers above "
+        "when doing so conveys meaning. Avoid copying styling that is merely decorative.\n"
+        "- Do not add content or explanations. Keep translations concise and idiomatic.\n"
+        "- Preserve intended emphasis; you may style only the relevant words within a line.\n"
+        "- Use ASCII quotes and punctuation; retain ellipses when meaningful.\n"
+        "- If a source line is [OCR FAILED] or [NO TEXT], output it unchanged.\n"
+        "- Output format: Return ONLY a numbered list with exactly one line per bubble, "
+        "in the form `i: <text>` for i = 1..N and nothing else."
+    )
+
+
 def sort_bubbles_by_reading_order(detections, image_height, image_width, reading_direction="rtl"):
     """
     Sort speech bubbles into a robust reading order.
@@ -200,7 +255,11 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
 
 
 def _call_llm_endpoint(
-    config: TranslationConfig, parts: List[Dict[str, Any]], prompt_text: str, debug: bool = False
+    config: TranslationConfig,
+    parts: List[Dict[str, Any]],
+    prompt_text: str,
+    debug: bool = False,
+    system_prompt: Optional[str] = None,
 ) -> Optional[str]:
     """Internal helper to dispatch API calls based on provider."""
     provider = config.provider
@@ -238,6 +297,7 @@ def _call_llm_endpoint(
                 model_name=model_name,
                 parts=api_parts,
                 generation_config=generation_config,
+                system_prompt=system_prompt,
                 debug=debug,
             )
         elif provider == "OpenAI":
@@ -262,6 +322,7 @@ def _call_llm_endpoint(
                 model_name=model_name,
                 parts=api_parts,
                 generation_config=generation_config,
+                system_prompt=system_prompt,
                 debug=debug,
             )
         elif provider == "Anthropic":
@@ -292,6 +353,7 @@ def _call_llm_endpoint(
                 model_name=model_name,
                 parts=api_parts,
                 generation_config=generation_config,
+                system_prompt=system_prompt,
                 debug=debug,
             )
         elif provider == "OpenRouter":
@@ -315,6 +377,7 @@ def _call_llm_endpoint(
                 model_name=model_name,
                 parts=api_parts,
                 generation_config=generation_config,
+                system_prompt=system_prompt,
                 debug=debug,
             )
         elif provider == "OpenAI-Compatible":
@@ -329,6 +392,7 @@ def _call_llm_endpoint(
                 model_name=model_name,
                 parts=api_parts,
                 generation_config=generation_config,
+                system_prompt=system_prompt,
                 debug=debug,
             )
         else:
@@ -478,13 +542,13 @@ def call_translation_api_batch(
                 else "the original text"
             )
             ocr_prompt = f"""Analyze the {num_bubbles} individual speech bubble images extracted from a manga/comic page in reading order ({reading_order_desc}).
-For each individual speech bubble image, *only* extract {lang_part}.
-Provide your response in this *exact* format, with each extraction on a new line:
-1: [Extracted text for bubble 1]
-...
-{num_bubbles}: [Extracted text for bubble {num_bubbles}]
+For each bubble image, transcribe only {lang_part}. Collapse multi-line text into one line with spaces.
+If a bubble has no legible text, output exactly [NO TEXT]. If the text is unreadable, output exactly [OCR FAILED].
 
-Do not include translations, explanations, or any other text in your response."""  # noqa
+Return ONLY the following numbered lines, one per bubble:
+1: <text>
+...
+{num_bubbles}: <text>"""  # noqa
 
             log_message("--- Starting Two-Step Translation: Step 1 (OCR) ---", verbose=debug)
             # Prepare parts specifically for OCR (only bubble images)
@@ -492,7 +556,14 @@ Do not include translations, explanations, or any other text in your response.""
             for img_b64 in images_b64:
                 ocr_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
 
-            ocr_response_text = _call_llm_endpoint(config, ocr_parts, ocr_prompt, debug)
+            ocr_system = _build_system_prompt_ocr(input_language, reading_direction)
+            ocr_response_text = _call_llm_endpoint(
+                config,
+                ocr_parts,
+                ocr_prompt,
+                debug,
+                system_prompt=ocr_system,
+            )
             extracted_texts = _parse_llm_response(ocr_response_text, num_bubbles, provider + "-OCR", debug)
 
             if extracted_texts is None:
@@ -534,33 +605,39 @@ Do not include translations, explanations, or any other text in your response.""
             )
 
             translation_prompt = f"""{preface}
-Then, translate the following extracted speech bubble texts (numbered {1} to {num_bubbles}) {from_part}, choosing words and sentence structures that accurately convey the original's tone and sounds authentic for that specific context in the target language.
-Decide if styling should be applied using these markdown-like markers:
-- Italic (`*text*`): Use for thoughts, flashbacks, distant sounds, or dialogue via devices.
-- Bold (`**text**`): Use for SFX, shouting, and timestamps.
-- Bold Italic (`***text***`): Use for loud SFX/dialogue in flashbacks or via devices.
-- Use regular text otherwise. You can style parts of text if needed (e.g., "He said **'Stop!'**").
+Translate the following extracted speech-bubble texts (numbered 1 to {num_bubbles}) {from_part}. Choose wording that preserves meaning, tone, and naturalness in the target language.
+Apply styling when appropriate:
+- Italic (`*text*`): thoughts, flashbacks, distant sounds, device-mediated dialogue.
+- Bold (`**text**`): SFX, shouting, timestamps, emphatic words.
+- Bold Italic (`***text***`): very loud SFX/dialogue in flashbacks or via devices.
+- Use plain text otherwise; style only the necessary words (e.g., He said **"Stop!"**).
 
 {header_label}
 ---
 {extracted_text_block}
 ---
 
-Provide your response in this *exact* format, with each translation on a new line:
-1: [Translation for bubble 1]
-2: [Translation for bubble 2]
+Return ONLY the following numbered lines, one per bubble:
+1: <translation>
+2: <translation>
 ...
-{num_bubbles}: [Translation for bubble {num_bubbles}]
+{num_bubbles}: <translation>
 
-For any extraction labeled as "[OCR FAILED]", output exactly "[OCR FAILED]" for that number. Do not attempt to translate it.
-Do not include any other text or explanations in your response."""  # noqa
+If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged for that number. Do not add any other text."""  # noqa
 
             # Prepare parts for translation call (only full image + prompt)
             translation_parts = []
             if config.send_full_page_context and full_image_b64:
                 translation_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}})
 
-            translation_response_text = _call_llm_endpoint(config, translation_parts, translation_prompt, debug)
+            translation_system = _build_system_prompt_translation(output_language)
+            translation_response_text = _call_llm_endpoint(
+                config,
+                translation_parts,
+                translation_prompt,
+                debug,
+                system_prompt=translation_system,
+            )
             final_translations = _parse_llm_response(
                 translation_response_text, num_bubbles, provider + "-Translate", debug
             )
@@ -618,23 +695,32 @@ Do not include any other text or explanations in your response."""  # noqa
             preface = preface_full if config.send_full_page_context else preface_no_full
 
             one_step_prompt = f"""{preface}
-For each individual speech bubble image:
-1. Extract the original {lang_part} and translate it {from_part}, choosing words and sentence structures that accurately convey the original's tone and sounds authentic for that specific context in the target language.
-2. Decide if styling should be applied to the translated text using these markdown-like markers:
-    - Italic (`*text*`): Use for thoughts, flashbacks, distant sounds, or dialogue via devices.
-    - Bold (`**text**`): Use for SFX, shouting, and timestamps.
-    - Bold Italic (`***text***`): Use for loud SFX/dialogue in flashbacks or via devices.
-    - Use regular text otherwise. You can style parts of text if needed (e.g., "He said **'Stop!'**").
+For each speech bubble image:
+1) Extract {lang_part}. Collapse multi-line text into one line with spaces.
+   - If a bubble has no legible text, use [NO TEXT]. If the text is unreadable, use [OCR FAILED].
+2) Translate {from_part} with wording that preserves meaning, tone, and naturalness.
+3) Apply styling when appropriate:
+   - Italic (`*text*`): thoughts, flashbacks, distant sounds, device-mediated dialogue.
+   - Bold (`**text**`): SFX, shouting, timestamps, emphatic words.
+   - Bold Italic (`***text***`): very loud SFX/dialogue in flashbacks or via devices.
+   - Use plain text otherwise; style only the necessary words (e.g., He said **"Stop!"**).
 
-Provide your response in this *exact* format, with each translation on a new line:
-1: [Translation for bubble 1]
-2: [Translation for bubble 2]
+Return ONLY the following numbered lines, one per bubble:
+1: <translation>
+2: <translation>
 ...
-{num_bubbles}: [Translation for bubble {num_bubbles}]
+{num_bubbles}: <translation>
 
-Do not include any other text or explanations in your response."""  # noqa
+If the bubble is [NO TEXT] or [OCR FAILED], output that exact tag unchanged for that number. Do not include any explanations."""  # noqa
 
-            response_text = _call_llm_endpoint(config, base_parts, one_step_prompt, debug)
+            one_step_system = _build_system_prompt_translation(output_language)
+            response_text = _call_llm_endpoint(
+                config,
+                base_parts,
+                one_step_prompt,
+                debug,
+                system_prompt=one_step_system,
+            )
             translations = _parse_llm_response(response_text, num_bubbles, provider, debug)
 
             if translations is None:
