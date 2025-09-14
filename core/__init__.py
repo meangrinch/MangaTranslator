@@ -12,8 +12,8 @@ from .cleaning import clean_speech_bubbles
 from .translation import sort_bubbles_by_reading_order, call_translation_api_batch
 from .rendering import render_text_skia
 
-__version__ = "1.0.6"
-__version_info__ = (1, 0, 6)
+__version__ = "1.0.7"
+__version_info__ = (1, 0, 7)
 __author__ = "grinnch"
 __copyright__ = "Copyright 2025-present grinnch"
 __license__ = "Apache-2.0"
