@@ -1,18 +1,8 @@
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 
-from core.models import TranslationConfig, RenderingConfig
+from core.models import RenderingConfig, TranslationConfig
 from utils.exceptions import ValidationError
-
-
-def get_available_yolo_models(models_directory: Path) -> List[str]:
-    """Helper to get list of available YOLO models."""
-    if not models_directory.is_dir():
-        return []
-    model_files = list(models_directory.glob("*.pt"))
-    models = [p.name for p in model_files]
-    models.sort()
-    return models
 
 
 def autodetect_yolo_model_path(models_dir: Path) -> Path:
