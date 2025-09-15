@@ -9,7 +9,7 @@ class DetectionConfig:
     """Configuration for speech bubble detection."""
 
     confidence: float = 0.35
-    use_sam2: bool = False
+    use_sam2: bool = True
     sam2_model_id: str = "facebook/sam2.1-hiera-large"
 
 

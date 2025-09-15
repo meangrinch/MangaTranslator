@@ -50,7 +50,7 @@ def detect_speech_bubbles(
     confidence=0.35,
     verbose=False,
     device=None,
-    use_sam2: bool = False,
+    use_sam2: bool = True,
     sam2_model_id: str = "facebook/sam2.1-hiera-large",
 ):
     """
@@ -87,24 +87,33 @@ def detect_speech_bubbles(
     if len(results) == 0:
         return detections
 
-    boxes_for_sam = []
-    for _, result in enumerate(results[0]):
-        boxes = result.boxes
+    # Use a single Results object to preserve ordering and avoid duplication
+    result = results[0]
+    boxes = result.boxes
 
+    # Float boxes for SAM prompts; keep int bbox for returned detections
+    sam_input_boxes = []
+
+    if boxes is not None:
         for j, box in enumerate(boxes):
-            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+            xyxy = box.xyxy[0].tolist()  # floats
+            x0_f, y0_f, x1_f, y1_f = float(xyxy[0]), float(xyxy[1]), float(xyxy[2]), float(xyxy[3])
 
             conf = float(box.conf[0])
 
             cls_id = int(box.cls[0])
             cls_name = model.names[cls_id]
 
-            detection = {"bbox": (x1, y1, x2, y2), "confidence": conf, "class": cls_name}
+            detection = {
+                "bbox": (int(round(x0_f)), int(round(y0_f)), int(round(x1_f)), int(round(y1_f))),
+                "confidence": conf,
+                "class": cls_name,
+            }
 
             detections.append(detection)
-            boxes_for_sam.append([x1, y1, x2, y2])
+            sam_input_boxes.append([x0_f, y0_f, x1_f, y1_f])
 
-            if hasattr(result, "masks") and result.masks is not None:
+            if getattr(result, "masks", None) is not None:
                 try:
                     masks = result.masks
                     if len(masks) > j:
@@ -124,7 +133,7 @@ def detect_speech_bubbles(
             processor, sam_model = _get_sam2(sam2_model_id, _device)
 
             # SAM expects a batch of images; input_boxes is list per image
-            sam_inputs = processor(images=pil_image, input_boxes=[boxes_for_sam], return_tensors="pt").to(_device)
+            sam_inputs = processor(images=pil_image, input_boxes=[sam_input_boxes], return_tensors="pt").to(_device)
 
             with torch.no_grad():
                 sam_outputs = sam_model(multimask_output=False, **sam_inputs)
@@ -138,12 +147,12 @@ def detect_speech_bubbles(
             for i, det in enumerate(detections):
                 if i >= n_sam:
                     break
-                x0, y0, x1, y1 = boxes_for_sam[i]
-                # Clip to image bounds
-                x0 = max(0, min(int(x0), img_w))
-                y0 = max(0, min(int(y0), img_h))
-                x1 = max(0, min(int(x1), img_w))
-                y1 = max(0, min(int(y1), img_h))
+                x0_f, y0_f, x1_f, y1_f = sam_input_boxes[i]
+                # Clip to image bounds, floor starts and ceil ends like the test script
+                x0 = int(np.floor(max(0, min(x0_f, img_w))))
+                y0 = int(np.floor(max(0, min(y0_f, img_h))))
+                x1 = int(np.ceil(max(0, min(x1_f, img_w))))
+                y1 = int(np.ceil(max(0, min(y1_f, img_h))))
                 if x1 <= x0 or y1 <= y0:
                     continue
 

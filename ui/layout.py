@@ -302,7 +302,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 info="Lower values detect more bubbles, potentially including false positives.",
                             )
                             use_sam2_checkbox = gr.Checkbox(
-                                value=saved_settings.get("use_sam2", False),
+                                value=saved_settings.get("use_sam2", True),
                                 label="Use SAM 2.1 for Segmentation",
                                 info="Enhances bubble segmentation quality, specifically for oddly shaped bubbles.",
                             )

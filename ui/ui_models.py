@@ -18,7 +18,7 @@ class UIDetectionSettings:
     """UI state for detection settings."""
 
     confidence: float = 0.35
-    use_sam2: bool = False
+    use_sam2: bool = True
 
 
 @dataclass
@@ -181,7 +181,7 @@ class UIConfigState:
             yolo_model=data.get("yolo_model"),
             detection=UIDetectionSettings(
                 confidence=data.get("confidence", defaults["confidence"]),
-                use_sam2=data.get("use_sam2", defaults.get("use_sam2", False)),
+                use_sam2=data.get("use_sam2", defaults.get("use_sam2", True)),
             ),
             cleaning=UICleaningSettings(
                 dilation_kernel_size=data.get("dilation_kernel_size", defaults["dilation_kernel_size"]),

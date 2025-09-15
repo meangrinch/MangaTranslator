@@ -574,12 +574,12 @@ def main():
     parser.add_argument("--output-language", type=str, default="English", help="Target language")
     parser.add_argument("--conf", type=float, default=0.35, help="Confidence threshold for detection")
     parser.add_argument(
-        "--sam2",
+        "--no-sam2",
         dest="use_sam2",
-        action="store_true",
-        help="Enable SAM 2.1 guided segmentation",
+        action="store_false",
+        help="Disable SAM 2.1 guided segmentation",
     )
-    parser.set_defaults(use_sam2=False)
+    parser.set_defaults(use_sam2=True)
     parser.add_argument(
         "--reading-direction",
         type=str,
