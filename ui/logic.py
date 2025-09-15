@@ -21,7 +21,6 @@ class LogicError(Exception):
 def translate_manga_logic(
     image: Union[str, Path, Image.Image],
     config: MangaTranslatorConfig,
-    selected_yolo_model_name: str,
     selected_font_pack_name: str,
     models_dir: Path,
     fonts_base_dir: Path,
@@ -34,7 +33,6 @@ def translate_manga_logic(
     Args:
         image: Input image (path or PIL object).
         config: The main configuration object.
-        selected_yolo_model_name: Name of the YOLO model file (e.g., "model.pt").
         selected_font_pack_name: Name of the font pack directory.
         models_dir: Path to the directory containing YOLO models.
         fonts_base_dir: Path to the base directory containing font pack subdirectories.
@@ -64,7 +62,6 @@ def translate_manga_logic(
         yolo_model_path, font_dir_path = validate_core_inputs(
             translation_cfg=config.translation,
             rendering_cfg=rendering_cfg_for_val,
-            selected_yolo_model_name=selected_yolo_model_name,
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
         )
@@ -136,7 +133,6 @@ def translate_manga_logic(
 def process_batch_logic(
     input_dir_or_files: Union[str, List[str]],
     config: MangaTranslatorConfig,
-    selected_yolo_model_name: str,
     selected_font_pack_name: str,
     models_dir: Path,
     fonts_base_dir: Path,
@@ -150,7 +146,6 @@ def process_batch_logic(
     Args:
         input_dir_or_files: Path to input directory or list of file paths.
         config: The main configuration object.
-        selected_yolo_model_name: Name of the YOLO model file (e.g., "model.pt").
         selected_font_pack_name: Name of the font pack directory.
         models_dir: Path to the directory containing YOLO models.
         fonts_base_dir: Path to the base directory containing font pack subdirectories.
@@ -188,7 +183,6 @@ def process_batch_logic(
         yolo_model_path, font_dir_path = validate_core_inputs(
             translation_cfg=config.translation,
             rendering_cfg=rendering_cfg_for_val,
-            selected_yolo_model_name=selected_yolo_model_name,
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
         )

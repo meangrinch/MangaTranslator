@@ -104,14 +104,8 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
 
         gr.Markdown("# MangaTranslator")
 
-        model_choices = utils.get_available_models(models_dir)
         font_choices, initial_default_font = utils.get_available_font_packs(fonts_base_dir)
         saved_settings = settings_manager.get_saved_settings()
-
-        saved_yolo_model = saved_settings.get("yolo_model")
-        default_yolo_model = (
-            saved_yolo_model if saved_yolo_model in model_choices else (model_choices[0] if model_choices else None)
-        )
 
         saved_font_pack = saved_settings.get("font_pack")
         default_font = (
@@ -268,7 +262,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                 config_initial_provider = initial_provider
                 config_initial_model_name = initial_model_name
                 config_initial_models_choices = initial_models_choices
-                config_default_yolo = default_yolo_model
 
                 with gr.Row(elem_id="config-button-row"):
                     save_config_btn = gr.Button("Save Config", variant="primary", scale=3)
@@ -300,14 +293,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                         # --- Detection Settings ---
                         with gr.Group(visible=True, elem_classes="settings-group") as group_detection:
                             gr.Markdown("### YOLO Model")
-                            config_yolo_model_dropdown = gr.Dropdown(
-                                choices=model_choices,
-                                label="YOLO Model",
-                                value=config_default_yolo,
-                                filterable=False,
-                                info="Model used for detecting speech bubbles (requires mask segmentation "
-                                     "capabilities).",
-                            )
                             confidence = gr.Slider(
                                 0.1,
                                 1.0,
@@ -317,9 +302,9 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 info="Lower values detect more bubbles, potentially including false positives.",
                             )
                             use_sam2_checkbox = gr.Checkbox(
-                                value=saved_settings.get("use_sam2", True),
+                                value=saved_settings.get("use_sam2", False),
                                 label="Use SAM 2.1 for Segmentation",
-                                info="Enhances bubble segmentation quality by combining YOLO detection with SAM 2.1.",
+                                info="Enhances bubble segmentation quality, specifically for oddly shaped bubbles.",
                             )
                             config_reading_direction = gr.Radio(
                                 choices=["rtl", "ltr"],
@@ -685,7 +670,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
 
         # --- Define Event Handlers ---
         save_config_inputs = [
-            config_yolo_model_dropdown,
             confidence,
             use_sam2_checkbox,
             config_reading_direction,
@@ -734,7 +718,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
         ]
 
         reset_outputs = [
-            config_yolo_model_dropdown,
             confidence,
             use_sam2_checkbox,
             config_reading_direction,
@@ -785,7 +768,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
 
         translate_inputs = [
             input_image,
-            config_yolo_model_dropdown,
             confidence,
             use_sam2_checkbox,
             dilation_kernel_size,
@@ -832,7 +814,6 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
 
         batch_inputs = [
             input_files,
-            config_yolo_model_dropdown,
             confidence,
             use_sam2_checkbox,
             dilation_kernel_size,
@@ -968,7 +949,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
         ).then(fn=None, inputs=None, outputs=None, js=js_status_fade, queue=False)
 
         # Refresh Button
-        refresh_outputs = [config_yolo_model_dropdown, font_dropdown, batch_font_dropdown]
+        refresh_outputs = [font_dropdown, batch_font_dropdown]
         refresh_resources_button.click(
             fn=functools.partial(
                 callbacks.handle_refresh_resources_click, models_dir=models_dir, fonts_base_dir=fonts_base_dir

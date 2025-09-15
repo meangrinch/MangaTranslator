@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 from core.models import TranslationConfig, RenderingConfig
 from utils.exceptions import ValidationError
@@ -15,10 +15,31 @@ def get_available_yolo_models(models_directory: Path) -> List[str]:
     return models
 
 
+def autodetect_yolo_model_path(models_dir: Path) -> Path:
+    """Auto-detect the YOLO model inside models/yolov8m_seg-speech-bubble/.
+
+    Looks for .pt files in that subdirectory (recursively). If multiple are found,
+    picks the first in sorted order. Raises if none found.
+    """
+    target_dir = models_dir / "yolov8m_seg-speech-bubble"
+    if not target_dir.exists() or not target_dir.is_dir():
+        raise FileNotFoundError(
+            f"YOLO model directory not found: {target_dir}. "
+            f"Create it and place your .pt model there."
+        )
+
+    candidates = sorted(target_dir.rglob("*.pt"))
+    if not candidates:
+        raise ValidationError(
+            f"No YOLO .pt model found in {target_dir}. Place a segmentation model there."
+        )
+
+    return candidates[0].resolve()
+
+
 def validate_core_inputs(
     translation_cfg: TranslationConfig,
     rendering_cfg: RenderingConfig,
-    selected_yolo_model_name: Optional[str],
     models_dir: Path,
     fonts_base_dir: Path,
 ) -> Tuple[Path, Path]:
@@ -28,7 +49,6 @@ def validate_core_inputs(
     Args:
         translation_cfg (TranslationConfig): Translation configuration.
         rendering_cfg (RenderingConfig): Rendering configuration.
-        selected_yolo_model_name (str): Filename of the selected YOLO model.
         models_dir (Path): Absolute path to the directory containing YOLO models.
         fonts_base_dir (Path): Absolute path to the base directory containing font packs.
 
@@ -41,28 +61,11 @@ def validate_core_inputs(
                          font pack empty, invalid numeric values).
         ValueError: For general invalid parameter values.
     """
-    # --- YOLO Model Validation ---
+    # --- YOLO Model Auto-detection ---
     if not models_dir.is_dir():
         raise FileNotFoundError(f"YOLO models directory not found: {models_dir}")
 
-    available_models = get_available_yolo_models(models_dir)
-    if not available_models:
-        raise ValidationError(
-            f"No YOLO models (*.pt) found in the directory: {models_dir}. "
-            "Please download a model and place it there."
-        )
-    if not selected_yolo_model_name:
-        raise ValidationError("No YOLO model selected.")
-    if selected_yolo_model_name not in available_models:
-        raise ValidationError(
-            f"Selected model '{selected_yolo_model_name}' is not available in {models_dir}. "
-            f"Available models: {', '.join(available_models)}"
-        )
-
-    yolo_model_path = models_dir / selected_yolo_model_name
-    if not yolo_model_path.is_file():
-        # Redundant, but good safeguard
-        raise FileNotFoundError(f"YOLO model file not found: {yolo_model_path}")
+    yolo_model_path = autodetect_yolo_model_path(models_dir)
 
     # --- Font Validation ---
     if not fonts_base_dir.is_dir():

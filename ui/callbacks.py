@@ -28,6 +28,23 @@ ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
 
 
+def _clean_error_message(message: Any) -> str:
+    """Normalize error text for display and avoid duplicate prefixes/quotes."""
+    try:
+        text = str(message).strip()
+    except Exception:
+        text = ""
+
+    # Strip surrounding quotes if present
+    if (len(text) >= 2) and ((text[0] == text[-1] == "'") or (text[0] == text[-1] == '"')):
+        text = text[1:-1].strip()
+
+    # Remove any existing ERROR_PREFIX occurrences to avoid duplication
+    if text.startswith(ERROR_PREFIX):
+        return text
+    return f"{ERROR_PREFIX}{text}"
+
+
 def _format_single_success_message(
     result_image: Image.Image,
     backend_config: MangaTranslatorConfig,
@@ -258,7 +275,6 @@ def handle_translate_click(
     """Callback for the 'Translate' button click. Uses dataclasses for config."""
     (
         input_image_path,
-        config_yolo_model_dropdown,
         confidence,
         use_sam2_checkbox_val,
         dilation_kernel_size,
@@ -336,7 +352,7 @@ def handle_translate_click(
 
         # --- Build UI State Dataclass ---
         ui_state = UIConfigState(
-            yolo_model=config_yolo_model_dropdown,
+            yolo_model=None,
             detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
             cleaning=UICleaningSettings(
                 dilation_kernel_size=dilation_kernel_size,
@@ -400,14 +416,12 @@ def handle_translate_click(
             target_device=target_device,
             is_batch=False,
         )
-        selected_yolo_model_name = ui_state.yolo_model
         selected_font_pack_name = ui_state.font_pack
 
         # --- Call Logic ---
         result_image, save_path = logic.translate_manga_logic(
             image=input_image_path,
             config=backend_config,
-            selected_yolo_model_name=selected_yolo_model_name,
             selected_font_pack_name=selected_font_pack_name,
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
@@ -418,24 +432,34 @@ def handle_translate_click(
         font_dir_path = fonts_base_dir / selected_font_pack_name if selected_font_pack_name else Path(".")
 
         processing_time = time.time() - start_time
+        # We don't know the model filename ahead of time; extract from config
+        autodetected_model_name = (
+            Path(backend_config.yolo_model_path).name if backend_config.yolo_model_path else "(auto)"
+        )
         status_msg = _format_single_success_message(
-            result_image, backend_config, selected_yolo_model_name, font_dir_path, save_path, processing_time
+            result_image, backend_config, autodetected_model_name, font_dir_path, save_path, processing_time
         )
 
         return result_image.copy(), status_msg
 
-    except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
-        # Catch specific errors from validation or logic
-        return gr.update(), f"{ERROR_PREFIX}Processing Error: {str(e)}"
     except gr.Error as e:
-        # Catch UI validation errors
-        return gr.update(), str(e)
+        # UI validation errors (e.g., please upload an image)
+        cleaned = _clean_error_message(e)
+        gr.Error(cleaned)
+        return gr.update(), cleaned
+    except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
+        # Backend/validation errors (e.g., missing YOLO model)
+        cleaned = _clean_error_message(e)
+        gr.Error(cleaned)
+        return gr.update(), cleaned
     except Exception as e:
         # Catch unexpected errors
         import traceback
 
         traceback.print_exc()
-        return gr.update(), f"{ERROR_PREFIX}An unexpected error occurred: {str(e)}"
+        cleaned = _clean_error_message(f"An unexpected error occurred: {str(e)}")
+        gr.Error(cleaned)
+        return gr.update(), cleaned
 
 
 def handle_batch_click(
@@ -448,7 +472,6 @@ def handle_batch_click(
     """Callback for the 'Start Batch Translating' button click. Uses dataclasses."""
     (
         input_files,
-        config_yolo_model_dropdown,
         confidence,
         use_sam2_checkbox_val,
         dilation_kernel_size,
@@ -528,7 +551,7 @@ def handle_batch_click(
 
         # --- Build UI State Dataclass ---
         ui_state = UIConfigState(
-            yolo_model=config_yolo_model_dropdown,
+            yolo_model=None,
             detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
             cleaning=UICleaningSettings(
                 dilation_kernel_size=dilation_kernel_size,
@@ -592,14 +615,12 @@ def handle_batch_click(
             target_device=target_device,
             is_batch=True,
         )
-        selected_yolo_model_name = ui_state.yolo_model
         selected_font_pack_name = ui_state.batch_font_pack
 
         # --- Call Logic ---
         results = logic.process_batch_logic(
             input_dir_or_files=input_files,
             config=backend_config,
-            selected_yolo_model_name=selected_yolo_model_name,
             selected_font_pack_name=selected_font_pack_name,
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
@@ -619,28 +640,36 @@ def handle_batch_click(
         # Re-get font path for success message (logic already validated it)
         font_dir_path = fonts_base_dir / selected_font_pack_name if selected_font_pack_name else Path(".")
 
-        status_msg = _format_batch_success_message(results, backend_config, selected_yolo_model_name, font_dir_path)
+        autodetected_model_name = (
+            Path(backend_config.yolo_model_path).name if backend_config.yolo_model_path else "(auto)"
+        )
+        status_msg = _format_batch_success_message(results, backend_config, autodetected_model_name, font_dir_path)
         progress(1.0, desc="Batch complete!")
         return gallery_images, status_msg
 
-    except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
-        progress(1.0, desc="Error occurred")
-        return gr.update(), f"{ERROR_PREFIX}Batch Processing Error: {str(e)}"
     except gr.Error as e:
         progress(1.0, desc="Error occurred")
-        return gr.update(), str(e)
+        cleaned = _clean_error_message(e)
+        gr.Error(cleaned)
+        return gr.update(), cleaned
+    except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
+        progress(1.0, desc="Error occurred")
+        cleaned = _clean_error_message(e)
+        gr.Error(cleaned)
+        return gr.update(), cleaned
     except Exception as e:
         progress(1.0, desc="Error occurred")
         import traceback
 
         traceback.print_exc()
-        return gr.update(), f"{ERROR_PREFIX}An unexpected error occurred during batch processing: {str(e)}"
+        cleaned = _clean_error_message(f"An unexpected error occurred during batch processing: {str(e)}")
+        gr.Error(cleaned)
+        return gr.update(), cleaned
 
 
 def handle_save_config_click(*args: Any) -> str:
     """Callback for the 'Save Config' button. Uses dataclasses."""
     (
-        yolo,
         conf,
         use_sam2,
         rd,
@@ -690,7 +719,7 @@ def handle_save_config_click(*args: Any) -> str:
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
     ui_state = UIConfigState(
-        yolo_model=yolo,
+        yolo_model=None,
         detection=UIDetectionSettings(confidence=conf, use_sam2=use_sam2),
         cleaning=UICleaningSettings(
             dilation_kernel_size=dks,
@@ -764,12 +793,6 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     default_ui_state = UIConfigState.from_dict(default_settings_dict)
 
     # --- Handle dynamic choices based on defaults ---
-    available_yolo_models = utils.get_available_models(models_dir)
-    reset_yolo_model = default_ui_state.yolo_model
-    if reset_yolo_model not in available_yolo_models:
-        reset_yolo_model = available_yolo_models[0] if available_yolo_models else None
-    default_ui_state.yolo_model = reset_yolo_model
-
     available_fonts, _ = utils.get_available_font_packs(fonts_base_dir)
     reset_single_font = default_ui_state.font_pack
     if reset_single_font not in available_fonts:
@@ -808,7 +831,6 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     reasoning_visible = default_provider == "OpenAI"
 
     return [
-        gr.update(value=default_ui_state.yolo_model),
         default_ui_state.detection.confidence,
         default_ui_state.detection.use_sam2,
         default_ui_state.llm_settings.reading_direction,

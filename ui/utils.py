@@ -17,14 +17,6 @@ OPENROUTER_MODEL_CACHE = {"models": None}
 COMPATIBLE_MODEL_CACHE = {"url": None, "models": None}
 
 
-def get_available_models(models_directory: Path) -> List[str]:
-    """Get list of available YOLO models in the models directory"""
-    model_files = list(models_directory.glob("*.pt"))
-    models = [p.name for p in model_files]
-    models.sort()
-    return models
-
-
 def get_available_font_packs(fonts_base_dir: Path) -> Tuple[List[str], Optional[str]]:
     """Get list of available font packs (subdirectories) in the fonts directory"""
     if not fonts_base_dir.exists():
@@ -105,19 +97,6 @@ def validate_font_directory(font_dir: Path) -> tuple[bool, str]:
     return True, f"Found {len(font_files)} font files in directory"
 
 
-def update_model_dropdown(models_dir: Path):
-    """Update the YOLO model dropdown list"""
-    try:
-        models = get_available_models(models_dir)
-        saved_settings = get_saved_settings()
-        current_model = saved_settings.get("yolo_model")
-        selected_model_val = current_model if current_model in models else (models[0] if models else None)
-        return gr.update(choices=models, value=selected_model_val), f"{SUCCESS_PREFIX}Found {len(models)} models"
-    except Exception as e:
-        log_message(f"Error updating model dropdown: {e}", always_print=True)
-        return gr.update(choices=[]), f"{ERROR_PREFIX}{str(e)}"
-
-
 def update_font_dropdown(fonts_base_dir: Path):
     """Update the font pack dropdown list"""
     try:
@@ -142,15 +121,10 @@ def update_font_dropdown(fonts_base_dir: Path):
 
 
 def refresh_models_and_fonts(models_dir: Path, fonts_base_dir: Path):
-    """Update both model dropdown and font dropdown lists"""
+    """Update font dropdown lists; YOLO is auto-detected so no model dropdown update."""
     try:
-        models = get_available_models(models_dir)
-        saved_settings = get_saved_settings()
-        current_model = saved_settings.get("yolo_model")
-        selected_model_val = current_model if current_model in models else (models[0] if models else None)
-        model_result = gr.update(choices=models, value=selected_model_val)
-
         font_packs, _ = get_available_font_packs(fonts_base_dir)
+        saved_settings = get_saved_settings()
         current_font = saved_settings.get("font_pack")
         selected_font_val = current_font if current_font in font_packs else (font_packs[0] if font_packs else None)
         single_font_result = gr.update(choices=font_packs, value=selected_font_val)
@@ -161,41 +135,15 @@ def refresh_models_and_fonts(models_dir: Path, fonts_base_dir: Path):
         )
         batch_font_result = gr.update(choices=font_packs, value=selected_batch_font_val)
 
-        model_count = len(models)
-        model_text = "1 model" if model_count == 1 else f"{model_count} models"
-
         font_count = len(font_packs)
         font_text = "1 font pack" if font_count == 1 else f"{font_count} font packs"
+        gr.Info(f"YOLO model auto-detected. Found {font_text}")
 
-        if models and font_packs:
-            gr.Info(f"Detected {model_text} and {font_text}")
-        elif not models and not font_packs:
-            gr.Warning("No models or font packs found")
-        elif not models:
-            gr.Warning(f"No models found. Found {font_text}")
-        else:  # Not fonts
-            gr.Warning(f"No font packs found. Found {model_text}")
-
-        return model_result, single_font_result, batch_font_result
+        return single_font_result, batch_font_result
     except Exception as e:
         gr.Error(f"Error refreshing resources: {str(e)}")
-        # Fallback to current state if error occurs during refresh
-        models = get_available_models(models_dir)
-        saved_settings = get_saved_settings()
-        current_model = saved_settings.get("yolo_model")
-        selected_model_val = current_model if current_model in models else None
-
         font_packs, _ = get_available_font_packs(fonts_base_dir)
-        current_font = saved_settings.get("font_pack")
-        selected_font_val = current_font if current_font in font_packs else None
-        current_batch_font = saved_settings.get("batch_font_pack")
-        selected_batch_font_val = current_batch_font if current_batch_font in font_packs else None
-
-        return (
-            gr.update(choices=models, value=selected_model_val),
-            gr.update(choices=font_packs, value=selected_font_val),
-            gr.update(choices=font_packs, value=selected_batch_font_val),
-        )
+        return gr.update(choices=font_packs), gr.update(choices=font_packs)
 
 
 def update_translation_ui(provider: str, current_temp: float):

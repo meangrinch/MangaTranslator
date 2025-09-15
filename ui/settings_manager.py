@@ -69,7 +69,7 @@ DEFAULT_SETTINGS = {
     "reading_direction": "rtl",
     "translation_mode": "one-step",
     "confidence": 0.35,
-    "use_sam2": True,
+    "use_sam2": False,
     "dilation_kernel_size": 7,
     "dilation_iterations": 1,
     "use_otsu_threshold": False,

@@ -9,7 +9,7 @@ class DetectionConfig:
     """Configuration for speech bubble detection."""
 
     confidence: float = 0.35
-    use_sam2: bool = True  # Use SAM 2.1 for segmentation guided by YOLO bboxes
+    use_sam2: bool = False
     sam2_model_id: str = "facebook/sam2.1-hiera-large"
 
 

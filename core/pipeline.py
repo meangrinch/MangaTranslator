@@ -17,6 +17,7 @@ from core.models import (
     OutputConfig,
     MangaTranslatorConfig,
 )
+from core.validation import autodetect_yolo_model_path
 from .detection import detect_speech_bubbles
 from .cleaning import clean_speech_bubbles
 from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
@@ -512,7 +513,6 @@ def main():
         "--output", type=str, required=False, help="Path to save the translated image or directory (if using --batch)"
     )
     parser.add_argument("--batch", action="store_true", help="Process all images in the input directory")
-    parser.add_argument("--yolo-model", type=str, required=True, help="Path to YOLO model")
     # --- Provider and API Key Arguments ---
     parser.add_argument(
         "--provider",
@@ -574,12 +574,12 @@ def main():
     parser.add_argument("--output-language", type=str, default="English", help="Target language")
     parser.add_argument("--conf", type=float, default=0.35, help="Confidence threshold for detection")
     parser.add_argument(
-        "--no-sam2",
+        "--sam2",
         dest="use_sam2",
-        action="store_false",
-        help="Disable SAM 2.1 guided segmentation",
+        action="store_true",
+        help="Enable SAM 2.1 guided segmentation",
     )
-    parser.set_defaults(use_sam2=True)
+    parser.set_defaults(use_sam2=False)
     parser.add_argument(
         "--reading-direction",
         type=str,
@@ -722,7 +722,7 @@ def main():
     use_otsu_config_val = args.use_otsu_threshold
 
     config = MangaTranslatorConfig(
-        yolo_model_path=args.yolo_model,
+        yolo_model_path="",
         verbose=args.verbose,
         device=target_device,
         cleaning_only=args.cleaning_only,
@@ -811,6 +811,19 @@ def main():
             if not output_path.parent.exists():
                 print(f"Creating directory for output file: {output_path.parent}")
                 output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Auto-detect YOLO model for CLI using ./models/yolov8m_seg-speech-bubble/
+        try:
+            models_base = Path("./models")
+            detected_model_path = autodetect_yolo_model_path(models_base)
+            config.yolo_model_path = str(detected_model_path)
+        except Exception as autodetect_err:
+            log_message(f"Error auto-detecting YOLO model: {autodetect_err}", always_print=True)
+            log_message(
+                "CLI requires a model at ./models/yolov8m_seg-speech-bubble/*.pt. Please add it and retry.",
+                always_print=True,
+            )
+            exit(1)
 
         try:
             log_message(f"Processing {input_path}...", always_print=True)

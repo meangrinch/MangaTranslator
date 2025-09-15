@@ -18,7 +18,7 @@ class UIDetectionSettings:
     """UI state for detection settings."""
 
     confidence: float = 0.35
-    use_sam2: bool = True
+    use_sam2: bool = False
 
 
 @dataclass
@@ -181,7 +181,7 @@ class UIConfigState:
             yolo_model=data.get("yolo_model"),
             detection=UIDetectionSettings(
                 confidence=data.get("confidence", defaults["confidence"]),
-                use_sam2=data.get("use_sam2", True),
+                use_sam2=data.get("use_sam2", defaults.get("use_sam2", False)),
             ),
             cleaning=UICleaningSettings(
                 dilation_kernel_size=data.get("dilation_kernel_size", defaults["dilation_kernel_size"]),
@@ -261,7 +261,7 @@ def map_ui_to_backend_config(
 ) -> MangaTranslatorConfig:
     """Maps the UIConfigState to the backend MangaTranslatorConfig."""
 
-    yolo_path = models_dir / ui_state.yolo_model if ui_state.yolo_model else ""
+    yolo_path = ""
     font_pack_name = ui_state.batch_font_pack if is_batch else ui_state.font_pack
     font_dir_path = fonts_base_dir / font_pack_name if font_pack_name else ""
     input_lang = ui_state.batch_input_language if is_batch else ui_state.input_language
