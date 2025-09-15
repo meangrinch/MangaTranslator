@@ -50,8 +50,8 @@ pip install -r requirements.txt
 
 ## Post-install setup
 ### YOLO model
-- Place a segmentation model (`.pt`) in `models/`
-- Recommended: [kitsumed/yolov8m_seg-speech-bubble](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt)
+- Place the necessary segmentation model (`.pt`) in `models/yolov8m_seg-speech-bubble/`
+- Model: [kitsumed/yolov8m_seg-speech-bubble](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt)
 
 ### Fonts
 - Put font packs as subfolders in `fonts/` with `.otf`/`.ttf` files
@@ -121,11 +121,10 @@ python main.py --help
 6) Use "Cleaning Only" in **Other** to skip translation/rendering
 
 ## Troubleshooting
-- Models/fonts not found: use Config → Refresh; ensure `models/*.pt` and `fonts/<pack>/*.ttf|*.otf`
+- Models/fonts not found: use Config → Refresh; ensure `models/<model>/*.pt` and `fonts/<pack>/*.ttf|*.otf`
 - OpenAI-compatible models not listed: verify the base URL (e.g., `http://localhost:11434/v1`) and that the endpoint is running
 - GPU/CPU: CUDA used if available; add `--cpu` to force CPU
 - Minimum image size: 600×600
-- No bubbles detected: lower `--conf` and confirm the model supports segmentation
 
 ## Updating
 - Windows portable: download the latest release and replace the existing folder
