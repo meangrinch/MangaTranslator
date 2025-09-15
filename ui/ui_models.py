@@ -173,8 +173,7 @@ class UIConfigState:
     def from_dict(data: Dict[str, Any]) -> "UIConfigState":
         """Creates a UIConfigState instance from a dictionary (e.g., loaded from config.json)."""
 
-        from . import \
-            settings_manager  # Local import to avoid circular dependency issues
+        from . import settings_manager  # Local import to avoid circular dependency issues
 
         defaults = settings_manager.DEFAULT_SETTINGS.copy()
         defaults.update(settings_manager.DEFAULT_BATCH_SETTINGS)
