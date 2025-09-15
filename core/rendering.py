@@ -1,7 +1,7 @@
-import re
 import os
+import re
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import skia

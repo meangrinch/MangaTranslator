@@ -1,8 +1,10 @@
+import os
+from pathlib import Path
+
 import cv2
 import numpy as np
 from PIL import Image
-import os
-from pathlib import Path
+
 from utils.logging import log_message
 
 

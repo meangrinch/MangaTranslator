@@ -1,7 +1,9 @@
-import requests
-import time
 import json
-from typing import List, Dict, Any, Optional
+import time
+from typing import Any, Dict, List, Optional
+
+import requests
+
 from utils.logging import log_message
 
 

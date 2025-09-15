@@ -3,9 +3,10 @@ import largestinteriorrectangle
 import numpy as np
 from PIL import Image
 
-from .image_utils import pil_to_cv2
-from .detection import detect_speech_bubbles
 from utils.logging import log_message
+
+from .detection import detect_speech_bubbles
+from .image_utils import pil_to_cv2
 
 
 def clean_speech_bubbles(

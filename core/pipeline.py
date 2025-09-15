@@ -3,11 +3,11 @@ import base64
 import os
 import time
 from pathlib import Path
-from typing import Optional, Union, Callable, Dict, Any
+from typing import Any, Callable, Dict, Optional, Union
 
 import cv2
-from PIL import Image
 import torch
+from PIL import Image
 
 from core.models import (
     DetectionConfig,
@@ -18,12 +18,13 @@ from core.models import (
     MangaTranslatorConfig,
 )
 from core.validation import autodetect_yolo_model_path
-from .detection import detect_speech_bubbles
-from .cleaning import clean_speech_bubbles
-from .image_utils import pil_to_cv2, cv2_to_pil, save_image_with_compression
-from .translation import call_translation_api_batch, sort_bubbles_by_reading_order
 from utils.logging import log_message
+
+from .cleaning import clean_speech_bubbles
+from .detection import detect_speech_bubbles
+from .image_utils import cv2_to_pil, pil_to_cv2, save_image_with_compression
 from .rendering import render_text_skia
+from .translation import call_translation_api_batch, sort_bubbles_by_reading_order
 
 
 def translate_and_render(

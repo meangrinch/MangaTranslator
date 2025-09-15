@@ -4,9 +4,7 @@ from typing import Any
 
 import gradio as gr
 
-from . import settings_manager
-from . import utils
-from . import callbacks
+from . import callbacks, settings_manager, utils
 
 js_credits = """
 function() {

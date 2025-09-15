@@ -1,6 +1,5 @@
 import re
-from typing import List, Dict, Any, Optional
-from utils.logging import log_message
+from typing import Any, Dict, List, Optional
 
 from core.models import TranslationConfig
 from utils.endpoints import (
@@ -11,6 +10,7 @@ from utils.endpoints import (
     call_openai_compatible_endpoint,
     openrouter_is_reasoning_model,
 )
+from utils.logging import log_message
 
 # Regex to find numbered lines in LLM responses
 TRANSLATION_PATTERN = re.compile(

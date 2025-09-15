@@ -1,15 +1,16 @@
 import re
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
-import torch
+from typing import Any, Dict, List, Optional, Tuple
 
 import gradio as gr
+import torch
 from PIL import Image
 
-from . import logic
-from . import utils
-from . import settings_manager
+from core.models import MangaTranslatorConfig
+from utils.exceptions import ValidationError
+
+from . import logic, settings_manager, utils
 from .ui_models import (
     UIConfigState,
     UIDetectionSettings,
@@ -21,8 +22,6 @@ from .ui_models import (
     UIGeneralSettings,
     map_ui_to_backend_config,
 )
-from core.models import MangaTranslatorConfig
-from utils.exceptions import ValidationError
 
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
