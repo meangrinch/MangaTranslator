@@ -40,6 +40,7 @@ def _get_sam2(model_id: str, device: torch.device):
         models_dir.mkdir(parents=True, exist_ok=True)
         processor = Sam2Processor.from_pretrained(model_id, cache_dir=str(models_dir))
         model = Sam2Model.from_pretrained(model_id, cache_dir=str(models_dir)).to(device)
+        model.eval()
         _sam2_cache[cache_key] = (processor, model)
     return _sam2_cache[cache_key]
 
