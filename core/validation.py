@@ -6,22 +6,21 @@ from utils.exceptions import ValidationError
 
 
 def autodetect_yolo_model_path(models_dir: Path) -> Path:
-    """Auto-detect the YOLO model inside models/yolov8m_seg-speech-bubble/.
+    """Auto-detect the YOLO model inside models/ directory.
 
-    Looks for .pt files in that subdirectory (recursively). If multiple are found,
+    Looks for .pt files in the models directory (recursively). If multiple are found,
     picks the first in sorted order. Raises if none found.
     """
-    target_dir = models_dir / "yolov8m_seg-speech-bubble"
-    if not target_dir.exists() or not target_dir.is_dir():
+    if not models_dir.exists() or not models_dir.is_dir():
         raise FileNotFoundError(
-            f"YOLO model directory not found: {target_dir}. "
+            f"Models directory not found: {models_dir}. "
             f"Create it and place your .pt model there."
         )
 
-    candidates = sorted(target_dir.rglob("*.pt"))
+    candidates = sorted(models_dir.rglob("*.pt"))
     if not candidates:
         raise ValidationError(
-            f"No YOLO .pt model found in {target_dir}. Place a segmentation model there."
+            f"No YOLO .pt model found in {models_dir}. Place a segmentation model there."
         )
 
     return candidates[0].resolve()

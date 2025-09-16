@@ -813,7 +813,7 @@ def main():
                 print(f"Creating directory for output file: {output_path.parent}")
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Auto-detect YOLO model for CLI using ./models/yolov8m_seg-speech-bubble/
+        # Auto-detect YOLO model for CLI using ./models/
         try:
             models_base = Path("./models")
             detected_model_path = autodetect_yolo_model_path(models_base)
@@ -821,7 +821,7 @@ def main():
         except Exception as autodetect_err:
             log_message(f"Error auto-detecting YOLO model: {autodetect_err}", always_print=True)
             log_message(
-                "CLI requires a model at ./models/yolov8m_seg-speech-bubble/*.pt. Please add it and retry.",
+                "CLI requires a model at ./models/*.pt. Please add it and retry.",
                 always_print=True,
             )
             exit(1)
