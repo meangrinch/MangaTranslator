@@ -50,7 +50,7 @@ pip install -r requirements.txt
 
 ## Post-install setup
 ### YOLO model
-- Place the necessary segmentation model (`.pt`) in `models/yolov8m_seg-speech-bubble/`
+- Place the necessary segmentation model (`.pt`) in `models/`
 - Model: [kitsumed/yolov8m_seg-speech-bubble](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt)
 
 ### Fonts
