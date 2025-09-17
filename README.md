@@ -6,7 +6,7 @@ Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs
 - Speech bubble detection (YOLOv8)
 - Text cleaning (removes original bubble text)
 - LLM-powered translation (one-step or two-step)
-- Text rendering with your chosen font pack
+- Text rendering (with custom font pack))
 - Two interfaces: Web UI (Gradio) and CLI
 
 ## Requirements
@@ -16,7 +16,7 @@ Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs
 - Font pack with `.ttf`/`.otf`
 - Vision-capable LLM (API or Local)
 
-## Install
+## Installation
 
 ### Windows portable
 Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases)
@@ -75,7 +75,7 @@ fonts/
 - Web UI: configure provider/model/key in the Config tab (stored locally)
 - CLI: pass keys/URLs as flags or via env vars
 - Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
-- OpenAI-Compatible default URL: `http://localhost:11434/v1`
+- OpenAI-compatible default URL: `http://localhost:11434/v1`
 
 ## Run
 
@@ -119,22 +119,22 @@ python main.py --help
 
 ## Troubleshooting
 
-### Setup & Configuration
+#### Setup & Configuration
 - Model/fonts not found: use Config → Refresh; ensure `models/*.pt` and `fonts/<pack>/*.ttf|*.otf`
 - OpenAI-compatible models not listed: verify the base URL (e.g., `http://localhost:11434/v1`)
 - GPU/CPU: CUDA used if available; add `--cpu` to force CPU
 - Minimum image size: 600×600
 
-### Misordered or Missing Content
+#### Misordered or Missing Content
 - Wrong reading order: Set correct "Reading Direction" (rtl for manga, ltr for comics)
 - Uncleaned text remaining: Lower the "Fixed Threshold Value" (try 190) or enable "Use Automatic Thresholding (Otsu)"
 
-### Poor Translations
+#### Poor Translations
 - Poor translation quality: Try "two-step" translation mode for less-capable LLMs
 - LLM refusals: Disable "Send Full Page to LLM" in Config → Translation
 - Inconsistent translations: Adjust the LLM parameters (e.g., "Temperature") for more creative/deterministic output
 
-### Text Rendering Issues
+#### Text Rendering Issues
 - Text too large/small: Adjust "Max Font Size" and "Min Font Size" ranges
 
 ## Updating
