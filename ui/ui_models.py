@@ -94,7 +94,6 @@ class UIGeneralSettings:
 class UIConfigState:
     """Represents the complete configuration state managed by the UI."""
 
-    yolo_model: Optional[str] = None
     detection: UIDetectionSettings = field(default_factory=UIDetectionSettings)
     cleaning: UICleaningSettings = field(default_factory=UICleaningSettings)
     provider_settings: UITranslationProviderSettings = field(default_factory=UITranslationProviderSettings)
@@ -114,7 +113,6 @@ class UIConfigState:
     def to_save_dict(self) -> Dict[str, Any]:
         """Converts the UI state into a dictionary suitable for saving to config.json."""
         data = {
-            "yolo_model": self.yolo_model,
             "confidence": self.detection.confidence,
             "use_sam2": self.detection.use_sam2,
             "reading_direction": self.llm_settings.reading_direction,
@@ -167,7 +165,6 @@ class UIConfigState:
         defaults.update(settings_manager.DEFAULT_BATCH_SETTINGS)
 
         return UIConfigState(
-            yolo_model=data.get("yolo_model"),
             detection=UIDetectionSettings(
                 confidence=data.get("confidence", defaults["confidence"]),
                 use_sam2=data.get("use_sam2", defaults.get("use_sam2", True)),
@@ -233,7 +230,6 @@ class UIConfigState:
 
 def map_ui_to_backend_config(
     ui_state: UIConfigState,
-    models_dir: Path,
     fonts_base_dir: Path,
     target_device: Optional[torch.device],
     is_batch: bool = False,

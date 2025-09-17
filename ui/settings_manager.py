@@ -138,7 +138,6 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "hyphenate_before_scaling",
 
     # Models / Detection
-    "yolo_model",
     "confidence",
     "use_sam2",
 
@@ -183,7 +182,6 @@ def save_config(incoming_settings: Dict[str, Any]):
 
         known_keys = set(DEFAULT_SETTINGS.keys()) | set(DEFAULT_BATCH_SETTINGS.keys())
         known_keys.add("provider_models")
-        known_keys.add("yolo_model")
         known_keys.add("cleaning_only")
         known_keys.add("use_sam2")
         all_defaults = {**DEFAULT_SETTINGS, **DEFAULT_BATCH_SETTINGS}
@@ -272,8 +270,6 @@ def get_saved_settings() -> Dict[str, Any]:
                     settings[key] = saved_config[key]
 
             # Special handling for potentially missing keys or nested structures from older configs
-            if "yolo_model" in saved_config:
-                settings["yolo_model"] = saved_config["yolo_model"]
             if "use_sam2" in saved_config:
                 settings["use_sam2"] = bool(saved_config["use_sam2"])
             if "provider_models" not in settings:
@@ -351,7 +347,6 @@ def reset_to_defaults() -> Dict[str, Any]:
             "anthropic_api_key",
             "openrouter_api_key",
             "openai_compatible_api_key",
-            "yolo_model",
         ]
         for key in preserved_keys:
             if key in current_saved:

@@ -333,7 +333,6 @@ def handle_translate_click(
 
         # --- Build UI State Dataclass ---
         ui_state = UIConfigState(
-            yolo_model=None,
             detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
             cleaning=UICleaningSettings(
                 thresholding_value=thresholding_value,
@@ -386,7 +385,6 @@ def handle_translate_click(
         # --- Map UI State to Backend Config ---
         backend_config = map_ui_to_backend_config(
             ui_state=ui_state,
-            models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
             target_device=target_device,
             is_batch=False,
@@ -520,7 +518,6 @@ def handle_batch_click(
 
         # --- Build UI State Dataclass ---
         ui_state = UIConfigState(
-            yolo_model=None,
             detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
             cleaning=UICleaningSettings(
                 thresholding_value=thresholding_value,
@@ -573,7 +570,6 @@ def handle_batch_click(
         # --- Map UI State to Backend Config ---
         backend_config = map_ui_to_backend_config(
             ui_state=ui_state,
-            models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
             target_device=target_device,
             is_batch=True,
@@ -676,7 +672,6 @@ def handle_save_config_click(*args: Any) -> str:
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
     ui_state = UIConfigState(
-        yolo_model=None,
         detection=UIDetectionSettings(confidence=conf, use_sam2=use_sam2),
         cleaning=UICleaningSettings(
             thresholding_value=thresholding_val,
