@@ -26,14 +26,8 @@ class UIDetectionSettings:
 class UICleaningSettings:
     """UI state for cleaning settings."""
 
-    dilation_kernel_size: int = 7
-    dilation_iterations: int = 1
+    thresholding_value: int = 210
     use_otsu_threshold: bool = False
-    min_contour_area: int = 50
-    closing_kernel_size: int = 7
-    closing_iterations: int = 1
-    constraint_erosion_kernel_size: int = 9
-    constraint_erosion_iterations: int = 1
 
 
 @dataclass
@@ -124,14 +118,8 @@ class UIConfigState:
             "confidence": self.detection.confidence,
             "use_sam2": self.detection.use_sam2,
             "reading_direction": self.llm_settings.reading_direction,
-            "dilation_kernel_size": self.cleaning.dilation_kernel_size,
-            "dilation_iterations": self.cleaning.dilation_iterations,
+            "thresholding_value": self.cleaning.thresholding_value,
             "use_otsu_threshold": self.cleaning.use_otsu_threshold,
-            "min_contour_area": self.cleaning.min_contour_area,
-            "closing_kernel_size": self.cleaning.closing_kernel_size,
-            "closing_iterations": self.cleaning.closing_iterations,
-            "constraint_erosion_kernel_size": self.cleaning.constraint_erosion_kernel_size,
-            "constraint_erosion_iterations": self.cleaning.constraint_erosion_iterations,
             "provider": self.provider_settings.provider,
             "gemini_api_key": self.provider_settings.gemini_api_key,
             "openai_api_key": self.provider_settings.openai_api_key,
@@ -185,18 +173,8 @@ class UIConfigState:
                 use_sam2=data.get("use_sam2", defaults.get("use_sam2", True)),
             ),
             cleaning=UICleaningSettings(
-                dilation_kernel_size=data.get("dilation_kernel_size", defaults["dilation_kernel_size"]),
-                dilation_iterations=data.get("dilation_iterations", defaults["dilation_iterations"]),
+                thresholding_value=data.get("thresholding_value", defaults["thresholding_value"]),
                 use_otsu_threshold=data.get("use_otsu_threshold", defaults["use_otsu_threshold"]),
-                min_contour_area=data.get("min_contour_area", defaults["min_contour_area"]),
-                closing_kernel_size=data.get("closing_kernel_size", defaults["closing_kernel_size"]),
-                closing_iterations=data.get("closing_iterations", defaults["closing_iterations"]),
-                constraint_erosion_kernel_size=data.get(
-                    "constraint_erosion_kernel_size", defaults["constraint_erosion_kernel_size"]
-                ),
-                constraint_erosion_iterations=data.get(
-                    "constraint_erosion_iterations", defaults["constraint_erosion_iterations"]
-                ),
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=data.get("provider", defaults["provider"]),
@@ -272,14 +250,8 @@ def map_ui_to_backend_config(
     detection_cfg.use_sam2 = ui_state.detection.use_sam2
 
     cleaning_cfg = CleaningConfig(
-        dilation_kernel_size=ui_state.cleaning.dilation_kernel_size,
-        dilation_iterations=ui_state.cleaning.dilation_iterations,
+        thresholding_value=ui_state.cleaning.thresholding_value,
         use_otsu_threshold=ui_state.cleaning.use_otsu_threshold,
-        min_contour_area=ui_state.cleaning.min_contour_area,
-        closing_kernel_size=ui_state.cleaning.closing_kernel_size,
-        closing_iterations=ui_state.cleaning.closing_iterations,
-        constraint_erosion_kernel_size=ui_state.cleaning.constraint_erosion_kernel_size,
-        constraint_erosion_iterations=ui_state.cleaning.constraint_erosion_iterations,
     )
 
     translation_cfg = TranslationConfig(

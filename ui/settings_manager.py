@@ -70,14 +70,8 @@ DEFAULT_SETTINGS = {
     "translation_mode": "one-step",
     "confidence": 0.35,
     "use_sam2": True,
-    "dilation_kernel_size": 7,
-    "dilation_iterations": 1,
     "use_otsu_threshold": False,
-    "min_contour_area": 50,
-    "closing_kernel_size": 7,
-    "closing_iterations": 1,
-    "constraint_erosion_kernel_size": 5,
-    "constraint_erosion_iterations": 1,
+    "thresholding_value": 210,
     "temperature": 0.1,
     "top_p": 0.95,
     "top_k": 64,
@@ -149,14 +143,8 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "use_sam2",
 
     # Cleaning
-    "dilation_kernel_size",
-    "dilation_iterations",
+    "thresholding_value",
     "use_otsu_threshold",
-    "min_contour_area",
-    "closing_kernel_size",
-    "closing_iterations",
-    "constraint_erosion_kernel_size",
-    "constraint_erosion_iterations",
 
     # Output
     "output_format",

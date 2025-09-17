@@ -186,15 +186,8 @@ def translate_and_render(
                 config.detection.confidence,
                 pre_computed_detections=bubble_data,
                 device=device,
-                dilation_kernel_size=config.cleaning.dilation_kernel_size,
-                dilation_iterations=config.cleaning.dilation_iterations,
+                thresholding_value=config.cleaning.thresholding_value,
                 use_otsu_threshold=use_otsu,
-                min_contour_area=config.cleaning.min_contour_area,
-                closing_kernel_size=config.cleaning.closing_kernel_size,
-                closing_iterations=config.cleaning.closing_iterations,
-                closing_kernel_shape=config.cleaning.closing_kernel_shape,
-                constraint_erosion_kernel_size=config.cleaning.constraint_erosion_kernel_size,
-                constraint_erosion_iterations=config.cleaning.constraint_erosion_iterations,
                 verbose=verbose,
             )
             log_message(f"Cleaning returned info for {len(processed_bubbles_info)} bubbles.", verbose=verbose)
@@ -589,21 +582,17 @@ def main():
         help="Reading direction for sorting bubbles (rtl or ltr)",
     )
     # Cleaning args
-    parser.add_argument("--dilation-kernel-size", type=int, default=7, help="ROI Dilation Kernel Size")
-    parser.add_argument("--dilation-iterations", type=int, default=1, help="ROI Dilation Iterations")
     parser.add_argument(
         "--use-otsu-threshold",
         action="store_true",
-        help="Use Otsu's method for thresholding instead of the fixed value (210)",
-    )
-    parser.add_argument("--min-contour-area", type=int, default=50, help="Min Bubble Contour Area")
-    parser.add_argument("--closing-kernel-size", type=int, default=7, help="Mask Closing Kernel Size")
-    parser.add_argument("--closing-iterations", type=int, default=1, help="Mask Closing Iterations")
-    parser.add_argument(
-        "--constraint-erosion-kernel-size", type=int, default=9, help="Edge Constraint Erosion Kernel Size"
+        help="Use Otsu's method for thresholding instead of the fixed value",
     )
     parser.add_argument(
-        "--constraint-erosion-iterations", type=int, default=1, help="Edge Constraint Erosion Iterations"
+        "--thresholding-value",
+        type=int,
+        default=210,
+        help="Fixed threshold value for text detection (0-255). Lower values (e.g., 190) are useful for "
+             "uncleaned text close to bubble's edges.",
     )
     # Translation args
     parser.add_argument("--temperature", type=float, default=0.1, help="Controls randomness in output (0.0-2.0)")
@@ -729,14 +718,8 @@ def main():
         cleaning_only=args.cleaning_only,
         detection=DetectionConfig(confidence=args.conf, use_sam2=args.use_sam2),
         cleaning=CleaningConfig(
-            dilation_kernel_size=args.dilation_kernel_size,
-            dilation_iterations=args.dilation_iterations,
+            thresholding_value=args.thresholding_value,
             use_otsu_threshold=use_otsu_config_val,
-            min_contour_area=args.min_contour_area,
-            closing_kernel_size=args.closing_kernel_size,
-            closing_iterations=args.closing_iterations,
-            constraint_erosion_kernel_size=args.constraint_erosion_kernel_size,
-            constraint_erosion_iterations=args.constraint_erosion_iterations,
         ),
         translation=TranslationConfig(
             provider=provider,

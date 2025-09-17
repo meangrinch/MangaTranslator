@@ -15,15 +15,8 @@ def clean_speech_bubbles(
     confidence=0.35,
     pre_computed_detections=None,
     device=None,
-    dilation_kernel_size=7,
-    dilation_iterations=1,
+    thresholding_value: int = 210,
     use_otsu_threshold: bool = False,
-    min_contour_area=50,
-    closing_kernel_size=7,
-    closing_iterations=1,
-    closing_kernel_shape=cv2.MORPH_ELLIPSE,
-    constraint_erosion_kernel_size=5,
-    constraint_erosion_iterations=1,
     verbose: bool = False,
 ):
     """
@@ -35,15 +28,9 @@ def clean_speech_bubbles(
         confidence (float): Confidence threshold for detections.
         pre_computed_detections (list, optional): Pre-computed detections from previous call.
         device (torch.device, optional): The device to run detection model on if needed.
-        dilation_kernel_size (int): Kernel size for dilating initial YOLO mask for ROI.
-        dilation_iterations (int): Iterations for dilation.
-        use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value (210).
-        min_contour_area (int): Minimum area for a contour to be considered part of the bubble interior.
-        closing_kernel_size (int): Kernel size for morphological closing to smooth mask and include text.
-        closing_iterations (int): Iterations for closing.
-        closing_kernel_shape (int): Shape for the closing kernel (e.g., cv2.MORPH_RECT, cv2.MORPH_ELLIPSE).
-        constraint_erosion_kernel_size (int): Kernel size for eroding the original YOLO mask for edge constraint.
-        constraint_erosion_iterations (int): Iterations for constraint erosion.
+        thresholding_value (int): Fixed threshold value for text detection (0-255). Lower values (e.g., 190)
+                                 are useful for uncleaned text close to bubble's edges.
+        use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value.
 
     Returns:
         numpy.ndarray: Cleaned image with white bubbles.
@@ -68,10 +55,9 @@ def clean_speech_bubbles(
         )
 
         processed_bubbles = []
-        dilation_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilation_kernel_size, dilation_kernel_size))
-        closing_kernel = cv2.getStructuringElement(closing_kernel_shape, (closing_kernel_size, closing_kernel_size))
+        dilation_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         constraint_erosion_kernel = cv2.getStructuringElement(
-            cv2.MORPH_ELLIPSE, (constraint_erosion_kernel_size, constraint_erosion_kernel_size)
+            cv2.MORPH_ELLIPSE, (5, 5)
         )
 
         for detection in detections:
@@ -86,7 +72,7 @@ def clean_speech_bubbles(
                     base_mask = np.where(base_mask > 0, 255, 0).astype(np.uint8)
 
                     # ROI similar to YOLO path (expand for thresholding robustness)
-                    roi_mask = cv2.dilate(base_mask, dilation_kernel, iterations=dilation_iterations)
+                    roi_mask = cv2.dilate(base_mask, dilation_kernel, iterations=1)
 
                     # Determine bubble color from pixels under the SAM mask
                     masked_pixels = img_gray[base_mask == 255]
@@ -138,9 +124,8 @@ def clean_speech_bubbles(
                         else:
                             log_message("[SAM]   - Skipping Otsu: ROI mask is empty.", verbose=verbose)
                     else:
-                        fixed_threshold = 210
                         _, thresholded_roi = cv2.threshold(
-                            roi_for_thresholding, fixed_threshold, 255, cv2.THRESH_BINARY
+                            roi_for_thresholding, thresholding_value, 255, cv2.THRESH_BINARY
                         )
 
                     # Restrict thresholded region to ROI
@@ -148,94 +133,77 @@ def clean_speech_bubbles(
 
                     # Constrain interior to avoid erasing outlines (use eroded SAM mask)
                     eroded_constraint_mask = cv2.erode(
-                        base_mask, constraint_erosion_kernel, iterations=constraint_erosion_iterations
+                        base_mask, constraint_erosion_kernel, iterations=1
                     )
 
                     final_mask = None
                     if is_black_bubble:
                         log_message(
-                            f"[SAM] Detection {detection.get('bbox')}: Applying BLACK bubble refinement logic.",
+                            f"[SAM] Detection {detection.get('bbox')}: Validated reconstruction (BLACK).",
                             verbose=verbose,
                         )
-                        contours, _ = cv2.findContours(thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                        refined_background_shape_mask = None
-                        if contours:
-                            valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_contour_area]
-                            if valid_contours:
-                                largest_contour = max(valid_contours, key=cv2.contourArea)
-                                refined_background_shape_mask = np.zeros_like(img_gray)
-                                cv2.drawContours(
-                                    refined_background_shape_mask,
-                                    [largest_contour],
-                                    -1,
-                                    255,
-                                    thickness=cv2.FILLED,
-                                )
-                                log_message("[SAM]   - Found refined background shape.", verbose=verbose)
-                            else:
-                                log_message("[SAM]   - No valid contours found for refined shape.", verbose=verbose)
-                        else:
-                            log_message("[SAM]   - No contours found at all for refined shape.", verbose=verbose)
+                        contours, _ = cv2.findContours(
+                            thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                        )
+                        validated_mask = np.zeros_like(img_gray)
+                        kept_count = 0
+                        for cnt in contours:
+                            area = cv2.contourArea(cnt)
+                            if area <= 50:
+                                continue
+                            m = cv2.moments(cnt)
+                            if m["m00"] == 0:
+                                continue
+                            cx = int(m["m10"] / m["m00"])
+                            cy = int(m["m01"] / m["m00"])
+                            if 0 <= cx < img_width and 0 <= cy < img_height and eroded_constraint_mask[cy, cx] == 255:
+                                cv2.drawContours(validated_mask, [cnt], -1, 255, thickness=cv2.FILLED)
+                                kept_count += 1
+                        log_message(f"[SAM]   - Kept {kept_count} validated fragments.", verbose=verbose)
 
-                        base_mask_closed = cv2.morphologyEx(
-                            base_mask, cv2.MORPH_CLOSE, closing_kernel, iterations=1
+                        # Re-contour the stable validated mask to get definitive boundary
+                        boundary_contours, _ = cv2.findContours(
+                            validated_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
                         )
-                        refined_mask = None
-                        if refined_background_shape_mask is not None:
-                            dilate_iter = 1
-                            dilated_shape_mask = cv2.dilate(
-                                refined_background_shape_mask, closing_kernel, iterations=dilate_iter
-                            )
-                            refined_mask = cv2.bitwise_and(base_mask_closed, dilated_shape_mask)
-                            log_message(
-                                "[SAM]   - Refined mask using dilated shape intersection.",
-                                verbose=verbose,
-                            )
+                        if boundary_contours:
+                            largest_contour = max(boundary_contours, key=cv2.contourArea)
+                            final_mask = np.zeros_like(img_gray)
+                            cv2.drawContours(final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
                         else:
-                            refined_mask = base_mask_closed
-                            log_message(
-                                "[SAM]   - No refined shape, using closed base SAM mask (1 iter).",
-                                verbose=verbose,
-                            )
-
-                        internal_erosion_iterations = max(1, (constraint_erosion_iterations + 2))
-                        eroded_refined_mask = cv2.erode(
-                            refined_mask,
-                            constraint_erosion_kernel,
-                            iterations=internal_erosion_iterations,
-                        )
-                        closed_eroded_refined_mask = cv2.morphologyEx(
-                            eroded_refined_mask, cv2.MORPH_CLOSE, closing_kernel, iterations=closing_iterations
-                        )
-                        final_mask = cv2.bitwise_and(
-                            closed_eroded_refined_mask, eroded_constraint_mask
-                        )
+                            final_mask = None
                     else:
                         log_message(
-                            f"[SAM] Detection {detection.get('bbox')}: Applying WHITE bubble refinement logic.",
+                            f"[SAM] Detection {detection.get('bbox')}: Validated reconstruction (WHITE).",
                             verbose=verbose,
                         )
-                        contours, _ = cv2.findContours(thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                        if contours:
-                            valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_contour_area]
-                            if valid_contours:
-                                largest_contour = max(valid_contours, key=cv2.contourArea)
-                                interior_mask = np.zeros((img_height, img_width), dtype=np.uint8)
-                                cv2.drawContours(
-                                    interior_mask, [largest_contour], -1, 255, thickness=cv2.FILLED
-                                )
-                                closed_mask = cv2.morphologyEx(
-                                    interior_mask, cv2.MORPH_CLOSE, closing_kernel, iterations=closing_iterations
-                                )
-                                final_mask = cv2.bitwise_and(closed_mask, eroded_constraint_mask)
-                                log_message(
-                                    "[SAM]   - Generated mask from largest contour, closed, and constrained.",
-                                    verbose=verbose,
-                                )
-                            else:
-                                log_message("[SAM]   - No valid contours found.", verbose=verbose)
+                        contours, _ = cv2.findContours(
+                            thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                        )
+                        validated_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+                        kept_count = 0
+                        for cnt in contours:
+                            area = cv2.contourArea(cnt)
+                            if area <= 50:
+                                continue
+                            m = cv2.moments(cnt)
+                            if m["m00"] == 0:
+                                continue
+                            cx = int(m["m10"] / m["m00"])
+                            cy = int(m["m01"] / m["m00"])
+                            if 0 <= cx < img_width and 0 <= cy < img_height and eroded_constraint_mask[cy, cx] == 255:
+                                cv2.drawContours(validated_mask, [cnt], -1, 255, thickness=cv2.FILLED)
+                                kept_count += 1
+                        log_message(f"[SAM]   - Kept {kept_count} validated fragments.", verbose=verbose)
+
+                        boundary_contours, _ = cv2.findContours(
+                            validated_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                        )
+                        if boundary_contours:
+                            largest_contour = max(boundary_contours, key=cv2.contourArea)
+                            final_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+                            cv2.drawContours(final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
                         else:
-                            log_message("[SAM]   - No contours found at all.", verbose=verbose)
+                            final_mask = None
 
                     if final_mask is not None:
                         lir_coords = None
@@ -298,7 +266,7 @@ def clean_speech_bubbles(
                 original_yolo_mask = np.zeros((img_height, img_width), dtype=np.uint8)
                 cv2.fillPoly(original_yolo_mask, [points_int], 255)
 
-                roi_mask = cv2.dilate(original_yolo_mask, dilation_kernel, iterations=dilation_iterations)
+                roi_mask = cv2.dilate(original_yolo_mask, dilation_kernel, iterations=1)
 
                 masked_pixels = img_gray[original_yolo_mask == 255]
                 if masked_pixels.size == 0:
@@ -341,84 +309,79 @@ def clean_speech_bubbles(
                     else:
                         log_message("  - Skipping Otsu: ROI mask is empty.", verbose=verbose)
                 else:
-                    fixed_threshold = 210
-                    _, thresholded_roi = cv2.threshold(roi_for_thresholding, fixed_threshold, 255, cv2.THRESH_BINARY)
+                    _, thresholded_roi = cv2.threshold(roi_for_thresholding, thresholding_value, 255, cv2.THRESH_BINARY)
 
                 thresholded_roi = cv2.bitwise_and(thresholded_roi, roi_mask)
 
                 final_mask = None
                 eroded_constraint_mask = cv2.erode(
-                    original_yolo_mask, constraint_erosion_kernel, iterations=constraint_erosion_iterations
+                    original_yolo_mask, constraint_erosion_kernel, iterations=1
                 )
 
                 if is_black_bubble:
                     log_message(
-                        f"Detection {detection.get('bbox')}: Applying BLACK bubble refinement logic.", verbose=verbose
+                        f"Detection {detection.get('bbox')}: Applying validated fragment reconstruction (BLACK).",
+                        verbose=verbose,
                     )
 
                     contours, _ = cv2.findContours(thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    refined_background_shape_mask = None
-                    if contours:
-                        valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_contour_area]
-                        if valid_contours:
-                            largest_contour = max(valid_contours, key=cv2.contourArea)
-                            refined_background_shape_mask = np.zeros_like(img_gray)
-                            cv2.drawContours(
-                                refined_background_shape_mask, [largest_contour], -1, 255, thickness=cv2.FILLED
-                            )
-                            log_message("  - Found refined background shape.", verbose=verbose)
-                        else:
-                            log_message("  - No valid contours found for refined shape.", verbose=verbose)
-                    else:
-                        log_message("  - No contours found at all for refined shape.", verbose=verbose)
+                    validated_mask = np.zeros_like(img_gray)
+                    kept_count = 0
+                    for cnt in contours:
+                        area = cv2.contourArea(cnt)
+                        if area <= 50:
+                            continue
+                        m = cv2.moments(cnt)
+                        if m["m00"] == 0:
+                            continue
+                        cx = int(m["m10"] / m["m00"])
+                        cy = int(m["m01"] / m["m00"])
+                        if 0 <= cx < img_width and 0 <= cy < img_height and eroded_constraint_mask[cy, cx] == 255:
+                            cv2.drawContours(validated_mask, [cnt], -1, 255, thickness=cv2.FILLED)
+                            kept_count += 1
+                    log_message(f"  - Kept {kept_count} validated fragments.", verbose=verbose)
 
-                    base_mask = original_yolo_mask.copy()
-                    refined_mask = None
-                    if refined_background_shape_mask is not None:
-                        dilate_iter = 1
-                        dilated_shape_mask = cv2.dilate(
-                            refined_background_shape_mask, closing_kernel, iterations=dilate_iter
-                        )
-                        refined_mask = cv2.bitwise_and(base_mask, dilated_shape_mask)
-                        log_message("  - Refined mask using dilated shape intersection.", verbose=verbose)
+                    boundary_contours, _ = cv2.findContours(
+                        validated_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                    )
+                    if boundary_contours:
+                        largest_contour = max(boundary_contours, key=cv2.contourArea)
+                        final_mask = np.zeros_like(img_gray)
+                        cv2.drawContours(final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
                     else:
-                        refined_mask = cv2.morphologyEx(base_mask, cv2.MORPH_CLOSE, closing_kernel, iterations=1)
-                        log_message("  - No refined shape, using closed base mask (1 iter).", verbose=verbose)
-
-                    internal_erosion_iterations = max(
-                        1, (constraint_erosion_iterations + 2)
-                    )  # 2 additional iterations for black bubbles
-                    eroded_refined_mask = cv2.erode(
-                        refined_mask, constraint_erosion_kernel, iterations=internal_erosion_iterations
-                    )
-                    closed_eroded_refined_mask = cv2.morphologyEx(
-                        eroded_refined_mask, cv2.MORPH_CLOSE, closing_kernel, iterations=closing_iterations
-                    )
-                    final_mask = cv2.bitwise_and(closed_eroded_refined_mask, eroded_constraint_mask)
+                        final_mask = None
 
                 else:
                     log_message(
-                        f"Detection {detection.get('bbox')}: Applying WHITE bubble refinement logic (original).",
+                        f"Detection {detection.get('bbox')}: Applying validated fragment reconstruction (WHITE).",
                         verbose=verbose,
                     )
                     contours, _ = cv2.findContours(thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    if contours:
-                        valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_contour_area]
-                        if valid_contours:
-                            largest_contour = max(valid_contours, key=cv2.contourArea)
-                            interior_mask = np.zeros((img_height, img_width), dtype=np.uint8)
-                            cv2.drawContours(interior_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
-                            closed_mask = cv2.morphologyEx(
-                                interior_mask, cv2.MORPH_CLOSE, closing_kernel, iterations=closing_iterations
-                            )
-                            final_mask = cv2.bitwise_and(closed_mask, eroded_constraint_mask)
-                            log_message(
-                                "  - Generated mask from largest contour, closed, and constrained.", verbose=verbose
-                            )
-                        else:
-                            log_message("  - No valid contours found.", verbose=verbose)
+                    validated_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+                    kept_count = 0
+                    for cnt in contours:
+                        area = cv2.contourArea(cnt)
+                        if area <= 50:
+                            continue
+                        m = cv2.moments(cnt)
+                        if m["m00"] == 0:
+                            continue
+                        cx = int(m["m10"] / m["m00"])
+                        cy = int(m["m01"] / m["m00"])
+                        if 0 <= cx < img_width and 0 <= cy < img_height and eroded_constraint_mask[cy, cx] == 255:
+                            cv2.drawContours(validated_mask, [cnt], -1, 255, thickness=cv2.FILLED)
+                            kept_count += 1
+                    log_message(f"  - Kept {kept_count} validated fragments.", verbose=verbose)
+
+                    boundary_contours, _ = cv2.findContours(
+                        validated_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                    )
+                    if boundary_contours:
+                        largest_contour = max(boundary_contours, key=cv2.contourArea)
+                        final_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+                        cv2.drawContours(final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
                     else:
-                        log_message("  - No contours found at all.", verbose=verbose)
+                        final_mask = None
 
                 if final_mask is not None:
                     lir_coords = None

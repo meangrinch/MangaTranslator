@@ -290,7 +290,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                     with gr.Column(scale=4, elem_id="config-content-area"):
                         # --- Detection Settings ---
                         with gr.Group(visible=True, elem_classes="settings-group") as group_detection:
-                            gr.Markdown("### YOLO Model")
+                            gr.Markdown("### Speech Bubble Detection")
                             confidence = gr.Slider(
                                 0.1,
                                 1.0,
@@ -316,75 +316,21 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                         # --- Cleaning Settings ---
                         with gr.Group(visible=False, elem_classes="settings-group") as group_cleaning:
                             gr.Markdown("### Mask Cleaning & Refinement")
-                            gr.Markdown("#### ROI Expansion")
-                            dilation_kernel_size = gr.Slider(
-                                1,
-                                15,
-                                value=saved_settings.get("dilation_kernel_size", 7),
-                                step=2,
-                                label="Dilation Kernel Size",
-                                info="Controls how much the initial bubble detection grows outwards. "
-                                     "Increase if blocky artifacts are present.",
-                            )
-                            dilation_iterations = gr.Slider(
-                                1,
-                                5,
-                                value=saved_settings.get("dilation_iterations", 1),
+                            thresholding_value = gr.Slider(
+                                0,
+                                255,
+                                value=saved_settings.get("thresholding_value", 210),
                                 step=1,
-                                label="Dilation Iterations",
-                                info="Controls how many times to apply the above bubble detection growth.",
+                                label="Fixed Threshold Value",
+                                info="Brightness threshold for text detection. Lower if there is uncleaned text "
+                                     "and it is close to the bubble's edges (e.g., 190).",
+                                interactive=not saved_settings.get("use_otsu_threshold", False),
                             )
-                            gr.Markdown("#### Bubble Interior Isolation")
                             use_otsu_threshold = gr.Checkbox(
                                 value=saved_settings.get("use_otsu_threshold", False),
                                 label="Use Automatic Thresholding (Otsu)",
                                 info="Automatically determine the brightness threshold instead of using the fixed "
-                                     "value (210). Recommended for varied lighting.",
-                            )
-                            min_contour_area = gr.Slider(
-                                0,
-                                500,
-                                value=saved_settings.get("min_contour_area", 50),
-                                step=10,
-                                label="Min Bubble Area",
-                                info="Removes tiny detected regions. Increase to ignore small specks or dots "
-                                     "inside the bubble area.",
-                            )
-                            gr.Markdown("#### Mask Smoothing")
-                            closing_kernel_size = gr.Slider(
-                                1,
-                                15,
-                                value=saved_settings.get("closing_kernel_size", 7),
-                                step=2,
-                                label="Closing Kernel Size",
-                                info="Controls the size of gaps between outline and text to fill. "
-                                     "Increase to capture text very close to the bubble outline.",
-                            )
-                            closing_iterations = gr.Slider(
-                                1,
-                                5,
-                                value=saved_settings.get("closing_iterations", 1),
-                                step=1,
-                                label="Closing Iterations",
-                                info="Controls how many times to apply the above gap filling.",
-                            )
-                            gr.Markdown("#### Edge Constraint")
-                            constraint_erosion_kernel_size = gr.Slider(
-                                1,
-                                15,
-                                value=saved_settings.get("constraint_erosion_kernel_size", 9),
-                                step=2,
-                                label="Constraint Erosion Kernel Size",
-                                info="Controls how much to shrink the cleaned mask inwards. "
-                                     "Increase if the bubble's outline is being erased.",
-                            )
-                            constraint_erosion_iterations = gr.Slider(
-                                1,
-                                3,
-                                value=saved_settings.get("constraint_erosion_iterations", 1),
-                                step=1,
-                                label="Constraint Erosion Iterations",
-                                info="Controls how many times to apply the above shrinkage.",
+                                     "value. Recommended for varied lighting.",
                             )
                         setting_groups.append(group_cleaning)
 
@@ -650,7 +596,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                         with gr.Group(visible=False, elem_classes="settings-group") as group_other:
                             gr.Markdown("### Other")
                             refresh_resources_button = gr.Button(
-                                "Refresh Models / Fonts",
+                                "Refresh Model / Fonts",
                                 variant="secondary",
                                 elem_classes="config-refresh-button",
                             )
@@ -671,14 +617,8 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             confidence,
             use_sam2_checkbox,
             config_reading_direction,
-            dilation_kernel_size,
-            dilation_iterations,
+            thresholding_value,
             use_otsu_threshold,
-            min_contour_area,
-            closing_kernel_size,
-            closing_iterations,
-            constraint_erosion_kernel_size,
-            constraint_erosion_iterations,
             provider_selector,
             gemini_api_key,
             openai_api_key,
@@ -719,14 +659,8 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             confidence,
             use_sam2_checkbox,
             config_reading_direction,
-            dilation_kernel_size,
-            dilation_iterations,
+            thresholding_value,
             use_otsu_threshold,
-            min_contour_area,
-            closing_kernel_size,
-            closing_iterations,
-            constraint_erosion_kernel_size,
-            constraint_erosion_iterations,
             provider_selector,
             gemini_api_key,
             openai_api_key,
@@ -768,14 +702,8 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             input_image,
             confidence,
             use_sam2_checkbox,
-            dilation_kernel_size,
-            dilation_iterations,
+            thresholding_value,
             use_otsu_threshold,
-            min_contour_area,
-            closing_kernel_size,
-            closing_iterations,
-            constraint_erosion_kernel_size,
-            constraint_erosion_iterations,
             provider_selector,
             gemini_api_key,
             openai_api_key,
@@ -814,14 +742,8 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             input_files,
             confidence,
             use_sam2_checkbox,
-            dilation_kernel_size,
-            dilation_iterations,
+            thresholding_value,
             use_otsu_threshold,
-            min_contour_area,
-            closing_kernel_size,
-            closing_iterations,
-            constraint_erosion_kernel_size,
-            constraint_erosion_iterations,
             provider_selector,
             gemini_api_key,
             openai_api_key,
@@ -929,6 +851,14 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             fn=callbacks.handle_model_change,
             inputs=[provider_selector, config_model_name, temperature],
             outputs=[temperature, top_k, enable_thinking_checkbox, reasoning_effort_dropdown],
+            queue=False,
+        )
+
+        # Thresholding checkbox change handler
+        use_otsu_threshold.change(
+            fn=callbacks.handle_thresholding_change,
+            inputs=use_otsu_threshold,
+            outputs=thresholding_value,
             queue=False,
         )
 

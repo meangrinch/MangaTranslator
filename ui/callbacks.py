@@ -95,55 +95,49 @@ def _format_single_success_message(
     processing_mode_str = "Cleaning Only" if backend_config.cleaning_only else "Translation"
     msg_parts = [
         f"{SUCCESS_PREFIX}{processing_mode_str} completed!\n",
-        f"• Image size: {width}x{height} pixels\n",
+        f"• Image Size: {width}x{height} pixels\n",
         f"• Provider: {provider}\n",
         f"• Model: {model_name}{thinking_status_str}\n",
-        f"• Source language: {backend_config.translation.input_language}\n",
-        f"• Target language: {backend_config.translation.output_language}\n",
+        f"• Source Language: {backend_config.translation.input_language}\n",
+        f"• Target Language: {backend_config.translation.output_language}\n",
         f"• Reading Direction: {backend_config.translation.reading_direction.upper()}\n",
-        f"• Font pack: {font_dir_path.name}\n",
+        f"• Font Pack: {font_dir_path.name}\n",
         f"• Translation Mode: {backend_config.translation.translation_mode}\n",
         f"• YOLO Model: {selected_yolo_model_name}\n",
         (
-            f"• Cleaning Params: DKS:{backend_config.cleaning.dilation_kernel_size}, "
-            f"DI:{backend_config.cleaning.dilation_iterations}, "
-            f"Otsu:{backend_config.cleaning.use_otsu_threshold}, "
-            f"MCA:{backend_config.cleaning.min_contour_area}, "
-            f"CKS:{backend_config.cleaning.closing_kernel_size}, "
-            f"CI:{backend_config.cleaning.closing_iterations}, "
-            f"CEKS:{backend_config.cleaning.constraint_erosion_kernel_size}, "
-            f"CEI:{backend_config.cleaning.constraint_erosion_iterations}\n"
+            "• Brightness Threshold: Otsu\n" if backend_config.cleaning.use_otsu_threshold
+            else f"• Brightness Threshold: {backend_config.cleaning.thresholding_value}\n"
         ),
     ]
     if not backend_config.cleaning_only:
         msg_parts.append(
-            f"• Full-page context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
+            f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
         )
         msg_parts.append(f"{llm_params_str}\n")
 
     if backend_config.output.output_format == "png":
-        msg_parts.append("• Output format: png\n")
-        msg_parts.append(f"• PNG compression: {backend_config.output.png_compression}\n")
+        msg_parts.append("• Output Format: png\n")
+        msg_parts.append(f"• PNG Compression: {backend_config.output.png_compression}\n")
     elif backend_config.output.output_format == "jpeg":
-        msg_parts.append("• Output format: jpeg\n")
-        msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
+        msg_parts.append("• Output Format: jpeg\n")
+        msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
     else:  # Auto
         try:
             ext = save_path.suffix.lower()
         except Exception:
             ext = ""
         if ext in {".jpg", ".jpeg"}:
-            msg_parts.append("• Output format: auto → jpeg\n")
-            msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
+            msg_parts.append("• Output Format: auto → jpeg\n")
+            msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
         elif ext == ".png":
-            msg_parts.append("• Output format: auto → png\n")
-            msg_parts.append(f"• PNG compression: {backend_config.output.png_compression}\n")
+            msg_parts.append("• Output Format: auto → png\n")
+            msg_parts.append(f"• PNG Compression: {backend_config.output.png_compression}\n")
         elif ext == ".webp":
-            msg_parts.append("• Output format: auto → webp\n")
+            msg_parts.append("• Output Format: auto → webp\n")
         else:
-            msg_parts.append("• Output format: auto\n")
+            msg_parts.append("• Output Format: auto\n")
 
-    msg_parts.extend([f"• Processing time: {processing_time:.2f} seconds\n", f"• Saved to: {save_path}"])
+    msg_parts.extend([f"• Processing Time: {processing_time:.2f} seconds\n", f"• Saved To: {save_path}"])
     return "".join(msg_parts)
 
 
@@ -198,7 +192,7 @@ def _format_batch_success_message(
 
     if not backend_config.cleaning_only:
         llm_params_str = (
-            f"• Full-page context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
+            f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
             + llm_params_str
         )
 
@@ -211,35 +205,29 @@ def _format_batch_success_message(
         f"{SUCCESS_PREFIX}Batch {processing_mode_str.lower()} completed!\n",
         f"• Provider: {provider}\n",
         f"• Model: {model_name}{thinking_status_str}\n",
-        f"• Source language: {backend_config.translation.input_language}\n",
-        f"• Target language: {backend_config.translation.output_language}\n",
+        f"• Source Language: {backend_config.translation.input_language}\n",
+        f"• Target Language: {backend_config.translation.output_language}\n",
         f"• Reading Direction: {backend_config.translation.reading_direction.upper()}\n",
-        f"• Font pack: {font_dir_path.name}\n",
+        f"• Font Pack: {font_dir_path.name}\n",
         f"• YOLO Model: {selected_yolo_model_name}\n",
         f"• Translation Mode: {backend_config.translation.translation_mode}\n",
         (
-            f"• Cleaning Params: DKS:{backend_config.cleaning.dilation_kernel_size}, "
-            f"DI:{backend_config.cleaning.dilation_iterations}, "
-            f"Otsu:{backend_config.cleaning.use_otsu_threshold}, "
-            f"MCA:{backend_config.cleaning.min_contour_area}, "
-            f"CKS:{backend_config.cleaning.closing_kernel_size}, "
-            f"CI:{backend_config.cleaning.closing_iterations}, "
-            f"CEKS:{backend_config.cleaning.constraint_erosion_kernel_size}, "
-            f"CEI:{backend_config.cleaning.constraint_erosion_iterations}\n"
+            "• Brightness Threshold: Otsu\n" if backend_config.cleaning.use_otsu_threshold
+            else f"• Brightness Threshold: {backend_config.cleaning.thresholding_value}\n"
         ),
     ]
     if not backend_config.cleaning_only:
         msg_parts.append(f"{llm_params_str}\n")
 
     if backend_config.output.output_format == "png":
-        msg_parts.append("• Output format: png\n")
-        msg_parts.append(f"• PNG compression: {backend_config.output.png_compression}\n")
+        msg_parts.append("• Output Format: png\n")
+        msg_parts.append(f"• PNG Compression: {backend_config.output.png_compression}\n")
     elif backend_config.output.output_format == "jpeg":
-        msg_parts.append("• Output format: jpeg\n")
-        msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
+        msg_parts.append("• Output Format: jpeg\n")
+        msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
     else:  # Auto
         # Derive which compression/quality setting to display based on batch output files
-        msg_parts.append("• Output format: auto\n")
+        msg_parts.append("• Output Format: auto\n")
         try:
             out_dir = Path(output_path)
             if out_dir.exists() and out_dir.is_dir():
@@ -248,18 +236,18 @@ def _format_batch_success_message(
                 only_jpeg = exts and all(e in {".jpg", ".jpeg"} for e in exts)
                 only_png = exts == {".png"}
                 if only_png:
-                    msg_parts.append(f"• PNG compression: {backend_config.output.png_compression}\n")
+                    msg_parts.append(f"• PNG Compression: {backend_config.output.png_compression}\n")
                 elif only_jpeg:
-                    msg_parts.append(f"• JPEG quality: {backend_config.output.jpeg_quality}\n")
+                    msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
                 # If mixed or unknown, omit specific settings to avoid showing both
         except Exception:
             pass
 
     msg_parts.extend(
         [
-            f"• Successful translations: {success_count}/{total_images}{error_summary}\n",
-            f"• Total processing time: {processing_time:.2f} seconds ({seconds_per_image:.2f} seconds/image)\n",
-            f"• Saved to: {output_path}",
+            f"• Successful Translations: {success_count}/{total_images}{error_summary}\n",
+            f"• Total Processing Time: {processing_time:.2f} seconds ({seconds_per_image:.2f} seconds/image)\n",
+            f"• Saved To: {output_path}",
         ]
     )
     return "".join(msg_parts)
@@ -276,14 +264,8 @@ def handle_translate_click(
         input_image_path,
         confidence,
         use_sam2_checkbox_val,
-        dilation_kernel_size,
-        dilation_iterations,
+        thresholding_value,
         use_otsu_threshold,
-        min_contour_area,
-        closing_kernel_size,
-        closing_iterations,
-        constraint_erosion_kernel_size,
-        constraint_erosion_iterations,
         provider_selector,
         gemini_api_key,
         openai_api_key,
@@ -354,14 +336,8 @@ def handle_translate_click(
             yolo_model=None,
             detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
             cleaning=UICleaningSettings(
-                dilation_kernel_size=dilation_kernel_size,
-                dilation_iterations=dilation_iterations,
+                thresholding_value=thresholding_value,
                 use_otsu_threshold=use_otsu_threshold,
-                min_contour_area=min_contour_area,
-                closing_kernel_size=closing_kernel_size,
-                closing_iterations=closing_iterations,
-                constraint_erosion_kernel_size=constraint_erosion_kernel_size,
-                constraint_erosion_iterations=constraint_erosion_iterations,
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=provider_selector,
@@ -473,14 +449,8 @@ def handle_batch_click(
         input_files,
         confidence,
         use_sam2_checkbox_val,
-        dilation_kernel_size,
-        dilation_iterations,
+        thresholding_value,
         use_otsu_threshold,
-        min_contour_area,
-        closing_kernel_size,
-        closing_iterations,
-        constraint_erosion_kernel_size,
-        constraint_erosion_iterations,
         provider_selector,
         gemini_api_key,
         openai_api_key,
@@ -553,14 +523,8 @@ def handle_batch_click(
             yolo_model=None,
             detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
             cleaning=UICleaningSettings(
-                dilation_kernel_size=dilation_kernel_size,
-                dilation_iterations=dilation_iterations,
+                thresholding_value=thresholding_value,
                 use_otsu_threshold=use_otsu_threshold,
-                min_contour_area=min_contour_area,
-                closing_kernel_size=closing_kernel_size,
-                closing_iterations=closing_iterations,
-                constraint_erosion_kernel_size=constraint_erosion_kernel_size,
-                constraint_erosion_iterations=constraint_erosion_iterations,
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=provider_selector,
@@ -672,14 +636,8 @@ def handle_save_config_click(*args: Any) -> str:
         conf,
         use_sam2,
         rd,
-        dks,
-        di,
+        thresholding_val,
         otsu,
-        mca,
-        cks,
-        ci,
-        ceks,
-        cei,
         prov,
         gem_key,
         oai_key,
@@ -721,14 +679,8 @@ def handle_save_config_click(*args: Any) -> str:
         yolo_model=None,
         detection=UIDetectionSettings(confidence=conf, use_sam2=use_sam2),
         cleaning=UICleaningSettings(
-            dilation_kernel_size=dks,
-            dilation_iterations=di,
+            thresholding_value=thresholding_val,
             use_otsu_threshold=otsu,
-            min_contour_area=mca,
-            closing_kernel_size=cks,
-            closing_iterations=ci,
-            constraint_erosion_kernel_size=ceks,
-            constraint_erosion_iterations=cei,
         ),
         provider_settings=UITranslationProviderSettings(
             provider=prov,
@@ -833,14 +785,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
         default_ui_state.detection.confidence,
         default_ui_state.detection.use_sam2,
         default_ui_state.llm_settings.reading_direction,
-        default_ui_state.cleaning.dilation_kernel_size,
-        default_ui_state.cleaning.dilation_iterations,
         default_ui_state.cleaning.use_otsu_threshold,
-        default_ui_state.cleaning.min_contour_area,
-        default_ui_state.cleaning.closing_kernel_size,
-        default_ui_state.cleaning.closing_iterations,
-        default_ui_state.cleaning.constraint_erosion_kernel_size,
-        default_ui_state.cleaning.constraint_erosion_iterations,
         gr.update(value=default_provider),
         gr.update(value=default_ui_state.provider_settings.gemini_api_key, visible=gemini_visible),
         gr.update(value=default_ui_state.provider_settings.openai_api_key, visible=openai_visible),
@@ -919,3 +864,8 @@ def update_button_state(processing: bool, button_text_processing: str, button_te
 def trigger_status_fade(status_element_id: str):
     """Returns JS code to fade out a status message element after a delay."""
     return None
+
+
+def handle_thresholding_change(use_otsu_threshold: bool):
+    """Handles changes in the Otsu thresholding checkbox to enable/disable thresholding_value slider."""
+    return gr.update(interactive=not use_otsu_threshold)
