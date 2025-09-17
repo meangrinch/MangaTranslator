@@ -50,8 +50,9 @@ pip install -r requirements.txt
 
 ## Post-install setup
 ### YOLO model
-- Place the necessary segmentation model (`.pt`) in `models/`
-- Model: [kitsumed/yolov8m_seg-speech-bubble](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt)
+- Place the necessary YOLO segmentation model (`.pt`) in `models/`
+- Recommended Model: [kitsumed/yolov8m_seg-speech-bubble](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt)
+- The application will automatically detect and use the model (no manual selection needed)
 
 ### Fonts
 - Put font packs as subfolders in `fonts/` with `.otf`/`.ttf` files
@@ -92,21 +93,17 @@ Examples:
 ```bash
 # Single image, Japanese → English (Gemini)
 python main.py --input <image_path> \
-  --yolo-model models/yolov8m_seg-speech-bubble.pt \
   --provider Gemini --gemini-api-key <AI...>
 
 # Batch folder, custom languages (OpenAI-Compatible, e.g., Ollama)
 python main.py --input <folder_path> --batch \
-  --yolo-model models/yolov8m_seg-speech-bubble.pt \
   --font-dir fonts/Komika \
   --input-language <src_lang> --output-language <tgt_lang> \
   --provider OpenAI-Compatible --openai-compatible-url http://localhost:11434/v1 \
   --output ./output
 
 # Cleaning only (no translation/rendering)
-python main.py --input <image_path> \
-  --yolo-model models/yolov8m_seg-speech-bubble.pt \
-  --cleaning-only
+python main.py --input <image_path> --cleaning-only
 
 # Full options
 python main.py --help
@@ -118,13 +115,27 @@ python main.py --help
 3) Upload image(s) and choose a font pack; set source/target languages
 4) Open **Config** and set: LLM provider/model, API key or endpoint, reading direction (`rtl` for manga, `ltr` for comics)
 5) Click **Translate** / **Start Batch Translating** — outputs save to `./output/`
-6) Use "Cleaning Only" in **Other** to skip translation/rendering
+6) Use "Cleaning Only" in **Other** to skip translation (if preferred)
 
 ## Troubleshooting
-- Models/fonts not found: use Config → Refresh; ensure `models/<model>/*.pt` and `fonts/<pack>/*.ttf|*.otf`
-- OpenAI-compatible models not listed: verify the base URL (e.g., `http://localhost:11434/v1`) and that the endpoint is running
+
+### Setup & Configuration
+- Model/fonts not found: use Config → Refresh; ensure `models/*.pt` and `fonts/<pack>/*.ttf|*.otf`
+- OpenAI-compatible models not listed: verify the base URL (e.g., `http://localhost:11434/v1`)
 - GPU/CPU: CUDA used if available; add `--cpu` to force CPU
 - Minimum image size: 600×600
+
+### Misordered or Missing Content
+- Wrong reading order: Set correct "Reading Direction" (rtl for manga, ltr for comics)
+- Uncleaned text remaining: Lower the "Fixed Threshold Value" (try 190) or enable "Use Automatic Thresholding (Otsu)"
+
+### Poor Translations
+- Poor translation quality: Try "two-step" translation mode for less-capable LLMs
+- LLM refusals: Disable "Send Full Page to LLM" in Config → Translation
+- Inconsistent translations: Adjust the LLM parameters (e.g., "Temperature") for more creative/deterministic output
+
+### Text Rendering Issues
+- Text too large/small: Adjust "Max Font Size" and "Min Font Size" ranges
 
 ## Updating
 - Windows portable: download the latest release and replace the existing folder
