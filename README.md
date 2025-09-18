@@ -129,12 +129,12 @@ python main.py --help
 - Uncleaned text remaining: Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
 - Outlines get eaten during cleaning: Increase "Shrink Threshold ROI" (e.g., 6–8) to preserve borders better
 
-#### Poor Translations
+#### Translation-Related
 - Poor translation quality: Try "two-step" translation mode for less-capable LLMs
 - LLM refusals: Disable "Send Full Page to LLM" in Config → Translation
 - Inconsistent translations: Adjust the LLM parameters (e.g., "Temperature") for more creative/deterministic output
 
-#### Text Rendering Issues
+#### Rendering-Related
 - Text too large/small: Adjust "Max Font Size" and "Min Font Size" ranges
 
 ## Updating
