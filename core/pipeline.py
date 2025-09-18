@@ -188,6 +188,7 @@ def translate_and_render(
                 device=device,
                 thresholding_value=config.cleaning.thresholding_value,
                 use_otsu_threshold=use_otsu,
+                roi_shrink_px=config.cleaning.roi_shrink_px,
                 verbose=verbose,
             )
             log_message(f"Cleaning returned info for {len(processed_bubbles_info)} bubbles.", verbose=verbose)
@@ -590,9 +591,20 @@ def main():
     parser.add_argument(
         "--thresholding-value",
         type=int,
-        default=210,
-        help="Fixed threshold value for text detection (0-255). Lower values (e.g., 190) are useful for "
-             "uncleaned text close to bubble's edges.",
+        default=190,
+        help=(
+            "Fixed threshold value for text detection (0-255). "
+            "Lower values help clean edge-hugging text."
+        ),
+    )
+    parser.add_argument(
+        "--roi-shrink-px",
+        type=int,
+        default=4,
+        help=(
+            "Shrink the threshold ROI inward by N pixels (0-8) before fill. "
+            "Lower helps clean edge-hugging text; higher preserves outlines."
+        ),
     )
     # Translation args
     parser.add_argument("--temperature", type=float, default=0.1, help="Controls randomness in output (0.0-2.0)")
@@ -720,6 +732,7 @@ def main():
         cleaning=CleaningConfig(
             thresholding_value=args.thresholding_value,
             use_otsu_threshold=use_otsu_config_val,
+            roi_shrink_px=max(0, min(8, int(args.roi_shrink_px))),
         ),
         translation=TranslationConfig(
             provider=provider,

@@ -26,8 +26,9 @@ class UIDetectionSettings:
 class UICleaningSettings:
     """UI state for cleaning settings."""
 
-    thresholding_value: int = 210
+    thresholding_value: int = 190
     use_otsu_threshold: bool = False
+    roi_shrink_px: int = 4
 
 
 @dataclass
@@ -118,6 +119,7 @@ class UIConfigState:
             "reading_direction": self.llm_settings.reading_direction,
             "thresholding_value": self.cleaning.thresholding_value,
             "use_otsu_threshold": self.cleaning.use_otsu_threshold,
+            "roi_shrink_px": self.cleaning.roi_shrink_px,
             "provider": self.provider_settings.provider,
             "gemini_api_key": self.provider_settings.gemini_api_key,
             "openai_api_key": self.provider_settings.openai_api_key,
@@ -172,6 +174,7 @@ class UIConfigState:
             cleaning=UICleaningSettings(
                 thresholding_value=data.get("thresholding_value", defaults["thresholding_value"]),
                 use_otsu_threshold=data.get("use_otsu_threshold", defaults["use_otsu_threshold"]),
+                roi_shrink_px=data.get("roi_shrink_px", defaults.get("roi_shrink_px", 4)),
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=data.get("provider", defaults["provider"]),
@@ -248,6 +251,7 @@ def map_ui_to_backend_config(
     cleaning_cfg = CleaningConfig(
         thresholding_value=ui_state.cleaning.thresholding_value,
         use_otsu_threshold=ui_state.cleaning.use_otsu_threshold,
+        roi_shrink_px=ui_state.cleaning.roi_shrink_px,
     )
 
     translation_cfg = TranslationConfig(

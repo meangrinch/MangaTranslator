@@ -15,8 +15,9 @@ def clean_speech_bubbles(
     confidence=0.35,
     pre_computed_detections=None,
     device=None,
-    thresholding_value: int = 210,
+    thresholding_value: int = 190,
     use_otsu_threshold: bool = False,
+    roi_shrink_px: int = 4,
     verbose: bool = False,
 ):
     """
@@ -31,6 +32,7 @@ def clean_speech_bubbles(
         thresholding_value (int): Fixed threshold value for text detection (0-255). Lower values (e.g., 190)
                                  are useful for uncleaned text close to bubble's edges.
         use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value.
+        roi_shrink_px (int): Number of pixels to shrink the ROI inwards before identification/fill.
 
     Returns:
         numpy.ndarray: Cleaned image with white bubbles.
@@ -130,6 +132,11 @@ def clean_speech_bubbles(
 
                     # Restrict thresholded region to ROI
                     thresholded_roi = cv2.bitwise_and(thresholded_roi, roi_mask)
+
+                    # Shrink ROI inwards by configurable pixels (avoid borders) without using erosion
+                    dist_map = cv2.distanceTransform(roi_mask, cv2.DIST_L2, 3)
+                    shrunk_roi_mask = np.where(dist_map >= float(roi_shrink_px), 255, 0).astype(np.uint8)
+                    thresholded_roi = cv2.bitwise_and(thresholded_roi, shrunk_roi_mask)
 
                     # Constrain interior to avoid erasing outlines (use eroded SAM mask)
                     eroded_constraint_mask = cv2.erode(
@@ -312,6 +319,11 @@ def clean_speech_bubbles(
                     _, thresholded_roi = cv2.threshold(roi_for_thresholding, thresholding_value, 255, cv2.THRESH_BINARY)
 
                 thresholded_roi = cv2.bitwise_and(thresholded_roi, roi_mask)
+
+                # Shrink ROI inwards by configurable pixels (avoid borders) without using erosion
+                dist_map = cv2.distanceTransform(roi_mask, cv2.DIST_L2, 3)
+                shrunk_roi_mask = np.where(dist_map >= float(roi_shrink_px), 255, 0).astype(np.uint8)
+                thresholded_roi = cv2.bitwise_and(thresholded_roi, shrunk_roi_mask)
 
                 final_mask = None
                 eroded_constraint_mask = cv2.erode(

@@ -266,6 +266,7 @@ def handle_translate_click(
         use_sam2_checkbox_val,
         thresholding_value,
         use_otsu_threshold,
+        roi_shrink_px,
         provider_selector,
         gemini_api_key,
         openai_api_key,
@@ -337,6 +338,7 @@ def handle_translate_click(
             cleaning=UICleaningSettings(
                 thresholding_value=thresholding_value,
                 use_otsu_threshold=use_otsu_threshold,
+                roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=provider_selector,
@@ -449,6 +451,7 @@ def handle_batch_click(
         use_sam2_checkbox_val,
         thresholding_value,
         use_otsu_threshold,
+        roi_shrink_px,
         provider_selector,
         gemini_api_key,
         openai_api_key,
@@ -522,6 +525,7 @@ def handle_batch_click(
             cleaning=UICleaningSettings(
                 thresholding_value=thresholding_value,
                 use_otsu_threshold=use_otsu_threshold,
+                roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=provider_selector,
@@ -634,6 +638,7 @@ def handle_save_config_click(*args: Any) -> str:
         rd,
         thresholding_val,
         otsu,
+        roi_shrink_px,
         prov,
         gem_key,
         oai_key,
@@ -676,6 +681,7 @@ def handle_save_config_click(*args: Any) -> str:
         cleaning=UICleaningSettings(
             thresholding_value=thresholding_val,
             use_otsu_threshold=otsu,
+            roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
         ),
         provider_settings=UITranslationProviderSettings(
             provider=prov,

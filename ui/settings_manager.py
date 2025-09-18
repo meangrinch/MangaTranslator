@@ -71,7 +71,8 @@ DEFAULT_SETTINGS = {
     "confidence": 0.35,
     "use_sam2": True,
     "use_otsu_threshold": False,
-    "thresholding_value": 210,
+    "thresholding_value": 190,
+    "roi_shrink_px": 4,
     "temperature": 0.1,
     "top_p": 0.95,
     "top_k": 64,
@@ -144,6 +145,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     # Cleaning
     "thresholding_value",
     "use_otsu_threshold",
+    "roi_shrink_px",
 
     # Output
     "output_format",

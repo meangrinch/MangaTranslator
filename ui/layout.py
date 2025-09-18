@@ -322,8 +322,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("thresholding_value", 210),
                                 step=1,
                                 label="Fixed Threshold Value",
-                                info="Brightness threshold for text detection. Lower if there is uncleaned text "
-                                     "and it is close to the bubble's edges (e.g., 190).",
+                                info="Brightness threshold for text detection. Lower helps clean edge-hugging text.",
                                 interactive=not saved_settings.get("use_otsu_threshold", False),
                             )
                             use_otsu_threshold = gr.Checkbox(
@@ -331,6 +330,17 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 label="Use Automatic Thresholding (Otsu)",
                                 info="Automatically determine the brightness threshold instead of using the fixed "
                                      "value. Recommended for varied lighting.",
+                            )
+                            roi_shrink_px = gr.Slider(
+                                0,
+                                8,
+                                value=saved_settings.get("roi_shrink_px", 4),
+                                step=1,
+                                label="Shrink Threshold ROI (pixels)",
+                                info=(
+                                    "Shrink the threshold ROI inward by N pixels (0-8) before fill. "
+                                    "Lower helps clean edge-hugging text; higher preserves outlines."
+                                ),
                             )
                         setting_groups.append(group_cleaning)
 
@@ -619,6 +629,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
+            roi_shrink_px,
             provider_selector,
             gemini_api_key,
             openai_api_key,
@@ -661,6 +672,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
+            roi_shrink_px,
             provider_selector,
             gemini_api_key,
             openai_api_key,
@@ -704,6 +716,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             use_sam2_checkbox,
             thresholding_value,
             use_otsu_threshold,
+            roi_shrink_px,
             provider_selector,
             gemini_api_key,
             openai_api_key,
@@ -744,6 +757,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             use_sam2_checkbox,
             thresholding_value,
             use_otsu_threshold,
+            roi_shrink_px,
             provider_selector,
             gemini_api_key,
             openai_api_key,

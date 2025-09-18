@@ -17,8 +17,9 @@ class DetectionConfig:
 class CleaningConfig:
     """Configuration for speech bubble cleaning."""
 
-    thresholding_value: int = 210
+    thresholding_value: int = 190
     use_otsu_threshold: bool = False
+    roi_shrink_px: int = 4
 
 
 @dataclass
