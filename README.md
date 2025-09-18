@@ -121,13 +121,13 @@ python main.py --help
 
 #### Setup & Configuration
 - Model/fonts not found: use Config → Refresh; ensure `models/*.pt` and `fonts/<pack>/*.ttf|*.otf`
-- OpenAI-compatible models not listed: verify the base URL (e.g., `http://localhost:11434/v1`)
 - GPU/CPU: CUDA used if available; add `--cpu` to force CPU
-- Minimum image size: 600×600
+- Minimum image size: 600×600px
 
-#### Misordered or Missing Content
+#### Content-Related
 - Wrong reading order: Set correct "Reading Direction" (rtl for manga, ltr for comics)
-- Uncleaned text remaining: Lower the "Fixed Threshold Value" (try 190) or enable "Use Automatic Thresholding (Otsu)"
+- Uncleaned text remaining: Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
+- Outlines get eaten during cleaning: Increase "Shrink Threshold ROI" (e.g., 6–8) to preserve borders better
 
 #### Poor Translations
 - Poor translation quality: Try "two-step" translation mode for less-capable LLMs
