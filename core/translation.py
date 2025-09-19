@@ -276,7 +276,7 @@ def _call_llm_endpoint(
             api_key = config.gemini_api_key
             if not api_key:
                 raise ValueError("Gemini API key is missing.")
-            # Reasoning-aware max tokens for Gemini models
+            # Reasoning models need higher token limits
             is_gemini_25_series = (model_name or "").startswith("gemini-2.5") or "gemini-2.5" in (model_name or "")
             max_output_tokens = 8192 if is_gemini_25_series else 2048
             generation_config = {
@@ -285,7 +285,7 @@ def _call_llm_endpoint(
                 "topK": top_k,
                 "maxOutputTokens": max_output_tokens,
             }
-            # Conditionally add thinkingConfig for specific Gemini models
+            # Enable/disable thinking for Gemini 2.5 models
             if "gemini-2.5-flash" in model_name and config.enable_thinking:
                 log_message(f"Including thoughts for {model_name} (thinkingBudget: default)", verbose=debug)
             elif "gemini-2.5-flash" in model_name and not config.enable_thinking:
@@ -304,7 +304,7 @@ def _call_llm_endpoint(
             api_key = config.openai_api_key
             if not api_key:
                 raise ValueError("OpenAI API key is missing.")
-            # Reasoning-aware max tokens for OpenAI reasoning models
+            # Reasoning models need higher token limits
             lm = (model_name or "").lower()
             is_gpt5 = lm.startswith("gpt-5")
             is_reasoning_capable = is_gpt5 or lm.startswith("o1") or lm.startswith("o3") or lm.startswith("o4-mini")
@@ -329,8 +329,7 @@ def _call_llm_endpoint(
             api_key = config.anthropic_api_key
             if not api_key:
                 raise ValueError("Anthropic API key is missing.")
-            clamped_temp = min(temperature, 1.0)  # Clamp temp
-            # Reasoning-aware max tokens and thinking toggle for applicable Anthropic models
+            clamped_temp = min(temperature, 1.0)  # Anthropic caps temperature at 1.0
             lm = (model_name or "").lower()
             anthropic_reasoning_prefixes = [
                 "claude-opus-4-1",
@@ -345,7 +344,6 @@ def _call_llm_endpoint(
                 "top_p": top_p,
                 "top_k": top_k,
                 "max_tokens": max_tokens,
-                # Flag used by endpoint to include Anthropic thinking payload
                 "anthropic_thinking": bool(config.enable_thinking and is_anthropic_reasoning_model),
             }
             return call_anthropic_endpoint(
@@ -360,7 +358,7 @@ def _call_llm_endpoint(
             api_key = config.openrouter_api_key
             if not api_key:
                 raise ValueError("OpenRouter API key is missing.")
-            # Reasoning-aware max tokens for OpenRouter using keyword/metadata detection
+            # Reasoning models need higher token limits
             is_reasoning_model = (
                 config.openrouter_reasoning_override
                 or openrouter_is_reasoning_model(model_name, debug)
@@ -371,7 +369,7 @@ def _call_llm_endpoint(
                 "top_p": top_p,
                 "top_k": top_k,
                 "max_tokens": max_tokens,
-            }  # Restrictions handled inside endpoint
+            }
             return call_openrouter_endpoint(
                 api_key=api_key,
                 model_name=model_name,
@@ -424,7 +422,7 @@ def _parse_llm_response(
             f"Parsing response: Regex matches found: {len(matches)} vs expected {expected_count}", verbose=debug
         )
 
-        # Fallback for non-numbered lists
+        # Fallback when regex fails to find numbered format
         if len(matches) < expected_count:
             log_message(
                 f"Parsing response warning: Regex found fewer items ({len(matches)}) than expected ({expected_count}). "
@@ -433,13 +431,12 @@ def _parse_llm_response(
                 always_print=True,
             )
             lines = [line.strip() for line in response_text.split("\n") if line.strip()]
-            # Remove potential leading/trailing markdown code blocks
+            # Clean up markdown code blocks
             if lines and lines[0].startswith("```"):
                 lines.pop(0)
             if lines and lines[-1].endswith("```"):
                 lines.pop(-1)
 
-            # Basic check: does the number of lines match expected bubbles?
             if len(lines) == expected_count:
                 log_message(
                     f"Parsing response: Fallback successful. Using {len(lines)} lines as translations.",
@@ -456,7 +453,6 @@ def _parse_llm_response(
                     always_print=True,
                 )
 
-        # Original logic if regex worked or fallback failed
         parsed_dict = {}
         for num_str, text in matches:
             try:
@@ -526,7 +522,6 @@ def call_translation_api_batch(
         "right-to-left, top-to-bottom" if reading_direction == "rtl" else "left-to-right, top-to-bottom"
     )
 
-    # --- Prepare common API input parts (images) ---
     base_parts = []
     if config.send_full_page_context and full_image_b64:
         base_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}})
@@ -551,7 +546,6 @@ Return ONLY the following numbered lines, one per bubble:
 {num_bubbles}: <text>"""  # noqa
 
             log_message("--- Starting Two-Step Translation: Step 1 (OCR) ---", verbose=debug)
-            # Prepare parts specifically for OCR (only bubble images)
             ocr_parts = []
             for img_b64 in images_b64:
                 ocr_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
@@ -625,7 +619,6 @@ Return ONLY the following numbered lines, one per bubble:
 
 If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged for that number. Do not add any other text."""  # noqa
 
-            # Prepare parts for translation call (only full image + prompt)
             translation_parts = []
             if config.send_full_page_context and full_image_b64:
                 translation_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}})
@@ -672,7 +665,7 @@ If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged f
         elif translation_mode == "one-step":
             # --- One-Step Logic ---
             log_message("--- Starting One-Step Translation ---", verbose=debug)
-            # Build context-aware prompt pieces similar to two-step
+            # Build context-aware prompt pieces
             lang_part = (
                 f"the original {input_language} text"
                 if input_language and input_language.lower() != "auto"

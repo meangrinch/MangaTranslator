@@ -10,7 +10,6 @@ from ultralytics import YOLO
 
 from utils.logging import log_message
 
-# Global cache
 _model_cache = {}
 _sam2_cache = {}
 
@@ -88,7 +87,6 @@ def detect_speech_bubbles(
     if len(results) == 0:
         return detections
 
-    # Use a single Results object to preserve ordering and avoid duplication
     result = results[0]
     boxes = result.boxes
 
@@ -97,7 +95,7 @@ def detect_speech_bubbles(
 
     if boxes is not None:
         for j, box in enumerate(boxes):
-            xyxy = box.xyxy[0].tolist()  # floats
+            xyxy = box.xyxy[0].tolist()
             x0_f, y0_f, x1_f, y1_f = float(xyxy[0]), float(xyxy[1]), float(xyxy[2]), float(xyxy[3])
 
             conf = float(box.conf[0])
@@ -126,22 +124,20 @@ def detect_speech_bubbles(
                     log_message(f"Warning: Could not extract mask for detection {j}: {e}", verbose=verbose)
                     detection["mask_points"] = None
 
-    # Optional: SAM 2.1 segmentation guided by YOLO boxes
+    # SAM 2.1 segmentation guided by YOLO boxes for more precise masks
     try:
         if use_sam2 and len(detections) > 0:
             pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
             processor, sam_model = _get_sam2(sam2_model_id, _device)
 
-            # SAM expects a batch of images; input_boxes is list per image
             sam_inputs = processor(images=pil_image, input_boxes=[sam_input_boxes], return_tensors="pt").to(_device)
 
             with torch.no_grad():
                 sam_outputs = sam_model(multimask_output=False, **sam_inputs)
 
-            # Post-process to original resolution masks
             masks = processor.post_process_masks(sam_outputs.pred_masks, sam_inputs["original_sizes"])[0][:, 0]
-            sam_masks_np = (masks > 0.5).detach().cpu().numpy()  # [N, H, W]
+            sam_masks_np = (masks > 0.5).detach().cpu().numpy()
 
             img_h, img_w = image.shape[:2]
             n_sam = sam_masks_np.shape[0]
@@ -149,7 +145,7 @@ def detect_speech_bubbles(
                 if i >= n_sam:
                     break
                 x0_f, y0_f, x1_f, y1_f = sam_input_boxes[i]
-                # Clip to image bounds, floor starts and ceil ends like the test script
+                # Clip to image bounds, floor starts and ceil ends to avoid off-by-one errors
                 x0 = int(np.floor(max(0, min(x0_f, img_w))))
                 y0 = int(np.floor(max(0, min(y0_f, img_h))))
                 x1 = int(np.ceil(max(0, min(x1_f, img_w))))

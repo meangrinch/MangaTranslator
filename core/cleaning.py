@@ -41,18 +41,14 @@ def _process_single_bubble(
         tuple: (final_mask, fill_color_bgr) or (None, None) if processing failed
     """
     try:
-        # Normalize mask to uint8 0/255
         if base_mask.dtype != np.uint8:
             base_mask = base_mask.astype(np.uint8)
         base_mask = np.where(base_mask > 0, 255, 0).astype(np.uint8)
 
-        # Use provided kernels or create defaults if not provided
         if dilation_kernel is None:
             dilation_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         if constraint_erosion_kernel is None:
             constraint_erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-
-        # Determine bubble color from pixels under the base mask
         masked_pixels = img_gray[base_mask == 255]
         if masked_pixels.size == 0:
             log_message(
@@ -71,13 +67,12 @@ def _process_single_bubble(
             verbose=verbose,
         )
 
-        # Build ROI grayscale image
         roi_mask = cv2.dilate(base_mask, dilation_kernel, iterations=1)
         roi_gray = np.zeros_like(img_gray)
         roi_indices = roi_mask == 255
         roi_gray[roi_indices] = img_gray[roi_indices]
 
-        # Thresholding (invert for black bubbles)
+        # Invert for black bubbles to detect text properly
         roi_for_thresholding = cv2.bitwise_not(roi_gray) if is_black_bubble else roi_gray
         thresholded_roi = np.zeros_like(img_gray)
 
@@ -98,21 +93,17 @@ def _process_single_bubble(
                 roi_for_thresholding, thresholding_value, 255, cv2.THRESH_BINARY
             )
 
-        # Restrict thresholded region to ROI
         thresholded_roi = cv2.bitwise_and(thresholded_roi, roi_mask)
 
-        # Shrink ROI inwards by configurable pixels (avoid borders)
+        # Shrink ROI to avoid border artifacts
         dist_map = cv2.distanceTransform(roi_mask, cv2.DIST_L2, 3)
         shrunk_roi_mask = np.where(dist_map >= float(roi_shrink_px), 255, 0).astype(np.uint8)
         thresholded_roi = cv2.bitwise_and(thresholded_roi, shrunk_roi_mask)
 
-        # Constrain interior to avoid erasing outlines (use eroded base mask)
+        # Use eroded mask to avoid erasing bubble outlines
         eroded_constraint_mask = cv2.erode(base_mask, constraint_erosion_kernel, iterations=1)
 
-        # Find contours and validate fragments
         contours, _ = cv2.findContours(thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # Collect valid contours for batch drawing
         valid_contours = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
@@ -138,12 +129,11 @@ def _process_single_bubble(
             verbose=verbose
         )
 
-        # Draw all valid contours at once
         if valid_contours:
             validated_mask = np.zeros((img_height, img_width), dtype=np.uint8)
             cv2.drawContours(validated_mask, valid_contours, -1, 255, thickness=cv2.FILLED)
 
-            # Re-contour the stable validated mask to get definitive boundary
+            # Re-contour to get clean boundary from validated mask
             boundary_contours, _ = cv2.findContours(
                 validated_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
@@ -212,16 +202,13 @@ def clean_speech_bubbles(
 
         processed_bubbles = []
 
-        # Create kernels once, outside the loop
+        # Create kernels once for efficiency
         dilation_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         constraint_erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-
-        # Process each detection using the helper function
         for detection in detections:
             final_mask = None
             fill_color_bgr = None
 
-            # Prefer SAM mask if available
             sam_mask = detection.get("sam_mask")
             if sam_mask is not None:
                 final_mask, fill_color_bgr = _process_single_bubble(
@@ -232,7 +219,6 @@ def clean_speech_bubbles(
                     constraint_erosion_kernel=constraint_erosion_kernel
                 )
             else:
-                # Process YOLO mask
                 if "mask_points" not in detection or not detection["mask_points"]:
                     log_message(f"Skipping detection without mask points: {detection.get('bbox')}", verbose=verbose)
                     continue
@@ -268,7 +254,6 @@ def clean_speech_bubbles(
                     log_message(error_msg, always_print=True, is_error=True)
                     continue
 
-            # Store successful results
             if final_mask is not None and fill_color_bgr is not None:
                 processed_bubbles.append({
                     "mask": final_mask,
@@ -280,9 +265,8 @@ def clean_speech_bubbles(
                     verbose=verbose,
                 )
 
-        # Optimized mask application: aggregate masks by color
+        # Group masks by color for efficient batch processing
         if processed_bubbles:
-            # Group bubbles by color
             color_groups = {}
             for bubble_info in processed_bubbles:
                 color_key = bubble_info["color"]
@@ -290,19 +274,14 @@ def clean_speech_bubbles(
                     color_groups[color_key] = []
                 color_groups[color_key].append(bubble_info["mask"])
 
-            # Apply each color group as a single operation
             for color_bgr, masks in color_groups.items():
-                # Combine all masks of the same color using efficient NumPy operation
                 combined_mask = np.bitwise_or.reduce(masks)
-
-                # Apply the combined mask using direct boolean indexing for efficiency
                 num_channels = cleaned_image.shape[2] if len(cleaned_image.shape) == 3 else 1
                 if num_channels == 4 and len(color_bgr) == 3:
                     fill_color = (*color_bgr, 255)
                 else:
                     fill_color = color_bgr
 
-                # Direct boolean indexing is more memory-efficient than np.where
                 cleaned_image[combined_mask == 255] = fill_color
 
         return cleaned_image, processed_bubbles

@@ -51,7 +51,7 @@ def translate_manga_logic(
         Exception: For unexpected errors during processing.
     """
     try:
-        # Create a temporary RenderingConfig just for validation, using the font pack name
+        # Create temporary config for validation since we only have the font pack name
         rendering_cfg_for_val = RenderingConfig(
             font_dir=selected_font_pack_name,
             max_font_size=config.rendering.max_font_size,
@@ -80,8 +80,8 @@ def translate_manga_logic(
             original_ext = input_path.suffix.lower()
             image_path_for_processing = str(input_path)
         elif isinstance(image, Image.Image):
-            # Handle PIL image input by saving to a temporary file
-            original_ext = ".png"  # Assume png if PIL object
+            # PIL objects need to be saved to disk for processing
+            original_ext = ".png"
             temp_image_path = Path(tempfile.mktemp(suffix=".png"))
             image.save(temp_image_path)
             image_path_for_processing = str(temp_image_path)
@@ -95,7 +95,7 @@ def translate_manga_logic(
             output_ext = ".png"
         elif output_format == "jpeg":
             output_ext = ".jpg"
-        else:  # Redundant, but default to png
+        else:
             output_ext = ".png"
 
         os.makedirs(output_base_dir, exist_ok=True)
@@ -104,7 +104,7 @@ def translate_manga_logic(
         if output_ext in [".jpg", ".jpeg"]:
             config.output.image_mode = "RGB"
         else:
-            config.output.image_mode = "RGBA"  # Default to RGBA for PNG/WEBP
+            config.output.image_mode = "RGBA"
 
         translated_image = translate_and_render(
             image_path=image_path_for_processing, config=config, output_path=save_path
@@ -172,7 +172,7 @@ def process_batch_logic(
     start_time = time.time()
 
     try:
-        # Create a temporary RenderingConfig just for validation, using the font pack name
+        # Create temporary config for validation since we only have the font pack name
         rendering_cfg_for_val = RenderingConfig(
             font_dir=selected_font_pack_name,
             max_font_size=config.rendering.max_font_size,
@@ -216,7 +216,7 @@ def process_batch_logic(
             for f_path_str in input_dir_or_files:
                 p = Path(f_path_str)
                 if p.is_file() and p.suffix.lower() in image_extensions:
-                    # Basic validation (e.g., can PIL open it?)
+                    # Verify file is actually a valid image
                     try:
                         with Image.open(p) as img:
                             img.verify()
@@ -240,10 +240,9 @@ def process_batch_logic(
 
             for img_file in image_files_to_copy:
                 try:
-                    # Use copy2 to preserve metadata if possible
+                    # Preserve metadata when copying
                     shutil.copy2(img_file, temp_dir_path / img_file.name)
                 except Exception as copy_err:
-                    # Log warning but continue if a file fails to copy
                     log_message(
                         f"Warning: Could not copy file {img_file.name} to temp dir: {copy_err}", always_print=True
                     )
@@ -262,7 +261,6 @@ def process_batch_logic(
         if not process_dir:
             raise LogicError("Could not determine processing directory.")
 
-        # Note: Output format determination happens inside batch_translate_images based on config
         results = batch_translate_images(
             input_dir=process_dir,
             config=config,

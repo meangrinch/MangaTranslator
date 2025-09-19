@@ -76,7 +76,6 @@ def translate_and_render(
     pil_image_processed = pil_original
     if pil_image_processed.mode != target_mode:
         if target_mode == "RGB":
-            # Handle transparency when converting to RGB
             if (
                 pil_image_processed.mode == "RGBA"
                 or pil_image_processed.mode == "LA"
@@ -91,7 +90,6 @@ def translate_and_render(
                     elif pil_image_processed.mode == "LA":
                         mask = pil_image_processed.split()[1]
                     elif pil_image_processed.mode == "P" and "transparency" in pil_image_processed.info:
-                        # Convert P with transparency to RGBA to get mask
                         temp_rgba = pil_image_processed.convert("RGBA")
                         mask = temp_rgba.split()[3]
 
@@ -107,7 +105,6 @@ def translate_and_render(
                         verbose=verbose,
                     )
                     try:
-                        # Attempt alpha compositing onto a white background as an alternative
                         background_comp = Image.new("RGB", pil_image_processed.size, (255, 255, 255))
                         img_rgba_for_composite = (
                             pil_image_processed
@@ -146,7 +143,6 @@ def translate_and_render(
             log_message(
                 f"Error encoding full image to base64: {e}. Proceeding without full-page context.", always_print=True
             )
-            # Continue without full image context if encoding fails
 
     # --- Detection ---
     log_message("Detecting speech bubbles...", verbose=verbose)
@@ -217,7 +213,6 @@ def translate_and_render(
             for bubble in bubble_data:
                 x1, y1, x2, y2 = bubble["bbox"]
 
-                # Crop from the *original* processed image (before cleaning)
                 bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
 
                 try:
@@ -260,7 +255,6 @@ def translate_and_render(
                         always_print=True,
                     )
                 else:
-                    # Only attempt translation if we have bubbles and context
                     log_message(
                         f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} "
                         f"to {config.translation.output_language} ({reading_direction.upper()})...",
@@ -280,7 +274,6 @@ def translate_and_render(
                         ]
 
                 # --- Render Translations ---
-                # Map original bbox tuple to color and mask
                 bubble_render_info_map = {
                     tuple(info["bbox"]): {
                         "color": info["color"],
@@ -362,7 +355,6 @@ def translate_and_render(
 
     # --- Save Output ---
     if output_path:
-        # Ensure the final image is in the correct mode before saving
         if final_image_to_save.mode != target_mode:
             log_message(
                 f"Converting final image mode from {final_image_to_save.mode} to target {target_mode} before saving.",
@@ -443,7 +435,6 @@ def batch_translate_images(
                 current_progress = i / total_images
                 progress_callback(current_progress, f"Processing image {i + 1}/{total_images}: {img_path.name}")
 
-            # Determine correct output extension based on config
             original_ext = img_path.suffix.lower()
             desired_format = config.output.output_format
             if desired_format == "jpeg":

@@ -13,7 +13,6 @@ from PIL import Image
 from utils.logging import log_message
 
 
-# --- LRU Cache Implementation ---
 class LRUCache:
     """Simple LRU cache implementation to prevent unbounded memory growth."""
 
@@ -23,7 +22,6 @@ class LRUCache:
 
     def get(self, key):
         if key in self.cache:
-            # Move to end (most recently used)
             value = self.cache.pop(key)
             self.cache[key] = value
             return value
@@ -31,10 +29,8 @@ class LRUCache:
 
     def put(self, key, value):
         if key in self.cache:
-            # Update existing key
             self.cache.pop(key)
         elif len(self.cache) >= self.max_size:
-            # Remove least recently used (first item)
             self.cache.popitem(last=False)
         self.cache[key] = value
 
@@ -46,15 +42,10 @@ class LRUCache:
             del self.cache[key]
 
 
-# Cache loaded font data with LRU management
-_font_data_cache = LRUCache(max_size=50)  # Store up to 50 font files
+_font_data_cache = LRUCache(max_size=50)
 _typeface_cache = LRUCache(max_size=50)
 _hb_face_cache = LRUCache(max_size=50)
-
-# Cache font features
 _font_features_cache = LRUCache(max_size=50)
-
-# Cache font variants
 _font_variants_cache: Dict[str, Dict[str, Optional[Path]]] = {}
 FONT_KEYWORDS = {
     "bold": {"bold", "heavy", "black"},
@@ -62,8 +53,7 @@ FONT_KEYWORDS = {
     "regular": {"regular", "normal", "roman", "medium"},
 }
 
-# --- Style Parsing Helper ---
-STYLE_PATTERN = re.compile(r"(\*{1,3})(.*?)(\1)")  # Matches *text*, **text**, ***text***
+STYLE_PATTERN = re.compile(r"(\*{1,3})(.*?)(\1)")
 
 
 def get_font_features(font_path: str) -> Dict[str, List[str]]:
@@ -143,10 +133,9 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
         _font_variants_cache[resolved_dir] = font_variants
         return font_variants
 
-    # Sort by name length (desc) to potentially prioritize more specific names like "BoldItalic" over "Bold"
+    # Sort by name length (desc) to prioritize more specific names like "BoldItalic" over "Bold"
     font_files.sort(key=lambda x: len(x.name), reverse=True)
 
-    # --- Font File Detection (Multi-pass) ---
     # Pass 1: Exact matches for combined styles first
     for font_file in font_files:
         if font_file in identified_files:
@@ -171,12 +160,12 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
         is_bold = any(kw in stem_lower for kw in FONT_KEYWORDS["bold"])
         is_italic = any(kw in stem_lower for kw in FONT_KEYWORDS["italic"])
         assigned = False
-        if is_bold and not is_italic:  # Only bold
+        if is_bold and not is_italic:
             if not font_variants["bold"]:
                 font_variants["bold"] = font_file
                 assigned = True
                 log_message(f"Found Bold: {font_file.name}", verbose=verbose)
-        elif is_italic and not is_bold:  # Only italic
+        elif is_italic and not is_bold:
             if not font_variants["italic"]:
                 font_variants["italic"] = font_file
                 assigned = True
@@ -234,7 +223,7 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
                     log_message(f"Inferred Regular (no keywords): {font_file.name}", verbose=verbose)
                     break
 
-    # Pass 5: Fallback regular (use first available unidentified font)
+    # Pass 5: Fallback regular
     if not font_variants["regular"]:
         first_available = next((f for f in font_files if f not in identified_files), None)
         if first_available:
@@ -243,7 +232,7 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
                 identified_files.add(first_available)
             log_message(f"Fallback Regular (first unidentified): {first_available.name}", verbose=verbose)
 
-    # Pass 6: Final fallback (use *any* identified font if regular is still missing)
+    # Pass 6: Final fallback
     if not font_variants["regular"]:
         backup_regular = next(
             (
@@ -256,7 +245,7 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
         if backup_regular:
             font_variants["regular"] = backup_regular
             log_message(f"Fallback Regular (using existing variant): {backup_regular.name}", verbose=verbose)
-        elif font_files:  # Absolute last resort: just grab the first font file found
+        elif font_files:
             font_variants["regular"] = font_files[0]
             log_message(f"Fallback Regular (absolute first file): {font_files[0].name}", verbose=verbose)
 
@@ -268,7 +257,6 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
             ),
             always_print=True,
         )
-        # Still cache the (lack of) results
     else:
         log_message(f"Final Font Variants Found in {resolved_dir}:", verbose=verbose)
         for style, path in font_variants.items():
@@ -296,7 +284,6 @@ def _parse_styled_segments(text: str) -> List[Tuple[str, str]]:
         marker = match.group(1)
         content = match.group(2)
 
-        # Add preceding regular text
         if start > last_end:
             segments.append((text[last_end:start], "regular"))
 
@@ -323,8 +310,7 @@ def _tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
     preserved as single, unbreakable tokens.
 
     Returns: List[Tuple[str, bool]] where each tuple is (token_text, is_styled).
-    - Styled tokens include their surrounding markers (e.g., **bold text**)
-      and are split into per-word tokens, each wrapped with the same markers,
+    - Styled tokens are split into per-word tokens, each wrapped with the same markers,
       to allow wrapping at word boundaries while preserving style.
     - Plain text outside markers is split on whitespace into word tokens.
     """
@@ -332,13 +318,11 @@ def _tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
     last_end = 0
     for match in STYLE_PATTERN.finditer(text):
         start, end = match.span()
-        # Preceding plain text -> split by whitespace into words
         if start > last_end:
             preceding = text[last_end:start]
             for w in preceding.split():
                 tokens.append((w, False))
 
-        # Styled block -> split content into words but preserve markers per word
         marker = match.group(1)
         content = match.group(2)
         if content:
@@ -347,7 +331,6 @@ def _tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
 
         last_end = end
 
-    # Trailing plain text
     if last_end < len(text):
         trailing = text[last_end:]
         for w in trailing.split():
@@ -356,10 +339,8 @@ def _tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
     return tokens
 
 
-# --- Skia/HarfBuzz Rendering ---
 def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia.Typeface], Optional[hb.Face]]:
     """Loads font data, Skia Typeface, and HarfBuzz Face, using LRU caching."""
-    # Check cache for font data
     font_data = _font_data_cache.get(font_path)
     if font_data is None:
         try:
@@ -370,20 +351,17 @@ def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia
             log_message(f"ERROR: Failed to read font file {font_path}: {e}", always_print=True)
             return None, None, None
 
-    # Check cache for typeface
     typeface = _typeface_cache.get(font_path)
     if typeface is None:
         skia_data = skia.Data.MakeWithoutCopy(font_data)
         typeface = skia.Typeface.MakeFromData(skia_data)
         if typeface is None:
             log_message(f"ERROR: Skia could not load typeface from {font_path}", always_print=True)
-            # Remove from font data cache if typeface creation failed
             if font_path in _font_data_cache:
                 del _font_data_cache[font_path]
             return None, None, None
         _typeface_cache.put(font_path, typeface)
 
-    # Check cache for HarfBuzz face
     hb_face = _hb_face_cache.get(font_path)
     if hb_face is None:
         try:
@@ -391,7 +369,6 @@ def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia
             _hb_face_cache.put(font_path, hb_face)
         except Exception as e:
             log_message(f"ERROR: HarfBuzz could not load face from {font_path}: {e}", always_print=True)
-            # Remove from other caches if HarfBuzz face creation failed
             if font_path in _typeface_cache:
                 del _typeface_cache[font_path]
             if font_path in _font_data_cache:
@@ -423,9 +400,7 @@ def _calculate_line_width(positions: List[hb.GlyphPosition], scale_factor: float
     """
     if not positions:
         return 0.0
-    # Sum advances (which are in 26.6 fixed point)
     total_advance_fixed = sum(pos.x_advance for pos in positions)
-    # Convert from 26.6 fixed point to pixels by dividing by 64.0
     HB_26_6_SCALE_FACTOR = 64.0
     return float(total_advance_fixed / HB_26_6_SCALE_FACTOR)
 
@@ -488,16 +463,12 @@ def _find_optimal_breaks_dp(
 ) -> Optional[List[str]]:
     """
     Pragmatic Knuth-Plass style DP to find globally optimal line breaks.
-
-    - Uses cached per-token widths and a single space width.
-    - Approximates line width as sum(token_widths) + spaces * space_width.
-    - Adds a fixed penalty when a line ends with a hyphenated token.
+    Uses cached per-token widths and adds hyphen penalty for hyphenated tokens.
     """
     try:
         if not tokens:
             return []
 
-        # Step 1.1: Setup and Caching
         token_width_cache: Dict[str, float] = {}
         unique_tokens = set(tokens)
         unique_tokens.add(" ")
@@ -517,37 +488,27 @@ def _find_optimal_breaks_dp(
             token_width_cache[t] = width_val
 
         space_w = token_width_cache.get(" ", 0.0)
-
-        # Precompute token widths array for quick access
         token_w: List[float] = [token_width_cache.get(t, 0.0) for t in tokens]
 
-        # Step 1.2: Initialize DP arrays
         N = len(tokens)
         min_cost: List[float] = [float("inf")] * (N + 1)
         path: List[int] = [0] * (N + 1)
         min_cost[0] = 0.0
-
-        # Step 1.4: DP loops
         for i in range(1, N + 1):
-            # Build line backwards from i-1 down to 0, accumulating width
             line_width = 0.0
             num_spaces = 0
             for j in range(i - 1, -1, -1):
-                # Add token j
                 if num_spaces > 0:
                     line_width += space_w
                 line_width += token_w[j]
                 num_spaces += 1
 
                 if line_width > max_render_width:
-                    # Further extending will only increase width
                     break
 
-                # Compute badness for line tokens[j..i-1]
                 slack = max_render_width - line_width
                 badness = pow(slack, badness_exponent)
 
-                # Hyphen penalty if last token ends with a hyphen
                 last_token = tokens[i - 1] if i > 0 else ""
                 if last_token.endswith("-"):
                     badness += hyphen_penalty
@@ -559,8 +520,6 @@ def _find_optimal_breaks_dp(
 
         if not np.isfinite(min_cost[N]):
             return None
-
-        # Step 1.5: Backtrack to reconstruct lines
         lines: List[str] = []
         current_break = N
         while current_break > 0:
@@ -609,7 +568,6 @@ def _skia_surface_to_pil(surface: skia.Surface) -> Optional[Image.Image]:
         return None
 
 
-# --- Distance Transform Insetting Method ---
 def _check_fit(
     font_size: int,
     text: str,
@@ -647,11 +605,9 @@ def _check_fit(
         Dict containing fit data if successful, None if doesn't fit
     """
     try:
-        # Setup HarfBuzz font
         hb_font = hb.Font(regular_hb_face)
         hb_font.ptem = float(font_size)
 
-        # Scale factor to convert font units to pixels
         scale_factor = 1.0
         if regular_hb_face.upem > 0:
             scale_factor = font_size / regular_hb_face.upem
@@ -659,11 +615,9 @@ def _check_fit(
             if verbose:
                 log_message("Warning: Regular font has upem=0. Using scale factor 1.0.", verbose=verbose)
 
-        # Convert scale factor to 16.16 fixed-point integer for HarfBuzz
         hb_scale = int(scale_factor * (2**16))
         hb_font.scale = (hb_scale, hb_scale)
 
-        # Setup Skia font for metrics
         skia_font_test = skia.Font(regular_typeface, font_size)
         try:
             metrics = skia_font_test.getMetrics()
@@ -674,15 +628,12 @@ def _check_fit(
             if verbose:
                 log_message(f"Could not get font metrics at size {font_size}: {e}", verbose=verbose)
             single_line_height = font_size * 1.2 * line_spacing_mult
-
-        # Text wrapping logic (token-aware; preserves styled blocks as atomic tokens)
         tokens: List[Tuple[str, bool]] = _tokenize_styled_text(text)
         wrapped_lines_text: List[str] = []
         augmented_tokens: List[str] = []
 
         def _try_hyphenate_word(word_str: str, hb_font_local: hb.Font) -> Optional[List[str]]:
             """Attempt to split a word into two parts with a hyphen such that each part fits."""
-            # 1) Isolate leading/trailing punctuation from the core word
             match = re.match(r'^(\W*)([\w\-]+)(\W*)$', word_str)
             if not match:
                 return None
@@ -708,7 +659,6 @@ def _check_fit(
                     right = right[1:]
                 return left, right
 
-            # Prefer splitting at existing hyphen(s) first (operate on core_word)
             if "-" in core_word:
                 hyphen_positions = [i for i, ch in enumerate(core_word) if ch == "-"]
                 mid = len(core_word) // 2
@@ -719,7 +669,6 @@ def _check_fit(
                     left_part = core_word[: pos + 1]
                     right_part = core_word[pos + 1 :]
 
-                    # Re-attach punctuation for measurement
                     final_left_part = leading_punc + left_part
                     final_right_part = right_part + trailing_punc
 
@@ -730,7 +679,6 @@ def _check_fit(
                     if w_left <= max_render_width and w_right <= max_render_width:
                         return [final_left_part, final_right_part]
 
-            # Try split positions around the middle (operate on core_word)
             mid = len(core_word) // 2
             candidate_indices: List[int] = []
             max_d = max(mid, len(core_word) - mid)
@@ -745,7 +693,6 @@ def _check_fit(
             for idx in candidate_indices:
                 left_part, right_part = _split_with_single_hyphen(core_word, idx)
 
-                # Re-attach punctuation for measurement
                 final_left_part = leading_punc + left_part
                 final_right_part = right_part + trailing_punc
 
@@ -757,7 +704,6 @@ def _check_fit(
                     return [final_left_part, final_right_part]
             return None
 
-        # Phase 2: Preprocess tokens with pragmatic hyphenation
         for token_text, is_styled in tokens:
             if (
                 not is_styled
@@ -772,7 +718,6 @@ def _check_fit(
             else:
                 augmented_tokens.append(token_text)
 
-        # Phase 3: DP-based optimal line breaking
         wrapped_lines_text = _find_optimal_breaks_dp(
             augmented_tokens,
             max_render_width,
@@ -787,7 +732,6 @@ def _check_fit(
         if not wrapped_lines_text:
             return None
 
-        # Measure wrapped block
         current_max_line_width = 0
         lines_data_at_size = []
         for line_text_with_markers in wrapped_lines_text:
@@ -806,7 +750,6 @@ def _check_fit(
                 verbose=verbose,
             )
 
-        # Check if it fits
         if current_max_line_width <= max_render_width and total_block_height <= max_render_height:
             if verbose:
                 log_message(f"Size {font_size} fits!", verbose=verbose)
@@ -863,7 +806,6 @@ def _calculate_centroid_expansion_box(
             )
             return None
 
-        # Step 2: Find the Unbiased Anchor (centroid)
         moments = cv2.moments(safe_area_mask)
         centroid_x = moments["m10"] / moments["m00"]
         centroid_y = moments["m01"] / moments["m00"]
@@ -871,9 +813,6 @@ def _calculate_centroid_expansion_box(
 
         cx, cy = int(round(centroid_x)), int(round(centroid_y))
         mask_h, mask_w = safe_area_mask.shape
-
-        # Step 3: Measure Available Space from centroid to edges
-        # Find the first zero pixel from the centroid outwards in each direction
         left_zeros = np.where(safe_area_mask[cy, 0:cx] == 0)[0]
         dist_to_left_edge = cx - (left_zeros.max() if left_zeros.size > 0 else 0)
 
@@ -886,8 +825,6 @@ def _calculate_centroid_expansion_box(
         down_zeros = np.where(safe_area_mask[cy:, cx] == 0)[0]
         dist_to_bottom_edge = down_zeros.min() if down_zeros.size > 0 else mask_h - cy
 
-        # Step 4: Calculate Symmetrical Dimensions
-        # Subtract 1 to avoid landing on the boundary
         max_safe_width = 2 * max(0, min(dist_to_left_edge, dist_to_right_edge) - 1)
         max_safe_height = 2 * max(0, min(dist_to_top_edge, dist_to_bottom_edge) - 1)
 
@@ -899,18 +836,14 @@ def _calculate_centroid_expansion_box(
             )
             return None
 
-        # Step 5: Construct the Final Box (centered on true geometric center)
-        # Use the float centroid for the calculation
         box_x_float = centroid_x - max_safe_width / 2.0
         box_y_float = centroid_y - max_safe_height / 2.0
 
-        # Convert to integer only at the very end
         box_x = int(round(box_x_float))
         box_y = int(round(box_y_float))
 
         guaranteed_box = (box_x, box_y, max_safe_width, max_safe_height)
 
-        # Basic bounds checking
         if box_x >= 0 and box_y >= 0 and box_x + max_safe_width <= mask_w and box_y + max_safe_height <= mask_h:
             log_message(
                 f"Safe area calculated: centroid=({centroid_x:.1f}, {centroid_y:.1f}), "
@@ -1025,7 +958,6 @@ def render_text_skia(
         target_center_x = x1 + bubble_width / 2.0
         target_center_y = y1 + bubble_height / 2.0
 
-    # --- Find and Load Font Variants ---
     font_variants = _find_font_variants(font_dir, verbose=verbose)
     regular_font_path = font_variants.get("regular")
 
@@ -1039,19 +971,14 @@ def render_text_skia(
         log_message(f"CRITICAL: Failed to load regular font resources for {regular_font_path.name}.", always_print=True)
         return pil_image, False
 
-    # --- Determine HarfBuzz Features ---
     available_features = get_font_features(str(regular_font_path))
     features_to_enable = {
-        # Enable kerning if available (GPOS 'kern' or legacy 'kern' table)
         "kern": "kern" in available_features["GPOS"],
-        # Enable ligatures based on config and availability
         "liga": use_ligatures and "liga" in available_features["GSUB"],
-        # Add other features as needed, e.g., "dlig", "calt"
         "calt": "calt" in available_features["GSUB"],
     }
     log_message(f"HarfBuzz features to enable: {features_to_enable}", verbose=verbose)
 
-    # --- Preload style faces for measurement during fitting ---
     preload_hb_faces: Dict[str, Optional[hb.Face]] = {"regular": regular_hb_face}
     for style_key in ["italic", "bold", "bold_italic"]:
         style_path = font_variants.get(style_key)
@@ -1059,8 +986,6 @@ def render_text_skia(
             _, _typeface, _hb_face = _load_font_resources(str(style_path))
             if _hb_face:
                 preload_hb_faces[style_key] = _hb_face
-
-    # --- Font Size Iteration (Binary Search) ---
     best_fit_size = -1
     best_fit_lines_data = None
     best_fit_metrics = None
@@ -1073,7 +998,7 @@ def render_text_skia(
 
     while low <= high:
         mid = (low + high) // 2
-        if mid == 0:  # Avoid infinite loop if min_font_size is 0 or 1
+        if mid == 0:
             break
 
         log_message(f"Trying font size: {mid}", verbose=verbose)
@@ -1105,31 +1030,24 @@ def render_text_skia(
         else:
             high = mid - 1
 
-    # --- Check if any size fit ---
     if best_fit_size == -1:
         log_message(
             f"Could not fit text in bubble even at min size {min_font_size}: '{clean_text[:30]}...'", always_print=True
         )
         return pil_image, False
-
-    # --- Prepare for Rendering ---
     final_font_size = best_fit_size
     final_lines_data = best_fit_lines_data
     final_metrics = best_fit_metrics
     final_max_line_width = best_fit_max_line_width
     final_line_height = (-final_metrics.fAscent + final_metrics.fDescent + final_metrics.fLeading) * line_spacing_mult
 
-    # Parse styled segments once after finding optimal font size to avoid repeated parsing
     if final_lines_data:
         for line_data in final_lines_data:
             line_data['segments'] = _parse_styled_segments(line_data['text_with_markers'])
 
-    # --- Load Needed Font Resources for Rendering ---
-    # Determine which styles are actually present in the text
     required_styles = {"regular"} | {style for _, style in _parse_styled_segments(clean_text)}
     log_message(f"Required font styles: {required_styles}", verbose=verbose)
 
-    # Initialize dictionaries to hold loaded resources, starting with regular
     loaded_typefaces: Dict[str, Optional[skia.Typeface]] = {"regular": regular_typeface}
     loaded_hb_faces: Dict[str, Optional[hb.Face]] = {"regular": regular_hb_face}
 
@@ -1161,7 +1079,6 @@ def render_text_skia(
         log_message("Failed to create Skia surface for rendering.", always_print=True)
         return pil_image, False
 
-    # --- Skia Font Hinting Setup (Used per segment) ---
     hinting_map = {
         "none": skia.FontHinting.kNone,
         "slight": skia.FontHinting.kSlight,
@@ -1170,17 +1087,13 @@ def render_text_skia(
     }
     skia_hinting = hinting_map.get(font_hinting.lower(), skia.FontHinting.kNone)
 
-    # --- Determine Text Color based on Bubble Background ---
     text_color = skia.ColorBLACK
     if bubble_color_bgr and (sum(bubble_color_bgr) / 3) < 128:
         text_color = skia.ColorWHITE
     paint = skia.Paint(AntiAlias=True, Color=text_color)
 
-    # --- Calculate Starting Position (Centering the visual block around the target center) ---
-    # Center the max line width
     block_start_x = target_center_x - final_max_line_width / 2.0
 
-    # Vertical centering
     num_lines = len(final_lines_data)
     if num_lines > 0:
         total_visual_height = (
@@ -1202,13 +1115,11 @@ def render_text_skia(
         verbose=verbose,
     )
 
-    # --- Render Line by Line, Segment by Segment ---
     with surface as canvas:
         current_baseline_y = first_baseline_y
         for i, line_data in enumerate(final_lines_data):
-            line_width_measured = line_data["width"]  # Width measured using regular font
+            line_width_measured = line_data["width"]
 
-            # Horizontal alignment for this specific line, centered within the block's max width
             line_start_x = block_start_x + (final_max_line_width - line_width_measured) / 2.0
             cursor_x = line_start_x
 
@@ -1216,8 +1127,6 @@ def render_text_skia(
             log_message(f"Line {i} Segments: {segments}", verbose=verbose)
 
             for segment_text, style_name in segments:
-
-                # --- Select Font Resources for Segment ---
                 typeface_to_use = None
                 hb_face_to_use = None
                 fallback_style_used = None
@@ -1260,7 +1169,6 @@ def render_text_skia(
                         f"  Style '{style_name}' not found, falling back to '{fallback_style_used}'.", verbose=verbose
                     )
 
-                # Ensure we actually got *some* font resource (should always get regular at least)
                 if not typeface_to_use or not hb_face_to_use:
                     log_message(
                         (
@@ -1271,12 +1179,10 @@ def render_text_skia(
                     )
                     continue
 
-                # --- Setup Skia Font for Segment ---
                 skia_font_segment = skia.Font(typeface_to_use, final_font_size)
                 skia_font_segment.setSubpixel(use_subpixel_rendering)
                 skia_font_segment.setHinting(skia_hinting)
 
-                # --- Setup HarfBuzz Font for Segment ---
                 hb_font_segment = hb.Font(hb_face_to_use)
                 hb_font_segment.ptem = float(final_font_size)
                 if hb_face_to_use.upem > 0:
@@ -1285,8 +1191,6 @@ def render_text_skia(
                     hb_font_segment.scale = (hb_scale, hb_scale)
                 else:
                     hb_font_segment.scale = (int(final_font_size * (2**16)), int(final_font_size * (2**16)))
-
-                # --- Shape Segment ---
                 try:
                     infos, positions = _shape_line(segment_text, hb_font_segment, features_to_enable)
                     if not infos:
@@ -1298,7 +1202,6 @@ def render_text_skia(
                     log_message(f"ERROR: HarfBuzz shaping failed for segment '{segment_text}': {e}", always_print=True)
                     continue
 
-                # --- Build and Draw Skia TextBlob for Segment ---
                 builder = skia.TextBlobBuilder()
                 glyph_ids = [info.codepoint for info in infos]
                 skia_point_positions = []
@@ -1307,7 +1210,7 @@ def render_text_skia(
                 HB_26_6_SCALE_FACTOR = 64.0
                 for _, pos in zip(infos, positions):
                     glyph_x = cursor_x + segment_cursor_x + (pos.x_offset / HB_26_6_SCALE_FACTOR)
-                    glyph_y = current_baseline_y - (pos.y_offset / HB_26_6_SCALE_FACTOR)  # Y flipped
+                    glyph_y = current_baseline_y - (pos.y_offset / HB_26_6_SCALE_FACTOR)
                     skia_point_positions.append(skia.Point(glyph_x, glyph_y))
 
                     segment_cursor_x += pos.x_advance / HB_26_6_SCALE_FACTOR
@@ -1337,7 +1240,6 @@ def render_text_skia(
 
             current_baseline_y += final_line_height
 
-    # --- Convert back to PIL ---
     final_pil_image = _skia_surface_to_pil(surface)
     if final_pil_image is None:
         log_message("Failed to convert final Skia surface back to PIL.", always_print=True)
