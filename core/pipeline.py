@@ -280,11 +280,10 @@ def translate_and_render(
                         ]
 
                 # --- Render Translations ---
-                # Map original bbox tuple to color and LIR bbox
+                # Map original bbox tuple to color and mask
                 bubble_render_info_map = {
                     tuple(info["bbox"]): {
                         "color": info["color"],
-                        "lir_bbox": info.get("lir_bbox"),
                         "mask": info.get("mask"),
                     }
                     for info in processed_bubbles_info
@@ -320,21 +319,18 @@ def translate_and_render(
 
                         render_info = bubble_render_info_map.get(tuple(bbox))
                         bubble_color_bgr = (255, 255, 255)
-                        lir_bbox_coords = None
                         cleaned_mask = None
                         if render_info:
                             bubble_color_bgr = render_info["color"]
-                            lir_bbox_coords = render_info.get("lir_bbox")
                             cleaned_mask = render_info.get("mask")
 
                         rendered_image, success = render_text_skia(
                             pil_image=pil_cleaned_image,
                             text=text,
                             bbox=bbox,
-                            lir_bbox=lir_bbox_coords,
+                            font_dir=config.rendering.font_dir,
                             cleaned_mask=cleaned_mask,
                             bubble_color_bgr=bubble_color_bgr,
-                            font_dir=config.rendering.font_dir,
                             min_font_size=config.rendering.min_font_size,
                             max_font_size=config.rendering.max_font_size,
                             line_spacing_mult=config.rendering.line_spacing,
