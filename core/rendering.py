@@ -476,6 +476,105 @@ def _calculate_styled_line_width(
     return total_width
 
 
+def _find_optimal_breaks_dp(
+    tokens: List[str],
+    max_render_width: float,
+    font_size: int,
+    loaded_hb_faces: Dict[str, Optional[hb.Face]],
+    features_to_enable: Dict[str, bool],
+    persistent_word_width_cache: Optional[Dict[Tuple[str, int], float]] = None,
+    badness_exponent: float = 3.0,
+    hyphen_penalty: float = 1000.0,
+) -> Optional[List[str]]:
+    """
+    Pragmatic Knuth-Plass style DP to find globally optimal line breaks.
+
+    - Uses cached per-token widths and a single space width.
+    - Approximates line width as sum(token_widths) + spaces * space_width.
+    - Adds a fixed penalty when a line ends with a hyphenated token.
+    """
+    try:
+        if not tokens:
+            return []
+
+        # Step 1.1: Setup and Caching
+        token_width_cache: Dict[str, float] = {}
+        unique_tokens = set(tokens)
+        unique_tokens.add(" ")
+
+        for t in unique_tokens:
+            width_val: Optional[float] = None
+            if persistent_word_width_cache is not None:
+                cached_key = (t, font_size)
+                if cached_key in persistent_word_width_cache:
+                    width_val = persistent_word_width_cache[cached_key]
+            if width_val is None:
+                width_val = _calculate_styled_line_width(
+                    t, font_size, loaded_hb_faces, features_to_enable
+                )
+                if persistent_word_width_cache is not None:
+                    persistent_word_width_cache[(t, font_size)] = width_val
+            token_width_cache[t] = width_val
+
+        space_w = token_width_cache.get(" ", 0.0)
+
+        # Precompute token widths array for quick access
+        token_w: List[float] = [token_width_cache.get(t, 0.0) for t in tokens]
+
+        # Step 1.2: Initialize DP arrays
+        N = len(tokens)
+        min_cost: List[float] = [float("inf")] * (N + 1)
+        path: List[int] = [0] * (N + 1)
+        min_cost[0] = 0.0
+
+        # Step 1.4: DP loops
+        for i in range(1, N + 1):
+            # Build line backwards from i-1 down to 0, accumulating width
+            line_width = 0.0
+            num_spaces = 0
+            for j in range(i - 1, -1, -1):
+                # Add token j
+                if num_spaces > 0:
+                    line_width += space_w
+                line_width += token_w[j]
+                num_spaces += 1
+
+                if line_width > max_render_width:
+                    # Further extending will only increase width
+                    break
+
+                # Compute badness for line tokens[j..i-1]
+                slack = max_render_width - line_width
+                badness = pow(slack, badness_exponent)
+
+                # Hyphen penalty if last token ends with a hyphen
+                last_token = tokens[i - 1] if i > 0 else ""
+                if last_token.endswith("-"):
+                    badness += hyphen_penalty
+
+                total_cost = min_cost[j] + badness
+                if total_cost < min_cost[i]:
+                    min_cost[i] = total_cost
+                    path[i] = j
+
+        if not np.isfinite(min_cost[N]):
+            return None
+
+        # Step 1.5: Backtrack to reconstruct lines
+        lines: List[str] = []
+        current_break = N
+        while current_break > 0:
+            prev_break = path[current_break]
+            line = " ".join(tokens[prev_break:current_break])
+            lines.insert(0, line)
+            current_break = prev_break
+
+        return lines
+
+    except Exception:
+        return None
+
+
 def _pil_to_skia_surface(pil_image: Image.Image) -> Optional[skia.Surface]:
     """Converts a PIL image to a Skia Surface."""
     try:
@@ -522,6 +621,8 @@ def _check_fit(
     features_to_enable: Dict[str, bool],
     line_spacing_mult: float,
     hyphenate_before_scaling: bool,
+    hyphenation_min_word_length: int,
+    badness_exponent: float,
     word_width_cache: Optional[Dict[Tuple[str, int], float]] = None,
     verbose: bool = False,
 ) -> Optional[Dict]:
@@ -576,7 +677,7 @@ def _check_fit(
         # Text wrapping logic (token-aware; preserves styled blocks as atomic tokens)
         tokens: List[Tuple[str, bool]] = _tokenize_styled_text(text)
         wrapped_lines_text: List[str] = []
-        current_line_tokens: List[str] = []
+        augmented_tokens: List[str] = []
 
         def _try_hyphenate_word(word_str: str, hb_font_local: hb.Font) -> Optional[List[str]]:
             """Attempt to split a word into two parts with a hyphen such that each part fits."""
@@ -655,55 +756,31 @@ def _check_fit(
                     return [final_left_part, final_right_part]
             return None
 
+        # Phase 2: Preprocess tokens with pragmatic hyphenation
         for token_text, is_styled in tokens:
-            # Measure token width (styled tokens include markers)
-            cache_key = (token_text, font_size)
-            if word_width_cache is not None and cache_key in word_width_cache:
-                token_width = word_width_cache[cache_key]
+            if (
+                not is_styled
+                and hyphenate_before_scaling
+                and len(token_text) > hyphenation_min_word_length
+            ):
+                split_parts = _try_hyphenate_word(token_text, hb_font)
+                if split_parts:
+                    augmented_tokens.extend(split_parts)
+                else:
+                    augmented_tokens.append(token_text)
             else:
-                token_width = _calculate_styled_line_width(
-                    token_text, font_size, loaded_hb_faces, features_to_enable
-                )
-                if word_width_cache is not None:
-                    word_width_cache[cache_key] = token_width
+                augmented_tokens.append(token_text)
 
-            if token_width > max_render_width:
-                # Only attempt hyphenation on non-styled tokens
-                if hyphenate_before_scaling and not is_styled:
-                    split_parts = _try_hyphenate_word(token_text, hb_font)
-                    if split_parts:
-                        for part in split_parts:
-                            test_line_tokens = (current_line_tokens or []) + [part]
-                            test_line_text = " ".join(test_line_tokens)
-                            width_split = _calculate_styled_line_width(
-                                test_line_text, font_size, loaded_hb_faces, features_to_enable
-                            )
-                            if width_split <= max_render_width:
-                                current_line_tokens = test_line_tokens
-                            else:
-                                if current_line_tokens:
-                                    wrapped_lines_text.append(" ".join(current_line_tokens))
-                                current_line_tokens = [part]
-                        continue
-                # Token too wide and cannot be hyphenated -> doesn't fit at this size
-                return None
-
-            # Try to add token to current line
-            test_line_tokens = current_line_tokens + [token_text]
-            styled_test_line = " ".join(test_line_tokens)
-            tentative_width = _calculate_styled_line_width(
-                styled_test_line, font_size, loaded_hb_faces, features_to_enable
-            )
-
-            if tentative_width <= max_render_width:
-                current_line_tokens = test_line_tokens
-            else:
-                if current_line_tokens:
-                    wrapped_lines_text.append(" ".join(current_line_tokens))
-                current_line_tokens = [token_text]
-
-        if current_line_tokens:
-            wrapped_lines_text.append(" ".join(current_line_tokens))
+        # Phase 3: DP-based optimal line breaking
+        wrapped_lines_text = _find_optimal_breaks_dp(
+            augmented_tokens,
+            max_render_width,
+            font_size,
+            loaded_hb_faces,
+            features_to_enable,
+            word_width_cache,
+            badness_exponent,
+        ) or []
 
         if not wrapped_lines_text:
             return None
@@ -870,6 +947,8 @@ def render_text_skia(
     font_hinting: str = "none",
     use_ligatures: bool = False,
     hyphenate_before_scaling: bool = True,
+    hyphenation_min_word_length: int = 8,
+    badness_exponent: float = 3.0,
     verbose: bool = False,
 ) -> Tuple[Optional[Image.Image], bool]:
     """
@@ -1007,6 +1086,8 @@ def render_text_skia(
             features_to_enable,
             line_spacing_mult,
             hyphenate_before_scaling,
+            hyphenation_min_word_length,
+            badness_exponent,
             word_width_cache,
             verbose,
         )
