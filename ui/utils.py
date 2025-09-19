@@ -21,7 +21,6 @@ COMPATIBLE_MODEL_CACHE = {"url": None, "models": None}
 def get_available_font_packs(fonts_base_dir: Path) -> Tuple[List[str], Optional[str]]:
     """Get list of available font packs (subdirectories) in the fonts directory"""
     if not fonts_base_dir.exists():
-        log_message(f"Warning: Font base directory not found at {fonts_base_dir}", always_print=True)
         return [], None
     font_dirs = [d.name for d in fonts_base_dir.iterdir() if d.is_dir()]
     font_dirs.sort()
@@ -117,7 +116,6 @@ def update_font_dropdown(fonts_base_dir: Path):
             f"{SUCCESS_PREFIX}Found {len(font_packs)} font packs",
         )
     except Exception as e:
-        log_message(f"Error updating font dropdown: {e}", always_print=True)
         return gr.update(choices=[]), gr.update(choices=[]), f"{ERROR_PREFIX}{str(e)}"
 
 
@@ -288,7 +286,7 @@ def fetch_and_update_openrouter_models():
     verbose = get_saved_settings().get("verbose", False)
     # Check if cache is already populated for this session
     if OPENROUTER_MODEL_CACHE["models"] is not None:
-        log_message("Using session-cached OpenRouter models.", verbose=verbose)
+        log_message("Using cached OpenRouter models", verbose=verbose)
         cached_models = OPENROUTER_MODEL_CACHE["models"]
         saved_settings = get_saved_settings()
         provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
@@ -301,7 +299,7 @@ def fetch_and_update_openrouter_models():
         return gr.update(choices=cached_models, value=selected_or_model)
 
     # If not cached, proceed with fetching
-    log_message("Fetching OpenRouter models...", verbose=verbose)
+    log_message("Fetching OpenRouter models", verbose=verbose)
     try:
         response = requests.get("https://openrouter.ai/api/v1/models", timeout=15)
         response.raise_for_status()
@@ -347,7 +345,7 @@ def fetch_and_update_openrouter_models():
         filtered_models.sort()
 
         OPENROUTER_MODEL_CACHE["models"] = filtered_models
-        log_message(f"Fetched and filtered {len(filtered_models)} vision-capable OpenRouter models.", verbose=verbose)
+        log_message(f"Fetched {len(filtered_models)} OpenRouter models", verbose=verbose)
 
         saved_settings = get_saved_settings()
         provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
@@ -360,11 +358,9 @@ def fetch_and_update_openrouter_models():
         return gr.update(choices=filtered_models, value=selected_or_model)
 
     except requests.exceptions.RequestException as e:
-        log_message(f"Error fetching OpenRouter models: {e}", verbose=verbose)
         gr.Warning(f"Failed to fetch OpenRouter models: {e}")
         return gr.update(choices=[])  # Return empty choices on error
     except Exception as e:  # Catch other potential errors like JSON parsing
-        log_message(f"Unexpected error fetching OpenRouter models: {e}", verbose=verbose)
         gr.Warning(f"Unexpected error fetching OpenRouter models: {e}")
         return gr.update(choices=[])
 
@@ -374,13 +370,12 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
     global COMPATIBLE_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
     if not url or not url.startswith(("http://", "https://")):
-        log_message("Invalid or missing URL for OpenAI-Compatible endpoint.", verbose=verbose)
         gr.Warning("Please enter a valid URL (starting with http:// or https://) for the OpenAI-Compatible endpoint.")
         return gr.update(choices=[], value=None)
 
     # Check if cache is already populated for this URL in this session
     if COMPATIBLE_MODEL_CACHE.get("url") == url and COMPATIBLE_MODEL_CACHE.get("models") is not None:
-        log_message(f"Using session-cached OpenAI-Compatible models for URL: {url}", verbose=verbose)
+        log_message(f"Using cached models from {url}", verbose=verbose)
         cached_models = COMPATIBLE_MODEL_CACHE["models"]
         saved_settings = get_saved_settings()
         provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
@@ -393,7 +388,7 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
         return gr.update(choices=cached_models, value=selected_comp_model)
 
     # If not cached, proceed with fetching
-    log_message(f"Fetching OpenAI-Compatible models from URL: {url}", verbose=verbose)
+    log_message(f"Fetching models from {url}", verbose=verbose)
     try:
         headers = {}
         if api_key:
@@ -422,7 +417,7 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
 
         COMPATIBLE_MODEL_CACHE["url"] = url
         COMPATIBLE_MODEL_CACHE["models"] = fetched_models
-        log_message(f"Fetched {len(fetched_models)} OpenAI-Compatible models from {url}.", verbose=verbose)
+        log_message(f"Fetched {len(fetched_models)} models from {url}", verbose=verbose)
         if not fetched_models:
             gr.Warning(f"No models found at {fetch_url}. Check the URL and API key (if required).")
 
@@ -437,37 +432,25 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
         return gr.update(choices=fetched_models, value=selected_comp_model)
 
     except requests.exceptions.RequestException as e:
-        error_msg = f"Error fetching OpenAI-Compatible models from {url}: {e}"
-        log_message(error_msg, verbose=verbose)
-        gr.Error(error_msg)
+        gr.Error(f"Error fetching models from {url}: {e}")
         return gr.update(choices=[], value=None)
     except (json.JSONDecodeError, ValueError, KeyError) as e:
         error_detail = (
             "Check if the URL points to a valid OpenAI-Compatible '/v1' "
             "or '/api/tags' (Ollama) endpoint."
         )
-        error_msg = f"Error parsing response from {url}: {e}. {error_detail}"
-        log_message(error_msg, verbose=verbose)
-        gr.Error(error_msg)
+        gr.Error(f"Error parsing response from {url}: {e}. {error_detail}")
         return gr.update(choices=[], value=None)
     except Exception as e:
-        error_msg = f"Unexpected error fetching/processing OpenAI-Compatible models: {e}"
-        log_message(error_msg, verbose=verbose)
-        gr.Error(error_msg)
+        gr.Error(f"Unexpected error fetching models from {url}: {e}")
         return gr.update(choices=[], value=None)
 
 
 def initial_dynamic_fetch(provider: str, url: str, key: Optional[str]):
     """Handle initial model fetching for dynamic providers on app load."""
-    verbose_load = False  # Default verbose to False for initial load
-
     if provider == "OpenRouter":
-        if verbose_load:
-            print("Initial load: OpenRouter selected, fetching models...")
         return fetch_and_update_openrouter_models()
     elif provider == "OpenAI-Compatible":
-        if verbose_load:
-            print("Initial load: OpenAI-Compatible selected, fetching models...")
         return fetch_and_update_compatible_models(url, key)
     return gr.update()
 

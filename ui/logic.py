@@ -126,7 +126,7 @@ def translate_manga_logic(
                 os.remove(temp_image_path)
             except Exception as e_clean:
                 log_message(
-                    f"Warning: Could not remove temporary image file {temp_image_path}: {e_clean}", always_print=True
+                    f"Failed to clean up temporary file: {e_clean}", always_print=True
                 )
 
 
@@ -198,7 +198,7 @@ def process_batch_logic(
         if gradio_progress is not None:
             gradio_progress(value, desc=desc)
         elif config.verbose:
-            log_message(f"Batch Progress: {desc} [{value * 100:.1f}%]", always_print=True)
+            log_message(f"Progress: {desc} [{value * 100:.1f}%]", verbose=True)
 
     temp_dir_path_obj = None
     try:
@@ -223,10 +223,8 @@ def process_batch_logic(
                         image_files_to_copy.append(p)
                     except Exception as img_err:
                         skipped_files.append(f"{p.name} (Invalid: {img_err})")
-                        log_message(f"Warning: Skipping invalid file '{p.name}': {img_err}", verbose=config.verbose)
                 else:
                     skipped_files.append(f"{p.name} (Not a supported image file)")
-                    log_message(f"Warning: Skipping non-image file or directory: '{p.name}'", verbose=config.verbose)
 
             if not image_files_to_copy:
                 raise ValueError(
@@ -234,9 +232,13 @@ def process_batch_logic(
                     f"Skipped: {', '.join(skipped_files) if skipped_files else 'None'}"
                 )
 
-            log_message(f"Preparing {len(image_files_to_copy)} files for batch processing...", verbose=config.verbose)
             if skipped_files:
-                log_message(f"Skipped files: {', '.join(skipped_files)}", verbose=config.verbose)
+                log_message(
+                    f"Preparing {len(image_files_to_copy)} files (skipped {len(skipped_files)} invalid files)",
+                    verbose=config.verbose
+                )
+            else:
+                log_message(f"Preparing {len(image_files_to_copy)} files for batch processing", verbose=config.verbose)
 
             for img_file in image_files_to_copy:
                 try:
@@ -244,7 +246,7 @@ def process_batch_logic(
                     shutil.copy2(img_file, temp_dir_path / img_file.name)
                 except Exception as copy_err:
                     log_message(
-                        f"Warning: Could not copy file {img_file.name} to temp dir: {copy_err}", always_print=True
+                        f"Failed to copy {img_file.name}: {copy_err}", always_print=True
                     )
             process_dir = temp_dir_path
 
@@ -272,12 +274,15 @@ def process_batch_logic(
         results["processing_time"] = processing_time
         results["output_path"] = batch_output_path
 
-        log_message(f"Batch processing completed in {processing_time:.2f} seconds.", verbose=config.verbose)
-        log_message(f"Success: {results['success_count']}, Errors: {results['error_count']}", verbose=config.verbose)
+        log_message(
+            f"Batch completed: {results['success_count']} success, "
+            f"{results['error_count']} errors in {processing_time:.2f}s",
+            verbose=config.verbose
+        )
         if results["errors"]:
-            log_message("Errors occurred on files:", verbose=config.verbose)
+            log_message("Processing errors:", verbose=config.verbose)
             for fname, err in results["errors"].items():
-                log_message(f"  - {fname}: {err}", verbose=config.verbose)
+                log_message(f"  {fname}: {err}", verbose=config.verbose)
 
         return results
 
@@ -290,9 +295,9 @@ def process_batch_logic(
         if temp_dir_path_obj:
             try:
                 temp_dir_path_obj.cleanup()
-                log_message(f"Cleaned up temporary directory: {temp_dir_path_obj.name}", verbose=config.verbose)
+                log_message("Cleaned up temp directory", verbose=config.verbose)
             except Exception as e_clean:
                 log_message(
-                    f"Warning: Could not clean up temporary directory {temp_dir_path_obj.name}: {e_clean}",
+                    f"Failed to clean up temp directory: {e_clean}",
                     always_print=True,
                 )

@@ -287,10 +287,10 @@ def _call_llm_endpoint(
             }
             # Enable/disable thinking for Gemini 2.5 models
             if "gemini-2.5-flash" in model_name and config.enable_thinking:
-                log_message(f"Including thoughts for {model_name} (thinkingBudget: default)", verbose=debug)
+                log_message(f"Using thinking mode for {model_name}", verbose=debug)
             elif "gemini-2.5-flash" in model_name and not config.enable_thinking:
                 generation_config["thinkingConfig"] = {"thinkingBudget": 0}
-                log_message(f"Not including thoughts for {model_name} (thinkingBudget: 0)", verbose=debug)
+                log_message(f"Disabled thinking mode for {model_name}", verbose=debug)
 
             return call_gemini_endpoint(
                 api_key=api_key,
@@ -405,30 +405,24 @@ def _parse_llm_response(
 ) -> Optional[List[str]]:
     """Internal helper to parse numbered list responses from LLM."""
     if response_text is None:
-        log_message(f"Parsing response: Received None from {provider} API call.", verbose=debug)
+        log_message(f"API call failed: {provider} returned None", always_print=True)
         return None
     elif response_text == "":
-        log_message(
-            f"Parsing response: Received empty string from {provider} API.",
-            verbose=debug,
-        )
-        return [f"[{provider}: Empty response / no content]" for _ in range(expected_count)]
+        log_message(f"API call returned empty response: {provider}", always_print=True)
+        return [f"[{provider}: Empty response]" for _ in range(expected_count)]
 
     try:
-        log_message(f"Parsing response: Raw text received from {provider}:\n---\n{response_text}\n---", verbose=debug)
+        log_message(f"Parsing {provider} response: {len(response_text)} chars", verbose=debug)
+        log_message(f"Raw response:\n---\n{response_text}\n---", verbose=debug)
 
         matches = TRANSLATION_PATTERN.findall(response_text)
-        log_message(
-            f"Parsing response: Regex matches found: {len(matches)} vs expected {expected_count}", verbose=debug
-        )
+        log_message(f"Found {len(matches)}/{expected_count} numbered items", verbose=debug)
 
         # Fallback when regex fails to find numbered format
         if len(matches) < expected_count:
             log_message(
-                f"Parsing response warning: Regex found fewer items ({len(matches)}) than expected ({expected_count}). "
-                f"Attempting newline split fallback.",
+                f"Regex parsing incomplete ({len(matches)}/{expected_count}), trying fallback",
                 verbose=debug,
-                always_print=True,
             )
             lines = [line.strip() for line in response_text.split("\n") if line.strip()]
             # Clean up markdown code blocks
@@ -438,19 +432,12 @@ def _parse_llm_response(
                 lines.pop(-1)
 
             if len(lines) == expected_count:
-                log_message(
-                    f"Parsing response: Fallback successful. Using {len(lines)} lines as translations.",
-                    verbose=debug,
-                    always_print=True,
-                )
+                log_message(f"Fallback parsing successful: {len(lines)} lines", verbose=debug)
                 return lines
             else:
                 log_message(
-                    f"Parsing response warning: Fallback failed. Newline count ({len(lines)}) "
-                    f"still doesn't match expected count ({expected_count}). "
-                    f"Proceeding with regex matches found ({len(matches)}).",
+                    f"Fallback failed ({len(lines)}/{expected_count}), using {len(matches)} regex matches",
                     verbose=debug,
-                    always_print=True,
                 )
 
         parsed_dict = {}
@@ -460,33 +447,22 @@ def _parse_llm_response(
                 if 1 <= num <= expected_count:
                     parsed_dict[num] = text.strip()
                 else:
-                    log_message(
-                        f"Parsing response warning: "
-                        f"Parsed number {num} is out of expected range (1-{expected_count}).",
-                        verbose=debug,
-                    )
+                    log_message(f"Number {num} out of range (1-{expected_count})", verbose=debug)
             except ValueError:
-                log_message(
-                    f"Parsing response warning: Could not parse number '{num_str}' in response line.", verbose=debug
-                )
+                log_message(f"Invalid number format: '{num_str}'", verbose=debug)
 
         final_list = []
         for i in range(1, expected_count + 1):
             final_list.append(parsed_dict.get(i, f"[{provider}: Incomplete response for bubble {i}]"))
 
         if len(final_list) != expected_count:
-            log_message(
-                f"Parsing response warning: Expected {expected_count} items, but constructed {len(final_list)}."
-                f" Check raw response and parsing logic.",
-                verbose=debug,
-            )
+            log_message(f"Item count mismatch: {len(final_list)}/{expected_count}", verbose=debug)
 
         return final_list
 
     except Exception as e:
-        log_message(f"Error parsing successful {provider} API response content: {str(e)}", always_print=True)
-        # Treat parsing error as a failure for all bubbles
-        return [f"[{provider}: Failed to parse response]" for _ in range(expected_count)]
+        log_message(f"Failed to parse {provider} response: {str(e)}", always_print=True)
+        return [f"[{provider}: Parse error]" for _ in range(expected_count)]
 
 
 def call_translation_api_batch(
@@ -545,7 +521,7 @@ Return ONLY the following numbered lines, one per bubble:
 ...
 {num_bubbles}: <text>"""  # noqa
 
-            log_message("--- Starting Two-Step Translation: Step 1 (OCR) ---", verbose=debug)
+            log_message("Starting OCR step", verbose=debug)
             ocr_parts = []
             for img_b64 in images_b64:
                 ocr_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
@@ -561,16 +537,16 @@ Return ONLY the following numbered lines, one per bubble:
             extracted_texts = _parse_llm_response(ocr_response_text, num_bubbles, provider + "-OCR", debug)
 
             if extracted_texts is None:
-                log_message("OCR API call failed or was blocked. Returning placeholders.", verbose=debug)
-                return [f"[{provider}: OCR call failed/blocked]"] * num_bubbles
+                log_message("OCR API call failed", always_print=True)
+                return [f"[{provider}: OCR failed]"] * num_bubbles
 
             is_ocr_failed = all(f"[{provider}-OCR:" in text for text in extracted_texts)
             if is_ocr_failed:
-                log_message("OCR parsing resulted in only placeholders. Returning them.", verbose=debug)
+                log_message("OCR returned only placeholders", verbose=debug)
                 return extracted_texts
 
             # --- Step 2: Translation & Styling ---
-            log_message("--- Starting Two-Step Translation: Step 2 (Translate & Style) ---", verbose=debug)
+            log_message("Starting translation step", verbose=debug)
             formatted_texts_for_prompt = []
             ocr_failed_indices = set()
             for i, text in enumerate(extracted_texts):
@@ -636,13 +612,13 @@ If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged f
             )
 
             if final_translations is None:
-                log_message("Translation API call failed or was blocked.", verbose=debug)
+                log_message("Translation API call failed", always_print=True)
                 combined_results = []
                 for i in range(num_bubbles):
                     if i in ocr_failed_indices:
                         combined_results.append(f"[{provider}: OCR Failed]")
                     else:
-                        combined_results.append(f"[{provider}: Translation call failed/blocked]")
+                        combined_results.append(f"[{provider}: Translation failed]")
                 return combined_results
 
             combined_results = []
@@ -651,11 +627,7 @@ If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged f
                     if final_translations[i] == "[OCR FAILED]":
                         combined_results.append("[OCR FAILED]")
                     else:
-                        log_message(
-                            f"Warning: LLM translated bubble {i + 1} despite [OCR FAILED] instruction."
-                            f" Using placeholder.",
-                            verbose=debug,
-                        )
+                        log_message(f"Bubble {i + 1}: LLM ignored OCR failure instruction", verbose=debug)
                         combined_results.append("[OCR FAILED]")
 
                 else:
@@ -664,7 +636,7 @@ If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged f
 
         elif translation_mode == "one-step":
             # --- One-Step Logic ---
-            log_message("--- Starting One-Step Translation ---", verbose=debug)
+            log_message("Starting one-step translation", verbose=debug)
             # Build context-aware prompt pieces
             lang_part = (
                 f"the original {input_language} text"
@@ -717,12 +689,12 @@ If the bubble is [NO TEXT] or [OCR FAILED], output that exact tag unchanged for 
             translations = _parse_llm_response(response_text, num_bubbles, provider, debug)
 
             if translations is None:
-                log_message("One-step API call failed or was blocked. Returning placeholders.", verbose=debug)
-                return [f"[{provider}: API call failed/blocked]"] * num_bubbles
+                log_message("One-step API call failed", always_print=True)
+                return [f"[{provider}: API failed]"] * num_bubbles
             else:
                 return translations
         else:
             raise ValueError(f"Unknown translation_mode specified in config: {translation_mode}")
     except (ValueError, RuntimeError) as e:
-        log_message(f"Translation failed: {e}", always_print=True)  # Catch errors raised during config validation
+        log_message(f"Translation error: {e}", always_print=True)
         return [f"[Translation Error: {e}]"] * num_bubbles

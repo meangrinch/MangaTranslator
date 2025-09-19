@@ -60,8 +60,10 @@ def detect_speech_bubbles(
         image_path (Path): Path to the input image
         model_path (str): Path to the YOLO segmentation model
         confidence (float): Confidence threshold for detections
-        verbose (bool): Whether to show detailed YOLO output
+        verbose (bool): Whether to show detailed processing information
         device (torch.device, optional): The device to run the model on. Autodetects if None.
+        use_sam2 (bool): Whether to use SAM2.1 for enhanced segmentation
+        sam2_model_id (str): SAM2.1 model identifier
 
     Returns:
         list: List of dictionaries containing detection information (bbox, class, confidence)
@@ -69,9 +71,11 @@ def detect_speech_bubbles(
     detections = []
 
     _device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    log_message(f"Using device: {_device}", verbose=verbose)
 
     try:
         model = get_yolo_model(model_path)
+        log_message(f"Loaded YOLO model: {model_path}", verbose=verbose)
     except Exception as e:
         raise RuntimeError(f"Error loading model: {e}")
 
@@ -79,12 +83,14 @@ def detect_speech_bubbles(
         image = cv2.imread(str(image_path))
         if image is None:
             raise ValueError(f"Could not read image at {image_path}")
+        log_message(f"Processing image: {image_path.name} ({image.shape[1]}x{image.shape[0]})", verbose=verbose)
     except Exception as e:
         raise RuntimeError(f"Error loading image: {e}")
 
     results = model(image, conf=confidence, device=_device, verbose=verbose)
 
     if len(results) == 0:
+        log_message("No detections found", verbose=verbose)
         return detections
 
     result = results[0]
@@ -99,7 +105,6 @@ def detect_speech_bubbles(
             x0_f, y0_f, x1_f, y1_f = float(xyxy[0]), float(xyxy[1]), float(xyxy[2]), float(xyxy[3])
 
             conf = float(box.conf[0])
-
             cls_id = int(box.cls[0])
             cls_name = model.names[cls_id]
 
@@ -121,12 +126,15 @@ def detect_speech_bubbles(
                             mask_points.tolist() if hasattr(mask_points, "tolist") else mask_points
                         )
                 except (IndexError, AttributeError) as e:
-                    log_message(f"Warning: Could not extract mask for detection {j}: {e}", verbose=verbose)
+                    log_message(f"Could not extract YOLO mask for detection {j}: {e}", always_print=True)
                     detection["mask_points"] = None
 
+    log_message(f"Found {len(detections)} speech bubbles", verbose=verbose)
+
     # SAM 2.1 segmentation guided by YOLO boxes for more precise masks
-    try:
-        if use_sam2 and len(detections) > 0:
+    if use_sam2 and len(detections) > 0:
+        try:
+            log_message("Applying SAM2.1 segmentation refinement", verbose=verbose)
             pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
             processor, sam_model = _get_sam2(sam2_model_id, _device)
@@ -158,7 +166,9 @@ def detect_speech_bubbles(
                 bbox_mask[y0:y1, x0:x1] = True
                 clipped = np.logical_and(m, bbox_mask)
                 det["sam_mask"] = (clipped.astype(np.uint8) * 255)
-    except Exception as e:
-        log_message(f"Warning: SAM2.1 segmentation failed: {e}", always_print=True)
+
+            log_message("SAM2.1 segmentation completed successfully", verbose=verbose)
+        except Exception as e:
+            log_message(f"SAM2.1 segmentation failed: {e}", always_print=True)
 
     return detections

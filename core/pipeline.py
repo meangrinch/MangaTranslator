@@ -57,9 +57,6 @@ def translate_and_render(
         log_message(f"Error opening image {image_path}: {e}", always_print=True)
         raise
 
-    original_mode = pil_original.mode
-    log_message(f"Original image mode: {original_mode}", verbose=verbose)
-
     desired_format = config.output.output_format
     output_ext_for_mode = Path(output_path).suffix.lower() if output_path else image_path.suffix.lower()
 
@@ -67,11 +64,7 @@ def translate_and_render(
         target_mode = "RGB"
     else:  # Default to RGBA for PNG, WEBP, or other formats in auto mode
         target_mode = "RGBA"
-    log_message(
-        f"Target image mode determined as: {target_mode} "
-        f"(based on format: {desired_format}, output_ext: {output_ext_for_mode})",
-        verbose=verbose,
-    )
+    log_message(f"Target mode: {target_mode}", verbose=verbose)
 
     pil_image_processed = pil_original
     if pil_image_processed.mode != target_mode:
@@ -99,11 +92,7 @@ def translate_and_render(
                     else:
                         pil_image_processed = pil_image_processed.convert("RGB")
                 except Exception as paste_err:
-                    log_message(
-                        f"Warning: Error during RGBA/LA/P -> RGB conversion paste: {paste_err}. "
-                        f"Trying alpha_composite.",
-                        verbose=verbose,
-                    )
+                    log_message(f"Warning: Paste failed, trying alpha_composite: {paste_err}", verbose=verbose)
                     try:
                         background_comp = Image.new("RGB", pil_image_processed.size, (255, 255, 255))
                         img_rgba_for_composite = (
@@ -114,11 +103,11 @@ def translate_and_render(
                         pil_image_processed = Image.alpha_composite(
                             background_comp.convert("RGBA"), img_rgba_for_composite
                         ).convert("RGB")
-                        log_message("Successfully used alpha_composite for RGB conversion.", verbose=verbose)
+                        log_message("Alpha composite conversion successful", verbose=verbose)
                     except Exception as composite_err:
                         log_message(
-                            f"Warning: alpha_composite also failed: {composite_err}. Using simple convert.",
-                            verbose=verbose,
+                            f"Warning: Alpha composite failed, using simple convert: {composite_err}",
+                            verbose=verbose
                         )
                         pil_image_processed = pil_image_processed.convert("RGB")  # Final fallback conversion
             else:  # Non-transparent conversion to RGB
@@ -138,11 +127,9 @@ def translate_and_render(
             if not is_success:
                 raise ValueError("Full image encoding to JPEG failed")
             full_image_b64 = base64.b64encode(buffer).decode("utf-8")
-            log_message("Encoded full image for translation context.", verbose=verbose)
+            log_message("Encoded full image for context", verbose=verbose)
         except Exception as e:
-            log_message(
-                f"Error encoding full image to base64: {e}. Proceeding without full-page context.", always_print=True
-            )
+            log_message(f"Warning: Failed to encode full image context: {e}", always_print=True)
 
     # --- Detection ---
     log_message("Detecting speech bubbles...", verbose=verbose)
@@ -157,19 +144,16 @@ def translate_and_render(
             sam2_model_id=config.detection.sam2_model_id,
         )
     except Exception as e:
-        log_message(f"Error during bubble detection: {e}. Proceeding without bubbles.", always_print=True)
+        log_message(f"Error during detection: {e}", always_print=True)
         bubble_data = []
 
     final_image_to_save = pil_image_processed
 
     # --- Proceed only if bubbles were detected ---
     if not bubble_data:
-        log_message(
-            "No speech bubbles detected or detection failed. Skipping cleaning, translation, and rendering.",
-            always_print=True,
-        )
+        log_message("No speech bubbles detected", always_print=True)
     else:
-        log_message(f"Detected {len(bubble_data)} potential bubbles.", verbose=verbose)
+        log_message(f"Detected {len(bubble_data)} bubbles", verbose=verbose)
 
         # --- Cleaning ---
         log_message("Cleaning speech bubbles...", verbose=verbose)
@@ -187,29 +171,24 @@ def translate_and_render(
                 roi_shrink_px=config.cleaning.roi_shrink_px,
                 verbose=verbose,
             )
-            log_message(f"Cleaning returned info for {len(processed_bubbles_info)} bubbles.", verbose=verbose)
+            log_message(f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose)
         except Exception as e:
-            log_message(f"Error during bubble cleaning: {e}. Proceeding with uncleaned image.", always_print=True)
+            log_message(f"Error during cleaning: {e}", always_print=True)
             cleaned_image_cv = original_cv_image.copy()
             processed_bubbles_info = []
 
         pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
         if pil_cleaned_image.mode != target_mode:
-            log_message(
-                f"Converting cleaned CV image mode from {pil_cleaned_image.mode} back to target {target_mode}",
-                verbose=verbose,
-            )
+            log_message(f"Converting cleaned image to {target_mode}", verbose=verbose)
             pil_cleaned_image = pil_cleaned_image.convert(target_mode)
         final_image_to_save = pil_cleaned_image
 
         # --- Check for Cleaning Only Mode ---
         if config.cleaning_only:
-            log_message(
-                "Cleaning only mode enabled. Skipping translation and rendering.", verbose=verbose, always_print=True
-            )
+            log_message("Cleaning only mode - skipping translation", always_print=True)
         else:
             # --- Prepare images for Translation ---
-            log_message("Preparing bubble images for translation...", verbose=verbose)
+            log_message("Preparing bubble images...", verbose=verbose)
             for bubble in bubble_data:
                 x1, y1, x2, y2 = bubble["bbox"]
 
@@ -221,24 +200,18 @@ def translate_and_render(
                         raise ValueError("cv2.imencode failed")
                     image_b64 = base64.b64encode(buffer).decode("utf-8")
                     bubble["image_b64"] = image_b64
-                    log_message(
-                        f"Collected bubble at ({x1}, {y1}), size {x2 - x1}x{y2 - y1}",
-                        verbose=verbose,
-                    )
+                    log_message(f"Bubble {x1},{y1} ({x2 - x1}x{y2 - y1})", verbose=verbose)
                 except Exception as e:
-                    log_message(f"Error encoding bubble at {bubble['bbox']}: {e}", verbose=verbose, always_print=True)
+                    log_message(f"Error encoding bubble {bubble['bbox']}: {e}", verbose=verbose)
                     bubble["image_b64"] = None
 
             valid_bubble_data = [b for b in bubble_data if b.get("image_b64")]
             if not valid_bubble_data:
-                log_message(
-                    "No valid bubble images could be prepared for translation. Skipping translation and rendering.",
-                    always_print=True,
-                )
+                log_message("No valid bubble images for translation", always_print=True)
             else:  # Only proceed if we have valid bubble data
                 # --- Sort and Translate ---
                 reading_direction = config.translation.reading_direction
-                log_message(f"Sorting bubbles in {reading_direction.upper()} reading order...", verbose=verbose)
+                log_message(f"Sorting bubbles ({reading_direction.upper()})", verbose=verbose)
                 image_width = original_cv_image.shape[1]
                 image_height = original_cv_image.shape[0]
 
@@ -249,15 +222,11 @@ def translate_and_render(
                 bubble_images_b64 = [bubble["image_b64"] for bubble in sorted_bubble_data]
                 translated_texts = []
                 if not bubble_images_b64:
-                    log_message(
-                        "No valid bubble images to translate after sorting/filtering. "
-                        "Skipping translation and rendering.",
-                        always_print=True,
-                    )
+                    log_message("No valid bubbles after sorting", always_print=True)
                 else:
                     log_message(
-                        f"Translating {len(bubble_images_b64)} speech bubbles from {config.translation.input_language} "
-                        f"to {config.translation.output_language} ({reading_direction.upper()})...",
+                        f"Translating {len(bubble_images_b64)} bubbles: "
+                        f"{config.translation.input_language} → {config.translation.output_language}",
                         always_print=True,
                     )
                     try:
@@ -268,7 +237,7 @@ def translate_and_render(
                             debug=verbose,
                         )
                     except Exception as e:
-                        log_message(f"Error during API translation: {e}", always_print=True)
+                        log_message(f"Translation API error: {e}", always_print=True)
                         translated_texts = [
                             "[Translation Error: API call raised exception]" for _ in sorted_bubble_data
                         ]
@@ -282,7 +251,7 @@ def translate_and_render(
                     for info in processed_bubbles_info
                     if "bbox" in info and "color" in info and "mask" in info
                 }
-                log_message("Rendering translations onto image...", verbose=verbose)
+                log_message("Rendering translations...", verbose=verbose)
                 if len(translated_texts) == len(sorted_bubble_data):
                     for i, bubble in enumerate(sorted_bubble_data):
                         bubble["translation"] = translated_texts[i]
@@ -302,13 +271,10 @@ def translate_and_render(
                                 f"[{config.translation.provider}: Failed to parse response]",
                             }
                         ):
-                            log_message(
-                                f"Skipping rendering for bubble {bbox} due to empty or error translation: '{text}'",
-                                verbose=verbose,
-                            )
+                            log_message(f"Skipping bubble {bbox} - invalid translation", verbose=verbose)
                             continue
 
-                        log_message(f"Rendering text for bubble {bbox}: '{text[:30]}...'", verbose=verbose)
+                        log_message(f"Rendering bubble {bbox}: '{text[:30]}...'", verbose=verbose)
 
                         render_info = bubble_render_info_map.get(tuple(bbox))
                         bubble_color_bgr = (255, 255, 255)
@@ -341,25 +307,18 @@ def translate_and_render(
                             pil_cleaned_image = rendered_image
                             final_image_to_save = pil_cleaned_image
                         else:
-                            log_message(
-                                f"Failed to render text in bubble {bbox} using Skia.",
-                                verbose=verbose,
-                                always_print=True,
-                            )
+                            log_message(f"Failed to render bubble {bbox}", verbose=verbose)
                 else:
                     log_message(
-                        f"Warning: Mismatch between number of bubbles ({len(sorted_bubble_data)}) "
-                        f"and translations ({len(translated_texts)}). Skipping rendering.",
+                        f"Warning: Bubble/translation count mismatch "
+                        f"({len(sorted_bubble_data)}/{len(translated_texts)})",
                         always_print=True,
                     )
 
     # --- Save Output ---
     if output_path:
         if final_image_to_save.mode != target_mode:
-            log_message(
-                f"Converting final image mode from {final_image_to_save.mode} to target {target_mode} before saving.",
-                verbose=verbose,
-            )
+            log_message(f"Converting final image to {target_mode}", verbose=verbose)
             final_image_to_save = final_image_to_save.convert(target_mode)
 
         save_image_with_compression(
@@ -372,7 +331,7 @@ def translate_and_render(
 
     end_time = time.time()
     processing_time = end_time - start_time
-    log_message(f"Processing finished in {processing_time:.2f} seconds.", always_print=True)
+    log_message(f"Processing completed in {processing_time:.2f}s", always_print=True)
 
     return final_image_to_save
 
@@ -424,7 +383,7 @@ def batch_translate_images(
     total_images = len(image_files)
     start_batch_time = time.time()
 
-    log_message(f"Starting batch processing of {total_images} images...", always_print=True)
+    log_message(f"Starting batch processing: {total_images} images", always_print=True)
 
     if progress_callback:
         progress_callback(0.0, f"Starting batch processing of {total_images} images...")
@@ -452,7 +411,7 @@ def batch_translate_images(
                 )
 
             output_path = output_dir / f"{img_path.stem}_translated{output_ext}"
-            log_message(f"Image {i + 1}/{total_images}: Processing {img_path.name}", always_print=True)
+            log_message(f"Processing {i + 1}/{total_images}: {img_path.name}", always_print=True)
 
             translate_and_render(img_path, config, output_path)
 
@@ -479,12 +438,12 @@ def batch_translate_images(
     seconds_per_image = total_batch_time / total_images if total_images > 0 else 0
 
     log_message(
-        f"\nBatch processing complete: {results['success_count']} of {total_images} images processed "
-        f"in {total_batch_time:.2f} seconds ({seconds_per_image:.2f} seconds/image).\n",
+        f"Batch complete: {results['success_count']}/{total_images} images in "
+        f"{total_batch_time:.2f}s ({seconds_per_image:.2f}s/image)",
         always_print=True,
     )
     if results["error_count"] > 0:
-        log_message(f"Failed to process {results['error_count']} images.", always_print=True)
+        log_message(f"Failed: {results['error_count']} images", always_print=True)
         for filename, error_msg in results["errors"].items():
             log_message(f"  - {filename}: {error_msg}", always_print=True)
 

@@ -84,9 +84,9 @@ def get_font_features(font_path: str) -> Dict[str, List[str]]:
             features["GPOS"] = sorted([fr.FeatureTag for fr in font["GPOS"].table.FeatureList.FeatureRecord])
 
     except ImportError:
-        log_message("fontTools not installed, cannot inspect font features.", always_print=True)
+        log_message("fontTools not available - font features disabled", always_print=True)
     except Exception as e:
-        log_message(f"Could not inspect font features for {os.path.basename(font_path)}: {e}", always_print=True)
+        log_message(f"Font feature inspection failed for {os.path.basename(font_path)}: {e}", always_print=True)
 
     _font_features_cache.put(font_path, features)
     return features
@@ -110,7 +110,7 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
     if resolved_dir in _font_variants_cache:
         return _font_variants_cache[resolved_dir]
 
-    log_message(f"Scanning font directory: {resolved_dir}", verbose=verbose)
+    log_message(f"Scanning fonts in {os.path.basename(resolved_dir)}", verbose=verbose)
     font_files: List[Path] = []
     font_variants: Dict[str, Optional[Path]] = {"regular": None, "italic": None, "bold": None, "bold_italic": None}
     identified_files: set[Path] = set()
@@ -120,16 +120,16 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
         if font_dir_path.exists() and font_dir_path.is_dir():
             font_files = list(font_dir_path.glob("*.ttf")) + list(font_dir_path.glob("*.otf"))
         else:
-            log_message(f"Font directory '{font_dir_path}' does not exist or is not a directory.", always_print=True)
+            log_message(f"Font directory not found: {font_dir_path}", always_print=True)
             _font_variants_cache[resolved_dir] = font_variants
             return font_variants
     except Exception as e:
-        log_message(f"Error accessing font directory '{font_dir}': {e}", always_print=True)
+        log_message(f"Font directory access error: {e}", always_print=True)
         _font_variants_cache[resolved_dir] = font_variants
         return font_variants
 
     if not font_files:
-        log_message(f"No font files (.ttf, .otf) found in '{resolved_dir}'", always_print=True)
+        log_message(f"No font files found in {os.path.basename(resolved_dir)}", always_print=True)
         _font_variants_cache[resolved_dir] = font_variants
         return font_variants
 
@@ -148,7 +148,7 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
             if not font_variants["bold_italic"]:
                 font_variants["bold_italic"] = font_file
                 assigned = True
-                log_message(f"Found Bold Italic: {font_file.name}", verbose=verbose)
+                log_message(f"Found bold-italic: {font_file.name}", verbose=verbose)
         if assigned:
             identified_files.add(font_file)
 
@@ -164,12 +164,12 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
             if not font_variants["bold"]:
                 font_variants["bold"] = font_file
                 assigned = True
-                log_message(f"Found Bold: {font_file.name}", verbose=verbose)
+                log_message(f"Found bold: {font_file.name}", verbose=verbose)
         elif is_italic and not is_bold:
             if not font_variants["italic"]:
                 font_variants["italic"] = font_file
                 assigned = True
-                log_message(f"Found Italic: {font_file.name}", verbose=verbose)
+                log_message(f"Found italic: {font_file.name}", verbose=verbose)
         if assigned:
             identified_files.add(font_file)
 
@@ -186,7 +186,7 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
             if not font_variants["regular"]:
                 font_variants["regular"] = font_file
                 assigned = True
-                log_message(f"Found Regular (explicit): {font_file.name}", verbose=verbose)
+                log_message(f"Found regular: {font_file.name}", verbose=verbose)
         if assigned:
             identified_files.add(font_file)
 
@@ -220,7 +220,7 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
                 if not is_likely_specific:
                     font_variants["regular"] = font_file
                     identified_files.add(font_file)
-                    log_message(f"Inferred Regular (no keywords): {font_file.name}", verbose=verbose)
+                    log_message(f"Inferred regular: {font_file.name}", verbose=verbose)
                     break
 
     # Pass 5: Fallback regular
@@ -230,7 +230,7 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
             font_variants["regular"] = first_available
             if first_available not in identified_files:
                 identified_files.add(first_available)
-            log_message(f"Fallback Regular (first unidentified): {first_available.name}", verbose=verbose)
+            log_message(f"Fallback regular: {first_available.name}", verbose=verbose)
 
     # Pass 6: Final fallback
     if not font_variants["regular"]:
@@ -244,23 +244,19 @@ def _find_font_variants(font_dir: str, verbose: bool = False) -> Dict[str, Optio
         )
         if backup_regular:
             font_variants["regular"] = backup_regular
-            log_message(f"Fallback Regular (using existing variant): {backup_regular.name}", verbose=verbose)
+            log_message(f"Fallback regular: {backup_regular.name}", verbose=verbose)
         elif font_files:
             font_variants["regular"] = font_files[0]
-            log_message(f"Fallback Regular (absolute first file): {font_files[0].name}", verbose=verbose)
+            log_message(f"Fallback regular: {font_files[0].name}", verbose=verbose)
 
     if not font_variants["regular"]:
         log_message(
-            (
-                f"CRITICAL: Could not identify or fallback to any regular font file in '{resolved_dir}'. "
-                "Rendering will likely fail."
-            ),
+            f"CRITICAL: No regular font found in {os.path.basename(resolved_dir)} - rendering will fail",
             always_print=True,
         )
     else:
-        log_message(f"Final Font Variants Found in {resolved_dir}:", verbose=verbose)
-        for style, path in font_variants.items():
-            log_message(f"  - {style}: {path.name if path else 'None'}", verbose=verbose)
+        found_variants = [f"{style}: {path.name}" for style, path in font_variants.items() if path]
+        log_message(f"Font variants: {', '.join(found_variants)}", verbose=verbose)
 
     _font_variants_cache[resolved_dir] = font_variants
     return font_variants
@@ -348,7 +344,7 @@ def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia
                 font_data = f.read()
             _font_data_cache.put(font_path, font_data)
         except Exception as e:
-            log_message(f"ERROR: Failed to read font file {font_path}: {e}", always_print=True)
+            log_message(f"Font file read error: {e}", always_print=True)
             return None, None, None
 
     typeface = _typeface_cache.get(font_path)
@@ -356,7 +352,7 @@ def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia
         skia_data = skia.Data.MakeWithoutCopy(font_data)
         typeface = skia.Typeface.MakeFromData(skia_data)
         if typeface is None:
-            log_message(f"ERROR: Skia could not load typeface from {font_path}", always_print=True)
+            log_message(f"Skia typeface load failed: {os.path.basename(font_path)}", always_print=True)
             if font_path in _font_data_cache:
                 del _font_data_cache[font_path]
             return None, None, None
@@ -368,7 +364,7 @@ def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia
             hb_face = hb.Face(font_data)
             _hb_face_cache.put(font_path, hb_face)
         except Exception as e:
-            log_message(f"ERROR: HarfBuzz could not load face from {font_path}: {e}", always_print=True)
+            log_message(f"HarfBuzz face load failed: {os.path.basename(font_path)}: {e}", always_print=True)
             if font_path in _typeface_cache:
                 del _typeface_cache[font_path]
             if font_path in _font_data_cache:
@@ -389,7 +385,7 @@ def _shape_line(
         hb.shape(hb_font, hb_buffer, features)
         return hb_buffer.glyph_infos, hb_buffer.glyph_positions
     except Exception as e:
-        log_message(f"ERROR: HarfBuzz shaping failed for line '{text_line[:30]}...': {e}", always_print=True)
+        log_message(f"HarfBuzz shaping failed: {e}", always_print=True)
         return [], []
 
 
@@ -541,14 +537,14 @@ def _pil_to_skia_surface(pil_image: Image.Image) -> Optional[skia.Surface]:
             pil_image = pil_image.convert("RGBA")
         skia_image = skia.Image.frombytes(pil_image.tobytes(), pil_image.size, skia.kRGBA_8888_ColorType)
         if skia_image is None:
-            log_message("Failed to create Skia image from PIL bytes", always_print=True)
+            log_message("PIL to Skia conversion failed", always_print=True)
             return None
         surface = skia.Surface(pil_image.width, pil_image.height)
         with surface as canvas:
             canvas.drawImage(skia_image, 0, 0)
         return surface
     except Exception as e:
-        log_message(f"Error converting PIL to Skia Surface: {e}", always_print=True)
+        log_message(f"PIL to Skia conversion error: {e}", always_print=True)
         return None
 
 
@@ -557,14 +553,14 @@ def _skia_surface_to_pil(surface: skia.Surface) -> Optional[Image.Image]:
     try:
         skia_image: Optional[skia.Image] = surface.makeImageSnapshot()
         if skia_image is None:
-            log_message("Failed to create Skia snapshot from surface", always_print=True)
+            log_message("Skia surface snapshot failed", always_print=True)
             return None
 
         skia_image = skia_image.convert(alphaType=skia.kUnpremul_AlphaType, colorType=skia.kRGBA_8888_ColorType)
         pil_image = Image.fromarray(skia_image)
         return pil_image
     except Exception as e:
-        log_message(f"Error converting Skia Surface to PIL: {e}", always_print=True)
+        log_message(f"Skia to PIL conversion error: {e}", always_print=True)
         return None
 
 
@@ -613,7 +609,7 @@ def _check_fit(
             scale_factor = font_size / regular_hb_face.upem
         else:
             if verbose:
-                log_message("Warning: Regular font has upem=0. Using scale factor 1.0.", verbose=verbose)
+                log_message("Font upem=0, using scale factor 1.0", verbose=verbose)
 
         hb_scale = int(scale_factor * (2**16))
         hb_font.scale = (hb_scale, hb_scale)
@@ -626,7 +622,7 @@ def _check_fit(
                 single_line_height = font_size * 1.2 * line_spacing_mult
         except Exception as e:
             if verbose:
-                log_message(f"Could not get font metrics at size {font_size}: {e}", verbose=verbose)
+                log_message(f"Font metrics unavailable at size {font_size}: {e}", verbose=verbose)
             single_line_height = font_size * 1.2 * line_spacing_mult
         tokens: List[Tuple[str, bool]] = _tokenize_styled_text(text)
         wrapped_lines_text: List[str] = []
@@ -741,18 +737,20 @@ def _check_fit(
             lines_data_at_size.append({"text_with_markers": line_text_with_markers, "width": width})
             current_max_line_width = max(current_max_line_width, width)
 
-        total_block_height = (-metrics.fAscent + metrics.fDescent) + (len(wrapped_lines_text) - 1) * single_line_height
+        total_block_height = (
+            (-metrics.fAscent + metrics.fDescent) + (len(wrapped_lines_text) - 1) * single_line_height
+        )
 
         if verbose:
             log_message(
-                f"Size {font_size}: Block W={current_max_line_width:.1f} (Max W={max_render_width:.1f}), "
-                f"H={total_block_height:.1f} (Max H={max_render_height:.1f})",
+                f"Size {font_size}: {current_max_line_width:.0f}x{total_block_height:.0f} "
+                f"(max {max_render_width:.0f}x{max_render_height:.0f})",
                 verbose=verbose,
             )
 
         if current_max_line_width <= max_render_width and total_block_height <= max_render_height:
             if verbose:
-                log_message(f"Size {font_size} fits!", verbose=verbose)
+                log_message(f"Size {font_size} fits", verbose=verbose)
             return {
                 'lines': lines_data_at_size,
                 'metrics': metrics,
@@ -764,7 +762,7 @@ def _check_fit(
 
     except Exception as e:
         if verbose:
-            log_message(f"Error in _check_fit for size {font_size}: {e}", verbose=verbose)
+            log_message(f"Fit check failed at size {font_size}: {e}", verbose=verbose)
         return None
 
 
@@ -800,7 +798,7 @@ def _calculate_centroid_expansion_box(
 
         if not np.any(safe_area_mask):
             log_message(
-                f"Padding of {padding_pixels:.1f}px resulted in an empty safe area. Calculation failed.",
+                f"Safe area calculation failed: padding {padding_pixels:.0f}px too large",
                 verbose=verbose,
                 always_print=True
             )
@@ -830,7 +828,7 @@ def _calculate_centroid_expansion_box(
 
         if max_safe_width <= 0 or max_safe_height <= 0:
             log_message(
-                f"Calculated dimensions invalid: width={max_safe_width}, height={max_safe_height}",
+                f"Invalid safe area dimensions: {max_safe_width:.0f}x{max_safe_height:.0f}",
                 verbose=verbose,
                 always_print=True
             )
@@ -846,24 +844,22 @@ def _calculate_centroid_expansion_box(
 
         if box_x >= 0 and box_y >= 0 and box_x + max_safe_width <= mask_w and box_y + max_safe_height <= mask_h:
             log_message(
-                f"Safe area calculated: centroid=({centroid_x:.1f}, {centroid_y:.1f}), "
-                f"box=({box_x}, {box_y}, {max_safe_width}, {max_safe_height})",
+                f"Safe area: {max_safe_width:.0f}x{max_safe_height:.0f} at ({centroid_x:.0f}, {centroid_y:.0f})",
                 verbose=verbose
             )
             return guaranteed_box, centroid
         else:
             log_message(
-                f"Validation failed: box=({box_x}, {box_y}, {max_safe_width}, {max_safe_height}) "
-                f"exceeds mask bounds=({mask_w}, {mask_h})",
+                f"Safe area validation failed: exceeds bounds {mask_w}x{mask_h}",
                 verbose=verbose,
                 always_print=True
             )
             return None
 
     except (cv2.error, ValueError, IndexError, ZeroDivisionError, OverflowError) as e:
-        log_message(f"Error calculating safe area: {e}", verbose=verbose, always_print=True)
+        log_message(f"Safe area calculation error: {e}", verbose=verbose, always_print=True)
     except Exception as e:
-        log_message(f"Unexpected error calculating safe area: {e}", verbose=verbose, always_print=True)
+        log_message(f"Safe area calculation failed: {e}", verbose=verbose, always_print=True)
 
     return None
 
@@ -925,7 +921,7 @@ def render_text_skia(
     bubble_height = y2 - y1
 
     if bubble_width <= 0 or bubble_height <= 0:
-        log_message(f"Invalid original bbox dimensions: {bbox}", always_print=True)
+        log_message(f"Invalid bbox dimensions: {bbox}", always_print=True)
         return pil_image, False
 
     clean_text = " ".join(text.split())
@@ -962,13 +958,13 @@ def render_text_skia(
     regular_font_path = font_variants.get("regular")
 
     if not regular_font_path:
-        log_message(f"CRITICAL: Regular font variant not found in '{font_dir}'. Cannot render text.", always_print=True)
+        log_message(f"CRITICAL: No regular font found in {os.path.basename(font_dir)}", always_print=True)
         return pil_image, False
 
     _, regular_typeface, regular_hb_face = _load_font_resources(str(regular_font_path))
 
     if not regular_typeface or not regular_hb_face:
-        log_message(f"CRITICAL: Failed to load regular font resources for {regular_font_path.name}.", always_print=True)
+        log_message(f"CRITICAL: Font load failed: {regular_font_path.name}", always_print=True)
         return pil_image, False
 
     available_features = get_font_features(str(regular_font_path))
@@ -977,7 +973,7 @@ def render_text_skia(
         "liga": use_ligatures and "liga" in available_features["GSUB"],
         "calt": "calt" in available_features["GSUB"],
     }
-    log_message(f"HarfBuzz features to enable: {features_to_enable}", verbose=verbose)
+    log_message(f"Font features: {[k for k, v in features_to_enable.items() if v]}", verbose=verbose)
 
     preload_hb_faces: Dict[str, Optional[hb.Face]] = {"regular": regular_hb_face}
     for style_key in ["italic", "bold", "bold_italic"]:
@@ -1001,7 +997,7 @@ def render_text_skia(
         if mid == 0:
             break
 
-        log_message(f"Trying font size: {mid}", verbose=verbose)
+        log_message(f"Testing size {mid}", verbose=verbose)
 
         fit_data = _check_fit(
             mid,
@@ -1032,7 +1028,7 @@ def render_text_skia(
 
     if best_fit_size == -1:
         log_message(
-            f"Could not fit text in bubble even at min size {min_font_size}: '{clean_text[:30]}...'", always_print=True
+            f"Text too large for bubble at min size {min_font_size}: '{clean_text[:30]}...'", always_print=True
         )
         return pil_image, False
     final_font_size = best_fit_size
@@ -1046,7 +1042,7 @@ def render_text_skia(
             line_data['segments'] = _parse_styled_segments(line_data['text_with_markers'])
 
     required_styles = {"regular"} | {style for _, style in _parse_styled_segments(clean_text)}
-    log_message(f"Required font styles: {required_styles}", verbose=verbose)
+    log_message(f"Required styles: {sorted(required_styles)}", verbose=verbose)
 
     loaded_typefaces: Dict[str, Optional[skia.Typeface]] = {"regular": regular_typeface}
     loaded_hb_faces: Dict[str, Optional[hb.Face]] = {"regular": regular_hb_face}
@@ -1055,28 +1051,25 @@ def render_text_skia(
         if style in required_styles:
             font_path = font_variants.get(style)
             if font_path:
-                log_message(f"Loading {style} font variant: {font_path.name}", verbose=verbose)
+                log_message(f"Loading {style}: {font_path.name}", verbose=verbose)
                 _, typeface, hb_face = _load_font_resources(str(font_path))
                 if typeface and hb_face:
                     loaded_typefaces[style] = typeface
                     loaded_hb_faces[style] = hb_face
                 else:
                     log_message(
-                        f"Warning: Failed to load {style} font variant {font_path.name}. Will fallback to regular.",
+                        f"Failed to load {style} variant, using regular",
                         verbose=verbose,
                     )
             else:
                 log_message(
-                    (
-                        f"Warning: {style} style requested by text, but font variant not found in {font_dir}. "
-                        "Will fallback to regular."
-                    ),
+                    f"Style '{style}' not found, using regular",
                     verbose=verbose,
                 )
 
     surface = _pil_to_skia_surface(pil_image)
     if surface is None:
-        log_message("Failed to create Skia surface for rendering.", always_print=True)
+        log_message("Skia surface creation failed", always_print=True)
         return pil_image, False
 
     hinting_map = {
@@ -1107,11 +1100,7 @@ def render_text_skia(
         first_baseline_y = target_center_y - (final_metrics.fAscent + final_metrics.fDescent) / 2.0
 
     log_message(
-        (
-            f"Rendering at size {final_font_size}. Centering target: "
-            f"({target_center_x:.1f}, {target_center_y:.1f}). Block Start X: {block_start_x:.1f}. "
-            f"First Baseline Y: {first_baseline_y:.1f}"
-        ),
+        f"Rendering at size {final_font_size}, center: ({target_center_x:.0f}, {target_center_y:.0f})",
         verbose=verbose,
     )
 
@@ -1124,7 +1113,7 @@ def render_text_skia(
             cursor_x = line_start_x
 
             segments = line_data.get('segments', [])
-            log_message(f"Line {i} Segments: {segments}", verbose=verbose)
+            log_message(f"Line {i}: {len(segments)} segments", verbose=verbose)
 
             for segment_text, style_name in segments:
                 typeface_to_use = None
@@ -1166,15 +1155,12 @@ def render_text_skia(
 
                 if fallback_style_used:
                     log_message(
-                        f"  Style '{style_name}' not found, falling back to '{fallback_style_used}'.", verbose=verbose
+                        f"Style '{style_name}' -> '{fallback_style_used}'", verbose=verbose
                     )
 
                 if not typeface_to_use or not hb_face_to_use:
                     log_message(
-                        (
-                            f"ERROR: Could not get any valid font resources (including regular) "
-                            f"for style '{style_name}'. Skipping segment."
-                        ),
+                        f"ERROR: No font resources for style '{style_name}' - skipping segment",
                         always_print=True,
                     )
                     continue
@@ -1195,11 +1181,11 @@ def render_text_skia(
                     infos, positions = _shape_line(segment_text, hb_font_segment, features_to_enable)
                     if not infos:
                         log_message(
-                            f"Warning: HarfBuzz returned no glyphs for segment '{segment_text}'", verbose=verbose
+                            f"No glyphs for segment '{segment_text}'", verbose=verbose
                         )
                         continue
                 except Exception as e:
-                    log_message(f"ERROR: HarfBuzz shaping failed for segment '{segment_text}': {e}", always_print=True)
+                    log_message(f"Shaping failed for '{segment_text}': {e}", always_print=True)
                     continue
 
                 builder = skia.TextBlobBuilder()
@@ -1224,17 +1210,14 @@ def render_text_skia(
                         segment_width = segment_cursor_x
                         cursor_x += segment_width
                         log_message(
-                            (
-                                f"  Rendered segment '{segment_text}' ({style_name}), width={segment_width:.1f}, "
-                                f"new cursor_x={cursor_x:.1f}"
-                            ),
+                            f"Rendered '{segment_text}' ({style_name}) width={segment_width:.0f}",
                             verbose=verbose,
                         )
                     else:
-                        log_message(f"Warning: Failed to build TextBlob for segment '{segment_text}'", verbose=verbose)
+                        log_message(f"TextBlob build failed for '{segment_text}'", verbose=verbose)
 
                 except Exception as e:
-                    log_message(f"ERROR during Skia rendering for segment '{segment_text}': {e}", always_print=True)
+                    log_message(f"Skia rendering error for '{segment_text}': {e}", always_print=True)
                     segment_width = segment_cursor_x
                     cursor_x += segment_width
 
@@ -1242,8 +1225,8 @@ def render_text_skia(
 
     final_pil_image = _skia_surface_to_pil(surface)
     if final_pil_image is None:
-        log_message("Failed to convert final Skia surface back to PIL.", always_print=True)
+        log_message("Final Skia to PIL conversion failed", always_print=True)
         return pil_image, False
 
-    log_message(f"Successfully rendered text at size {final_font_size}", verbose=verbose)
+    log_message(f"Rendered at size {final_font_size}", verbose=verbose)
     return final_pil_image, True

@@ -52,7 +52,7 @@ def _process_single_bubble(
         masked_pixels = img_gray[base_mask == 255]
         if masked_pixels.size == 0:
             log_message(
-                f"{'[SAM]' if is_sam else ''}Skipping detection {detection_bbox} due to empty mask after indexing.",
+                f"{'[SAM]' if is_sam else ''}Skipping detection {detection_bbox}: empty mask",
                 verbose=verbose,
             )
             return None, None
@@ -62,8 +62,8 @@ def _process_single_bubble(
         fill_color_bgr = (0, 0, 0) if is_black_bubble else (255, 255, 255)
 
         log_message(
-            f"{'[SAM]' if is_sam else ''}Detection {detection_bbox}: Mean={mean_pixel_value:.1f} -> "
-            f"{'Black' if is_black_bubble else 'White'} Bubble. Fill: {fill_color_bgr}",
+            f"{'[SAM]' if is_sam else ''}Detection {detection_bbox}: "
+            f"{'Black' if is_black_bubble else 'White'} bubble (mean={mean_pixel_value:.1f})",
             verbose=verbose,
         )
 
@@ -82,7 +82,7 @@ def _process_single_bubble(
                 roi_pixels_for_otsu, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
             )
             log_message(
-                f"{'[SAM]' if is_sam else ''}  - Otsu threshold determined: {thresh_val}",
+                f"{'[SAM]' if is_sam else ''}  Otsu threshold: {thresh_val}",
                 verbose=verbose
             )
             _, thresholded_roi = cv2.threshold(
@@ -119,14 +119,8 @@ def _process_single_bubble(
                 valid_contours.append(cnt)
 
         log_message(
-            f"{'[SAM]' if is_sam else ''}Detection {detection_bbox}: "
-            f"{'Validated reconstruction' if is_black_bubble else 'Validated reconstruction'} "
-            f"({'BLACK' if is_black_bubble else 'WHITE'}).",
+            f"{'[SAM]' if is_sam else ''}Detection {detection_bbox}: {len(valid_contours)} text fragments found",
             verbose=verbose,
-        )
-        log_message(
-            f"{'[SAM]' if is_sam else ''}  - Kept {len(valid_contours)} validated fragments.",
-            verbose=verbose
         )
 
         if valid_contours:
@@ -147,8 +141,9 @@ def _process_single_bubble(
 
     except Exception as e:
         log_message(
-            f"Warning: Failed to process {'SAM' if is_sam else 'YOLO'} mask for {detection_bbox}: {e}",
+            f"Failed to process {'SAM' if is_sam else 'YOLO'} mask for {detection_bbox}: {e}",
             always_print=True,
+            is_error=True,
         )
         return None, None
 
@@ -220,7 +215,7 @@ def clean_speech_bubbles(
                 )
             else:
                 if "mask_points" not in detection or not detection["mask_points"]:
-                    log_message(f"Skipping detection without mask points: {detection.get('bbox')}", verbose=verbose)
+                    log_message(f"Skipping detection {detection.get('bbox')}: no mask points", verbose=verbose)
                     continue
 
                 try:
@@ -233,7 +228,7 @@ def clean_speech_bubbles(
                         points_int = np.round(points).astype(int).reshape((-1, 1, 2))
                     else:
                         log_message(
-                            f"Unexpected mask points format for detection {detection.get('bbox')}. Skipping.",
+                            f"Skipping detection {detection.get('bbox')}: invalid mask format",
                             verbose=verbose,
                         )
                         continue
@@ -261,7 +256,7 @@ def clean_speech_bubbles(
                     "bbox": detection.get("bbox"),
                 })
                 log_message(
-                    f"Detection {detection.get('bbox')}: Stored final mask and color {fill_color_bgr}.",
+                    f"Detection {detection.get('bbox')}: processed successfully",
                     verbose=verbose,
                 )
 
