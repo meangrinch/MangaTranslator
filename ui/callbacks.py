@@ -299,6 +299,9 @@ def handle_translate_click(
         send_full_page_context_val,
         hyphenate_before_scaling_val,
         openrouter_reasoning_override_val,
+        hyphen_penalty_val,
+        hyphenation_min_word_length_val,
+        badness_exponent_val,
     ) = args
     """Callback for the 'Translate' button click."""
     start_time = time.time()
@@ -366,6 +369,9 @@ def handle_translate_click(
                 font_hinting=font_hinting,
                 use_ligatures=use_ligatures,
                 hyphenate_before_scaling=hyphenate_before_scaling_val,
+                hyphen_penalty=hyphen_penalty_val,
+                hyphenation_min_word_length=hyphenation_min_word_length_val,
+                badness_exponent=badness_exponent_val,
             ),
             output=UIOutputSettings(
                 output_format=output_format,
@@ -484,6 +490,9 @@ def handle_batch_click(
         batch_send_full_page_context_val,
         hyphenate_before_scaling_val,
         openrouter_reasoning_override_val,
+        hyphen_penalty_val,
+        hyphenation_min_word_length_val,
+        badness_exponent_val,
     ) = args
     """Callback for the 'Start Batch Translating' button click."""
     progress(0, desc="Starting batch process...")
@@ -553,6 +562,9 @@ def handle_batch_click(
                 font_hinting=font_hinting,
                 use_ligatures=use_ligatures,
                 hyphenate_before_scaling=hyphenate_before_scaling_val,
+                hyphen_penalty=hyphen_penalty_val,
+                hyphenation_min_word_length=hyphenation_min_word_length_val,
+                badness_exponent=badness_exponent_val,
             ),
             output=UIOutputSettings(
                 output_format=output_format,
@@ -673,6 +685,9 @@ def handle_save_config_click(*args: Any) -> str:
         send_full_page_context_val,
         hyphenate_before_scaling_val,
         openrouter_reasoning_override_val,
+        hyphen_penalty_val,
+        hyphenation_min_word_length_val,
+        badness_exponent_val,
     ) = args
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
@@ -709,6 +724,9 @@ def handle_save_config_click(*args: Any) -> str:
             font_hinting=hint,
             use_ligatures=liga,
             hyphenate_before_scaling=hyphenate_before_scaling_val,
+            hyphen_penalty=hyphen_penalty_val,
+            hyphenation_min_word_length=hyphenation_min_word_length_val,
+            badness_exponent=badness_exponent_val,
         ),
         output=UIOutputSettings(
             output_format=out_fmt,

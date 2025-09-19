@@ -83,6 +83,9 @@ DEFAULT_SETTINGS = {
     "font_hinting": "none",
     "use_ligatures": False,
     "hyphenate_before_scaling": True,
+    "hyphen_penalty": 1000.0,
+    "hyphenation_min_word_length": 8,
+    "badness_exponent": 3.0,
     "font_pack": None,
     "verbose": False,
     "jpeg_quality": 95,
@@ -137,6 +140,9 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "font_hinting",
     "use_ligatures",
     "hyphenate_before_scaling",
+    "hyphen_penalty",
+    "hyphenation_min_word_length",
+    "badness_exponent",
 
     # Models / Detection
     "confidence",

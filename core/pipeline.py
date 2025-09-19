@@ -338,6 +338,9 @@ def translate_and_render(
                             font_hinting=config.rendering.font_hinting,
                             use_ligatures=config.rendering.use_ligatures,
                             hyphenate_before_scaling=config.rendering.hyphenate_before_scaling,
+                            hyphen_penalty=config.rendering.hyphen_penalty,
+                            hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
+                            badness_exponent=config.rendering.badness_exponent,
                             verbose=verbose,
                         )
 
@@ -639,6 +642,24 @@ def main():
         help="Disable hyphenation of long words before reducing font size.",
     )
     parser.set_defaults(hyphenate_before_scaling=True)
+    parser.add_argument(
+        "--hyphen-penalty",
+        type=float,
+        default=1000.0,
+        help="Penalty for hyphenated line breaks in text layout (100-2000). Increase to discourage hyphenation.",
+    )
+    parser.add_argument(
+        "--hyphenation-min-word-length",
+        type=int,
+        default=8,
+        help="Minimum word length for hyphenation (6-10).",
+    )
+    parser.add_argument(
+        "--badness-exponent",
+        type=float,
+        default=3.0,
+        help="Exponent for line badness calculation in text layout (2-4). Increase to avoid loose lines.",
+    )
     # Output args
     parser.add_argument("--jpeg-quality", type=int, default=95, help="JPEG compression quality (1-100)")
     parser.add_argument("--png-compression", type=int, default=6, help="PNG compression level (0-9)")
@@ -759,6 +780,9 @@ def main():
             min_font_size=args.min_font_size,
             line_spacing=args.line_spacing,
             hyphenate_before_scaling=args.hyphenate_before_scaling,
+            hyphen_penalty=args.hyphen_penalty,
+            hyphenation_min_word_length=args.hyphenation_min_word_length,
+            badness_exponent=args.badness_exponent,
         ),
         output=OutputConfig(
             jpeg_quality=args.jpeg_quality, png_compression=args.png_compression, image_mode=args.image_mode

@@ -69,6 +69,9 @@ class UIRenderingSettings:
     font_hinting: str = "none"
     use_ligatures: bool = False
     hyphenate_before_scaling: bool = True
+    hyphen_penalty: float = 1000.0
+    hyphenation_min_word_length: int = 8
+    badness_exponent: float = 3.0
 
 
 @dataclass
@@ -142,6 +145,9 @@ class UIConfigState:
             "font_hinting": self.rendering.font_hinting,
             "use_ligatures": self.rendering.use_ligatures,
             "hyphenate_before_scaling": self.rendering.hyphenate_before_scaling,
+            "hyphen_penalty": self.rendering.hyphen_penalty,
+            "hyphenation_min_word_length": self.rendering.hyphenation_min_word_length,
+            "badness_exponent": self.rendering.badness_exponent,
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
             "png_compression": self.output.png_compression,
@@ -207,6 +213,11 @@ class UIConfigState:
                     "hyphenate_before_scaling",
                     defaults.get("hyphenate_before_scaling", True),
                 ),
+                hyphen_penalty=data.get("hyphen_penalty", defaults.get("hyphen_penalty", 1000.0)),
+                hyphenation_min_word_length=data.get(
+                    "hyphenation_min_word_length", defaults.get("hyphenation_min_word_length", 8)
+                ),
+                badness_exponent=data.get("badness_exponent", defaults.get("badness_exponent", 3.0)),
             ),
             output=UIOutputSettings(
                 output_format=data.get("output_format", defaults["output_format"]),
@@ -284,6 +295,9 @@ def map_ui_to_backend_config(
         font_hinting=ui_state.rendering.font_hinting,
         use_ligatures=ui_state.rendering.use_ligatures,
         hyphenate_before_scaling=ui_state.rendering.hyphenate_before_scaling,
+        hyphen_penalty=ui_state.rendering.hyphen_penalty,
+        hyphenation_min_word_length=ui_state.rendering.hyphenation_min_word_length,
+        badness_exponent=ui_state.rendering.badness_exponent,
     )
 
     output_cfg = OutputConfig(

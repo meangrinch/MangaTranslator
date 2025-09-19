@@ -568,10 +568,37 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 info="Enables common letter combinations to be rendered as single glyphs "
                                      "(must be supported by the font).",
                             )
+                            gr.Markdown("### Text Layout")
                             hyphenate_before_scaling = gr.Checkbox(
                                 value=saved_settings.get("hyphenate_before_scaling", True),
                                 label="Hyphenate Long Words",
                                 info="Try inserting hyphens when wrapping before reducing font size.",
+                            )
+                            hyphen_penalty = gr.Slider(
+                                100,
+                                2000,
+                                value=saved_settings.get("hyphen_penalty", 1000.0),
+                                step=100,
+                                label="Hyphen Penalty",
+                                info="Penalty for hyphenated line breaks in text layout (100-2000). "
+                                     "Increase to discourage hyphenation.",
+                            )
+                            hyphenation_min_word_length = gr.Slider(
+                                6,
+                                10,
+                                value=saved_settings.get("hyphenation_min_word_length", 8),
+                                step=1,
+                                label="Min Word Length for Hyphenation",
+                                info="Minimum word length required for hyphenation (6-10).",
+                            )
+                            badness_exponent = gr.Slider(
+                                2.0,
+                                4.0,
+                                value=saved_settings.get("badness_exponent", 3.0),
+                                step=0.5,
+                                label="Badness Exponent",
+                                info="Exponent for line badness calculation in text layout (2-4). "
+                                     "Increase to avoid loose lines.",
                             )
                         setting_groups.append(group_rendering)
 
@@ -664,6 +691,9 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             send_full_page_context,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
+            hyphen_penalty,
+            hyphenation_min_word_length,
+            badness_exponent,
         ]
 
         reset_outputs = [
@@ -749,6 +779,9 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             send_full_page_context,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
+            hyphen_penalty,
+            hyphenation_min_word_length,
+            badness_exponent,
         ]
 
         batch_inputs = [
@@ -790,6 +823,9 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             send_full_page_context,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
+            hyphen_penalty,
+            hyphenation_min_word_length,
+            badness_exponent,
         ]
 
         # Config Tab Navigation & Updates

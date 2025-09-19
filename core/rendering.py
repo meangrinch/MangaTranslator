@@ -621,6 +621,7 @@ def _check_fit(
     features_to_enable: Dict[str, bool],
     line_spacing_mult: float,
     hyphenate_before_scaling: bool,
+    hyphen_penalty: float,
     hyphenation_min_word_length: int,
     badness_exponent: float,
     word_width_cache: Optional[Dict[Tuple[str, int], float]] = None,
@@ -780,6 +781,7 @@ def _check_fit(
             features_to_enable,
             word_width_cache,
             badness_exponent,
+            hyphen_penalty,
         ) or []
 
         if not wrapped_lines_text:
@@ -947,6 +949,7 @@ def render_text_skia(
     font_hinting: str = "none",
     use_ligatures: bool = False,
     hyphenate_before_scaling: bool = True,
+    hyphen_penalty: float = 1000.0,
     hyphenation_min_word_length: int = 8,
     badness_exponent: float = 3.0,
     verbose: bool = False,
@@ -1086,6 +1089,7 @@ def render_text_skia(
             features_to_enable,
             line_spacing_mult,
             hyphenate_before_scaling,
+            hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
             word_width_cache,

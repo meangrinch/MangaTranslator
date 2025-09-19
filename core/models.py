@@ -60,6 +60,9 @@ class RenderingConfig:
     font_hinting: str = "none"
     use_ligatures: bool = False
     hyphenate_before_scaling: bool = True
+    hyphen_penalty: float = 1000.0
+    hyphenation_min_word_length: int = 8
+    badness_exponent: float = 3.0
 
 
 @dataclass
