@@ -576,11 +576,7 @@ Return ONLY the following numbered lines, one per bubble:
 
             translation_prompt = f"""{preface}
 Translate the following extracted speech-bubble texts (numbered 1 to {num_bubbles}) {from_part}. Choose wording that preserves meaning, tone, and naturalness in the target language.
-Apply styling when appropriate:
-- Italic (`*text*`): thoughts, flashbacks, distant sounds, device-mediated dialogue.
-- Bold (`**text**`): SFX, shouting, timestamps, emphatic words.
-- Bold Italic (`***text***`): very loud SFX/dialogue in flashbacks or via devices.
-- Use plain text otherwise; style only the necessary words (e.g., He said **"Stop!"**).
+Apply the style markers as defined in your instructions.
 
 {header_label}
 ---
@@ -664,11 +660,7 @@ For each speech bubble image:
 1) Extract {lang_part}. Collapse multi-line text into one line with spaces.
    - If a bubble has no legible text, use [NO TEXT]. If the text is unreadable, use [OCR FAILED].
 2) Translate {from_part} with wording that preserves meaning, tone, and naturalness.
-3) Apply styling when appropriate:
-   - Italic (`*text*`): thoughts, flashbacks, distant sounds, device-mediated dialogue.
-   - Bold (`**text**`): SFX, shouting, timestamps, emphatic words.
-   - Bold Italic (`***text***`): very loud SFX/dialogue in flashbacks or via devices.
-   - Use plain text otherwise; style only the necessary words (e.g., He said **"Stop!"**).
+3) Apply the style markers as defined in your instructions.
 
 Return ONLY the following numbered lines, one per bubble:
 1: <translation>
