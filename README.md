@@ -6,7 +6,7 @@ Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs
 - Speech bubble detection (YOLOv8)
 - Text cleaning (removes original bubble text)
 - LLM-powered translation (one-step or two-step)
-- Text rendering (with custom font pack))
+- Text rendering (with custom font pack)
 - Two interfaces: Web UI (Gradio) and CLI
 
 ## Requirements
@@ -127,12 +127,12 @@ python main.py --help
 #### Content-Related
 - Wrong reading order: Set correct "Reading Direction" (rtl for manga, ltr for comics)
 - Uncleaned text remaining: Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
-- Outlines get eaten during cleaning: Increase "Shrink Threshold ROI" (e.g., 6–8) to preserve borders better
+- Outlines get eaten during cleaning: Increase "Shrink Threshold ROI" (e.g., 6–8)
 
 #### Translation-Related
 - Poor translation quality: Try "two-step" translation mode for less-capable LLMs
 - LLM refusals: Disable "Send Full Page to LLM" in Config → Translation
-- Inconsistent translations: Adjust the LLM parameters (e.g., "Temperature") for more creative/deterministic output
+- Inconsistent translations: Adjust LLM parameters (e.g., "Temperature") for more creative/deterministic output
 
 #### Rendering-Related
 - Text too large/small: Adjust "Max Font Size" and "Min Font Size" ranges
