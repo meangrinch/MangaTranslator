@@ -229,6 +229,11 @@ def translate_and_render(
                         f"{config.translation.input_language} → {config.translation.output_language}",
                         always_print=True,
                     )
+
+                    provider_info = f"{config.translation.provider}"
+                    if config.translation.model_name:
+                        provider_info += f" ({config.translation.model_name})"
+                    log_message(f"LLM: {provider_info}", always_print=True)
                     try:
                         translated_texts = call_translation_api_batch(
                             config=config.translation,
@@ -252,6 +257,7 @@ def translate_and_render(
                     if "bbox" in info and "color" in info and "mask" in info
                 }
                 log_message("Rendering translations...", verbose=verbose)
+                log_message(f"Render: Applying {len(translated_texts)} translations to image", always_print=True)
                 if len(translated_texts) == len(sorted_bubble_data):
                     for i, bubble in enumerate(sorted_bubble_data):
                         bubble["translation"] = translated_texts[i]

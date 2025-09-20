@@ -522,6 +522,7 @@ Return ONLY the following numbered lines, one per bubble:
 {num_bubbles}: <text>"""  # noqa
 
             log_message("Starting OCR step", verbose=debug)
+            log_message(f"OCR: Extracting text from {num_bubbles} bubbles", always_print=True)
             ocr_parts = []
             for img_b64 in images_b64:
                 ocr_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
@@ -537,16 +538,19 @@ Return ONLY the following numbered lines, one per bubble:
             extracted_texts = _parse_llm_response(ocr_response_text, num_bubbles, provider + "-OCR", debug)
 
             if extracted_texts is None:
-                log_message("OCR API call failed", always_print=True)
+                log_message(f"OCR failed: {provider} API call returned no response", always_print=True)
                 return [f"[{provider}: OCR failed]"] * num_bubbles
 
             is_ocr_failed = all(f"[{provider}-OCR:" in text for text in extracted_texts)
             if is_ocr_failed:
                 log_message("OCR returned only placeholders", verbose=debug)
                 return extracted_texts
+            else:
+                pass
 
             # --- Step 2: Translation & Styling ---
             log_message("Starting translation step", verbose=debug)
+            log_message(f"Translate: Processing {len(extracted_texts)} extracted texts", always_print=True)
             formatted_texts_for_prompt = []
             ocr_failed_indices = set()
             for i, text in enumerate(extracted_texts):
@@ -608,7 +612,7 @@ If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged f
             )
 
             if final_translations is None:
-                log_message("Translation API call failed", always_print=True)
+                log_message(f"Translation failed: {provider} API call returned no response", always_print=True)
                 combined_results = []
                 for i in range(num_bubbles):
                     if i in ocr_failed_indices:
@@ -628,11 +632,13 @@ If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged f
 
                 else:
                     combined_results.append(final_translations[i])
+
             return combined_results
 
         elif translation_mode == "one-step":
             # --- One-Step Logic ---
             log_message("Starting one-step translation", verbose=debug)
+            log_message(f"One-step: OCR + Translate {num_bubbles} bubbles", always_print=True)
             # Build context-aware prompt pieces
             lang_part = (
                 f"the original {input_language} text"
@@ -681,7 +687,7 @@ If the bubble is [NO TEXT] or [OCR FAILED], output that exact tag unchanged for 
             translations = _parse_llm_response(response_text, num_bubbles, provider, debug)
 
             if translations is None:
-                log_message("One-step API call failed", always_print=True)
+                log_message(f"One-step translation failed: {provider} API call returned no response", always_print=True)
                 return [f"[{provider}: API failed]"] * num_bubbles
             else:
                 return translations
