@@ -9,7 +9,7 @@ from utils.logging import log_message
 CONFIG_FILE = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "MangaTranslator" / "config.json"
 
 PROVIDER_MODELS: Dict[str, List[str]] = {
-    "Gemini": [
+    "Google": [
         "gemini-2.5-pro",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
@@ -55,17 +55,17 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
 }
 
 DEFAULT_SETTINGS = {
-    "provider": "Gemini",
-    "gemini_api_key": "",
+    "provider": "Google",
+    "google_api_key": "",
     "openai_api_key": "",
     "anthropic_api_key": "",
     "xai_api_key": "",
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:11434/v1",
     "openai_compatible_api_key": "",
-    "model_name": PROVIDER_MODELS["Gemini"][0] if PROVIDER_MODELS["Gemini"] else None,  # Default active model
+    "model_name": PROVIDER_MODELS["Google"][0] if PROVIDER_MODELS["Google"] else None,  # Default active model
     "provider_models": {
-        "Gemini": PROVIDER_MODELS["Gemini"][0] if PROVIDER_MODELS["Gemini"] else None,
+        "Google": PROVIDER_MODELS["Google"][0] if PROVIDER_MODELS["Google"] else None,
         "OpenAI": PROVIDER_MODELS["OpenAI"][0] if PROVIDER_MODELS["OpenAI"] else None,
         "Anthropic": PROVIDER_MODELS["Anthropic"][0] if PROVIDER_MODELS["Anthropic"] else None,
         "xAI": PROVIDER_MODELS["xAI"][0] if PROVIDER_MODELS["xAI"] else None,
@@ -120,7 +120,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "provider_models",
     "provider",
     "model_name",
-    "gemini_api_key",
+    "google_api_key",
     "openai_api_key",
     "anthropic_api_key",
     "openrouter_api_key",
@@ -295,6 +295,30 @@ def get_saved_settings() -> Dict[str, Any]:
                 log_message("Warning: 'provider_models' in config is not a dictionary. Resetting.", always_print=True)
                 settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
 
+            # Back-compat: migrate older configs
+            try:
+                # 1) provider string: Gemini -> Google
+                if saved_config.get("provider") == "Gemini":
+                    settings["provider"] = "Google"
+
+                # 2) API key: 'gemini_api_key' -> 'google_api_key'
+                if ("google_api_key" in settings and not settings["google_api_key"]) and (
+                    "gemini_api_key" in saved_config and saved_config.get("gemini_api_key")
+                ):
+                    settings["google_api_key"] = saved_config.get("gemini_api_key", "")
+
+                # 3) provider_models: move key 'Gemini' -> 'Google' if present
+                pm = settings.get("provider_models") or {}
+                if isinstance(pm, dict) and "Gemini" in pm:
+                    pm.setdefault("Google", pm.get("Gemini"))
+                    try:
+                        del pm["Gemini"]
+                    except Exception:
+                        pass
+                    settings["provider_models"] = pm
+            except Exception:
+                pass
+
             loaded_provider = settings.get("provider", DEFAULT_SETTINGS["provider"])
             provider_models_dict = settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
             saved_model_for_provider = provider_models_dict.get(loaded_provider)
@@ -359,7 +383,7 @@ def reset_to_defaults() -> Dict[str, Any]:
             pass
 
         preserved_keys = [
-            "gemini_api_key",
+            "google_api_key",
             "openai_api_key",
             "anthropic_api_key",
             "openrouter_api_key",

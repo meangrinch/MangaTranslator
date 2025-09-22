@@ -35,8 +35,8 @@ class UICleaningSettings:
 class UITranslationProviderSettings:
     """UI state for translation provider settings."""
 
-    provider: str = "Gemini"
-    gemini_api_key: Optional[str] = ""
+    provider: str = "Google"
+    google_api_key: Optional[str] = ""
     openai_api_key: Optional[str] = ""
     anthropic_api_key: Optional[str] = ""
     xai_api_key: Optional[str] = ""
@@ -126,7 +126,7 @@ class UIConfigState:
             "use_otsu_threshold": self.cleaning.use_otsu_threshold,
             "roi_shrink_px": self.cleaning.roi_shrink_px,
             "provider": self.provider_settings.provider,
-            "gemini_api_key": self.provider_settings.gemini_api_key,
+            "google_api_key": self.provider_settings.google_api_key,
             "openai_api_key": self.provider_settings.openai_api_key,
             "anthropic_api_key": self.provider_settings.anthropic_api_key,
             "xai_api_key": self.provider_settings.xai_api_key,
@@ -188,7 +188,7 @@ class UIConfigState:
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=data.get("provider", defaults["provider"]),
-                gemini_api_key=data.get("gemini_api_key", defaults["gemini_api_key"]),
+                google_api_key=data.get("google_api_key", defaults.get("google_api_key", "")),
                 openai_api_key=data.get("openai_api_key", defaults["openai_api_key"]),
                 anthropic_api_key=data.get("anthropic_api_key", defaults["anthropic_api_key"]),
                 xai_api_key=data.get("xai_api_key", defaults["xai_api_key"]),
@@ -273,7 +273,7 @@ def map_ui_to_backend_config(
 
     translation_cfg = TranslationConfig(
         provider=ui_state.provider_settings.provider,
-        gemini_api_key=ui_state.provider_settings.gemini_api_key or "",
+        google_api_key=ui_state.provider_settings.google_api_key or "",
         openai_api_key=ui_state.provider_settings.openai_api_key or "",
         anthropic_api_key=ui_state.provider_settings.anthropic_api_key or "",
         xai_api_key=ui_state.provider_settings.xai_api_key or "",

@@ -57,7 +57,7 @@ def _format_single_success_message(
     provider = backend_config.translation.provider
     model_name = backend_config.translation.model_name
     thinking_status_str = ""
-    if provider == "Gemini" and model_name and "gemini-2.5-flash" in model_name:
+    if provider == "Google" and model_name and "gemini-2.5-flash" in model_name:
         thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
     elif provider == "Anthropic" and model_name:
         lm = model_name.lower()
@@ -74,7 +74,7 @@ def _format_single_success_message(
 
     llm_params_str = f"• LLM Params: Temp={temp_val:.2f}, Top-P={top_p_val:.2f}"
     param_notes = ""
-    if provider == "Gemini":
+    if provider == "Google":
         llm_params_str += f", Top-K={top_k_val}"
     elif provider == "Anthropic":
         llm_params_str += f", Top-K={top_k_val}"
@@ -155,7 +155,7 @@ def _format_batch_success_message(
     provider = backend_config.translation.provider
     model_name = backend_config.translation.model_name
     thinking_status_str = ""
-    if provider == "Gemini" and model_name and "gemini-2.5-flash" in model_name:
+    if provider == "Google" and model_name and "gemini-2.5-flash" in model_name:
         thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
     elif provider == "Anthropic" and model_name:
         lm = model_name.lower()
@@ -172,7 +172,7 @@ def _format_batch_success_message(
 
     llm_params_str = f"• LLM Params: Temp={temp_val:.2f}, Top-P={top_p_val:.2f}"
     param_notes = ""
-    if provider == "Gemini":
+    if provider == "Google":
         llm_params_str += f", Top-K={top_k_val}"
     elif provider == "Anthropic":
         llm_params_str += f", Top-K={top_k_val}"
@@ -268,7 +268,7 @@ def handle_translate_click(
         use_otsu_threshold,
         roi_shrink_px,
         provider_selector,
-        gemini_api_key,
+        google_api_key,
         openai_api_key,
         anthropic_api_key,
         xai_api_key,
@@ -314,8 +314,8 @@ def handle_translate_click(
             raise gr.Error(f"{ERROR_PREFIX}{img_msg}")
 
         api_key_to_validate = ""
-        if provider_selector == "Gemini":
-            api_key_to_validate = gemini_api_key
+        if provider_selector == "Google":
+            api_key_to_validate = google_api_key
         elif provider_selector == "OpenAI":
             api_key_to_validate = openai_api_key
         elif provider_selector == "Anthropic":
@@ -349,7 +349,7 @@ def handle_translate_click(
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=provider_selector,
-                gemini_api_key=gemini_api_key,
+                google_api_key=google_api_key,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
                 xai_api_key=xai_api_key,
@@ -465,7 +465,7 @@ def handle_batch_click(
         use_otsu_threshold,
         roi_shrink_px,
         provider_selector,
-        gemini_api_key,
+        google_api_key,
         openai_api_key,
         anthropic_api_key,
         xai_api_key,
@@ -513,8 +513,8 @@ def handle_batch_click(
             raise gr.Error(f"{ERROR_PREFIX}Invalid input format. Expected a list of files.")
 
         api_key_to_validate = ""
-        if provider_selector == "Gemini":
-            api_key_to_validate = gemini_api_key
+        if provider_selector == "Google":
+            api_key_to_validate = google_api_key
         elif provider_selector == "OpenAI":
             api_key_to_validate = openai_api_key
         elif provider_selector == "Anthropic":
@@ -548,7 +548,7 @@ def handle_batch_click(
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=provider_selector,
-                gemini_api_key=gemini_api_key,
+                google_api_key=google_api_key,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
                 xai_api_key=xai_api_key,
@@ -714,7 +714,7 @@ def handle_save_config_click(*args: Any) -> str:
         ),
         provider_settings=UITranslationProviderSettings(
             provider=prov,
-            gemini_api_key=gem_key,
+            google_api_key=gem_key,
             openai_api_key=oai_key,
             anthropic_api_key=ant_key,
             xai_api_key=xai_key,
@@ -799,7 +799,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     else:
         default_models_choices = settings_manager.PROVIDER_MODELS.get(default_provider, [])
 
-    gemini_visible = default_provider == "Gemini"
+    gemini_visible = default_provider == "Google"
     openai_visible = default_provider == "OpenAI"
     anthropic_visible = default_provider == "Anthropic"
     xai_visible = default_provider == "xAI"
@@ -813,7 +813,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     top_k_interactive = top_k_update.get("interactive", True)
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
     enable_thinking_visible = (
-        default_provider == "Gemini" and "gemini-2.5-flash" in default_model_name
+        default_provider == "Google" and "gemini-2.5-flash" in default_model_name
     )
     reasoning_visible = default_provider == "OpenAI"
 
@@ -823,7 +823,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
         default_ui_state.llm_settings.reading_direction,
         default_ui_state.cleaning.use_otsu_threshold,
         gr.update(value=default_provider),
-        gr.update(value=default_ui_state.provider_settings.gemini_api_key, visible=gemini_visible),
+        gr.update(value=default_ui_state.provider_settings.google_api_key, visible=gemini_visible),
         gr.update(value=default_ui_state.provider_settings.openai_api_key, visible=openai_visible),
         gr.update(value=default_ui_state.provider_settings.anthropic_api_key, visible=anthropic_visible),
         gr.update(value=default_ui_state.provider_settings.xai_api_key, visible=xai_visible),

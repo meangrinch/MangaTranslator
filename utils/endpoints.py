@@ -19,11 +19,11 @@ def call_gemini_endpoint(
     base_delay: float = 1.0,
 ) -> Optional[str]:
     """
-    Calls the Gemini API endpoint with the provided data and handles retries.
+    Calls the Google API endpoint with the provided data and handles retries.
 
     Args:
-        api_key (str): Gemini API key.
-        model_name (str): Gemini model to use.
+        api_key (str): Google API key.
+        model_name (str): Google model to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, etc.).
         debug (bool): Whether to print debugging information.
@@ -41,7 +41,7 @@ def call_gemini_endpoint(
                       connection errors, or response processing fails.
     """
     if not api_key:
-        raise ValueError("API key is required for Gemini endpoint")
+        raise ValueError("API key is required for Google endpoint")
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
 
@@ -63,12 +63,12 @@ def call_gemini_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)  # Exponential backoff, max 16s
         try:
-            log_message(f"Gemini API request (attempt {attempt + 1}/{max_retries + 1})", verbose=debug)
+            log_message(f"Google API request (attempt {attempt + 1}/{max_retries + 1})", verbose=debug)
 
             response = requests.post(url, json=payload, timeout=timeout)
             response.raise_for_status()
 
-            log_message("Processing Gemini response", verbose=debug)
+            log_message("Processing Google response", verbose=debug)
             try:
                 result = response.json()
                 prompt_feedback = result.get("promptFeedback")
@@ -93,14 +93,14 @@ def call_gemini_endpoint(
                         return ""
 
                 else:
-                    log_message("No candidates in Gemini response", always_print=True)
+                    log_message("No candidates in Google response", always_print=True)
                     if prompt_feedback and prompt_feedback.get("blockReason"):
                         block_reason = prompt_feedback.get("blockReason")
                         return None
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(f"Error processing successful Gemini API response: {str(e)}") from e
+                raise RuntimeError(f"Error processing successful Google API response: {str(e)}") from e
 
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
@@ -115,7 +115,7 @@ def call_gemini_endpoint(
                 if status_code == 429 and attempt == max_retries:
                     error_reason = f"Rate limited after {max_retries + 1} attempts: {error_text}"
 
-                raise RuntimeError(f"Gemini API HTTP Error: {error_reason}") from e
+                raise RuntimeError(f"Google API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
@@ -123,9 +123,9 @@ def call_gemini_endpoint(
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(f"Gemini API Connection Error after retries: {str(e)}") from e
+                raise RuntimeError(f"Google API Connection Error after retries: {str(e)}") from e
 
-    raise RuntimeError(f"Failed to get response from Gemini API after {max_retries + 1} attempts.")
+    raise RuntimeError(f"Failed to get response from Google API after {max_retries + 1} attempts.")
 
 
 def call_openai_endpoint(
@@ -729,7 +729,7 @@ def call_openrouter_endpoint(
         if effort in ["low", "medium", "high", "minimal"]:
             reasoning_config["effort"] = effort
 
-    # Check for enable thinking (Gemini/Anthropic/Grok 4 Fast models)
+    # Check for enable thinking (Google/Anthropic/xAI models)
     # Exclude :thinking variants as they are already thinking-only models
     elif ((is_anthropic_model or "gemini" in model_name.lower() or (is_grok_model and "fast" in model_name.lower()))
           and ":thinking" not in model_name.lower()

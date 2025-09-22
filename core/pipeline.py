@@ -462,15 +462,16 @@ def main():
     parser.add_argument(
         "--provider",
         type=str,
-        default="Gemini",
-        choices=["Gemini", "OpenAI", "Anthropic", "xAI", "OpenRouter", "OpenAI-Compatible"],
+        default="Google",
+        choices=["Google", "OpenAI", "Anthropic", "xAI", "OpenRouter", "OpenAI-Compatible"],
         help="LLM provider to use for translation",
     )
     parser.add_argument(
-        "--gemini-api-key",
+        "--google-api-key",
+        dest="google_api_key",
         type=str,
         default=None,
-        help="Gemini API key (overrides GOOGLE_API_KEY env var if --provider is Gemini)",
+        help="Google API key (overrides GOOGLE_API_KEY env var if --provider is Google)",
     )
     parser.add_argument(
         "--openai-api-key",
@@ -662,9 +663,9 @@ def main():
     api_key_env_var = ""
     compatible_url = None
 
-    if provider == "Gemini":
-        api_key = args.gemini_api_key or os.environ.get("GOOGLE_API_KEY")
-        api_key_arg_name = "--gemini-api-key"
+    if provider == "Google":
+        api_key = args.google_api_key or os.environ.get("GOOGLE_API_KEY")
+        api_key_arg_name = "--google-api-key"
         api_key_env_var = "GOOGLE_API_KEY"
         default_model = "gemini-2.0-flash"
     elif provider == "OpenAI":
@@ -722,7 +723,7 @@ def main():
         ),
         translation=TranslationConfig(
             provider=provider,
-            gemini_api_key=api_key if provider == "Gemini" else os.environ.get("GOOGLE_API_KEY", ""),
+            google_api_key=api_key if provider == "Google" else os.environ.get("GOOGLE_API_KEY", ""),
             openai_api_key=api_key if provider == "OpenAI" else os.environ.get("OPENAI_API_KEY", ""),
             anthropic_api_key=api_key if provider == "Anthropic" else os.environ.get("ANTHROPIC_API_KEY", ""),
             xai_api_key=api_key if provider == "xAI" else os.environ.get("XAI_API_KEY", ""),

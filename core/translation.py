@@ -273,12 +273,13 @@ def _call_llm_endpoint(
     api_parts = parts + [{"text": prompt_text}]
 
     try:
-        if provider == "Gemini":
-            api_key = config.gemini_api_key
+        if provider == "Google":
+            api_key = config.google_api_key
             if not api_key:
-                raise ValueError("Gemini API key is missing.")
+                raise ValueError("Google API key is missing.")
             # Reasoning models need higher token limits
-            max_output_tokens = 2048
+            is_gemini_25_series = (model_name or "").startswith("gemini-2.5") or "gemini-2.5" in (model_name or "")
+            max_output_tokens = 8192 if is_gemini_25_series else 2048
             generation_config = {
                 "temperature": temperature,
                 "topP": top_p,
@@ -287,8 +288,7 @@ def _call_llm_endpoint(
             }
             # Enable/disable thinking for Gemini 2.5 models
             if "gemini-2.5-flash" in model_name and config.enable_thinking:
-                generation_config["thinkingConfig"] = {"thinkingBudget": 8192}
-                log_message(f"Using thinking mode for {model_name} with thinkingBudget=8192", verbose=debug)
+                log_message(f"Using thinking mode for {model_name}", verbose=debug)
             elif "gemini-2.5-flash" in model_name and not config.enable_thinking:
                 generation_config["thinkingConfig"] = {"thinkingBudget": 0}
                 log_message(f"Disabled thinking mode for {model_name}", verbose=debug)

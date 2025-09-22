@@ -40,8 +40,8 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     elif not api_key and provider == "OpenAI-Compatible":
         return True, f"{provider} API key is optional and not provided."  # Valid state
 
-    if provider == "Gemini" and not (api_key.startswith("AI") and len(api_key) == 39):
-        return False, "Invalid Gemini API key format (should start with 'AI' and be 39 chars)"
+    if provider == "Google" and not (api_key.startswith("AI") and len(api_key) == 39):
+        return False, "Invalid Google API key format (should start with 'AI' and be 39 chars)"
     if provider == "OpenAI" and not (api_key.startswith("sk-") and len(api_key) >= 48):
         return False, "Invalid OpenAI API key format (should start with 'sk-')"
     if provider == "Anthropic" and not (api_key.startswith("sk-ant-") and len(api_key) >= 100):
@@ -157,7 +157,7 @@ def update_translation_ui(provider: str, current_temp: float):
     selected_model = remembered_model if remembered_model in models else (models[0] if models else None)
     model_update = gr.update(choices=models, value=selected_model)
 
-    gemini_visible_update = gr.update(visible=(provider == "Gemini"))
+    google_visible_update = gr.update(visible=(provider == "Google"))
     openai_visible_update = gr.update(visible=(provider == "OpenAI"))
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
     xai_visible_update = gr.update(visible=(provider == "xAI"))
@@ -177,7 +177,7 @@ def update_translation_ui(provider: str, current_temp: float):
     top_k_update = gr.update(interactive=top_k_interactive)
 
     enable_thinking_visible = (
-        provider == "Gemini"
+        provider == "Google"
         or provider == "Anthropic"
         or provider == "xAI"
         or provider == "OpenRouter"
@@ -202,7 +202,7 @@ def update_translation_ui(provider: str, current_temp: float):
     openrouter_override_visible_update = gr.update(visible=(provider == "OpenRouter"))
 
     return (
-        gemini_visible_update,
+        google_visible_update,
         openai_visible_update,
         anthropic_visible_update,
         xai_visible_update,
@@ -246,7 +246,7 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
     top_k_update = gr.update(interactive=top_k_interactive)
 
     # Determine visibility for the enable_thinking checkbox
-    is_flash_model = provider == "Gemini" and model_name and "gemini-2.5-flash" in model_name
+    is_flash_model = provider == "Google" and model_name and "gemini-2.5-flash" in model_name
     # Anthropic reasoning-capable models for thinking toggle
 
     def _is_anthropic_reasoning_model(name: Optional[str]) -> bool:

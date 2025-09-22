@@ -353,14 +353,14 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=config_initial_provider,
                                 elem_id="provider_selector",
                             )
-                            gemini_api_key = gr.Textbox(
-                                label="Gemini API Key",
-                                placeholder="Enter Gemini API key (starts with AI...)",
+                            google_api_key = gr.Textbox(
+                                label="Google API Key",
+                                placeholder="Enter Google API key (starts with AI...)",
                                 type="password",
-                                value=saved_settings.get("gemini_api_key", ""),
+                                value=saved_settings.get("google_api_key", ""),
                                 show_copy_button=False,
-                                visible=(config_initial_provider == "Gemini"),
-                                elem_id="gemini_api_key",
+                                visible=(config_initial_provider == "Google"),
+                                elem_id="google_api_key",
                                 info="Stored locally in config file. Can also be set via GOOGLE_API_KEY "
                                      "environment variable.",
                             )
@@ -442,7 +442,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                             # Compute initial visibility for enable thinking (Google, Anthropic, OpenRouter)
                             _initial_enable_thinking_visible = False
                             try:
-                                if config_initial_provider == "Gemini" and config_initial_model_name:
+                                if config_initial_provider == "Google" and config_initial_model_name:
                                     _initial_enable_thinking_visible = "gemini-2.5-flash" in config_initial_model_name
                                 elif config_initial_provider == "Anthropic" and config_initial_model_name:
                                     lm = config_initial_model_name.lower()
@@ -710,7 +710,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             use_otsu_threshold,
             roi_shrink_px,
             provider_selector,
-            gemini_api_key,
+            google_api_key,
             openai_api_key,
             anthropic_api_key,
             xai_api_key,
@@ -758,7 +758,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             use_otsu_threshold,
             roi_shrink_px,
             provider_selector,
-            gemini_api_key,
+            google_api_key,
             openai_api_key,
             anthropic_api_key,
             xai_api_key,
@@ -803,7 +803,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             use_otsu_threshold,
             roi_shrink_px,
             provider_selector,
-            gemini_api_key,
+            google_api_key,
             openai_api_key,
             anthropic_api_key,
             xai_api_key,
@@ -849,7 +849,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             use_otsu_threshold,
             roi_shrink_px,
             provider_selector,
-            gemini_api_key,
+            google_api_key,
             openai_api_key,
             anthropic_api_key,
             xai_api_key,
@@ -931,7 +931,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             fn=callbacks.handle_provider_change,
             inputs=[provider_selector, temperature],
             outputs=[
-                gemini_api_key,
+                google_api_key,
                 openai_api_key,
                 anthropic_api_key,
                 xai_api_key,

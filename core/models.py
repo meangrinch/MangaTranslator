@@ -26,8 +26,8 @@ class CleaningConfig:
 class TranslationConfig:
     """Configuration for text translation."""
 
-    provider: str = "Gemini"
-    gemini_api_key: str = ""
+    provider: str = "Google"
+    google_api_key: str = ""
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     xai_api_key: str = ""
@@ -95,8 +95,8 @@ class MangaTranslatorConfig:
         # Load API keys from environment variables if not already set
         import os
 
-        if not self.translation.gemini_api_key:
-            self.translation.gemini_api_key = os.environ.get("GOOGLE_API_KEY", "")
+        if not self.translation.google_api_key:
+            self.translation.google_api_key = os.environ.get("GOOGLE_API_KEY", "")
         if not self.translation.openai_api_key:
             self.translation.openai_api_key = os.environ.get("OPENAI_API_KEY", "")
         if not self.translation.anthropic_api_key:
