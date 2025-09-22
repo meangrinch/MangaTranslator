@@ -582,6 +582,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 label="Hyphen Penalty",
                                 info="Penalty for hyphenated line breaks in text layout (100-2000). "
                                      "Increase to discourage hyphenation.",
+                                interactive=saved_settings.get("hyphenate_before_scaling", True),
                             )
                             hyphenation_min_word_length = gr.Slider(
                                 6,
@@ -590,6 +591,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 step=1,
                                 label="Min Word Length for Hyphenation",
                                 info="Minimum word length required for hyphenation (6-10).",
+                                interactive=saved_settings.get("hyphenate_before_scaling", True),
                             )
                             badness_exponent = gr.Slider(
                                 2.0,
@@ -599,6 +601,15 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 label="Badness Exponent",
                                 info="Exponent for line badness calculation in text layout (2-4). "
                                      "Increase to avoid loose lines.",
+                            )
+                            padding_pixels = gr.Slider(
+                                2,
+                                12,
+                                value=saved_settings.get("padding_pixels", 8.0),
+                                step=1,
+                                label="Padding Pixels",
+                                info="Distance in pixels from bubble edges for safe text placement (2-12). "
+                                     "Higher values keep text further from bubble boundaries.",
                             )
                         setting_groups.append(group_rendering)
 
@@ -694,6 +705,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
+            padding_pixels,
         ]
 
         reset_outputs = [
@@ -782,6 +794,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
+            padding_pixels,
         ]
 
         batch_inputs = [
@@ -826,6 +839,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
+            padding_pixels,
         ]
 
         # Config Tab Navigation & Updates
@@ -909,6 +923,14 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             fn=callbacks.handle_thresholding_change,
             inputs=use_otsu_threshold,
             outputs=thresholding_value,
+            queue=False,
+        )
+
+        # Hyphenation checkbox change handler
+        hyphenate_before_scaling.change(
+            fn=callbacks.handle_hyphenation_change,
+            inputs=hyphenate_before_scaling,
+            outputs=[hyphen_penalty, hyphenation_min_word_length],
             queue=False,
         )
 

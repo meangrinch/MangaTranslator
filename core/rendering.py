@@ -881,6 +881,7 @@ def render_text_skia(
     hyphen_penalty: float = 1000.0,
     hyphenation_min_word_length: int = 8,
     badness_exponent: float = 3.0,
+    padding_pixels: float = 8.0,
     verbose: bool = False,
 ) -> Tuple[Optional[Image.Image], bool]:
     """
@@ -931,7 +932,9 @@ def render_text_skia(
     # --- Calculate Safe Rendering Area ---
     safe_area_result = None
     if cleaned_mask is not None:
-        safe_area_result = _calculate_centroid_expansion_box(cleaned_mask, verbose=verbose)
+        safe_area_result = _calculate_centroid_expansion_box(
+            cleaned_mask, padding_pixels=padding_pixels, verbose=verbose
+        )
 
     if safe_area_result is not None:
         guaranteed_box, _ = safe_area_result

@@ -300,6 +300,7 @@ def translate_and_render(
                             hyphen_penalty=config.rendering.hyphen_penalty,
                             hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
                             badness_exponent=config.rendering.badness_exponent,
+                            padding_pixels=config.rendering.padding_pixels,
                             verbose=verbose,
                         )
 
@@ -610,6 +611,13 @@ def main():
         default=3.0,
         help="Exponent for line badness calculation in text layout (2-4). Increase to avoid loose lines.",
     )
+    parser.add_argument(
+        "--padding-pixels",
+        type=float,
+        default=8.0,
+        help="Distance in pixels from bubble edges for safe text placement (2-12). "
+             "Higher values keep text further from bubble boundaries.",
+    )
     # Output args
     parser.add_argument("--jpeg-quality", type=int, default=95, help="JPEG compression quality (1-100)")
     parser.add_argument("--png-compression", type=int, default=6, help="PNG compression level (0-9)")
@@ -733,6 +741,7 @@ def main():
             hyphen_penalty=args.hyphen_penalty,
             hyphenation_min_word_length=args.hyphenation_min_word_length,
             badness_exponent=args.badness_exponent,
+            padding_pixels=args.padding_pixels,
         ),
         output=OutputConfig(
             jpeg_quality=args.jpeg_quality, png_compression=args.png_compression, image_mode=args.image_mode

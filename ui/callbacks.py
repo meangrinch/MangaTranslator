@@ -302,6 +302,7 @@ def handle_translate_click(
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
+        padding_pixels_val,
     ) = args
     """Callback for the 'Translate' button click."""
     start_time = time.time()
@@ -372,6 +373,7 @@ def handle_translate_click(
                 hyphen_penalty=hyphen_penalty_val,
                 hyphenation_min_word_length=hyphenation_min_word_length_val,
                 badness_exponent=badness_exponent_val,
+                padding_pixels=padding_pixels_val,
             ),
             output=UIOutputSettings(
                 output_format=output_format,
@@ -493,6 +495,7 @@ def handle_batch_click(
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
+        padding_pixels_val,
     ) = args
     """Callback for the 'Start Batch Translating' button click."""
     progress(0, desc="Starting batch process...")
@@ -565,6 +568,7 @@ def handle_batch_click(
                 hyphen_penalty=hyphen_penalty_val,
                 hyphenation_min_word_length=hyphenation_min_word_length_val,
                 badness_exponent=badness_exponent_val,
+                padding_pixels=padding_pixels_val,
             ),
             output=UIOutputSettings(
                 output_format=output_format,
@@ -688,6 +692,7 @@ def handle_save_config_click(*args: Any) -> str:
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
+        padding_pixels_val,
     ) = args
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
@@ -727,6 +732,7 @@ def handle_save_config_click(*args: Any) -> str:
             hyphen_penalty=hyphen_penalty_val,
             hyphenation_min_word_length=hyphenation_min_word_length_val,
             badness_exponent=badness_exponent_val,
+            padding_pixels=padding_pixels_val,
         ),
         output=UIOutputSettings(
             output_format=out_fmt,
@@ -888,3 +894,8 @@ def trigger_status_fade(status_element_id: str):
 def handle_thresholding_change(use_otsu_threshold: bool):
     """Handles changes in the Otsu thresholding checkbox to enable/disable thresholding_value slider."""
     return gr.update(interactive=not use_otsu_threshold)
+
+
+def handle_hyphenation_change(hyphenate_before_scaling: bool):
+    """Handles changes in the hyphenation checkbox to enable/disable hyphenation-related sliders."""
+    return gr.update(interactive=hyphenate_before_scaling), gr.update(interactive=hyphenate_before_scaling)

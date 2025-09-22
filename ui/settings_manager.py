@@ -86,6 +86,7 @@ DEFAULT_SETTINGS = {
     "hyphen_penalty": 1000.0,
     "hyphenation_min_word_length": 8,
     "badness_exponent": 3.0,
+    "padding_pixels": 8.0,
     "font_pack": None,
     "verbose": False,
     "jpeg_quality": 95,

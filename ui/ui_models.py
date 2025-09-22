@@ -72,6 +72,7 @@ class UIRenderingSettings:
     hyphen_penalty: float = 1000.0
     hyphenation_min_word_length: int = 8
     badness_exponent: float = 3.0
+    padding_pixels: float = 8.0
 
 
 @dataclass
@@ -148,6 +149,7 @@ class UIConfigState:
             "hyphen_penalty": self.rendering.hyphen_penalty,
             "hyphenation_min_word_length": self.rendering.hyphenation_min_word_length,
             "badness_exponent": self.rendering.badness_exponent,
+            "padding_pixels": self.rendering.padding_pixels,
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
             "png_compression": self.output.png_compression,
@@ -218,6 +220,7 @@ class UIConfigState:
                     "hyphenation_min_word_length", defaults.get("hyphenation_min_word_length", 8)
                 ),
                 badness_exponent=data.get("badness_exponent", defaults.get("badness_exponent", 3.0)),
+                padding_pixels=data.get("padding_pixels", defaults.get("padding_pixels", 8.0)),
             ),
             output=UIOutputSettings(
                 output_format=data.get("output_format", defaults["output_format"]),
@@ -298,6 +301,7 @@ def map_ui_to_backend_config(
         hyphen_penalty=ui_state.rendering.hyphen_penalty,
         hyphenation_min_word_length=ui_state.rendering.hyphenation_min_word_length,
         badness_exponent=ui_state.rendering.badness_exponent,
+        padding_pixels=ui_state.rendering.padding_pixels,
     )
 
     output_cfg = OutputConfig(

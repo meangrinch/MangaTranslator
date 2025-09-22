@@ -314,7 +314,6 @@ def _call_llm_endpoint(
                 "top_p": top_p,
                 "max_output_tokens": max_output_tokens,
             }  # top_k ignored
-            # Add reasoning effort for applicable OpenAI reasoning models
             if config.reasoning_effort:
                 generation_config["reasoning_effort"] = config.reasoning_effort
             return call_openai_endpoint(
