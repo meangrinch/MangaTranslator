@@ -386,6 +386,17 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 info="Stored locally in config file. Can also be set via ANTHROPIC_API_KEY "
                                      "environment variable.",
                             )
+                            xai_api_key = gr.Textbox(
+                                label="xAI API Key",
+                                placeholder="Enter xAI API key (starts with xai-...)",
+                                type="password",
+                                value=saved_settings.get("xai_api_key", ""),
+                                show_copy_button=False,
+                                visible=(config_initial_provider == "xAI"),
+                                elem_id="xai_api_key",
+                                info="Stored locally in config file. Can also be set via XAI_API_KEY "
+                                     "environment variable.",
+                            )
                             openrouter_api_key = gr.Textbox(
                                 label="OpenRouter API Key",
                                 placeholder="Enter OpenRouter API key (starts with sk-or-...)",
@@ -702,6 +713,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             gemini_api_key,
             openai_api_key,
             anthropic_api_key,
+            xai_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -749,6 +761,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             gemini_api_key,
             openai_api_key,
             anthropic_api_key,
+            xai_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -793,6 +806,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             gemini_api_key,
             openai_api_key,
             anthropic_api_key,
+            xai_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -838,6 +852,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             gemini_api_key,
             openai_api_key,
             anthropic_api_key,
+            xai_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -919,6 +934,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                 gemini_api_key,
                 openai_api_key,
                 anthropic_api_key,
+                xai_api_key,
                 openrouter_api_key,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,

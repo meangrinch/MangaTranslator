@@ -271,6 +271,7 @@ def handle_translate_click(
         gemini_api_key,
         openai_api_key,
         anthropic_api_key,
+        xai_api_key,
         openrouter_api_key,
         openai_compatible_url_input,
         openai_compatible_api_key_input,
@@ -319,6 +320,8 @@ def handle_translate_click(
             api_key_to_validate = openai_api_key
         elif provider_selector == "Anthropic":
             api_key_to_validate = anthropic_api_key
+        elif provider_selector == "xAI":
+            api_key_to_validate = xai_api_key
         elif provider_selector == "OpenRouter":
             api_key_to_validate = openrouter_api_key
         elif provider_selector == "OpenAI-Compatible":
@@ -349,6 +352,7 @@ def handle_translate_click(
                 gemini_api_key=gemini_api_key,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
+                xai_api_key=xai_api_key,
                 openrouter_api_key=openrouter_api_key,
                 openai_compatible_url=openai_compatible_url_input,
                 openai_compatible_api_key=openai_compatible_api_key_input,
@@ -464,6 +468,7 @@ def handle_batch_click(
         gemini_api_key,
         openai_api_key,
         anthropic_api_key,
+        xai_api_key,
         openrouter_api_key,
         openai_compatible_url_input,
         openai_compatible_api_key_input,
@@ -514,6 +519,8 @@ def handle_batch_click(
             api_key_to_validate = openai_api_key
         elif provider_selector == "Anthropic":
             api_key_to_validate = anthropic_api_key
+        elif provider_selector == "xAI":
+            api_key_to_validate = xai_api_key
         elif provider_selector == "OpenRouter":
             api_key_to_validate = openrouter_api_key
         elif provider_selector == "OpenAI-Compatible":
@@ -544,6 +551,7 @@ def handle_batch_click(
                 gemini_api_key=gemini_api_key,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
+                xai_api_key=xai_api_key,
                 openrouter_api_key=openrouter_api_key,
                 openai_compatible_url=openai_compatible_url_input,
                 openai_compatible_api_key=openai_compatible_api_key_input,
@@ -659,6 +667,7 @@ def handle_save_config_click(*args: Any) -> str:
         gem_key,
         oai_key,
         ant_key,
+        xai_key,
         or_key,
         comp_url,
         comp_key,
@@ -708,6 +717,7 @@ def handle_save_config_click(*args: Any) -> str:
             gemini_api_key=gem_key,
             openai_api_key=oai_key,
             anthropic_api_key=ant_key,
+            xai_api_key=xai_key,
             openrouter_api_key=or_key,
             openai_compatible_url=comp_url,
             openai_compatible_api_key=comp_key,
@@ -792,6 +802,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     gemini_visible = default_provider == "Gemini"
     openai_visible = default_provider == "OpenAI"
     anthropic_visible = default_provider == "Anthropic"
+    xai_visible = default_provider == "xAI"
     openrouter_visible = default_provider == "OpenRouter"
     compatible_visible = default_provider == "OpenAI-Compatible"
     temp_update, top_k_update = utils.update_params_for_model(
@@ -815,6 +826,7 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
         gr.update(value=default_ui_state.provider_settings.gemini_api_key, visible=gemini_visible),
         gr.update(value=default_ui_state.provider_settings.openai_api_key, visible=openai_visible),
         gr.update(value=default_ui_state.provider_settings.anthropic_api_key, visible=anthropic_visible),
+        gr.update(value=default_ui_state.provider_settings.xai_api_key, visible=xai_visible),
         gr.update(value=default_ui_state.provider_settings.openrouter_api_key, visible=openrouter_visible),
         gr.update(value=default_ui_state.provider_settings.openai_compatible_url, visible=compatible_visible),
         gr.update(value=default_ui_state.provider_settings.openai_compatible_api_key, visible=compatible_visible),

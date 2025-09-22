@@ -463,7 +463,7 @@ def main():
         "--provider",
         type=str,
         default="Gemini",
-        choices=["Gemini", "OpenAI", "Anthropic", "OpenRouter", "OpenAI-Compatible"],
+        choices=["Gemini", "OpenAI", "Anthropic", "xAI", "OpenRouter", "OpenAI-Compatible"],
         help="LLM provider to use for translation",
     )
     parser.add_argument(
@@ -483,6 +483,12 @@ def main():
         type=str,
         default=None,
         help="Anthropic API key (overrides ANTHROPIC_API_KEY env var if --provider is Anthropic)",
+    )
+    parser.add_argument(
+        "--xai-api-key",
+        type=str,
+        default=None,
+        help="xAI API key (overrides XAI_API_KEY env var if --provider is xAI)",
     )
     parser.add_argument(
         "--openrouter-api-key",
@@ -671,6 +677,11 @@ def main():
         api_key_arg_name = "--anthropic-api-key"
         api_key_env_var = "ANTHROPIC_API_KEY"
         default_model = "claude-3.7-sonnet-latest"
+    elif provider == "xAI":
+        api_key = args.xai_api_key or os.environ.get("XAI_API_KEY")
+        api_key_arg_name = "--xai-api-key"
+        api_key_env_var = "XAI_API_KEY"
+        default_model = "grok-4-fast-reasoning"
     elif provider == "OpenRouter":
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
@@ -714,6 +725,7 @@ def main():
             gemini_api_key=api_key if provider == "Gemini" else os.environ.get("GOOGLE_API_KEY", ""),
             openai_api_key=api_key if provider == "OpenAI" else os.environ.get("OPENAI_API_KEY", ""),
             anthropic_api_key=api_key if provider == "Anthropic" else os.environ.get("ANTHROPIC_API_KEY", ""),
+            xai_api_key=api_key if provider == "xAI" else os.environ.get("XAI_API_KEY", ""),
             openrouter_api_key=api_key if provider == "OpenRouter" else os.environ.get("OPENROUTER_API_KEY", ""),
             openai_compatible_url=compatible_url,
             openai_compatible_api_key=(

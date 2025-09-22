@@ -39,6 +39,7 @@ class UITranslationProviderSettings:
     gemini_api_key: Optional[str] = ""
     openai_api_key: Optional[str] = ""
     anthropic_api_key: Optional[str] = ""
+    xai_api_key: Optional[str] = ""
     openrouter_api_key: Optional[str] = ""
     openai_compatible_url: str = "http://localhost:11434/v1"
     openai_compatible_api_key: Optional[str] = ""
@@ -128,6 +129,7 @@ class UIConfigState:
             "gemini_api_key": self.provider_settings.gemini_api_key,
             "openai_api_key": self.provider_settings.openai_api_key,
             "anthropic_api_key": self.provider_settings.anthropic_api_key,
+            "xai_api_key": self.provider_settings.xai_api_key,
             "openrouter_api_key": self.provider_settings.openrouter_api_key,
             "openai_compatible_url": self.provider_settings.openai_compatible_url,
             "openai_compatible_api_key": self.provider_settings.openai_compatible_api_key,
@@ -189,6 +191,7 @@ class UIConfigState:
                 gemini_api_key=data.get("gemini_api_key", defaults["gemini_api_key"]),
                 openai_api_key=data.get("openai_api_key", defaults["openai_api_key"]),
                 anthropic_api_key=data.get("anthropic_api_key", defaults["anthropic_api_key"]),
+                xai_api_key=data.get("xai_api_key", defaults["xai_api_key"]),
                 openrouter_api_key=data.get("openrouter_api_key", defaults["openrouter_api_key"]),
                 openai_compatible_url=data.get("openai_compatible_url", defaults["openai_compatible_url"]),
                 openai_compatible_api_key=data.get(
@@ -273,6 +276,7 @@ def map_ui_to_backend_config(
         gemini_api_key=ui_state.provider_settings.gemini_api_key or "",
         openai_api_key=ui_state.provider_settings.openai_api_key or "",
         anthropic_api_key=ui_state.provider_settings.anthropic_api_key or "",
+        xai_api_key=ui_state.provider_settings.xai_api_key or "",
         openrouter_api_key=ui_state.provider_settings.openrouter_api_key or "",
         openai_compatible_url=ui_state.provider_settings.openai_compatible_url,
         openai_compatible_api_key=ui_state.provider_settings.openai_compatible_api_key,

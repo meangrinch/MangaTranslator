@@ -44,6 +44,12 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "claude-3-5-sonnet-latest",
         "claude-3-5-haiku-latest",
     ],
+    "xAI": [
+        "grok-4-fast-reasoning",
+        "grok-4-fast-non-reasoning",
+        "grok-4-0709",
+        "grok-2-vision-1212",
+    ],
     "OpenRouter": [],
     "OpenAI-Compatible": [],
 }
@@ -53,6 +59,7 @@ DEFAULT_SETTINGS = {
     "gemini_api_key": "",
     "openai_api_key": "",
     "anthropic_api_key": "",
+    "xai_api_key": "",
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:11434/v1",
     "openai_compatible_api_key": "",
@@ -61,6 +68,7 @@ DEFAULT_SETTINGS = {
         "Gemini": PROVIDER_MODELS["Gemini"][0] if PROVIDER_MODELS["Gemini"] else None,
         "OpenAI": PROVIDER_MODELS["OpenAI"][0] if PROVIDER_MODELS["OpenAI"] else None,
         "Anthropic": PROVIDER_MODELS["Anthropic"][0] if PROVIDER_MODELS["Anthropic"] else None,
+        "xAI": PROVIDER_MODELS["xAI"][0] if PROVIDER_MODELS["xAI"] else None,
         "OpenRouter": None,
         "OpenAI-Compatible": None,
     },

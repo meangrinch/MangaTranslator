@@ -46,6 +46,8 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         return False, "Invalid OpenAI API key format (should start with 'sk-')"
     if provider == "Anthropic" and not (api_key.startswith("sk-ant-") and len(api_key) >= 100):
         return False, "Invalid Anthropic API key format (should start with 'sk-ant-')"
+    if provider == "xAI" and not api_key.startswith("xai-"):
+        return False, "Invalid xAI API key format (should start with 'xai-')"
     if provider == "OpenRouter" and not (api_key.startswith("sk-or-") and len(api_key) >= 48):
         return False, "Invalid OpenRouter API key format (should start with 'sk-or-')"
     # No specific format check for OpenAI-Compatible keys
@@ -158,6 +160,7 @@ def update_translation_ui(provider: str, current_temp: float):
     gemini_visible_update = gr.update(visible=(provider == "Gemini"))
     openai_visible_update = gr.update(visible=(provider == "OpenAI"))
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
+    xai_visible_update = gr.update(visible=(provider == "xAI"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
     openai_compatible_url_visible_update = gr.update(visible=(provider == "OpenAI-Compatible"))
     openai_compatible_key_visible_update = gr.update(visible=(provider == "OpenAI-Compatible"))
@@ -170,12 +173,13 @@ def update_translation_ui(provider: str, current_temp: float):
     new_temp_value = min(current_temp, temp_max)
     temp_update = gr.update(maximum=temp_max, value=new_temp_value)
 
-    top_k_interactive = provider != "OpenAI"
+    top_k_interactive = provider != "OpenAI" and provider != "xAI"
     top_k_update = gr.update(interactive=top_k_interactive)
 
     enable_thinking_visible = (
         provider == "Gemini"
         or provider == "Anthropic"
+        or provider == "xAI"
         or provider == "OpenRouter"
     )
     enable_thinking_update = gr.update(visible=enable_thinking_visible)
@@ -201,6 +205,7 @@ def update_translation_ui(provider: str, current_temp: float):
         gemini_visible_update,
         openai_visible_update,
         anthropic_visible_update,
+        xai_visible_update,
         openrouter_visible_update,
         openai_compatible_url_visible_update,
         openai_compatible_key_visible_update,
@@ -223,7 +228,7 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
 
     if provider == "Anthropic":
         temp_max = 1.0
-    elif provider == "OpenAI":
+    elif provider == "OpenAI" or provider == "xAI":
         top_k_interactive = False
     elif provider == "OpenRouter":
         is_openai_model = model_name and ("openai/" in model_name or model_name.startswith("gpt-"))

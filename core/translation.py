@@ -6,6 +6,7 @@ from utils.endpoints import (
     call_gemini_endpoint,
     call_openai_endpoint,
     call_anthropic_endpoint,
+    call_xai_endpoint,
     call_openrouter_endpoint,
     call_openai_compatible_endpoint,
     openrouter_is_reasoning_model,
@@ -277,8 +278,7 @@ def _call_llm_endpoint(
             if not api_key:
                 raise ValueError("Gemini API key is missing.")
             # Reasoning models need higher token limits
-            is_gemini_25_series = (model_name or "").startswith("gemini-2.5") or "gemini-2.5" in (model_name or "")
-            max_output_tokens = 8192 if is_gemini_25_series else 2048
+            max_output_tokens = 2048
             generation_config = {
                 "temperature": temperature,
                 "topP": top_p,
@@ -287,7 +287,8 @@ def _call_llm_endpoint(
             }
             # Enable/disable thinking for Gemini 2.5 models
             if "gemini-2.5-flash" in model_name and config.enable_thinking:
-                log_message(f"Using thinking mode for {model_name}", verbose=debug)
+                generation_config["thinkingConfig"] = {"thinkingBudget": 8192}
+                log_message(f"Using thinking mode for {model_name} with thinkingBudget=8192", verbose=debug)
             elif "gemini-2.5-flash" in model_name and not config.enable_thinking:
                 generation_config["thinkingConfig"] = {"thinkingBudget": 0}
                 log_message(f"Disabled thinking mode for {model_name}", verbose=debug)
@@ -346,6 +347,29 @@ def _call_llm_endpoint(
                 "anthropic_thinking": bool(config.enable_thinking and is_anthropic_reasoning_model),
             }
             return call_anthropic_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                system_prompt=system_prompt,
+                debug=debug,
+            )
+        elif provider == "xAI":
+            api_key = config.xai_api_key
+            if not api_key:
+                raise ValueError("xAI API key is missing.")
+            # Reasoning models need higher token limits
+            lm = (model_name or "").lower()
+            is_reasoning_model = "reasoning" in lm or lm.startswith("grok-4-fast-reasoning")
+            max_tokens = 2048
+            generation_config = {
+                "temperature": temperature,
+                "top_p": top_p,
+                "max_tokens": max_tokens,
+            }
+            if is_reasoning_model:
+                generation_config["reasoning_tokens"] = 8192
+            return call_xai_endpoint(
                 api_key=api_key,
                 model_name=model_name,
                 parts=api_parts,
