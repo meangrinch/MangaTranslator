@@ -71,10 +71,10 @@ fonts/
 ```
 
 ### LLM setup
-- Providers: Gemini, OpenAI, Anthropic, OpenRouter, OpenAI-Compatible
+- Providers: Gemini, OpenAI, Anthropic, xAI, OpenRouter, OpenAI-Compatible
 - Web UI: configure provider/model/key in the Config tab (stored locally)
 - CLI: pass keys/URLs as flags or via env vars
-- Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
+- Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
 - OpenAI-compatible default URL: `http://localhost:11434/v1`
 
 ## Run
