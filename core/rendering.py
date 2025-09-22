@@ -704,11 +704,26 @@ def _check_fit(
             if (
                 not is_styled
                 and hyphenate_before_scaling
-                and len(token_text) > hyphenation_min_word_length
             ):
-                split_parts = _try_hyphenate_word(token_text, hb_font)
-                if split_parts:
-                    augmented_tokens.extend(split_parts)
+                match = re.match(r'^(\W*)([\w\-]+)(\W*)$', token_text)
+                if match:
+                    core_word_length = len(match.group(2))
+                else:
+                    core_word_length = len(token_text)
+
+                if core_word_length > hyphenation_min_word_length:
+                    word_width = _calculate_styled_line_width(
+                        token_text, font_size, loaded_hb_faces, features_to_enable
+                    )
+
+                    if word_width > max_render_width:
+                        split_parts = _try_hyphenate_word(token_text, hb_font)
+                        if split_parts:
+                            augmented_tokens.extend(split_parts)
+                        else:
+                            augmented_tokens.append(token_text)
+                    else:
+                        augmented_tokens.append(token_text)
                 else:
                     augmented_tokens.append(token_text)
             else:
