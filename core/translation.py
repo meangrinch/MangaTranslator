@@ -363,12 +363,28 @@ def _call_llm_endpoint(
                 or openrouter_is_reasoning_model(model_name, debug)
             )
             max_tokens = 8192 if is_reasoning_model else 2048
+
+            # Determine if this is a reasoning-capable model for OpenRouter
+            model_lower = (model_name or "").lower()
+            is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
+            is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith("claude-")
+            is_grok_model = "grok" in model_lower
+            is_gemini_model = "gemini" in model_lower
+
             generation_config = {
                 "temperature": temperature,
                 "top_p": top_p,
                 "top_k": top_k,
                 "max_tokens": max_tokens,
             }
+
+            # Add reasoning parameters for OpenRouter
+            if is_openai_model and config.reasoning_effort:
+                generation_config["reasoning_effort"] = config.reasoning_effort
+            elif ((is_anthropic_model or is_gemini_model or (is_grok_model and "fast" in model_lower))
+                  and config.enable_thinking):
+                generation_config["enable_thinking"] = config.enable_thinking
+
             return call_openrouter_endpoint(
                 api_key=api_key,
                 model_name=model_name,

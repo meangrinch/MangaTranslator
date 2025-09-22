@@ -173,9 +173,27 @@ def update_translation_ui(provider: str, current_temp: float):
     top_k_interactive = provider != "OpenAI"
     top_k_update = gr.update(interactive=top_k_interactive)
 
-    enable_thinking_update = gr.update(visible=False)
-    # Visibility for reasoning effort (OpenAI only)
-    reasoning_effort_visible_update = gr.update(visible=(provider == "OpenAI"))
+    enable_thinking_visible = (
+        provider == "Gemini"
+        or provider == "Anthropic"
+        or provider == "OpenRouter"
+    )
+    enable_thinking_update = gr.update(visible=enable_thinking_visible)
+
+    reasoning_effort_visible = False
+    if provider == "OpenAI":
+        reasoning_effort_visible = True
+    elif provider == "OpenRouter" and remembered_model:
+        lm = remembered_model.lower()
+        is_reasoning_capable = (
+            "gpt-5" in lm
+            or "o1" in lm
+            or "o3" in lm
+            or "o4-mini" in lm
+        )
+        reasoning_effort_visible = is_reasoning_capable
+    reasoning_effort_visible_update = gr.update(visible=reasoning_effort_visible)
+
     # Visibility for OpenRouter override
     openrouter_override_visible_update = gr.update(visible=(provider == "OpenRouter"))
 
@@ -236,21 +254,58 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
             or lower.startswith("claude-sonnet-4")
             or lower.startswith("claude-3-7-sonnet")
         )
+
+    def _is_openrouter_thinking_model(name: Optional[str]) -> bool:
+        if not name:
+            return False
+        lower = name.lower()
+
+        is_gemini_reasoning = "gemini-2.5-flash" in lower
+        is_anthropic_reasoning = (
+            "claude-opus-4.1" in lower
+            or "claude-opus-4" in lower
+            or "claude-sonnet-4" in lower
+        )
+        is_grok_reasoning = "grok" in lower and "fast" in lower
+
+        return is_gemini_reasoning or is_anthropic_reasoning or is_grok_reasoning
+
     is_anthropic_thinking_model = provider == "Anthropic" and _is_anthropic_reasoning_model(model_name)
-    enable_thinking_update = gr.update(visible=is_flash_model or is_anthropic_thinking_model)
+    is_openrouter_thinking_model = provider == "OpenRouter" and _is_openrouter_thinking_model(model_name)
+    enable_thinking_update = gr.update(
+        visible=is_flash_model or is_anthropic_thinking_model or is_openrouter_thinking_model
+    )
 
     # Determine reasoning-effort dropdown visibility and choices
     reasoning_visible = False
     reasoning_choices = ["low", "medium", "high"]
+
+    def _is_openai_reasoning_model(name: Optional[str]) -> bool:
+        if not name:
+            return False
+        lm = name.lower()
+        is_reasoning_capable = (
+            "gpt-5" in lm
+            or "o1" in lm
+            or "o3" in lm
+            or "o4-mini" in lm
+        )
+        return is_reasoning_capable
+
     if provider == "OpenAI" and model_name:
         lm = model_name.lower()
         is_gpt5 = lm.startswith("gpt-5")
-        is_reasoning_capable = is_gpt5 or lm.startswith("o1") or lm.startswith("o3") or lm.startswith("o4-mini")
+        is_reasoning_capable = (is_gpt5 or lm.startswith("o1")
+                                or lm.startswith("o3") or lm.startswith("o4-mini"))
         reasoning_visible = is_reasoning_capable
         if is_gpt5:
             reasoning_choices = ["minimal", "low", "medium", "high"]
         else:
             reasoning_choices = ["low", "medium", "high"]
+    elif provider == "OpenRouter" and model_name and _is_openai_reasoning_model(model_name):
+        lm = model_name.lower()
+        reasoning_visible = True
+        reasoning_choices = ["low", "medium", "high"]
 
     # Pick a safe value if saved value not allowed in current choices
     saved = get_saved_settings()

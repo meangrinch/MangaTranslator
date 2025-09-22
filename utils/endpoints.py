@@ -534,6 +534,7 @@ def call_openrouter_endpoint(
 
     is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")
     is_anthropic_model = "anthropic/" in model_name or model_name.startswith("claude-")
+    is_grok_model = "grok" in model_name.lower()
 
     temp = generation_config.get("temperature")
     if temp is not None:
@@ -549,6 +550,31 @@ def call_openrouter_endpoint(
     top_k = generation_config.get("top_k")
     if top_k is not None and not is_openai_model and not is_anthropic_model:
         payload["top_k"] = top_k
+
+    # Handle OpenRouter reasoning parameters
+    reasoning_config = {}
+
+    # Check for reasoning effort (OpenAI models)
+    if is_openai_model and generation_config.get("reasoning_effort"):
+        effort = generation_config.get("reasoning_effort")
+        if effort in ["low", "medium", "high", "minimal"]:
+            reasoning_config["effort"] = effort
+
+    # Check for enable thinking (Gemini/Anthropic/Grok 4 Fast models)
+    # Exclude :thinking variants as they are already thinking-only models
+    elif ((is_anthropic_model or "gemini" in model_name.lower() or (is_grok_model and "fast" in model_name.lower()))
+          and ":thinking" not in model_name.lower()
+          and generation_config.get("enable_thinking")):
+        reasoning_config["max_tokens"] = 8192
+
+    # Check for Grok 4 Fast
+    if is_grok_model and "fast" in model_name.lower() and generation_config.get("enable_thinking"):
+        reasoning_config["enabled"] = True
+
+    # Always exclude reasoning tokens from response for all models
+    if reasoning_config:
+        reasoning_config["exclude"] = True
+        payload["reasoning"] = reasoning_config
 
     payload = {k: v for k, v in payload.items() if v is not None}
 

@@ -428,7 +428,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 elem_id="config_model_name",
                                 allow_custom_value=True,
                             )
-                            # Compute initial visibility for enable thinking (Gemini 2.5 Flash and Anthropic reasoning)
+                            # Compute initial visibility for enable thinking (Google, Anthropic, OpenRouter)
                             _initial_enable_thinking_visible = False
                             try:
                                 if config_initial_provider == "Gemini" and config_initial_model_name:
@@ -441,6 +441,18 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                         or lm.startswith("claude-sonnet-4")
                                         or lm.startswith("claude-3-7-sonnet")
                                     )
+                                elif config_initial_provider == "OpenRouter" and config_initial_model_name:
+                                    lm = config_initial_model_name.lower()
+                                    is_gemini_reasoning = "gemini-2.5-flash" in lm
+                                    is_anthropic_reasoning = (
+                                        "claude-opus-4.1" in lm
+                                        or "claude-opus-4" in lm
+                                        or "claude-sonnet-4" in lm
+                                    )
+                                    is_grok_reasoning = "grok" in lm and "fast" in lm
+                                    _initial_enable_thinking_visible = (
+                                        is_gemini_reasoning or is_anthropic_reasoning or is_grok_reasoning
+                                    )
                             except Exception:
                                 _initial_enable_thinking_visible = False
 
@@ -448,20 +460,38 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 label="Enable Thinking",
                                 value=saved_settings.get("enable_thinking", True),
                                 info=(
-                                    "Enables 'thinking' capabilities for Gemini 2.5 Flash (Lite) and Claude "
-                                    "reasoning models."
+                                    "Enables 'thinking' capabilities for Gemini 2.5 Flash (Lite), Claude "
+                                    "reasoning models, and OpenRouter Gemini/Anthropic/Grok models."
                                 ),
                                 visible=_initial_enable_thinking_visible,
                                 elem_id="enable_thinking_checkbox",
                             )
+                            # Compute initial visibility for reasoning effort (OpenAI and OpenRouter OpenAI models)
+                            _initial_reasoning_effort_visible = False
+                            try:
+                                if config_initial_provider == "OpenAI":
+                                    _initial_reasoning_effort_visible = True
+                                elif config_initial_provider == "OpenRouter" and config_initial_model_name:
+                                    lm = config_initial_model_name.lower()
+                                    is_reasoning_capable = (
+                                        "gpt-5" in lm
+                                        or "o1" in lm
+                                        or "o3" in lm
+                                        or "o4-mini" in lm
+                                    )
+                                    _initial_reasoning_effort_visible = is_reasoning_capable
+                            except Exception:
+                                _initial_reasoning_effort_visible = False
+
                             reasoning_effort_dropdown = gr.Dropdown(
                                 choices=["low", "medium", "high"],
-                                label="Reasoning Effort (OpenAI)",
+                                label="Reasoning Effort (OpenAI/OpenRouter)",
                                 value=saved_settings.get("reasoning_effort", "medium"),
                                 info=(
-                                    "Controls internal reasoning effort for OpenAI reasoning models."
+                                    "Controls internal reasoning effort for OpenAI reasoning models "
+                                    "and OpenRouter OpenAI models."
                                 ),
-                                visible=(config_initial_provider == "OpenAI"),
+                                visible=_initial_reasoning_effort_visible,
                                 elem_id="reasoning_effort_dropdown",
                             )
                             openrouter_reasoning_override = gr.Checkbox(
