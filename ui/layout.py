@@ -566,7 +566,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
 
                         # --- Rendering Settings ---
                         with gr.Group(visible=False, elem_classes="settings-group") as group_rendering:
-                            gr.Markdown("### Text Rendering")
+                            gr.Markdown("### Font Rendering")
                             max_font_size = gr.Slider(
                                 5,
                                 50,
@@ -621,7 +621,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("hyphen_penalty", 1000.0),
                                 step=100,
                                 label="Hyphen Penalty",
-                                info="Penalty for hyphenated line breaks in text layout (100-2000). "
+                                info="Penalty for hyphenated line breaks in text layout. "
                                      "Increase to discourage hyphenation.",
                                 interactive=saved_settings.get("hyphenate_before_scaling", True),
                             )
@@ -631,7 +631,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("hyphenation_min_word_length", 8),
                                 step=1,
                                 label="Min Word Length for Hyphenation",
-                                info="Minimum word length required for hyphenation (6-10).",
+                                info="Minimum word length required for hyphenation.",
                                 interactive=saved_settings.get("hyphenate_before_scaling", True),
                             )
                             badness_exponent = gr.Slider(
@@ -640,7 +640,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("badness_exponent", 3.0),
                                 step=0.5,
                                 label="Badness Exponent",
-                                info="Exponent for line badness calculation in text layout (2-4). "
+                                info="Exponent for line badness calculation in text layout. "
                                      "Increase to avoid loose lines.",
                             )
                             padding_pixels = gr.Slider(
@@ -649,8 +649,8 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 value=saved_settings.get("padding_pixels", 8.0),
                                 step=1,
                                 label="Padding Pixels",
-                                info="Distance in pixels from bubble edges for safe text placement (2-12). "
-                                     "Higher values keep text further from bubble boundaries.",
+                                info="Padding between text and the edge of the speech bubble. "
+                                     "Increase for more space between text and bubble boundaries.",
                             )
                         setting_groups.append(group_rendering)
 

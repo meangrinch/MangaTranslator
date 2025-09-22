@@ -622,8 +622,8 @@ def main():
         "--padding-pixels",
         type=float,
         default=8.0,
-        help="Distance in pixels from bubble edges for safe text placement (2-12). "
-             "Higher values keep text further from bubble boundaries.",
+        help="Padding between text and the edge of the speech bubble (2-12). "
+             "Increase for more space between text and bubble boundaries.",
     )
     # Output args
     parser.add_argument("--jpeg-quality", type=int, default=95, help="JPEG compression quality (1-100)")
