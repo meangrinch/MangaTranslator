@@ -71,7 +71,7 @@ fonts/
 ```
 
 ### LLM setup
-- Providers: Gemini, OpenAI, Anthropic, xAI, OpenRouter, OpenAI-Compatible
+- Providers: Google, OpenAI, Anthropic, xAI, OpenRouter, OpenAI-Compatible
 - Web UI: configure provider/model/key in the Config tab (stored locally)
 - CLI: pass keys/URLs as flags or via env vars
 - Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
@@ -91,9 +91,9 @@ First launch can take ~1–2 minutes.
 ### CLI
 Examples:
 ```bash
-# Single image, Japanese → English (Gemini)
+# Single image, Japanese → English (Google)
 python main.py --input <image_path> \
-  --provider Gemini --gemini-api-key <AI...>
+  --provider Google --google-api-key <AI...>
 
 # Batch folder, custom languages (OpenAI-Compatible, e.g., Ollama)
 python main.py --input <folder_path> --batch \
