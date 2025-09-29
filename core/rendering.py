@@ -1,3 +1,4 @@
+import io
 import os
 import re
 from collections import OrderedDict
@@ -8,6 +9,7 @@ import cv2
 import numpy as np
 import skia
 import uharfbuzz as hb
+from fontTools.ttLib import TTFont
 from PIL import Image
 
 from utils.logging import log_message
@@ -335,13 +337,62 @@ def _tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
     return tokens
 
 
+def _sanitize_font_data(font_path: str, font_data: bytes) -> bytes:
+    """
+    Analyzes font data for known issues (bad UPM, corrupt kern table) and
+    returns a sanitized version of the font data. This is a one-time operation.
+    """
+    try:
+        font_file = io.BytesIO(font_data)
+        font = TTFont(font_file, fontNumber=0)
+
+        data_was_modified = False
+
+        if 'kern' in font:
+            try:
+                _ = font['kern'].tables[0].kernTable
+            except Exception:
+                msg = f"Detected corrupt kern table in {os.path.basename(font_path)}. Removing it."
+                log_message(msg, always_print=True)
+                del font['kern']
+                data_was_modified = True
+
+        test_glyph_name = None
+        cmap = font.getBestCmap()
+        if cmap and ord('M') in cmap:
+            test_glyph_name = cmap[ord('M')]
+
+        if test_glyph_name and 'glyf' in font and 'hmtx' in font:
+            glyph = font['glyf'][test_glyph_name]
+            advance_width = font['hmtx'][test_glyph_name][0]
+            if hasattr(glyph, 'xMax') and advance_width < glyph.xMax:
+                msg = f"Font {os.path.basename(font_path)} has unreliable metrics. Overriding UPM to 1000."
+                log_message(msg, always_print=True)
+                font['head'].unitsPerEm = 1000  # Commonly used UPM value
+                data_was_modified = True
+
+        if data_was_modified:
+            output_bytes = io.BytesIO()
+            font.save(output_bytes)
+            return output_bytes.getvalue()
+        else:
+            return font_data
+
+    except Exception as e:
+        log_message(f"Font sanitization failed for {os.path.basename(font_path)}: {e}", always_print=True)
+        return font_data
+
+
 def _load_font_resources(font_path: str) -> Tuple[Optional[bytes], Optional[skia.Typeface], Optional[hb.Face]]:
     """Loads font data, Skia Typeface, and HarfBuzz Face, using LRU caching."""
     font_data = _font_data_cache.get(font_path)
     if font_data is None:
         try:
             with open(font_path, "rb") as f:
-                font_data = f.read()
+                original_font_data = f.read()
+
+            font_data = _sanitize_font_data(font_path, original_font_data)
+
             _font_data_cache.put(font_path, font_data)
         except Exception as e:
             log_message(f"Font file read error: {e}", always_print=True)
@@ -441,7 +492,7 @@ def _calculate_styled_line_width(
         else:
             hb_font_segment.scale = (int(font_size * (2**16)), int(font_size * (2**16)))
 
-        infos, positions = _shape_line(segment_text, hb_font_segment, features)
+        _, positions = _shape_line(segment_text, hb_font_segment, features)
         total_width += _calculate_line_width(positions, 1.0)
 
     return total_width
