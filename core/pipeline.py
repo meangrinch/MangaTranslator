@@ -264,9 +264,9 @@ def translate_and_render(
                 else:
                     if getattr(config, "test_mode", False):
                         placeholder_long = (
-                            "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+                            "Lorem **ipsum** *dolor* sit amet, consectetur adipiscing elit."
                         )
-                        placeholder_short = "Lorem ipsum dolor sit amet..."
+                        placeholder_short = "Lorem **ipsum** *dolor* sit amet..."
                         log_message(
                             f"Test mode: generating placeholders for {len(sorted_bubble_data)} bubbles",
                             always_print=True,
