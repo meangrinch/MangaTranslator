@@ -48,7 +48,7 @@ pip install torch
 pip install -r requirements.txt
 ```
 
-## Post-install setup
+## Post-Install Setup
 ### YOLO model
 - Place the necessary YOLO segmentation model (`.pt`) in `models/`
 - Recommended Model: [kitsumed/yolov8m_seg-speech-bubble](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt)
@@ -105,37 +105,42 @@ python main.py --input <folder_path> --batch \
 # Cleaning only (no translation/rendering)
 python main.py --input <image_path> --cleaning-only
 
+# Test mode (bypass translation; render placeholder lorem ipsum)
+python main.py --input <image_path> --test-mode
+
 # Full options
 python main.py --help
 ```
 
-## Web UI (quick steps)
+## Web UI (Quick Start)
 1) Launch the Web UI (use `start-webui.bat` on Windows, or the command above)
 2) Translator tab (single) or Batch tab (multiple)
 3) Upload image(s) and choose a font pack; set source/target languages
 4) Open **Config** and set: LLM provider/model, API key or endpoint, reading direction (`rtl` for manga, `ltr` for comics)
 5) Click **Translate** / **Start Batch Translating** — outputs save to `./output/`
-6) Use "Cleaning Only" in **Other** to skip translation (if preferred)
+6) Enable "Cleaning-only Mode" or "Test Mode" in **Other** to skip translation and/or render placeholder text
+
+## Recommended Fonts
+
+#### Normal Text
+- CC Wild Words
+- Anime Ace 3 BB
+- Clementine
+- Komika Hand
+
+#### Shouts/SFX Text (Can be used in place of `Normal Text` bold/italic variants)
+- Fold & Staple BB
+- PP Handwriting
+- Dirty Finger
 
 ## Troubleshooting
 
-#### Setup & Configuration
-- Model/fonts not found: use Config → Refresh; ensure `models/*.pt` and `fonts/<pack>/*.ttf|*.otf`
-- GPU/CPU: CUDA used if available; add `--cpu` to force CPU
-- Minimum image size: 600×600px
-
-#### Content-Related
-- Wrong reading order: Set correct "Reading Direction" (rtl for manga, ltr for comics)
-- Uncleaned text remaining: Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
-- Outlines get eaten during cleaning: Increase "Shrink Threshold ROI" (e.g., 6–8)
-
-#### Translation-Related
-- Poor translation quality: Try "two-step" translation mode for less-capable LLMs
-- LLM refusals: Disable "Send Full Page to LLM" in Config → Translation
-- Inconsistent translations: Adjust LLM parameters (e.g., "Temperature") for more creative/deterministic output
-
-#### Rendering-Related
-- Text too large/small: Adjust "Max Font Size" and "Min Font Size" ranges
+- **Wrong reading order:** Set correct "Reading Direction" (rtl for manga, ltr for comics)
+- **Uncleaned text remaining:** Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
+- **Outlines get eaten during cleaning:** Increase "Shrink Threshold ROI" (e.g., 6–8)
+- **Incoherent translations/API refusals:** Try "two-step" translation mode for less-capable LLMs **or** Disable "Send Full Page to LLM" in Config → Translation
+- **Inconsistent translations:** Adjust LLM parameters (e.g., "Temperature") for more creative/deterministic output
+- **Text too large/small:** Adjust "Max Font Size" and "Min Font Size" ranges
 
 ## Updating
 - Windows portable: download the latest release and replace the existing folder
