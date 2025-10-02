@@ -103,6 +103,7 @@ DEFAULT_SETTINGS = {
     "png_compression": 6,
     "output_format": "auto",
     "cleaning_only": False,
+    "test_mode": False,
     "enable_thinking": True,  # Gemini 2.5 Flash & Claude reasoning models
     "reasoning_effort": "medium",  # OpenAI reasoning models; gpt-5 also supports 'minimal'
     "send_full_page_context": True,
@@ -172,6 +173,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     # General
     "verbose",
     "cleaning_only",
+    "test_mode",
 
     # Batch
     "batch_input_language",

@@ -222,23 +222,65 @@ def translate_and_render(
                 if not bubble_images_b64:
                     log_message("No valid bubbles after sorting", always_print=True)
                 else:
-                    log_message(
-                        f"Translating {len(bubble_images_b64)} bubbles: "
-                        f"{config.translation.input_language} → {config.translation.output_language}",
-                        always_print=True,
-                    )
-                    try:
-                        translated_texts = call_translation_api_batch(
-                            config=config.translation,
-                            images_b64=bubble_images_b64,
-                            full_image_b64=full_image_b64 or "",
-                            debug=verbose,
+                    if getattr(config, "test_mode", False):
+                        placeholder_long = "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+                        placeholder_short = "Lorem ipsum dolor sit amet..."
+                        log_message(
+                            f"Test mode: generating placeholders for {len(sorted_bubble_data)} bubbles",
+                            always_print=True,
                         )
-                    except Exception as e:
-                        log_message(f"Translation API error: {e}", always_print=True)
-                        translated_texts = [
-                            "[Translation Error: API call raised exception]" for _ in sorted_bubble_data
-                        ]
+                        # Map for rendering info used in probe
+                        bubble_render_info_map_probe = {
+                            tuple(info["bbox"]): {"color": info["color"], "mask": info.get("mask")}
+                            for info in processed_bubbles_info
+                            if "bbox" in info and "color" in info and "mask" in info
+                        }
+                        for bubble in sorted_bubble_data:
+                            bbox = bubble["bbox"]
+                            probe_info = bubble_render_info_map_probe.get(tuple(bbox), {})
+                            bubble_color_bgr = probe_info.get("color", (255, 255, 255))
+                            cleaned_mask = probe_info.get("mask")
+                            # Probe fit at max size without mutating the working image
+                            _probe_canvas = pil_cleaned_image.copy()
+                            _, fits = render_text_skia(
+                                pil_image=_probe_canvas,
+                                text=placeholder_long,
+                                bbox=bbox,
+                                font_dir=config.rendering.font_dir,
+                                cleaned_mask=cleaned_mask,
+                                bubble_color_bgr=bubble_color_bgr,
+                                min_font_size=config.rendering.max_font_size,
+                                max_font_size=config.rendering.max_font_size,
+                                line_spacing_mult=config.rendering.line_spacing,
+                                use_subpixel_rendering=config.rendering.use_subpixel_rendering,
+                                font_hinting=config.rendering.font_hinting,
+                                use_ligatures=config.rendering.use_ligatures,
+                                hyphenate_before_scaling=config.rendering.hyphenate_before_scaling,
+                                hyphen_penalty=config.rendering.hyphen_penalty,
+                                hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
+                                badness_exponent=config.rendering.badness_exponent,
+                                padding_pixels=config.rendering.padding_pixels,
+                                verbose=verbose,
+                            )
+                            translated_texts.append(placeholder_long if fits else placeholder_short)
+                    else:
+                        log_message(
+                            f"Translating {len(bubble_images_b64)} bubbles: "
+                            f"{config.translation.input_language} → {config.translation.output_language}",
+                            always_print=True,
+                        )
+                        try:
+                            translated_texts = call_translation_api_batch(
+                                config=config.translation,
+                                images_b64=bubble_images_b64,
+                                full_image_b64=full_image_b64 or "",
+                                debug=verbose,
+                            )
+                        except Exception as e:
+                            log_message(f"Translation API error: {e}", always_print=True)
+                            translated_texts = [
+                                "[Translation Error: API call raised exception]" for _ in sorted_bubble_data
+                            ]
 
                 # --- Render Translations ---
                 bubble_render_info_map = {
@@ -638,6 +680,11 @@ def main():
         help="Only perform detection and cleaning, skip translation and rendering.",
     )
     parser.add_argument(
+        "--test-mode",
+        action="store_true",
+        help="Bypass translation and render placeholder lorem ipsum for testing.",
+    )
+    parser.add_argument(
         "--enable-thinking",
         action="store_true",
         help="Enable 'thinking' capabilities for Gemini 2.5 Flash models.",
@@ -757,6 +804,7 @@ def main():
         output=OutputConfig(
             jpeg_quality=args.jpeg_quality, png_compression=args.png_compression, image_mode=args.image_mode
         ),
+        test_mode=args.test_mode,
     )
 
     # --- Execute ---

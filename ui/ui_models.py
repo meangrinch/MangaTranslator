@@ -91,6 +91,7 @@ class UIGeneralSettings:
 
     verbose: bool = False
     cleaning_only: bool = False
+    test_mode: bool = False
     enable_thinking: bool = True
     reasoning_effort: str = "medium"
     openrouter_reasoning_override: bool = False
@@ -157,6 +158,7 @@ class UIConfigState:
             "png_compression": self.output.png_compression,
             "verbose": self.general.verbose,
             "cleaning_only": self.general.cleaning_only,
+            "test_mode": self.general.test_mode,
             "enable_thinking": self.general.enable_thinking,
             "reasoning_effort": self.general.reasoning_effort,
             "input_language": self.input_language,
@@ -233,6 +235,7 @@ class UIConfigState:
             general=UIGeneralSettings(
                 verbose=data.get("verbose", defaults["verbose"]),
                 cleaning_only=data.get("cleaning_only", defaults["cleaning_only"]),
+                test_mode=data.get("test_mode", defaults.get("test_mode", False)),
                 enable_thinking=data.get("enable_thinking", defaults.get("enable_thinking", True)),
                 reasoning_effort=data.get("reasoning_effort", defaults.get("reasoning_effort", "medium")),
                 openrouter_reasoning_override=data.get(
@@ -324,6 +327,7 @@ def map_ui_to_backend_config(
         rendering=rendering_cfg,
         output=output_cfg,
         cleaning_only=ui_state.general.cleaning_only,
+        test_mode=ui_state.general.test_mode,
     )
 
     return backend_config

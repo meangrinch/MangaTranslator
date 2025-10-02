@@ -699,6 +699,13 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
                                 label="Cleaning-only Mode",
                                 info="Skip translation and text rendering, output only the cleaned speech bubbles.",
                             )
+                            test_mode_toggle = gr.Checkbox(
+                                value=saved_settings.get("test_mode", False),
+                                label="Test Mode (use placeholder text)",
+                                info=(
+                                    "Bypass translation and render lorem ipsum."
+                                ),
+                            )
                         setting_groups.append(group_other)
 
         # --- Define Event Handlers ---
@@ -733,6 +740,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             png_compression,
             verbose,
             cleaning_only_toggle,
+            test_mode_toggle,
             input_language,
             output_language,
             font_dropdown,
@@ -781,6 +789,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             png_compression,
             verbose,
             cleaning_only_toggle,
+            test_mode_toggle,
             input_language,
             output_language,
             font_dropdown,
@@ -830,6 +839,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             png_compression,
             verbose,
             cleaning_only_toggle,
+            test_mode_toggle,
             enable_thinking_checkbox,
             reasoning_effort_dropdown,
             send_full_page_context,
@@ -876,6 +886,7 @@ def create_layout(models_dir: Path, fonts_base_dir: Path, target_device: Any) ->
             png_compression,
             verbose,
             cleaning_only_toggle,
+            test_mode_toggle,
             enable_thinking_checkbox,
             reasoning_effort_dropdown,
             send_full_page_context,

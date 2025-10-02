@@ -90,6 +90,7 @@ class MangaTranslatorConfig:
     verbose: bool = False
     device: Optional[torch.device] = None
     cleaning_only: bool = False
+    test_mode: bool = False
 
     def __post_init__(self):
         # Load API keys from environment variables if not already set

@@ -295,6 +295,7 @@ def handle_translate_click(
         png_compression,
         verbose,
         cleaning_only_toggle,
+        test_mode_toggle,
         enable_thinking_checkbox_val,
         reasoning_effort_val,
         send_full_page_context_val,
@@ -387,6 +388,7 @@ def handle_translate_click(
             general=UIGeneralSettings(
                 verbose=verbose,
                 cleaning_only=cleaning_only_toggle,
+                test_mode=test_mode_toggle,
                 enable_thinking=enable_thinking_checkbox_val,
                 reasoning_effort=reasoning_effort_val,
                 openrouter_reasoning_override=openrouter_reasoning_override_val,
@@ -492,6 +494,7 @@ def handle_batch_click(
         png_compression,
         verbose,
         cleaning_only_toggle,
+        test_mode_toggle,
         enable_thinking_checkbox_val,
         reasoning_effort_val,
         batch_send_full_page_context_val,
@@ -586,6 +589,7 @@ def handle_batch_click(
             general=UIGeneralSettings(
                 verbose=verbose,
                 cleaning_only=cleaning_only_toggle,
+                test_mode=test_mode_toggle,
                 enable_thinking=enable_thinking_checkbox_val,
                 reasoning_effort=reasoning_effort_val,
                 openrouter_reasoning_override=openrouter_reasoning_override_val,
@@ -687,6 +691,7 @@ def handle_save_config_click(*args: Any) -> str:
         pngc,
         verb,
         cleaning_only_val,
+        test_mode_val,
         s_in_lang,
         s_out_lang,
         s_font,
@@ -752,6 +757,7 @@ def handle_save_config_click(*args: Any) -> str:
         general=UIGeneralSettings(
             verbose=verb,
             cleaning_only=cleaning_only_val,
+            test_mode=test_mode_val,
             enable_thinking=enable_thinking_val,
             reasoning_effort=reasoning_effort_val,
             openrouter_reasoning_override=openrouter_reasoning_override_val,
