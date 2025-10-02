@@ -796,13 +796,6 @@ def main():
     parser.add_argument(
         "--png-compression", type=int, default=6, help="PNG compression level (0-9)"
     )
-    parser.add_argument(
-        "--image-mode",
-        type=str,
-        default="RGBA",
-        choices=["RGB", "RGBA"],
-        help="Processing image mode (RGB or RGBA)",
-    )
     # General args
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--cpu", action="store_true", help="Force CPU usage")
@@ -964,7 +957,6 @@ def main():
         output=OutputConfig(
             jpeg_quality=args.jpeg_quality,
             png_compression=args.png_compression,
-            image_mode=args.image_mode,
         ),
         test_mode=args.test_mode,
     )

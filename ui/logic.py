@@ -105,11 +105,6 @@ def translate_manga_logic(
         os.makedirs(output_base_dir, exist_ok=True)
         save_path = output_base_dir / f"MangaTranslator_{timestamp}{output_ext}"
 
-        if output_ext in [".jpg", ".jpeg"]:
-            config.output.image_mode = "RGB"
-        else:
-            config.output.image_mode = "RGBA"
-
         translated_image = translate_and_render(
             image_path=image_path_for_processing, config=config, output_path=save_path
         )

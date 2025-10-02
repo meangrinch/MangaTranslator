@@ -75,7 +75,6 @@ class OutputConfig:
 
     jpeg_quality: int = 95
     png_compression: int = 6
-    image_mode: str = "RGBA"  # Default image mode
     output_format: str = "auto"
 
 
