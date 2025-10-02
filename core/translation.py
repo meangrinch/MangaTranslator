@@ -70,11 +70,11 @@ def _build_system_prompt_translation(output_language: str) -> str:
         "- Use ASCII quotes and punctuation; retain ellipses when meaningful.\n"
         "- If a source line is [OCR FAILED] or [NO TEXT], output it unchanged.\n"
         "- Output format: Return ONLY a numbered list with exactly one line per bubble, "
-        "in the form `i: <text>` for i = 1..N and nothing else."
+        "in the form `i: <translated text>` for i = 1..N and nothing else."
     )
 
 
-def sort_bubbles_by_reading_order(detections, image_height, image_width, reading_direction="rtl"):
+def sort_bubbles_by_reading_order(detections, reading_direction="rtl"):
     """
     Sort speech bubbles into a robust reading order.
 
@@ -89,8 +89,6 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
 
     Args:
         detections (list): List of detection dicts with a "bbox" key: (x1, y1, x2, y2).
-        image_height (int): Full image height (unused, reserved for future heuristics).
-        image_width (int): Full image width (unused, reserved for future heuristics).
         reading_direction (str): "rtl" or "ltr".
 
     Returns:
@@ -108,47 +106,13 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
         cy = (y1 + y2) / 2.0
         return x1, y1, x2, y2, w, h, cx, cy
 
-    # Heuristics
-    y_overlap_ratio_threshold = 0.3  # Consider same row if >= 30% vertical overlap
-    y_center_band_factor = 0.35      # Or if centers are within 35% of the smaller height
-    x_overlap_ratio_threshold = 0.3  # Consider same column if >= 30% horizontal overlap
-    x_center_band_factor = 0.35      # Or if centers are within 35% of the smaller width
-    x_tie_epsilon = 1e-3
-    y_tie_epsilon = 1e-3
+    # Heuristics for grouping bubbles into rows and columns
+    y_overlap_ratio_threshold = 0.3
+    y_center_band_factor = 0.35
+    x_overlap_ratio_threshold = 0.3
+    x_center_band_factor = 0.35
 
     rtl = (reading_direction or "rtl").lower() == "rtl"
-
-    def _compare(a: Dict[str, Any], b: Dict[str, Any]) -> int:
-        ax1, ay1, ax2, ay2, aw, ah, acx, acy = _features(a)
-        bx1, by1, bx2, by2, bw, bh, bcx, bcy = _features(b)
-
-        # Determine if on the same row band
-        overlap_v = max(0.0, min(ay2, by2) - max(ay1, by1))
-        min_h = max(1.0, min(ah, bh))
-        overlap_ratio = overlap_v / min_h
-        center_delta_y = abs(acy - bcy)
-        same_row = (overlap_ratio >= y_overlap_ratio_threshold) or (center_delta_y <= y_center_band_factor * min_h)
-
-        if same_row:
-            if abs(acx - bcx) <= x_tie_epsilon:
-                # If horizontally tied, fall back to top→bottom within the row
-                if abs(acy - bcy) <= y_tie_epsilon:
-                    # Absolute tie: break by leftmost/rightmost to keep deterministic order
-                    return -1 if (ax1 + bx1) <= (ax2 + bx2) else 1
-                return -1 if acy < bcy else 1
-            if rtl:
-                return -1 if acx > bcx else 1
-            else:
-                return -1 if acx < bcx else 1
-
-        # Different rows: top first
-        if abs(acy - bcy) <= y_tie_epsilon:
-            # If vertical centers are practically equal but not considered same_row, use direction on x
-            if rtl:
-                return -1 if acx > bcx else 1
-            else:
-                return -1 if acx < bcx else 1
-        return -1 if acy < bcy else 1
 
     # Deterministic row-banding approach to ensure transitive ordering
     enriched = []
@@ -166,10 +130,9 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
             "cy": cy,
         })
 
-    # Sort by vertical center for stable band construction
-    enriched.sort(key=lambda e: e["cy"])  # stable vertical ordering
+    enriched.sort(key=lambda e: e["cy"])
 
-    bands = []  # Each band: {y_min, y_max, items: [enriched indices]}
+    bands = []
 
     for e in enriched:
         y1 = e["y1"]
@@ -201,16 +164,14 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
             band["y_min"] = min(band["y_min"], y1)
             band["y_max"] = max(band["y_max"], y2)
 
-    # Sort bands by top-most y
-    bands.sort(key=lambda b: b["y_min"])  # top rows first
+    bands.sort(key=lambda b: b["y_min"])
 
     # Sort items within each band using column clustering, then vertical order inside columns
     ordered_enriched = []
     for band in bands:
         items = band["items"]
 
-        # Build columns within this band
-        columns = []  # Each: {x_min, x_max, items: [enriched]}
+        columns = []
         for e in items:
             x1 = e["x1"]
             x2 = e["x2"]
@@ -247,9 +208,8 @@ def sort_bubbles_by_reading_order(detections, image_height, image_width, reading
         else:
             columns.sort(key=lambda c: ((c["x_min"] + c["x_max"]) / 2.0))
 
-        # Within each column, sort by vertical center (top→bottom)
         for col in columns:
-            col["items"].sort(key=lambda e: e["cy"])  # top first
+            col["items"].sort(key=lambda e: e["cy"])
             ordered_enriched.extend(col["items"])
 
     return [e["det"] for e in ordered_enriched]
@@ -623,10 +583,10 @@ Apply the style markers as defined in your instructions.
 ---
 
 Return ONLY the following numbered lines, one per bubble:
-1: <translation>
-2: <translation>
+1: <translated text>
+2: <translated text>
 ...
-{num_bubbles}: <translation>
+{num_bubbles}: <translated text>
 
 If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged for that number. Do not add any other text."""  # noqa
 
@@ -702,10 +662,10 @@ For each speech bubble image:
 3) Apply the style markers as defined in your instructions.
 
 Return ONLY the following numbered lines, one per bubble:
-1: <translation>
-2: <translation>
+1: <translated text>
+2: <translated text>
 ...
-{num_bubbles}: <translation>
+{num_bubbles}: <translated text>
 
 If the bubble is [NO TEXT] or [OCR FAILED], output that exact tag unchanged for that number. Do not include any explanations."""  # noqa
 

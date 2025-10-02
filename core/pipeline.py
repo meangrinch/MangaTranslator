@@ -212,11 +212,9 @@ def translate_and_render(
                 # --- Sort and Translate ---
                 reading_direction = config.translation.reading_direction
                 log_message(f"Sorting bubbles ({reading_direction.upper()})", verbose=verbose)
-                image_width = original_cv_image.shape[1]
-                image_height = original_cv_image.shape[0]
 
                 sorted_bubble_data = sort_bubbles_by_reading_order(
-                    valid_bubble_data, image_height, image_width, reading_direction
+                    valid_bubble_data, reading_direction
                 )
 
                 bubble_images_b64 = [bubble["image_b64"] for bubble in sorted_bubble_data]
