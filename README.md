@@ -102,7 +102,7 @@ python main.py --input <folder_path> --batch \
   --provider OpenAI-Compatible --openai-compatible-url http://localhost:11434/v1 \
   --output ./output
 
-# Cleaning only (no translation/rendering)
+# Cleaning-only mode (no translation/rendering)
 python main.py --input <image_path> --cleaning-only
 
 # Test mode (bypass translation; render placeholder lorem ipsum)
@@ -128,7 +128,7 @@ python main.py --help
 - Clementine
 - Komika Hand
 
-#### Shouts/SFX Text (Can be used in place of `Normal Text` bold/italic variants)
+#### Shouts/SFX Text (Can be used in place of "Normal Text" bold/italic variants)
 - Fold & Staple BB
 - PP Handwriting
 - Dirty Finger
