@@ -48,7 +48,9 @@ def cv2_to_pil(cv2_image):
     return Image.fromarray(cv2_image)
 
 
-def save_image_with_compression(image, output_path, jpeg_quality=95, png_compression=6, verbose=False):
+def save_image_with_compression(
+    image, output_path, jpeg_quality=95, png_compression=6, verbose=False
+):
     """
     Save an image with specified compression settings.
 
@@ -62,7 +64,9 @@ def save_image_with_compression(image, output_path, jpeg_quality=95, png_compres
     Returns:
         bool: Whether the save was successful
     """
-    output_path = Path(output_path) if not isinstance(output_path, Path) else output_path
+    output_path = (
+        Path(output_path) if not isinstance(output_path, Path) else output_path
+    )
 
     extension = output_path.suffix.lower()
     output_format = None
@@ -72,7 +76,9 @@ def save_image_with_compression(image, output_path, jpeg_quality=95, png_compres
         output_format = "JPEG"
         # Convert RGBA/P/LA to RGB for JPEG by compositing on white background
         if image.mode in ["RGBA", "LA"]:
-            log_message(f"Converting {image.mode} to RGB for JPEG output", verbose=verbose)
+            log_message(
+                f"Converting {image.mode} to RGB for JPEG output", verbose=verbose
+            )
             background = Image.new("RGB", image.size, (255, 255, 255))
             # Use alpha channel if available (RGBA, LA)
             alpha_channel = image.split()[-1] if image.mode in ["RGBA", "LA"] else None
@@ -82,10 +88,15 @@ def save_image_with_compression(image, output_path, jpeg_quality=95, png_compres
             log_message("Converting P mode to RGB for JPEG output", verbose=verbose)
             image = image.convert("RGB")
         elif image.mode != "RGB":
-            log_message(f"Converting {image.mode} mode to RGB for JPEG output", verbose=verbose)
+            log_message(
+                f"Converting {image.mode} mode to RGB for JPEG output", verbose=verbose
+            )
             image = image.convert("RGB")
         save_options["quality"] = max(1, min(jpeg_quality, 100))
-        log_message(f"Saving JPEG image with quality {save_options['quality']} to {output_path}", verbose=verbose)
+        log_message(
+            f"Saving JPEG image with quality {save_options['quality']} to {output_path}",
+            verbose=verbose,
+        )
 
     elif extension == ".png":
         output_format = "PNG"
@@ -98,11 +109,15 @@ def save_image_with_compression(image, output_path, jpeg_quality=95, png_compres
     elif extension == ".webp":
         output_format = "WEBP"
         save_options["lossless"] = True
-        log_message(f"Saving WEBP image with lossless quality to {output_path}", verbose=verbose)
+        log_message(
+            f"Saving WEBP image with lossless quality to {output_path}", verbose=verbose
+        )
 
     else:
         log_message(
-            f"Warning: Unknown output extension '{extension}'. Saving as PNG.", verbose=verbose, always_print=True
+            f"Warning: Unknown output extension '{extension}'. Saving as PNG.",
+            verbose=verbose,
+            always_print=True,
         )
         output_format = "PNG"
         output_path = output_path.with_suffix(".png")

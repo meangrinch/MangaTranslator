@@ -61,9 +61,14 @@ def call_gemini_endpoint(
         payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
 
     for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2**attempt), 16.0)  # Exponential backoff, max 16s
+        current_delay = min(
+            base_delay * (2**attempt), 16.0
+        )  # Exponential backoff, max 16s
         try:
-            log_message(f"Google API request (attempt {attempt + 1}/{max_retries + 1})", verbose=debug)
+            log_message(
+                f"Google API request (attempt {attempt + 1}/{max_retries + 1})",
+                verbose=debug,
+            )
 
             response = requests.post(url, json=payload, timeout=timeout)
             response.raise_for_status()
@@ -82,7 +87,9 @@ def call_gemini_endpoint(
                         safety_ratings = candidate.get("safetyRatings", [])
                         block_reason = "Unknown Safety Reason"
                         if safety_ratings:
-                            block_reason = safety_ratings[0].get("category", block_reason)
+                            block_reason = safety_ratings[0].get(
+                                "category", block_reason
+                            )
                         return None
 
                     content_parts = candidate.get("content", {}).get("parts", [{}])
@@ -100,32 +107,45 @@ def call_gemini_endpoint(
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(f"Error processing successful Google API response: {str(e)}") from e
+                raise RuntimeError(
+                    f"Error processing successful Google API response: {str(e)}"
+                ) from e
 
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
             error_text = e.response.text[:500]  # Limit error text length
 
             if status_code == 429 and attempt < max_retries:
-                log_message(f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug)
+                log_message(
+                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
+                )
                 time.sleep(current_delay)
                 continue
             else:
                 error_reason = f"Status {status_code}: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                    error_reason = f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    error_reason = (
+                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    )
 
                 raise RuntimeError(f"Google API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                log_message(f"Connection error, retrying in {current_delay:.1f}s: {str(e)}", verbose=debug)
+                log_message(
+                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    verbose=debug,
+                )
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(f"Google API Connection Error after retries: {str(e)}") from e
+                raise RuntimeError(
+                    f"Google API Connection Error after retries: {str(e)}"
+                ) from e
 
-    raise RuntimeError(f"Failed to get response from Google API after {max_retries + 1} attempts.")
+    raise RuntimeError(
+        f"Failed to get response from Google API after {max_retries + 1} attempts."
+    )
 
 
 def call_openai_endpoint(
@@ -176,14 +196,20 @@ def call_openai_endpoint(
     # Build Responses API input content
     input_content = []
     for part in image_parts:
-        if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
+        if (
+            "inline_data" in part
+            and "data" in part["inline_data"]
+            and "mime_type" in part["inline_data"]
+        ):
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
             # Responses API image input
-            input_content.append({
-                "type": "input_image",
-                "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
-            })
+            input_content.append(
+                {
+                    "type": "input_image",
+                    "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                }
+            )
         else:
             log_message(f"Invalid image part format: {part}", always_print=True)
     input_content.append({"type": "input_text", "text": text_part["text"]})
@@ -191,7 +217,9 @@ def call_openai_endpoint(
     payload = {
         "model": model_name,
         "input": [{"role": "user", "content": input_content}],
-        "temperature": generation_config.get("temperature") if model_name != "o4-mini" else 1.0,
+        "temperature": (
+            generation_config.get("temperature") if model_name != "o4-mini" else 1.0
+        ),
         "top_p": generation_config.get("top_p") if model_name != "o4-mini" else None,
         "max_output_tokens": generation_config.get("max_output_tokens", 2048),
     }
@@ -228,9 +256,14 @@ def call_openai_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
-            log_message(f"OpenAI API request (attempt {attempt + 1}/{max_retries + 1})", verbose=debug)
+            log_message(
+                f"OpenAI API request (attempt {attempt + 1}/{max_retries + 1})",
+                verbose=debug,
+            )
 
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response = requests.post(
+                url, headers=headers, json=payload, timeout=timeout
+            )
             response.raise_for_status()
 
             log_message("Processing OpenAI response", verbose=debug)
@@ -246,11 +279,15 @@ def call_openai_endpoint(
                 output_items = result.get("output")
                 if isinstance(output_items, list):
                     for item in output_items:
-                        content_blocks = item.get("content") if isinstance(item, dict) else None
+                        content_blocks = (
+                            item.get("content") if isinstance(item, dict) else None
+                        )
                         if isinstance(content_blocks, list):
                             for block in content_blocks:
                                 if isinstance(block, dict):
-                                    text_val = block.get("text") or block.get("output_text")
+                                    text_val = block.get("text") or block.get(
+                                        "output_text"
+                                    )
                                     if isinstance(text_val, str) and text_val.strip():
                                         return text_val.strip()
 
@@ -258,20 +295,26 @@ def call_openai_endpoint(
                 return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(f"Error processing successful OpenAI API response: {str(e)}") from e
+                raise RuntimeError(
+                    f"Error processing successful OpenAI API response: {str(e)}"
+                ) from e
 
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
             error_text = e.response.text[:500]
 
             if status_code == 429 and attempt < max_retries:
-                log_message(f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug)
+                log_message(
+                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
+                )
                 time.sleep(current_delay)
                 continue
             else:
                 error_reason = f"Status {status_code}: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                    error_reason = f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    error_reason = (
+                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    )
                 elif status_code == 400:
                     error_reason += " (Check model name and payload)"
 
@@ -279,13 +322,20 @@ def call_openai_endpoint(
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                log_message(f"Connection error, retrying in {current_delay:.1f}s: {str(e)}", verbose=debug)
+                log_message(
+                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    verbose=debug,
+                )
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(f"OpenAI API Connection Error after retries: {str(e)}") from e
+                raise RuntimeError(
+                    f"OpenAI API Connection Error after retries: {str(e)}"
+                ) from e
 
-    raise RuntimeError(f"Failed to get response from OpenAI Responses API after {max_retries + 1} attempts.")
+    raise RuntimeError(
+        f"Failed to get response from OpenAI Responses API after {max_retries + 1} attempts."
+    )
 
 
 def call_anthropic_endpoint(
@@ -333,18 +383,28 @@ def call_anthropic_endpoint(
             image_parts.insert(0, part)
 
     if not user_prompt_part:
-        raise ValueError("Invalid 'parts' format for Anthropic: No text prompt found for user message.")
+        raise ValueError(
+            "Invalid 'parts' format for Anthropic: No text prompt found for user message."
+        )
 
     content_parts = image_parts
 
     url = "https://api.anthropic.com/v1/messages"
-    headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+    }
 
     messages = []
     user_prompt_text = user_prompt_part["text"]
     user_content = []
     for part in content_parts:
-        if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
+        if (
+            "inline_data" in part
+            and "data" in part["inline_data"]
+            and "mime_type" in part["inline_data"]
+        ):
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
             user_content.append(
@@ -362,7 +422,9 @@ def call_anthropic_endpoint(
 
     user_content.append({"type": "text", "text": user_prompt_text})
     if not user_content:
-        raise ValueError("No valid content (images/text) could be prepared for Anthropic user message.")
+        raise ValueError(
+            "No valid content (images/text) could be prepared for Anthropic user message."
+        )
 
     messages.append({"role": "user", "content": user_content})
 
@@ -391,9 +453,14 @@ def call_anthropic_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
-            log_message(f"Anthropic API request (attempt {attempt + 1}/{max_retries + 1})", verbose=debug)
+            log_message(
+                f"Anthropic API request (attempt {attempt + 1}/{max_retries + 1})",
+                verbose=debug,
+            )
 
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response = requests.post(
+                url, headers=headers, json=payload, timeout=timeout
+            )
             response.raise_for_status()
 
             log_message("Processing Anthropic response", verbose=debug)
@@ -403,10 +470,18 @@ def call_anthropic_endpoint(
                 if result.get("type") == "error":
                     error_data = result.get("error", {})
                     error_type = error_data.get("type", "unknown_error")
-                    error_message = error_data.get("message", "No error message provided.")
-                    raise RuntimeError(f"Anthropic API returned error: {error_type} - {error_message}")
+                    error_message = error_data.get(
+                        "message", "No error message provided."
+                    )
+                    raise RuntimeError(
+                        f"Anthropic API returned error: {error_type} - {error_message}"
+                    )
 
-                if "content" in result and isinstance(result["content"], list) and len(result["content"]) > 0:
+                if (
+                    "content" in result
+                    and isinstance(result["content"], list)
+                    and len(result["content"]) > 0
+                ):
                     text_content = ""
                     for block in result["content"]:
                         if block.get("type") == "text":
@@ -415,7 +490,10 @@ def call_anthropic_endpoint(
 
                     stop_reason = result.get("stop_reason")
                     if stop_reason == "max_tokens":
-                        log_message("Response truncated due to max_tokens limit", always_print=True)
+                        log_message(
+                            "Response truncated due to max_tokens limit",
+                            always_print=True,
+                        )
                     elif stop_reason == "stop_sequence":
                         pass
                     elif stop_reason:
@@ -424,42 +502,61 @@ def call_anthropic_endpoint(
                     return text_content.strip()
 
                 else:
-                    log_message("No text content in Anthropic response", always_print=True)
+                    log_message(
+                        "No text content in Anthropic response", always_print=True
+                    )
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(f"Error processing successful Anthropic API response: {str(e)}") from e
+                raise RuntimeError(
+                    f"Error processing successful Anthropic API response: {str(e)}"
+                ) from e
 
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
             error_text = e.response.text[:500]
 
             if status_code == 429 and attempt < max_retries:
-                log_message(f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug)
+                log_message(
+                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
+                )
                 time.sleep(current_delay)
                 continue
             else:
                 error_reason = f"Status {status_code}: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                    error_reason = f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    error_reason = (
+                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    )
                 elif status_code == 400:
-                    error_reason += " (Check model name, API key, payload, or max_tokens)"
+                    error_reason += (
+                        " (Check model name, API key, payload, or max_tokens)"
+                    )
                 elif status_code == 401:
                     error_reason += " (Check API key)"
                 elif status_code == 403:
                     error_reason += " (Permission denied, check API key/plan)"
-                log_message(f"Anthropic API HTTP Error: {error_reason}", always_print=True)
+                log_message(
+                    f"Anthropic API HTTP Error: {error_reason}", always_print=True
+                )
                 raise RuntimeError(f"Anthropic API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                log_message(f"Connection error, retrying in {current_delay:.1f}s: {str(e)}", verbose=debug)
+                log_message(
+                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    verbose=debug,
+                )
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(f"Anthropic API Connection Error after retries: {str(e)}") from e
+                raise RuntimeError(
+                    f"Anthropic API Connection Error after retries: {str(e)}"
+                ) from e
 
-    raise RuntimeError(f"Failed to get response from Anthropic API after {max_retries + 1} attempts.")
+    raise RuntimeError(
+        f"Failed to get response from Anthropic API after {max_retries + 1} attempts."
+    )
 
 
 def call_xai_endpoint(
@@ -513,25 +610,26 @@ def call_xai_endpoint(
     # Build input array for xAI Responses API
     input_messages = []
     if system_prompt:
-        input_messages.append({
-            "role": "system",
-            "content": system_prompt
-        })
+        input_messages.append({"role": "system", "content": system_prompt})
 
     if image_parts:
         # Use array format when images are present
         user_content = []
         for part in image_parts:
-            if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
+            if (
+                "inline_data" in part
+                and "data" in part["inline_data"]
+                and "mime_type" in part["inline_data"]
+            ):
                 mime_type = part["inline_data"]["mime_type"]
                 base64_image = part["inline_data"]["data"]
                 # xAI Responses API image format
-                user_content.append({
-                    "type": "input_image",
-                    "image_url": {
-                        "url": f"data:{mime_type};base64,{base64_image}"
+                user_content.append(
+                    {
+                        "type": "input_image",
+                        "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
                     }
-                })
+                )
             else:
                 log_message(f"Invalid image part format: {part}", always_print=True)
 
@@ -549,7 +647,9 @@ def call_xai_endpoint(
     }
 
     model_lower = (model_name or "").lower()
-    is_reasoning_model = "reasoning" in model_lower or model_lower.startswith("grok-4-fast-reasoning")
+    is_reasoning_model = "reasoning" in model_lower or model_lower.startswith(
+        "grok-4-fast-reasoning"
+    )
 
     if is_reasoning_model:
         payload["reasoning_tokens"] = generation_config.get("reasoning_tokens", 8192)
@@ -562,9 +662,14 @@ def call_xai_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
-            log_message(f"xAI API request (attempt {attempt + 1}/{max_retries + 1})", verbose=debug)
+            log_message(
+                f"xAI API request (attempt {attempt + 1}/{max_retries + 1})",
+                verbose=debug,
+            )
 
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response = requests.post(
+                url, headers=headers, json=payload, timeout=timeout
+            )
             response.raise_for_status()
 
             log_message("Processing xAI response", verbose=debug)
@@ -580,7 +685,10 @@ def call_xai_endpoint(
                                 return content.strip()
                             elif isinstance(content, list):
                                 for content_block in content:
-                                    if isinstance(content_block, dict) and "text" in content_block:
+                                    if (
+                                        isinstance(content_block, dict)
+                                        and "text" in content_block
+                                    ):
                                         text = content_block["text"]
                                         if text and text.strip():
                                             return text.strip()
@@ -593,20 +701,26 @@ def call_xai_endpoint(
                 return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(f"Error processing xAI API response: {str(e)}") from e
+                raise RuntimeError(
+                    f"Error processing xAI API response: {str(e)}"
+                ) from e
 
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
             error_text = e.response.text[:500]
 
             if status_code == 429 and attempt < max_retries:
-                log_message(f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug)
+                log_message(
+                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
+                )
                 time.sleep(current_delay)
                 continue
             else:
                 error_reason = f"Status {status_code}: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                    error_reason = f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    error_reason = (
+                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    )
                 elif status_code == 400:
                     error_reason += " (Check model name and payload)"
                 elif status_code == 401:
@@ -619,16 +733,24 @@ def call_xai_endpoint(
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                log_message(f"Connection error, retrying in {current_delay:.1f}s: {str(e)}", verbose=debug)
+                log_message(
+                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    verbose=debug,
+                )
                 time.sleep(current_delay)
                 continue
             else:
                 log_message(
-                    f"xAI connection failed after {max_retries + 1} attempts: {str(e)}", always_print=True
+                    f"xAI connection failed after {max_retries + 1} attempts: {str(e)}",
+                    always_print=True,
                 )
-                raise RuntimeError(f"xAI API Connection Error after retries: {str(e)}") from e
+                raise RuntimeError(
+                    f"xAI API Connection Error after retries: {str(e)}"
+                ) from e
 
-    raise RuntimeError(f"Failed to get response from xAI API after {max_retries + 1} attempts.")
+    raise RuntimeError(
+        f"Failed to get response from xAI API after {max_retries + 1} attempts."
+    )
 
 
 def call_openrouter_endpoint(
@@ -688,10 +810,19 @@ def call_openrouter_endpoint(
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     for part in image_parts:
-        if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
+        if (
+            "inline_data" in part
+            and "data" in part["inline_data"]
+            and "mime_type" in part["inline_data"]
+        ):
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}})
+            user_content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                }
+            )
         else:
             log_message(f"Invalid image part format: {part}", always_print=True)
     user_content.append({"type": "text", "text": text_part["text"]})
@@ -699,7 +830,11 @@ def call_openrouter_endpoint(
 
     # Map generation config with provider-specific restrictions
     # Reasoning-aware max tokens: allow higher limit if indicated by caller
-    payload = {"model": model_name, "messages": messages, "max_tokens": generation_config.get("max_tokens", 2048)}
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "max_tokens": generation_config.get("max_tokens", 2048),
+    }
 
     is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")
     is_anthropic_model = "anthropic/" in model_name or model_name.startswith("claude-")
@@ -731,13 +866,23 @@ def call_openrouter_endpoint(
 
     # Check for enable thinking (Google/Anthropic/xAI models)
     # Exclude :thinking variants as they are already thinking-only models
-    elif ((is_anthropic_model or "gemini" in model_name.lower() or (is_grok_model and "fast" in model_name.lower()))
-          and ":thinking" not in model_name.lower()
-          and generation_config.get("enable_thinking")):
+    elif (
+        (
+            is_anthropic_model
+            or "gemini" in model_name.lower()
+            or (is_grok_model and "fast" in model_name.lower())
+        )
+        and ":thinking" not in model_name.lower()
+        and generation_config.get("enable_thinking")
+    ):
         reasoning_config["max_tokens"] = 8192
 
     # Check for Grok 4 Fast
-    if is_grok_model and "fast" in model_name.lower() and generation_config.get("enable_thinking"):
+    if (
+        is_grok_model
+        and "fast" in model_name.lower()
+        and generation_config.get("enable_thinking")
+    ):
         reasoning_config["enabled"] = True
 
     # Always exclude reasoning tokens from response for all models
@@ -750,9 +895,14 @@ def call_openrouter_endpoint(
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
-            log_message(f"OpenRouter API request (attempt {attempt + 1}/{max_retries + 1})", verbose=debug)
+            log_message(
+                f"OpenRouter API request (attempt {attempt + 1}/{max_retries + 1})",
+                verbose=debug,
+            )
 
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response = requests.post(
+                url, headers=headers, json=payload, timeout=timeout
+            )
             response.raise_for_status()
 
             log_message("Processing OpenRouter response", verbose=debug)
@@ -764,7 +914,9 @@ def call_openrouter_endpoint(
                     finish_reason = choice.get("finish_reason")
 
                     if finish_reason == "content_filter":
-                        log_message("Content blocked by OpenRouter filter", always_print=True)
+                        log_message(
+                            "Content blocked by OpenRouter filter", always_print=True
+                        )
                         return None
 
                     message = choice.get("message")
@@ -776,47 +928,69 @@ def call_openrouter_endpoint(
                         return ""
                 else:
                     if "error" in result:
-                        error_msg = result.get("error", {}).get("message", "Unknown error")
-                        raise RuntimeError(f"OpenRouter API returned error: {error_msg}")
+                        error_msg = result.get("error", {}).get(
+                            "message", "Unknown error"
+                        )
+                        raise RuntimeError(
+                            f"OpenRouter API returned error: {error_msg}"
+                        )
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(f"Error processing OpenRouter API response: {str(e)}") from e
+                raise RuntimeError(
+                    f"Error processing OpenRouter API response: {str(e)}"
+                ) from e
 
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
             error_text = e.response.text[:500]
 
             if status_code == 429 and attempt < max_retries:
-                log_message(f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug)
+                log_message(
+                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
+                )
                 time.sleep(current_delay)
                 continue
             else:
                 error_reason = f"Status {status_code}: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                    error_reason = f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    error_reason = (
+                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    )
                 elif status_code == 400:
-                    error_reason += " (Check model name and payload)"  # Potential 400 reason
+                    error_reason += (
+                        " (Check model name and payload)"  # Potential 400 reason
+                    )
                 elif status_code == 401:
                     error_reason += " (Check API key)"  # Potential 401 reason
                 elif status_code == 403:
                     error_reason += " (Permission denied, check API key/plan)"  # Potential 403 reason
 
-                log_message(f"OpenRouter API HTTP Error: {error_reason}", always_print=True)
+                log_message(
+                    f"OpenRouter API HTTP Error: {error_reason}", always_print=True
+                )
                 raise RuntimeError(f"OpenRouter API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                log_message(f"Connection error, retrying in {current_delay:.1f}s: {str(e)}", verbose=debug)
+                log_message(
+                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    verbose=debug,
+                )
                 time.sleep(current_delay)
                 continue
             else:
                 log_message(
-                    f"OpenRouter connection failed after {max_retries + 1} attempts: {str(e)}", always_print=True
+                    f"OpenRouter connection failed after {max_retries + 1} attempts: {str(e)}",
+                    always_print=True,
                 )
-                raise RuntimeError(f"OpenRouter API Connection Error after retries: {str(e)}") from e
+                raise RuntimeError(
+                    f"OpenRouter API Connection Error after retries: {str(e)}"
+                ) from e
 
-    raise RuntimeError(f"Failed to get response from OpenRouter API after {max_retries + 1} attempts.")
+    raise RuntimeError(
+        f"Failed to get response from OpenRouter API after {max_retries + 1} attempts."
+    )
 
 
 # --- OpenRouter model metadata cache & reasoning detection ---
@@ -842,7 +1016,9 @@ def _ensure_openrouter_models_meta_loaded(debug: bool = False) -> None:
                 _OPENROUTER_MODELS_META[mid] = model
     except Exception as e:
         # Do not raise; lack of metadata should not block translations
-        log_message(f"Could not load OpenRouter models metadata: {e}", always_print=True)
+        log_message(
+            f"Could not load OpenRouter models metadata: {e}", always_print=True
+        )
 
 
 def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
@@ -922,7 +1098,9 @@ def call_openai_compatible_endpoint(
     text_part = next((p for p in parts if "text" in p), None)
     image_parts = [p for p in parts if "inline_data" in p]
     if not text_part:
-        raise ValueError("Invalid 'parts' format for OpenAI-Compatible: No text prompt found.")
+        raise ValueError(
+            "Invalid 'parts' format for OpenAI-Compatible: No text prompt found."
+        )
 
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
@@ -937,16 +1115,29 @@ def call_openai_compatible_endpoint(
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     for part in image_parts:
-        if "inline_data" in part and "data" in part["inline_data"] and "mime_type" in part["inline_data"]:
+        if (
+            "inline_data" in part
+            and "data" in part["inline_data"]
+            and "mime_type" in part["inline_data"]
+        ):
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            user_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}})
+            user_content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                }
+            )
         else:
             log_message(f"Invalid image part format: {part}", always_print=True)
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
-    payload = {"model": model_name, "messages": messages, "max_tokens": generation_config.get("max_tokens", 2048)}
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "max_tokens": generation_config.get("max_tokens", 2048),
+    }
 
     temp = generation_config.get("temperature")
     if temp is not None:
@@ -966,10 +1157,13 @@ def call_openai_compatible_endpoint(
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
             log_message(
-                f"OpenAI-Compatible API request to {url} (attempt {attempt + 1}/{max_retries + 1})", verbose=debug
+                f"OpenAI-Compatible API request to {url} (attempt {attempt + 1}/{max_retries + 1})",
+                verbose=debug,
             )
 
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response = requests.post(
+                url, headers=headers, json=payload, timeout=timeout
+            )
             response.raise_for_status()
 
             log_message(f"Processing response from {url}", verbose=debug)
@@ -993,27 +1187,39 @@ def call_openai_compatible_endpoint(
                         log_message("No message content in response", verbose=debug)
                         return ""
                 else:
-                    log_message("No choices in OpenAI-Compatible response", always_print=True)
+                    log_message(
+                        "No choices in OpenAI-Compatible response", always_print=True
+                    )
                     if "error" in result:
-                        error_msg = result.get("error", {}).get("message", "Unknown error")
-                        raise RuntimeError(f"OpenAI-Compatible API returned error: {error_msg}")
+                        error_msg = result.get("error", {}).get(
+                            "message", "Unknown error"
+                        )
+                        raise RuntimeError(
+                            f"OpenAI-Compatible API returned error: {error_msg}"
+                        )
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(f"Error processing successful OpenAI-Compatible API response: {str(e)}") from e
+                raise RuntimeError(
+                    f"Error processing successful OpenAI-Compatible API response: {str(e)}"
+                ) from e
 
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
             error_text = e.response.text[:500]
 
             if status_code == 429 and attempt < max_retries:
-                log_message(f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug)
+                log_message(
+                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
+                )
                 time.sleep(current_delay)
                 continue
             else:
                 error_reason = f"Status {status_code}: {error_text}"
                 if status_code == 429 and attempt == max_retries:
-                    error_reason = f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    error_reason = (
+                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
+                    )
                 elif status_code == 400:
                     error_reason += " (Check model name and payload)"
                 elif status_code == 401:
@@ -1021,14 +1227,23 @@ def call_openai_compatible_endpoint(
                 elif status_code == 403:
                     error_reason += " (Permission denied)"
 
-                raise RuntimeError(f"OpenAI-Compatible API HTTP Error: {error_reason}") from e
+                raise RuntimeError(
+                    f"OpenAI-Compatible API HTTP Error: {error_reason}"
+                ) from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
-                log_message(f"Connection error, retrying in {current_delay:.1f}s: {str(e)}", verbose=debug)
+                log_message(
+                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    verbose=debug,
+                )
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(f"OpenAI-Compatible API Connection Error after retries: {str(e)}") from e
+                raise RuntimeError(
+                    f"OpenAI-Compatible API Connection Error after retries: {str(e)}"
+                ) from e
 
-    raise RuntimeError(f"Failed to get response from OpenAI-Compatible API ({url}) after {max_retries + 1} attempts.")
+    raise RuntimeError(
+        f"Failed to get response from OpenAI-Compatible API ({url}) after {max_retries + 1} attempts."
+    )

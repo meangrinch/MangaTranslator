@@ -5,12 +5,12 @@ from typing import Any, Dict, Optional
 import torch
 
 from core.models import (
-    MangaTranslatorConfig,
-    DetectionConfig,
     CleaningConfig,
-    TranslationConfig,
-    RenderingConfig,
+    DetectionConfig,
+    MangaTranslatorConfig,
     OutputConfig,
+    RenderingConfig,
+    TranslationConfig,
 )
 
 
@@ -103,8 +103,12 @@ class UIConfigState:
 
     detection: UIDetectionSettings = field(default_factory=UIDetectionSettings)
     cleaning: UICleaningSettings = field(default_factory=UICleaningSettings)
-    provider_settings: UITranslationProviderSettings = field(default_factory=UITranslationProviderSettings)
-    llm_settings: UITranslationLLMSettings = field(default_factory=UITranslationLLMSettings)
+    provider_settings: UITranslationProviderSettings = field(
+        default_factory=UITranslationProviderSettings
+    )
+    llm_settings: UITranslationLLMSettings = field(
+        default_factory=UITranslationLLMSettings
+    )
     rendering: UIRenderingSettings = field(default_factory=UIRenderingSettings)
     output: UIOutputSettings = field(default_factory=UIOutputSettings)
     general: UIGeneralSettings = field(default_factory=UIGeneralSettings)
@@ -173,7 +177,9 @@ class UIConfigState:
     def from_dict(data: Dict[str, Any]) -> "UIConfigState":
         """Creates a UIConfigState instance from a dictionary (e.g., loaded from config.json)."""
 
-        from . import settings_manager  # Local import to avoid circular dependency issues
+        from . import (
+            settings_manager,
+        )  # Local import to avoid circular dependency issues
 
         defaults = settings_manager.DEFAULT_SETTINGS.copy()
         defaults.update(settings_manager.DEFAULT_BATCH_SETTINGS)
@@ -184,18 +190,32 @@ class UIConfigState:
                 use_sam2=data.get("use_sam2", defaults.get("use_sam2", True)),
             ),
             cleaning=UICleaningSettings(
-                thresholding_value=data.get("thresholding_value", defaults["thresholding_value"]),
-                use_otsu_threshold=data.get("use_otsu_threshold", defaults["use_otsu_threshold"]),
-                roi_shrink_px=data.get("roi_shrink_px", defaults.get("roi_shrink_px", 4)),
+                thresholding_value=data.get(
+                    "thresholding_value", defaults["thresholding_value"]
+                ),
+                use_otsu_threshold=data.get(
+                    "use_otsu_threshold", defaults["use_otsu_threshold"]
+                ),
+                roi_shrink_px=data.get(
+                    "roi_shrink_px", defaults.get("roi_shrink_px", 4)
+                ),
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=data.get("provider", defaults["provider"]),
-                google_api_key=data.get("google_api_key", defaults.get("google_api_key", "")),
+                google_api_key=data.get(
+                    "google_api_key", defaults.get("google_api_key", "")
+                ),
                 openai_api_key=data.get("openai_api_key", defaults["openai_api_key"]),
-                anthropic_api_key=data.get("anthropic_api_key", defaults["anthropic_api_key"]),
+                anthropic_api_key=data.get(
+                    "anthropic_api_key", defaults["anthropic_api_key"]
+                ),
                 xai_api_key=data.get("xai_api_key", defaults["xai_api_key"]),
-                openrouter_api_key=data.get("openrouter_api_key", defaults["openrouter_api_key"]),
-                openai_compatible_url=data.get("openai_compatible_url", defaults["openai_compatible_url"]),
+                openrouter_api_key=data.get(
+                    "openrouter_api_key", defaults["openrouter_api_key"]
+                ),
+                openai_compatible_url=data.get(
+                    "openai_compatible_url", defaults["openai_compatible_url"]
+                ),
                 openai_compatible_api_key=data.get(
                     "openai_compatible_api_key", defaults["openai_compatible_api_key"]
                 ),
@@ -205,48 +225,72 @@ class UIConfigState:
                 temperature=data.get("temperature", defaults["temperature"]),
                 top_p=data.get("top_p", defaults["top_p"]),
                 top_k=data.get("top_k", defaults["top_k"]),
-                translation_mode=data.get("translation_mode", defaults["translation_mode"]),
-                reading_direction=data.get("reading_direction", defaults["reading_direction"]),
+                translation_mode=data.get(
+                    "translation_mode", defaults["translation_mode"]
+                ),
+                reading_direction=data.get(
+                    "reading_direction", defaults["reading_direction"]
+                ),
                 send_full_page_context=data.get("send_full_page_context", True),
             ),
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
                 min_font_size=data.get("min_font_size", defaults["min_font_size"]),
                 line_spacing=data.get("line_spacing", defaults["line_spacing"]),
-                use_subpixel_rendering=data.get("use_subpixel_rendering", defaults["use_subpixel_rendering"]),
+                use_subpixel_rendering=data.get(
+                    "use_subpixel_rendering", defaults["use_subpixel_rendering"]
+                ),
                 font_hinting=data.get("font_hinting", defaults["font_hinting"]),
                 use_ligatures=data.get("use_ligatures", defaults["use_ligatures"]),
                 hyphenate_before_scaling=data.get(
                     "hyphenate_before_scaling",
                     defaults.get("hyphenate_before_scaling", True),
                 ),
-                hyphen_penalty=data.get("hyphen_penalty", defaults.get("hyphen_penalty", 1000.0)),
-                hyphenation_min_word_length=data.get(
-                    "hyphenation_min_word_length", defaults.get("hyphenation_min_word_length", 8)
+                hyphen_penalty=data.get(
+                    "hyphen_penalty", defaults.get("hyphen_penalty", 1000.0)
                 ),
-                badness_exponent=data.get("badness_exponent", defaults.get("badness_exponent", 3.0)),
-                padding_pixels=data.get("padding_pixels", defaults.get("padding_pixels", 8.0)),
+                hyphenation_min_word_length=data.get(
+                    "hyphenation_min_word_length",
+                    defaults.get("hyphenation_min_word_length", 8),
+                ),
+                badness_exponent=data.get(
+                    "badness_exponent", defaults.get("badness_exponent", 3.0)
+                ),
+                padding_pixels=data.get(
+                    "padding_pixels", defaults.get("padding_pixels", 8.0)
+                ),
             ),
             output=UIOutputSettings(
                 output_format=data.get("output_format", defaults["output_format"]),
                 jpeg_quality=data.get("jpeg_quality", defaults["jpeg_quality"]),
-                png_compression=data.get("png_compression", defaults["png_compression"]),
+                png_compression=data.get(
+                    "png_compression", defaults["png_compression"]
+                ),
             ),
             general=UIGeneralSettings(
                 verbose=data.get("verbose", defaults["verbose"]),
                 cleaning_only=data.get("cleaning_only", defaults["cleaning_only"]),
                 test_mode=data.get("test_mode", defaults.get("test_mode", False)),
-                enable_thinking=data.get("enable_thinking", defaults.get("enable_thinking", True)),
-                reasoning_effort=data.get("reasoning_effort", defaults.get("reasoning_effort", "medium")),
+                enable_thinking=data.get(
+                    "enable_thinking", defaults.get("enable_thinking", True)
+                ),
+                reasoning_effort=data.get(
+                    "reasoning_effort", defaults.get("reasoning_effort", "medium")
+                ),
                 openrouter_reasoning_override=data.get(
-                    "openrouter_reasoning_override", defaults.get("openrouter_reasoning_override", False)
+                    "openrouter_reasoning_override",
+                    defaults.get("openrouter_reasoning_override", False),
                 ),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
             output_language=data.get("output_language", defaults["output_language"]),
             font_pack=data.get("font_pack"),
-            batch_input_language=data.get("batch_input_language", defaults["batch_input_language"]),
-            batch_output_language=data.get("batch_output_language", defaults["batch_output_language"]),
+            batch_input_language=data.get(
+                "batch_input_language", defaults["batch_input_language"]
+            ),
+            batch_output_language=data.get(
+                "batch_output_language", defaults["batch_output_language"]
+            ),
             batch_font_pack=data.get("batch_font_pack"),
         )
 
@@ -263,7 +307,9 @@ def map_ui_to_backend_config(
     font_pack_name = ui_state.batch_font_pack if is_batch else ui_state.font_pack
     font_dir_path = fonts_base_dir / font_pack_name if font_pack_name else ""
     input_lang = ui_state.batch_input_language if is_batch else ui_state.input_language
-    output_lang = ui_state.batch_output_language if is_batch else ui_state.output_language
+    output_lang = (
+        ui_state.batch_output_language if is_batch else ui_state.output_language
+    )
 
     detection_cfg = DetectionConfig(confidence=ui_state.detection.confidence)
     detection_cfg.use_sam2 = ui_state.detection.use_sam2

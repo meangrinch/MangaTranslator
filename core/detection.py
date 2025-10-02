@@ -38,7 +38,9 @@ def _get_sam2(model_id: str, device: torch.device):
         models_dir = Path("models")
         models_dir.mkdir(parents=True, exist_ok=True)
         processor = Sam2Processor.from_pretrained(model_id, cache_dir=str(models_dir))
-        model = Sam2Model.from_pretrained(model_id, cache_dir=str(models_dir)).to(device)
+        model = Sam2Model.from_pretrained(model_id, cache_dir=str(models_dir)).to(
+            device
+        )
         model.eval()
         _sam2_cache[cache_key] = (processor, model)
     return _sam2_cache[cache_key]
@@ -70,7 +72,11 @@ def detect_speech_bubbles(
     """
     detections = []
 
-    _device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    _device = (
+        device
+        if device is not None
+        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    )
     log_message(f"Using device: {_device}", verbose=verbose)
 
     try:
@@ -83,7 +89,10 @@ def detect_speech_bubbles(
         image = cv2.imread(str(image_path))
         if image is None:
             raise ValueError(f"Could not read image at {image_path}")
-        log_message(f"Processing image: {image_path.name} ({image.shape[1]}x{image.shape[0]})", verbose=verbose)
+        log_message(
+            f"Processing image: {image_path.name} ({image.shape[1]}x{image.shape[0]})",
+            verbose=verbose,
+        )
     except Exception as e:
         raise RuntimeError(f"Error loading image: {e}")
 
@@ -102,14 +111,24 @@ def detect_speech_bubbles(
     if boxes is not None:
         for j, box in enumerate(boxes):
             xyxy = box.xyxy[0].tolist()
-            x0_f, y0_f, x1_f, y1_f = float(xyxy[0]), float(xyxy[1]), float(xyxy[2]), float(xyxy[3])
+            x0_f, y0_f, x1_f, y1_f = (
+                float(xyxy[0]),
+                float(xyxy[1]),
+                float(xyxy[2]),
+                float(xyxy[3]),
+            )
 
             conf = float(box.conf[0])
             cls_id = int(box.cls[0])
             cls_name = model.names[cls_id]
 
             detection = {
-                "bbox": (int(round(x0_f)), int(round(y0_f)), int(round(x1_f)), int(round(y1_f))),
+                "bbox": (
+                    int(round(x0_f)),
+                    int(round(y0_f)),
+                    int(round(x1_f)),
+                    int(round(y1_f)),
+                ),
                 "confidence": conf,
                 "class": cls_name,
             }
@@ -123,10 +142,15 @@ def detect_speech_bubbles(
                     if len(masks) > j:
                         mask_points = masks[j].xy[0]
                         detection["mask_points"] = (
-                            mask_points.tolist() if hasattr(mask_points, "tolist") else mask_points
+                            mask_points.tolist()
+                            if hasattr(mask_points, "tolist")
+                            else mask_points
                         )
                 except (IndexError, AttributeError) as e:
-                    log_message(f"Could not extract YOLO mask for detection {j}: {e}", always_print=True)
+                    log_message(
+                        f"Could not extract YOLO mask for detection {j}: {e}",
+                        always_print=True,
+                    )
                     detection["mask_points"] = None
 
     log_message(f"Found {len(detections)} speech bubbles", verbose=verbose)
@@ -139,12 +163,16 @@ def detect_speech_bubbles(
 
             processor, sam_model = _get_sam2(sam2_model_id, _device)
 
-            sam_inputs = processor(images=pil_image, input_boxes=[sam_input_boxes], return_tensors="pt").to(_device)
+            sam_inputs = processor(
+                images=pil_image, input_boxes=[sam_input_boxes], return_tensors="pt"
+            ).to(_device)
 
             with torch.no_grad():
                 sam_outputs = sam_model(multimask_output=False, **sam_inputs)
 
-            masks = processor.post_process_masks(sam_outputs.pred_masks, sam_inputs["original_sizes"])[0][:, 0]
+            masks = processor.post_process_masks(
+                sam_outputs.pred_masks, sam_inputs["original_sizes"]
+            )[0][:, 0]
             sam_masks_np = (masks > 0.5).detach().cpu().numpy()
 
             img_h, img_w = image.shape[:2]
@@ -165,7 +193,7 @@ def detect_speech_bubbles(
                 bbox_mask = np.zeros((img_h, img_w), dtype=bool)
                 bbox_mask[y0:y1, x0:x1] = True
                 clipped = np.logical_and(m, bbox_mask)
-                det["sam_mask"] = (clipped.astype(np.uint8) * 255)
+                det["sam_mask"] = clipped.astype(np.uint8) * 255
 
             log_message("SAM2.1 segmentation completed successfully", verbose=verbose)
         except Exception as e:

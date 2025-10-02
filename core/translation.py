@@ -3,44 +3,53 @@ from typing import Any, Dict, List, Optional
 
 from core.models import TranslationConfig
 from utils.endpoints import (
-    call_gemini_endpoint,
-    call_openai_endpoint,
     call_anthropic_endpoint,
-    call_xai_endpoint,
-    call_openrouter_endpoint,
+    call_gemini_endpoint,
     call_openai_compatible_endpoint,
+    call_openai_endpoint,
+    call_openrouter_endpoint,
+    call_xai_endpoint,
     openrouter_is_reasoning_model,
 )
 from utils.logging import log_message
 
 # Regex to find numbered lines in LLM responses
 TRANSLATION_PATTERN = re.compile(
-    r'^\s*(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*:|\s*$)', re.MULTILINE | re.DOTALL
+    r'^\s*(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*:|\s*$)',
+    re.MULTILINE | re.DOTALL,
 )
 
 
-def _build_system_prompt_ocr(input_language: Optional[str], reading_direction: str) -> str:
+def _build_system_prompt_ocr(
+    input_language: Optional[str], reading_direction: str
+) -> str:
     """System prompt for OCR-only extraction.
 
     Emphasizes deterministic, structured output and domain rules from the prompt-engineering guide.
     """
     lang_label = (
-        f"{input_language} " if input_language and input_language.lower() != "auto" else ""
+        f"{input_language} "
+        if input_language and input_language.lower() != "auto"
+        else ""
     )
     direction = (
-        "right-to-left" if (reading_direction or "rtl").lower() == "rtl" else "left-to-right"
+        "right-to-left"
+        if (reading_direction or "rtl").lower() == "rtl"
+        else "left-to-right"
     )
     return (
         "You are an expert manga/comic OCR transcriber.\n"
         "- Task: For each speech bubble image, transcribe the visible text only; do not translate.\n"
-        "- Layout context: Reading order is "
-        + direction
-        + ".\n"
+        "- Layout context: Reading order is " + direction + ".\n"
         "- Text policy: Preserve punctuation, ellipses, and casing. "
         "Collapse multi-line text into a single line with spaces.\n"
         "- Ignore: borders/tails, watermarks, page numbers, and decorations outside the bubble.\n"
         "- "
-        + ("Language: Focus on the original " + lang_label + "text.\n" if lang_label else "")
+        + (
+            "Language: Focus on the original " + lang_label + "text.\n"
+            if lang_label
+            else ""
+        )
         + "- Ruby/furigana: If present, ignore small ruby readings and keep the main base text.\n"
         "- If a bubble has no legible text, return [NO TEXT]. If the text is unreadable, return [OCR FAILED].\n"
         "- Output format: Return ONLY a numbered list with exactly one line per bubble, "
@@ -118,17 +127,19 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl"):
     enriched = []
     for d in detections:
         x1, y1, x2, y2, w, h, cx, cy = _features(d)
-        enriched.append({
-            "det": d,
-            "x1": x1,
-            "y1": y1,
-            "x2": x2,
-            "y2": y2,
-            "w": w,
-            "h": h,
-            "cx": cx,
-            "cy": cy,
-        })
+        enriched.append(
+            {
+                "det": d,
+                "x1": x1,
+                "y1": y1,
+                "x2": x2,
+                "y2": y2,
+                "w": w,
+                "h": h,
+                "cx": cx,
+                "cy": cy,
+            }
+        )
 
     enriched.sort(key=lambda e: e["cy"])
 
@@ -238,7 +249,9 @@ def _call_llm_endpoint(
             if not api_key:
                 raise ValueError("Google API key is missing.")
             # Reasoning models need higher token limits
-            is_gemini_25_series = (model_name or "").startswith("gemini-2.5") or "gemini-2.5" in (model_name or "")
+            is_gemini_25_series = (model_name or "").startswith(
+                "gemini-2.5"
+            ) or "gemini-2.5" in (model_name or "")
             max_output_tokens = 8192 if is_gemini_25_series else 2048
             generation_config = {
                 "temperature": temperature,
@@ -268,7 +281,12 @@ def _call_llm_endpoint(
             # Reasoning models need higher token limits
             lm = (model_name or "").lower()
             is_gpt5 = lm.startswith("gpt-5")
-            is_reasoning_capable = is_gpt5 or lm.startswith("o1") or lm.startswith("o3") or lm.startswith("o4-mini")
+            is_reasoning_capable = (
+                is_gpt5
+                or lm.startswith("o1")
+                or lm.startswith("o3")
+                or lm.startswith("o4-mini")
+            )
             max_output_tokens = 8192 if is_reasoning_capable else 2048
             generation_config = {
                 "temperature": temperature,
@@ -297,14 +315,18 @@ def _call_llm_endpoint(
                 "claude-sonnet-4",
                 "claude-3-7-sonnet",
             ]
-            is_anthropic_reasoning_model = any(lm.startswith(p) for p in anthropic_reasoning_prefixes)
+            is_anthropic_reasoning_model = any(
+                lm.startswith(p) for p in anthropic_reasoning_prefixes
+            )
             max_tokens = 8192 if is_anthropic_reasoning_model else 2048
             generation_config = {
                 "temperature": clamped_temp,
                 "top_p": top_p,
                 "top_k": top_k,
                 "max_tokens": max_tokens,
-                "anthropic_thinking": bool(config.enable_thinking and is_anthropic_reasoning_model),
+                "anthropic_thinking": bool(
+                    config.enable_thinking and is_anthropic_reasoning_model
+                ),
             }
             return call_anthropic_endpoint(
                 api_key=api_key,
@@ -320,7 +342,9 @@ def _call_llm_endpoint(
                 raise ValueError("xAI API key is missing.")
             # Reasoning models need higher token limits
             lm = (model_name or "").lower()
-            is_reasoning_model = "reasoning" in lm or lm.startswith("grok-4-fast-reasoning")
+            is_reasoning_model = "reasoning" in lm or lm.startswith(
+                "grok-4-fast-reasoning"
+            )
             max_tokens = 2048
             generation_config = {
                 "temperature": temperature,
@@ -351,7 +375,9 @@ def _call_llm_endpoint(
             # Determine if this is a reasoning-capable model for OpenRouter
             model_lower = (model_name or "").lower()
             is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
-            is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith("claude-")
+            is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith(
+                "claude-"
+            )
             is_grok_model = "grok" in model_lower
             is_gemini_model = "gemini" in model_lower
 
@@ -365,8 +391,11 @@ def _call_llm_endpoint(
             # Add reasoning parameters for OpenRouter
             if is_openai_model and config.reasoning_effort:
                 generation_config["reasoning_effort"] = config.reasoning_effort
-            elif ((is_anthropic_model or is_gemini_model or (is_grok_model and "fast" in model_lower))
-                  and config.enable_thinking):
+            elif (
+                is_anthropic_model
+                or is_gemini_model
+                or (is_grok_model and "fast" in model_lower)
+            ) and config.enable_thinking:
                 generation_config["enable_thinking"] = config.enable_thinking
 
             return call_openrouter_endpoint(
@@ -382,7 +411,12 @@ def _call_llm_endpoint(
             api_key = config.openai_compatible_api_key  # Optional
             if not base_url:
                 raise ValueError("OpenAI-Compatible URL is missing.")
-            generation_config = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_tokens": 2048}
+            generation_config = {
+                "temperature": temperature,
+                "top_p": top_p,
+                "top_k": top_k,
+                "max_tokens": 2048,
+            }
             return call_openai_compatible_endpoint(
                 base_url=base_url,
                 api_key=api_key,
@@ -400,7 +434,10 @@ def _call_llm_endpoint(
 
 
 def _parse_llm_response(
-    response_text: Optional[str], expected_count: int, provider: str, debug: bool = False
+    response_text: Optional[str],
+    expected_count: int,
+    provider: str,
+    debug: bool = False,
 ) -> Optional[List[str]]:
     """Internal helper to parse numbered list responses from LLM."""
     if response_text is None:
@@ -411,11 +448,15 @@ def _parse_llm_response(
         return [f"[{provider}: Empty response]" for _ in range(expected_count)]
 
     try:
-        log_message(f"Parsing {provider} response: {len(response_text)} chars", verbose=debug)
+        log_message(
+            f"Parsing {provider} response: {len(response_text)} chars", verbose=debug
+        )
         log_message(f"Raw response:\n---\n{response_text}\n---", verbose=debug)
 
         matches = TRANSLATION_PATTERN.findall(response_text)
-        log_message(f"Found {len(matches)}/{expected_count} numbered items", verbose=debug)
+        log_message(
+            f"Found {len(matches)}/{expected_count} numbered items", verbose=debug
+        )
 
         # Fallback when regex fails to find numbered format
         if len(matches) < expected_count:
@@ -431,7 +472,9 @@ def _parse_llm_response(
                 lines.pop(-1)
 
             if len(lines) == expected_count:
-                log_message(f"Fallback parsing successful: {len(lines)} lines", verbose=debug)
+                log_message(
+                    f"Fallback parsing successful: {len(lines)} lines", verbose=debug
+                )
                 return lines
             else:
                 log_message(
@@ -446,16 +489,23 @@ def _parse_llm_response(
                 if 1 <= num <= expected_count:
                     parsed_dict[num] = text.strip()
                 else:
-                    log_message(f"Number {num} out of range (1-{expected_count})", verbose=debug)
+                    log_message(
+                        f"Number {num} out of range (1-{expected_count})", verbose=debug
+                    )
             except ValueError:
                 log_message(f"Invalid number format: '{num_str}'", verbose=debug)
 
         final_list = []
         for i in range(1, expected_count + 1):
-            final_list.append(parsed_dict.get(i, f"[{provider}: Incomplete response for bubble {i}]"))
+            final_list.append(
+                parsed_dict.get(i, f"[{provider}: Incomplete response for bubble {i}]")
+            )
 
         if len(final_list) != expected_count:
-            log_message(f"Item count mismatch: {len(final_list)}/{expected_count}", verbose=debug)
+            log_message(
+                f"Item count mismatch: {len(final_list)}/{expected_count}",
+                verbose=debug,
+            )
 
         return final_list
 
@@ -465,7 +515,10 @@ def _parse_llm_response(
 
 
 def call_translation_api_batch(
-    config: TranslationConfig, images_b64: List[str], full_image_b64: str, debug: bool = False
+    config: TranslationConfig,
+    images_b64: List[str],
+    full_image_b64: str,
+    debug: bool = False,
 ) -> List[str]:
     """
     Generates prompts and calls the appropriate LLM API endpoint based on the provider and mode
@@ -494,12 +547,16 @@ def call_translation_api_batch(
     translation_mode = config.translation_mode
     num_bubbles = len(images_b64)
     reading_order_desc = (
-        "right-to-left, top-to-bottom" if reading_direction == "rtl" else "left-to-right, top-to-bottom"
+        "right-to-left, top-to-bottom"
+        if reading_direction == "rtl"
+        else "left-to-right, top-to-bottom"
     )
 
     base_parts = []
     if config.send_full_page_context and full_image_b64:
-        base_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}})
+        base_parts.append(
+            {"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}}
+        )
     for img_b64 in images_b64:
         base_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
 
@@ -523,7 +580,9 @@ Return ONLY the following numbered lines, one per bubble:
             log_message("Starting OCR step", verbose=debug)
             ocr_parts = []
             for img_b64 in images_b64:
-                ocr_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
+                ocr_parts.append(
+                    {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}}
+                )
 
             ocr_system = _build_system_prompt_ocr(input_language, reading_direction)
             ocr_response_text = _call_llm_endpoint(
@@ -533,7 +592,9 @@ Return ONLY the following numbered lines, one per bubble:
                 debug,
                 system_prompt=ocr_system,
             )
-            extracted_texts = _parse_llm_response(ocr_response_text, num_bubbles, provider + "-OCR", debug)
+            extracted_texts = _parse_llm_response(
+                ocr_response_text, num_bubbles, provider + "-OCR", debug
+            )
 
             if extracted_texts is None:
                 log_message("OCR API call failed", always_print=True)
@@ -592,7 +653,9 @@ If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged f
 
             translation_parts = []
             if config.send_full_page_context and full_image_b64:
-                translation_parts.append({"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}})
+                translation_parts.append(
+                    {"inline_data": {"mime_type": "image/jpeg", "data": full_image_b64}}
+                )
 
             translation_system = _build_system_prompt_translation(output_language)
             translation_response_text = _call_llm_endpoint(
@@ -622,7 +685,10 @@ If an input line is exactly "[OCR FAILED]" or "[NO TEXT]", output it unchanged f
                     if final_translations[i] == "[OCR FAILED]":
                         combined_results.append("[OCR FAILED]")
                     else:
-                        log_message(f"Bubble {i + 1}: LLM ignored OCR failure instruction", verbose=debug)
+                        log_message(
+                            f"Bubble {i + 1}: LLM ignored OCR failure instruction",
+                            verbose=debug,
+                        )
                         combined_results.append("[OCR FAILED]")
                 else:
                     combined_results.append(final_translations[i])
@@ -677,7 +743,9 @@ If the bubble is [NO TEXT] or [OCR FAILED], output that exact tag unchanged for 
                 debug,
                 system_prompt=one_step_system,
             )
-            translations = _parse_llm_response(response_text, num_bubbles, provider, debug)
+            translations = _parse_llm_response(
+                response_text, num_bubbles, provider, debug
+            )
 
             if translations is None:
                 log_message("One-step API call failed", always_print=True)
@@ -685,7 +753,9 @@ If the bubble is [NO TEXT] or [OCR FAILED], output that exact tag unchanged for 
             else:
                 return translations
         else:
-            raise ValueError(f"Unknown translation_mode specified in config: {translation_mode}")
+            raise ValueError(
+                f"Unknown translation_mode specified in config: {translation_mode}"
+            )
     except (ValueError, RuntimeError) as e:
         log_message(f"Translation error: {e}", always_print=True)
         return [f"[Translation Error: {e}]"] * num_bubbles

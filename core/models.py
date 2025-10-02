@@ -44,7 +44,9 @@ class TranslationConfig:
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
     enable_thinking: bool = True  # Gemini 2.5 Flash & Claude reasoning models
-    reasoning_effort: Optional[str] = "medium"  # OpenAI reasoning models (o1/o3/o4-mini/gpt-5*)
+    reasoning_effort: Optional[str] = (
+        "medium"  # OpenAI reasoning models (o1/o3/o4-mini/gpt-5*)
+    )
     send_full_page_context: bool = True
     openrouter_reasoning_override: bool = False  # Forces max output tokens to 8192
 
@@ -105,9 +107,15 @@ class MangaTranslatorConfig:
         if not self.translation.xai_api_key:
             self.translation.xai_api_key = os.environ.get("XAI_API_KEY", "")
         if not self.translation.openrouter_api_key:
-            self.translation.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
-        if not self.translation.openai_compatible_api_key:  # Check if it's None or empty string
-            self.translation.openai_compatible_api_key = os.environ.get("OPENAI_COMPATIBLE_API_KEY", "")
+            self.translation.openrouter_api_key = os.environ.get(
+                "OPENROUTER_API_KEY", ""
+            )
+        if (
+            not self.translation.openai_compatible_api_key
+        ):  # Check if it's None or empty string
+            self.translation.openai_compatible_api_key = os.environ.get(
+                "OPENAI_COMPATIBLE_API_KEY", ""
+            )
 
         # Autodetect device if not specified
         if self.device is None:

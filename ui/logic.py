@@ -90,7 +90,11 @@ def translate_manga_logic(
 
         output_format = config.output.output_format
         if output_format == "auto":
-            output_ext = original_ext if original_ext in [".jpg", ".jpeg", ".png", ".webp"] else ".png"
+            output_ext = (
+                original_ext
+                if original_ext in [".jpg", ".jpeg", ".png", ".webp"]
+                else ".png"
+            )
         elif output_format == "png":
             output_ext = ".png"
         elif output_format == "jpeg":
@@ -119,7 +123,9 @@ def translate_manga_logic(
         import traceback
 
         traceback.print_exc()
-        raise LogicError(f"An unexpected error occurred during translation: {str(e)}") from e
+        raise LogicError(
+            f"An unexpected error occurred during translation: {str(e)}"
+        ) from e
     finally:
         if temp_image_path and temp_image_path.exists():
             try:
@@ -235,10 +241,13 @@ def process_batch_logic(
             if skipped_files:
                 log_message(
                     f"Preparing {len(image_files_to_copy)} files (skipped {len(skipped_files)} invalid files)",
-                    verbose=config.verbose
+                    verbose=config.verbose,
                 )
             else:
-                log_message(f"Preparing {len(image_files_to_copy)} files for batch processing", verbose=config.verbose)
+                log_message(
+                    f"Preparing {len(image_files_to_copy)} files for batch processing",
+                    verbose=config.verbose,
+                )
 
             for img_file in image_files_to_copy:
                 try:
@@ -253,12 +262,14 @@ def process_batch_logic(
         elif isinstance(input_dir_or_files, str):
             input_path = Path(input_dir_or_files)
             if not input_path.exists():
-                raise FileNotFoundError(f"Input directory '{input_dir_or_files}' does not exist.")
+                raise FileNotFoundError(
+                    f"Input directory '{input_dir_or_files}' does not exist."
+                )
             if not input_path.is_dir():
-                raise ValueError(f"Input path '{input_dir_or_files}' is not a directory.")
+                raise ValueError(
+                    f"Input path '{input_dir_or_files}' is not a directory."
+                )
             process_dir = input_path
-        else:
-            raise ValueError(f"Invalid input type for batch processing: {type(input_dir_or_files)}")
 
         if not process_dir:
             raise LogicError("Could not determine processing directory.")
@@ -277,7 +288,7 @@ def process_batch_logic(
         log_message(
             f"Batch completed: {results['success_count']} success, "
             f"{results['error_count']} errors in {processing_time:.2f}s",
-            verbose=config.verbose
+            verbose=config.verbose,
         )
         if results["errors"]:
             log_message("Processing errors:", verbose=config.verbose)
@@ -290,7 +301,10 @@ def process_batch_logic(
         import traceback
 
         traceback.print_exc()
-        raise LogicError(f"An unexpected error occurred during batch processing: {str(e)}") from e
+        raise LogicError(
+            f"An unexpected error occurred during batch processing: {str(e)}"
+        ) from e
+
     finally:
         if temp_dir_path_obj:
             try:

@@ -12,14 +12,14 @@ from utils.exceptions import ValidationError
 
 from . import logic, settings_manager, utils
 from .ui_models import (
+    UICleaningSettings,
     UIConfigState,
     UIDetectionSettings,
-    UICleaningSettings,
-    UITranslationProviderSettings,
-    UITranslationLLMSettings,
-    UIRenderingSettings,
-    UIOutputSettings,
     UIGeneralSettings,
+    UIOutputSettings,
+    UIRenderingSettings,
+    UITranslationLLMSettings,
+    UITranslationProviderSettings,
     map_ui_to_backend_config,
 )
 
@@ -35,7 +35,9 @@ def _clean_error_message(message: Any) -> str:
         text = ""
 
     # Strip surrounding quotes if present
-    if (len(text) >= 2) and ((text[0] == text[-1] == "'") or (text[0] == text[-1] == '"')):
+    if (len(text) >= 2) and (
+        (text[0] == text[-1] == "'") or (text[0] == text[-1] == '"')
+    ):
         text = text[1:-1].strip()
 
     # Remove any existing ERROR_PREFIX occurrences to avoid duplication
@@ -58,7 +60,11 @@ def _format_single_success_message(
     model_name = backend_config.translation.model_name
     thinking_status_str = ""
     if provider == "Google" and model_name and "gemini-2.5-flash" in model_name:
-        thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
+        thinking_status_str = (
+            " (thinking)"
+            if backend_config.translation.enable_thinking
+            else " (no thinking)"
+        )
     elif provider == "Anthropic" and model_name:
         lm = model_name.lower()
         if (
@@ -67,7 +73,11 @@ def _format_single_success_message(
             or lm.startswith("claude-sonnet-4")
             or lm.startswith("claude-3-7-sonnet")
         ):
-            thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
+            thinking_status_str = (
+                " (thinking)"
+                if backend_config.translation.enable_thinking
+                else " (no thinking)"
+            )
     temp_val = backend_config.translation.temperature
     top_p_val = backend_config.translation.top_p
     top_k_val = backend_config.translation.top_k
@@ -92,7 +102,9 @@ def _format_single_success_message(
         llm_params_str += f", Top-K={top_k_val}"
     llm_params_str += param_notes
 
-    processing_mode_str = "Cleaning Only" if backend_config.cleaning_only else "Translation"
+    processing_mode_str = (
+        "Cleaning Only" if backend_config.cleaning_only else "Translation"
+    )
     msg_parts = [
         f"{SUCCESS_PREFIX}{processing_mode_str} completed!\n",
         f"• Image Size: {width}x{height} pixels\n",
@@ -105,7 +117,8 @@ def _format_single_success_message(
         f"• Translation Mode: {backend_config.translation.translation_mode}\n",
         f"• YOLO Model: {selected_yolo_model_name}\n",
         (
-            "• Brightness Threshold: Otsu\n" if backend_config.cleaning.use_otsu_threshold
+            "• Brightness Threshold: Otsu\n"
+            if backend_config.cleaning.use_otsu_threshold
             else f"• Brightness Threshold: {backend_config.cleaning.thresholding_value}\n"
         ),
     ]
@@ -117,7 +130,9 @@ def _format_single_success_message(
 
     if backend_config.output.output_format == "png":
         msg_parts.append("• Output Format: png\n")
-        msg_parts.append(f"• PNG Compression: {backend_config.output.png_compression}\n")
+        msg_parts.append(
+            f"• PNG Compression: {backend_config.output.png_compression}\n"
+        )
     elif backend_config.output.output_format == "jpeg":
         msg_parts.append("• Output Format: jpeg\n")
         msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
@@ -131,18 +146,28 @@ def _format_single_success_message(
             msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
         elif ext == ".png":
             msg_parts.append("• Output Format: auto → png\n")
-            msg_parts.append(f"• PNG Compression: {backend_config.output.png_compression}\n")
+            msg_parts.append(
+                f"• PNG Compression: {backend_config.output.png_compression}\n"
+            )
         elif ext == ".webp":
             msg_parts.append("• Output Format: auto → webp\n")
         else:
             msg_parts.append("• Output Format: auto\n")
 
-    msg_parts.extend([f"• Processing Time: {processing_time:.2f} seconds\n", f"• Saved To: {save_path}"])
+    msg_parts.extend(
+        [
+            f"• Processing Time: {processing_time:.2f} seconds\n",
+            f"• Saved To: {save_path}",
+        ]
+    )
     return "".join(msg_parts)
 
 
 def _format_batch_success_message(
-    results: Dict[str, Any], backend_config: MangaTranslatorConfig, selected_yolo_model_name: str, font_dir_path: Path
+    results: Dict[str, Any],
+    backend_config: MangaTranslatorConfig,
+    selected_yolo_model_name: str,
+    font_dir_path: Path,
 ) -> str:
     """Formats the success message for batch processing."""
     success_count = results["success_count"]
@@ -156,7 +181,11 @@ def _format_batch_success_message(
     model_name = backend_config.translation.model_name
     thinking_status_str = ""
     if provider == "Google" and model_name and "gemini-2.5-flash" in model_name:
-        thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
+        thinking_status_str = (
+            " (thinking)"
+            if backend_config.translation.enable_thinking
+            else " (no thinking)"
+        )
     elif provider == "Anthropic" and model_name:
         lm = model_name.lower()
         if (
@@ -165,7 +194,11 @@ def _format_batch_success_message(
             or lm.startswith("claude-sonnet-4")
             or lm.startswith("claude-3-7-sonnet")
         ):
-            thinking_status_str = " (thinking)" if backend_config.translation.enable_thinking else " (no thinking)"
+            thinking_status_str = (
+                " (thinking)"
+                if backend_config.translation.enable_thinking
+                else " (no thinking)"
+            )
     temp_val = backend_config.translation.temperature
     top_p_val = backend_config.translation.top_p
     top_k_val = backend_config.translation.top_k
@@ -181,7 +214,9 @@ def _format_batch_success_message(
         param_notes = " (Top-K N/A)"
     elif provider == "OpenRouter":
         is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")
-        is_anthropic_model = "anthropic/" in model_name or model_name.startswith("claude-")
+        is_anthropic_model = "anthropic/" in model_name or model_name.startswith(
+            "claude-"
+        )
         if is_openai_model or is_anthropic_model:
             param_notes = " (Temp clamped <= 1.0, Top-K N/A)"
         else:
@@ -200,7 +235,9 @@ def _format_batch_success_message(
     if error_count > 0:
         error_summary = f"\n• Warning: {error_count} image(s) failed to process."
 
-    processing_mode_str = "Cleaning Only" if backend_config.cleaning_only else "Translation"
+    processing_mode_str = (
+        "Cleaning Only" if backend_config.cleaning_only else "Translation"
+    )
     msg_parts = [
         f"{SUCCESS_PREFIX}Batch {processing_mode_str.lower()} completed!\n",
         f"• Provider: {provider}\n",
@@ -212,7 +249,8 @@ def _format_batch_success_message(
         f"• YOLO Model: {selected_yolo_model_name}\n",
         f"• Translation Mode: {backend_config.translation.translation_mode}\n",
         (
-            "• Brightness Threshold: Otsu\n" if backend_config.cleaning.use_otsu_threshold
+            "• Brightness Threshold: Otsu\n"
+            if backend_config.cleaning.use_otsu_threshold
             else f"• Brightness Threshold: {backend_config.cleaning.thresholding_value}\n"
         ),
     ]
@@ -221,7 +259,9 @@ def _format_batch_success_message(
 
     if backend_config.output.output_format == "png":
         msg_parts.append("• Output Format: png\n")
-        msg_parts.append(f"• PNG Compression: {backend_config.output.png_compression}\n")
+        msg_parts.append(
+            f"• PNG Compression: {backend_config.output.png_compression}\n"
+        )
     elif backend_config.output.output_format == "jpeg":
         msg_parts.append("• Output Format: jpeg\n")
         msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
@@ -236,9 +276,13 @@ def _format_batch_success_message(
                 only_jpeg = exts and all(e in {".jpg", ".jpeg"} for e in exts)
                 only_png = exts == {".png"}
                 if only_png:
-                    msg_parts.append(f"• PNG Compression: {backend_config.output.png_compression}\n")
+                    msg_parts.append(
+                        f"• PNG Compression: {backend_config.output.png_compression}\n"
+                    )
                 elif only_jpeg:
-                    msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
+                    msg_parts.append(
+                        f"• JPEG Quality: {backend_config.output.jpeg_quality}\n"
+                    )
                 # If mixed or unknown, omit specific settings to avoid showing both
         except Exception:
             pass
@@ -328,8 +372,12 @@ def handle_translate_click(
         elif provider_selector == "OpenAI-Compatible":
             api_key_to_validate = openai_compatible_api_key_input
 
-        api_valid, api_msg = utils.validate_api_key(api_key_to_validate, provider_selector)
-        if not api_valid and not (provider_selector == "OpenAI-Compatible" and not api_key_to_validate):
+        api_valid, api_msg = utils.validate_api_key(
+            api_key_to_validate, provider_selector
+        )
+        if not api_valid and not (
+            provider_selector == "OpenAI-Compatible" and not api_key_to_validate
+        ):
             raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
 
         if provider_selector == "OpenAI-Compatible":
@@ -342,7 +390,9 @@ def handle_translate_click(
 
         # --- Build UI State Dataclass ---
         ui_state = UIConfigState(
-            detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
+            detection=UIDetectionSettings(
+                confidence=confidence, use_sam2=use_sam2_checkbox_val
+            ),
             cleaning=UICleaningSettings(
                 thresholding_value=thresholding_value,
                 use_otsu_threshold=use_otsu_threshold,
@@ -418,15 +468,26 @@ def handle_translate_click(
 
         # --- Format Success Output ---
         # Re-get font path for success message (logic already validated it)
-        font_dir_path = fonts_base_dir / selected_font_pack_name if selected_font_pack_name else Path(".")
+        font_dir_path = (
+            fonts_base_dir / selected_font_pack_name
+            if selected_font_pack_name
+            else Path(".")
+        )
 
         processing_time = time.time() - start_time
         # We don't know the model filename ahead of time; extract from config
         autodetected_model_name = (
-            Path(backend_config.yolo_model_path).name if backend_config.yolo_model_path else "(auto)"
+            Path(backend_config.yolo_model_path).name
+            if backend_config.yolo_model_path
+            else "(auto)"
         )
         status_msg = _format_single_success_message(
-            result_image, backend_config, autodetected_model_name, font_dir_path, save_path, processing_time
+            result_image,
+            backend_config,
+            autodetected_model_name,
+            font_dir_path,
+            save_path,
+            processing_time,
         )
 
         return result_image.copy(), status_msg
@@ -513,7 +574,9 @@ def handle_batch_click(
             raise gr.Error(f"{ERROR_PREFIX}Please upload images or a folder.")
 
         if not isinstance(input_files, list):
-            raise gr.Error(f"{ERROR_PREFIX}Invalid input format. Expected a list of files.")
+            raise gr.Error(
+                f"{ERROR_PREFIX}Invalid input format. Expected a list of files."
+            )
 
         api_key_to_validate = ""
         if provider_selector == "Google":
@@ -529,8 +592,12 @@ def handle_batch_click(
         elif provider_selector == "OpenAI-Compatible":
             api_key_to_validate = openai_compatible_api_key_input
 
-        api_valid, api_msg = utils.validate_api_key(api_key_to_validate, provider_selector)
-        if not api_valid and not (provider_selector == "OpenAI-Compatible" and not api_key_to_validate):
+        api_valid, api_msg = utils.validate_api_key(
+            api_key_to_validate, provider_selector
+        )
+        if not api_valid and not (
+            provider_selector == "OpenAI-Compatible" and not api_key_to_validate
+        ):
             raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
 
         if provider_selector == "OpenAI-Compatible":
@@ -543,7 +610,9 @@ def handle_batch_click(
 
         # --- Build UI State Dataclass ---
         ui_state = UIConfigState(
-            detection=UIDetectionSettings(confidence=confidence, use_sam2=use_sam2_checkbox_val),
+            detection=UIDetectionSettings(
+                confidence=confidence, use_sam2=use_sam2_checkbox_val
+            ),
             cleaning=UICleaningSettings(
                 thresholding_value=thresholding_value,
                 use_otsu_threshold=use_otsu_threshold,
@@ -624,17 +693,28 @@ def handle_batch_click(
         if output_path.exists():
             processed_files = list(output_path.glob("*.*"))
             processed_files.sort(  # Sort naturally (e.g., page_1, page_2, page_10)
-                key=lambda x: tuple(int(part) if part.isdigit() else part for part in re.split(r"(\d+)", x.stem))
+                key=lambda x: tuple(
+                    int(part) if part.isdigit() else part
+                    for part in re.split(r"(\d+)", x.stem)
+                )
             )
             gallery_images = [str(file_path) for file_path in processed_files]
 
         # Re-get font path for success message (logic already validated it)
-        font_dir_path = fonts_base_dir / selected_font_pack_name if selected_font_pack_name else Path(".")
+        font_dir_path = (
+            fonts_base_dir / selected_font_pack_name
+            if selected_font_pack_name
+            else Path(".")
+        )
 
         autodetected_model_name = (
-            Path(backend_config.yolo_model_path).name if backend_config.yolo_model_path else "(auto)"
+            Path(backend_config.yolo_model_path).name
+            if backend_config.yolo_model_path
+            else "(auto)"
         )
-        status_msg = _format_batch_success_message(results, backend_config, autodetected_model_name, font_dir_path)
+        status_msg = _format_batch_success_message(
+            results, backend_config, autodetected_model_name, font_dir_path
+        )
         progress(1.0, desc="Batch complete!")
         return gallery_images, status_msg
 
@@ -653,7 +733,9 @@ def handle_batch_click(
         import traceback
 
         traceback.print_exc()
-        cleaned = _clean_error_message(f"An unexpected error occurred during batch processing: {str(e)}")
+        cleaned = _clean_error_message(
+            f"An unexpected error occurred during batch processing: {str(e)}"
+        )
         gr.Error(cleaned)
         return gr.update(), cleaned
 
@@ -778,7 +860,9 @@ def handle_save_config_click(*args: Any) -> str:
     return message
 
 
-def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[gr.update]:
+def handle_reset_defaults_click(
+    models_dir: Path, fonts_base_dir: Path
+) -> List[gr.update]:
     """Callback for the 'Reset Defaults' button. Uses dataclasses."""
 
     default_settings_dict = settings_manager.reset_to_defaults()
@@ -797,13 +881,17 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
     default_ui_state.batch_font_pack = batch_reset_font
 
     default_provider = default_ui_state.provider_settings.provider
-    default_model_name = settings_manager.DEFAULT_SETTINGS["provider_models"].get(default_provider)
+    default_model_name = settings_manager.DEFAULT_SETTINGS["provider_models"].get(
+        default_provider
+    )
     default_ui_state.llm_settings.model_name = default_model_name
 
     if default_provider == "OpenRouter" or default_provider == "OpenAI-Compatible":
         default_models_choices = [default_model_name] if default_model_name else []
     else:
-        default_models_choices = settings_manager.PROVIDER_MODELS.get(default_provider, [])
+        default_models_choices = settings_manager.PROVIDER_MODELS.get(
+            default_provider, []
+        )
 
     gemini_visible = default_provider == "Google"
     openai_visible = default_provider == "OpenAI"
@@ -829,13 +917,33 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
         default_ui_state.llm_settings.reading_direction,
         default_ui_state.cleaning.use_otsu_threshold,
         gr.update(value=default_provider),
-        gr.update(value=default_ui_state.provider_settings.google_api_key, visible=gemini_visible),
-        gr.update(value=default_ui_state.provider_settings.openai_api_key, visible=openai_visible),
-        gr.update(value=default_ui_state.provider_settings.anthropic_api_key, visible=anthropic_visible),
-        gr.update(value=default_ui_state.provider_settings.xai_api_key, visible=xai_visible),
-        gr.update(value=default_ui_state.provider_settings.openrouter_api_key, visible=openrouter_visible),
-        gr.update(value=default_ui_state.provider_settings.openai_compatible_url, visible=compatible_visible),
-        gr.update(value=default_ui_state.provider_settings.openai_compatible_api_key, visible=compatible_visible),
+        gr.update(
+            value=default_ui_state.provider_settings.google_api_key,
+            visible=gemini_visible,
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.openai_api_key,
+            visible=openai_visible,
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.anthropic_api_key,
+            visible=anthropic_visible,
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.xai_api_key, visible=xai_visible
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.openrouter_api_key,
+            visible=openrouter_visible,
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.openai_compatible_url,
+            visible=compatible_visible,
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.openai_compatible_api_key,
+            visible=compatible_visible,
+        ),
         gr.update(choices=default_models_choices, value=default_model_name),
         gr.update(value=temp_val, maximum=temp_max),
         default_ui_state.llm_settings.top_p,
@@ -858,8 +966,13 @@ def handle_reset_defaults_click(models_dir: Path, fonts_base_dir: Path) -> List[
         default_ui_state.batch_input_language,
         default_ui_state.batch_output_language,
         gr.update(value=default_ui_state.batch_font_pack),
-        gr.update(value=default_ui_state.general.enable_thinking, visible=enable_thinking_visible),
-        gr.update(value=default_ui_state.general.reasoning_effort, visible=reasoning_visible),
+        gr.update(
+            value=default_ui_state.general.enable_thinking,
+            visible=enable_thinking_visible,
+        ),
+        gr.update(
+            value=default_ui_state.general.reasoning_effort, visible=reasoning_visible
+        ),
         "Settings reset to defaults (API keys preserved).",
         gr.update(value=default_ui_state.llm_settings.send_full_page_context),
         gr.update(value=default_ui_state.rendering.hyphenate_before_scaling),
@@ -880,7 +993,9 @@ def handle_output_format_change(output_format_value: str):
     jpeg_interactive = not is_png
     png_interactive = not is_jpeg
 
-    return gr.update(interactive=jpeg_interactive), gr.update(interactive=png_interactive)
+    return gr.update(interactive=jpeg_interactive), gr.update(
+        interactive=png_interactive
+    )
 
 
 def handle_refresh_resources_click(models_dir: Path, fonts_base_dir: Path):
@@ -899,9 +1014,14 @@ def handle_app_load(provider: str, url: str, key: Optional[str]):
 
 
 # --- Button/Status Update Callbacks ---
-def update_button_state(processing: bool, button_text_processing: str, button_text_idle: str):
+def update_button_state(
+    processing: bool, button_text_processing: str, button_text_idle: str
+):
     """Generic function to update button text and interactivity."""
-    return gr.update(interactive=not processing, value=button_text_processing if processing else button_text_idle)
+    return gr.update(
+        interactive=not processing,
+        value=button_text_processing if processing else button_text_idle,
+    )
 
 
 def trigger_status_fade(status_element_id: str):
@@ -916,4 +1036,6 @@ def handle_thresholding_change(use_otsu_threshold: bool):
 
 def handle_hyphenation_change(hyphenate_before_scaling: bool):
     """Handles changes in the hyphenation checkbox to enable/disable hyphenation-related sliders."""
-    return gr.update(interactive=hyphenate_before_scaling), gr.update(interactive=hyphenate_before_scaling)
+    return gr.update(interactive=hyphenate_before_scaling), gr.update(
+        interactive=hyphenate_before_scaling
+    )

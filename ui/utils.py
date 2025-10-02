@@ -8,7 +8,7 @@ from PIL import Image
 
 from utils.logging import log_message
 
-from .settings_manager import get_saved_settings, PROVIDER_MODELS, DEFAULT_SETTINGS
+from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_settings
 
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
@@ -41,14 +41,21 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         return True, f"{provider} API key is optional and not provided."  # Valid state
 
     if provider == "Google" and not (api_key.startswith("AI") and len(api_key) == 39):
-        return False, "Invalid Google API key format (should start with 'AI' and be 39 chars)"
+        return (
+            False,
+            "Invalid Google API key format (should start with 'AI' and be 39 chars)",
+        )
     if provider == "OpenAI" and not (api_key.startswith("sk-") and len(api_key) >= 48):
         return False, "Invalid OpenAI API key format (should start with 'sk-')"
-    if provider == "Anthropic" and not (api_key.startswith("sk-ant-") and len(api_key) >= 100):
+    if provider == "Anthropic" and not (
+        api_key.startswith("sk-ant-") and len(api_key) >= 100
+    ):
         return False, "Invalid Anthropic API key format (should start with 'sk-ant-')"
     if provider == "xAI" and not api_key.startswith("xai-"):
         return False, "Invalid xAI API key format (should start with 'xai-')"
-    if provider == "OpenRouter" and not (api_key.startswith("sk-or-") and len(api_key) >= 48):
+    if provider == "OpenRouter" and not (
+        api_key.startswith("sk-or-") and len(api_key) >= 48
+    ):
         return False, "Invalid OpenRouter API key format (should start with 'sk-or-')"
     # No specific format check for OpenAI-Compatible keys
 
@@ -74,7 +81,10 @@ def validate_image(image: Any) -> tuple[bool, str]:
 
         width, height = img.size
         if width < 600 or height < 600:
-            return False, f"Image dimensions too small ({width}x{height}). Min recommended size is 600x600."
+            return (
+                False,
+                f"Image dimensions too small ({width}x{height}). Min recommended size is 600x600.",
+            )
 
         return True, "Image is valid"
     except FileNotFoundError:
@@ -88,13 +98,19 @@ def validate_font_directory(font_dir: Path) -> tuple[bool, str]:
     if not font_dir:
         return False, "Font directory not specified"
     if not font_dir.exists():
-        return False, f"Font directory '{font_dir.name}' not found at {font_dir.resolve()}"
+        return (
+            False,
+            f"Font directory '{font_dir.name}' not found at {font_dir.resolve()}",
+        )
     if not font_dir.is_dir():
         return False, f"Path '{font_dir.name}' is not a directory."
 
     font_files = list(font_dir.glob("*.ttf")) + list(font_dir.glob("*.otf"))
     if not font_files:
-        return False, f"No font files (.ttf or .otf) found in '{font_dir.name}' directory"
+        return (
+            False,
+            f"No font files (.ttf or .otf) found in '{font_dir.name}' directory",
+        )
 
     return True, f"Found {len(font_files)} font files in directory"
 
@@ -105,11 +121,17 @@ def update_font_dropdown(fonts_base_dir: Path):
         font_packs, _ = get_available_font_packs(fonts_base_dir)
         saved_settings = get_saved_settings()
         current_font = saved_settings.get("font_pack")
-        selected_font_val = current_font if current_font in font_packs else (font_packs[0] if font_packs else None)
+        selected_font_val = (
+            current_font
+            if current_font in font_packs
+            else (font_packs[0] if font_packs else None)
+        )
 
         current_batch_font = saved_settings.get("batch_font_pack")
         selected_batch_font_val = (
-            current_batch_font if current_batch_font in font_packs else (font_packs[0] if font_packs else None)
+            current_batch_font
+            if current_batch_font in font_packs
+            else (font_packs[0] if font_packs else None)
         )
 
         return (
@@ -127,12 +149,18 @@ def refresh_models_and_fonts(models_dir: Path, fonts_base_dir: Path):
         font_packs, _ = get_available_font_packs(fonts_base_dir)
         saved_settings = get_saved_settings()
         current_font = saved_settings.get("font_pack")
-        selected_font_val = current_font if current_font in font_packs else (font_packs[0] if font_packs else None)
+        selected_font_val = (
+            current_font
+            if current_font in font_packs
+            else (font_packs[0] if font_packs else None)
+        )
         single_font_result = gr.update(choices=font_packs, value=selected_font_val)
 
         current_batch_font = saved_settings.get("batch_font_pack")
         selected_batch_font_val = (
-            current_batch_font if current_batch_font in font_packs else (font_packs[0] if font_packs else None)
+            current_batch_font
+            if current_batch_font in font_packs
+            else (font_packs[0] if font_packs else None)
         )
         batch_font_result = gr.update(choices=font_packs, value=selected_batch_font_val)
 
@@ -150,11 +178,17 @@ def refresh_models_and_fonts(models_dir: Path, fonts_base_dir: Path):
 def update_translation_ui(provider: str, current_temp: float):
     """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity."""
     saved_settings = get_saved_settings()
-    provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
+    provider_models_dict = saved_settings.get(
+        "provider_models", DEFAULT_SETTINGS["provider_models"]
+    )
     remembered_model = provider_models_dict.get(provider)
 
     models = PROVIDER_MODELS.get(provider, [])
-    selected_model = remembered_model if remembered_model in models else (models[0] if models else None)
+    selected_model = (
+        remembered_model
+        if remembered_model in models
+        else (models[0] if models else None)
+    )
     model_update = gr.update(choices=models, value=selected_model)
 
     google_visible_update = gr.update(visible=(provider == "Google"))
@@ -162,10 +196,17 @@ def update_translation_ui(provider: str, current_temp: float):
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
     xai_visible_update = gr.update(visible=(provider == "xAI"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
-    openai_compatible_url_visible_update = gr.update(visible=(provider == "OpenAI-Compatible"))
-    openai_compatible_key_visible_update = gr.update(visible=(provider == "OpenAI-Compatible"))
+    openai_compatible_url_visible_update = gr.update(
+        visible=(provider == "OpenAI-Compatible")
+    )
+    openai_compatible_key_visible_update = gr.update(
+        visible=(provider == "OpenAI-Compatible")
+    )
     if provider == "OpenRouter" or provider == "OpenAI-Compatible":
-        model_update = gr.update(value=remembered_model, choices=[remembered_model] if remembered_model else [])
+        model_update = gr.update(
+            value=remembered_model,
+            choices=[remembered_model] if remembered_model else [],
+        )
     else:
         model_update = gr.update(choices=models, value=selected_model)
 
@@ -190,10 +231,7 @@ def update_translation_ui(provider: str, current_temp: float):
     elif provider == "OpenRouter" and remembered_model:
         lm = remembered_model.lower()
         is_reasoning_capable = (
-            "gpt-5" in lm
-            or "o1" in lm
-            or "o3" in lm
-            or "o4-mini" in lm
+            "gpt-5" in lm or "o1" in lm or "o3" in lm or "o4-mini" in lm
         )
         reasoning_effort_visible = is_reasoning_capable
     reasoning_effort_visible_update = gr.update(visible=reasoning_effort_visible)
@@ -218,7 +256,9 @@ def update_translation_ui(provider: str, current_temp: float):
     )
 
 
-def update_params_for_model(provider: str, model_name: Optional[str], current_temp: float):
+def update_params_for_model(
+    provider: str, model_name: Optional[str], current_temp: float
+):
     """Adjusts temp/top_k sliders and visibility toggles based on selected provider/model."""
     if not provider:  # Should not happen, but safeguard
         return gr.update(), gr.update()
@@ -231,8 +271,12 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
     elif provider == "OpenAI" or provider == "xAI":
         top_k_interactive = False
     elif provider == "OpenRouter":
-        is_openai_model = model_name and ("openai/" in model_name or model_name.startswith("gpt-"))
-        is_anthropic_model = model_name and ("anthropic/" in model_name or model_name.startswith("claude-"))
+        is_openai_model = model_name and (
+            "openai/" in model_name or model_name.startswith("gpt-")
+        )
+        is_anthropic_model = model_name and (
+            "anthropic/" in model_name or model_name.startswith("claude-")
+        )
         if is_anthropic_model:
             temp_max = 1.0
         if is_openai_model or is_anthropic_model:
@@ -246,7 +290,9 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
     top_k_update = gr.update(interactive=top_k_interactive)
 
     # Determine visibility for the enable_thinking checkbox
-    is_flash_model = provider == "Google" and model_name and "gemini-2.5-flash" in model_name
+    is_flash_model = (
+        provider == "Google" and model_name and "gemini-2.5-flash" in model_name
+    )
     # Anthropic reasoning-capable models for thinking toggle
 
     def _is_anthropic_reasoning_model(name: Optional[str]) -> bool:
@@ -275,10 +321,16 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
 
         return is_gemini_reasoning or is_anthropic_reasoning or is_grok_reasoning
 
-    is_anthropic_thinking_model = provider == "Anthropic" and _is_anthropic_reasoning_model(model_name)
-    is_openrouter_thinking_model = provider == "OpenRouter" and _is_openrouter_thinking_model(model_name)
+    is_anthropic_thinking_model = (
+        provider == "Anthropic" and _is_anthropic_reasoning_model(model_name)
+    )
+    is_openrouter_thinking_model = (
+        provider == "OpenRouter" and _is_openrouter_thinking_model(model_name)
+    )
     enable_thinking_update = gr.update(
-        visible=is_flash_model or is_anthropic_thinking_model or is_openrouter_thinking_model
+        visible=is_flash_model
+        or is_anthropic_thinking_model
+        or is_openrouter_thinking_model
     )
 
     # Determine reasoning-effort dropdown visibility and choices
@@ -290,24 +342,29 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
             return False
         lm = name.lower()
         is_reasoning_capable = (
-            "gpt-5" in lm
-            or "o1" in lm
-            or "o3" in lm
-            or "o4-mini" in lm
+            "gpt-5" in lm or "o1" in lm or "o3" in lm or "o4-mini" in lm
         )
         return is_reasoning_capable
 
     if provider == "OpenAI" and model_name:
         lm = model_name.lower()
         is_gpt5 = lm.startswith("gpt-5")
-        is_reasoning_capable = (is_gpt5 or lm.startswith("o1")
-                                or lm.startswith("o3") or lm.startswith("o4-mini"))
+        is_reasoning_capable = (
+            is_gpt5
+            or lm.startswith("o1")
+            or lm.startswith("o3")
+            or lm.startswith("o4-mini")
+        )
         reasoning_visible = is_reasoning_capable
         if is_gpt5:
             reasoning_choices = ["minimal", "low", "medium", "high"]
         else:
             reasoning_choices = ["low", "medium", "high"]
-    elif provider == "OpenRouter" and model_name and _is_openai_reasoning_model(model_name):
+    elif (
+        provider == "OpenRouter"
+        and model_name
+        and _is_openai_reasoning_model(model_name)
+    ):
         lm = model_name.lower()
         reasoning_visible = True
         reasoning_choices = ["low", "medium", "high"]
@@ -320,12 +377,18 @@ def update_params_for_model(provider: str, model_name: Optional[str], current_te
     else:
         value = "low" if "low" in reasoning_choices else reasoning_choices[0]
 
-    reasoning_effort_update = gr.update(visible=reasoning_visible, choices=reasoning_choices, value=value)
+    reasoning_effort_update = gr.update(
+        visible=reasoning_visible, choices=reasoning_choices, value=value
+    )
 
     return temp_update, top_k_update, enable_thinking_update, reasoning_effort_update
 
 
-def switch_settings_view(selected_group_index: int, setting_groups: List[gr.Group], nav_buttons: List[gr.Button]):
+def switch_settings_view(
+    selected_group_index: int,
+    setting_groups: List[gr.Group],
+    nav_buttons: List[gr.Button],
+):
     """Handles switching visibility of setting groups and styling nav buttons."""
     updates = []
     for i, _ in enumerate(setting_groups):
@@ -349,7 +412,9 @@ def fetch_and_update_openrouter_models():
         log_message("Using cached OpenRouter models", verbose=verbose)
         cached_models = OPENROUTER_MODEL_CACHE["models"]
         saved_settings = get_saved_settings()
-        provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
+        provider_models_dict = saved_settings.get(
+            "provider_models", DEFAULT_SETTINGS["provider_models"]
+        )
         remembered_or_model = provider_models_dict.get("OpenRouter")
         selected_or_model = (
             remembered_or_model
@@ -384,7 +449,9 @@ def fetch_and_update_openrouter_models():
             input_modalities_lc = [str(m).lower() for m in input_modalities]
 
             has_image_in_modality = (
-                any(k in modality_field for k in ["image", "vision", "multimodal"]) if modality_field else False
+                any(k in modality_field for k in ["image", "vision", "multimodal"])
+                if modality_field
+                else False
             )
             has_image_input = any(
                 ("image" in m) or (m == "video") for m in input_modalities_lc
@@ -405,10 +472,14 @@ def fetch_and_update_openrouter_models():
         filtered_models.sort()
 
         OPENROUTER_MODEL_CACHE["models"] = filtered_models
-        log_message(f"Fetched {len(filtered_models)} OpenRouter models", verbose=verbose)
+        log_message(
+            f"Fetched {len(filtered_models)} OpenRouter models", verbose=verbose
+        )
 
         saved_settings = get_saved_settings()
-        provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
+        provider_models_dict = saved_settings.get(
+            "provider_models", DEFAULT_SETTINGS["provider_models"]
+        )
         remembered_or_model = provider_models_dict.get("OpenRouter")
         selected_or_model = (
             remembered_or_model
@@ -430,15 +501,22 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
     global COMPATIBLE_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
     if not url or not url.startswith(("http://", "https://")):
-        gr.Warning("Please enter a valid URL (starting with http:// or https://) for the OpenAI-Compatible endpoint.")
+        gr.Warning(
+            "Please enter a valid URL (starting with http:// or https://) for the OpenAI-Compatible endpoint."
+        )
         return gr.update(choices=[], value=None)
 
     # Check if cache is already populated for this URL in this session
-    if COMPATIBLE_MODEL_CACHE.get("url") == url and COMPATIBLE_MODEL_CACHE.get("models") is not None:
+    if (
+        COMPATIBLE_MODEL_CACHE.get("url") == url
+        and COMPATIBLE_MODEL_CACHE.get("models") is not None
+    ):
         log_message(f"Using cached models from {url}", verbose=verbose)
         cached_models = COMPATIBLE_MODEL_CACHE["models"]
         saved_settings = get_saved_settings()
-        provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
+        provider_models_dict = saved_settings.get(
+            "provider_models", DEFAULT_SETTINGS["provider_models"]
+        )
         remembered_comp_model = provider_models_dict.get("OpenAI-Compatible")
         selected_comp_model = (
             remembered_comp_model
@@ -465,10 +543,14 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
             if isinstance(data.get("models"), list):
                 all_models_data = data["models"]
             else:
-                raise ValueError("Invalid response format: 'data' or 'models' key not found or not a list.")
+                raise ValueError(
+                    "Invalid response format: 'data' or 'models' key not found or not a list."
+                )
 
         fetched_models = [
-            model.get("id", model.get("name"))  # Handle different key names ('id' or 'name')
+            model.get(
+                "id", model.get("name")
+            )  # Handle different key names ('id' or 'name')
             for model in all_models_data
             if isinstance(model, dict) and (model.get("id") or model.get("name"))
         ]
@@ -479,10 +561,14 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
         COMPATIBLE_MODEL_CACHE["models"] = fetched_models
         log_message(f"Fetched {len(fetched_models)} models from {url}", verbose=verbose)
         if not fetched_models:
-            gr.Warning(f"No models found at {fetch_url}. Check the URL and API key (if required).")
+            gr.Warning(
+                f"No models found at {fetch_url}. Check the URL and API key (if required)."
+            )
 
         saved_settings = get_saved_settings()
-        provider_models_dict = saved_settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
+        provider_models_dict = saved_settings.get(
+            "provider_models", DEFAULT_SETTINGS["provider_models"]
+        )
         remembered_comp_model = provider_models_dict.get("OpenAI-Compatible")
         selected_comp_model = (
             remembered_comp_model

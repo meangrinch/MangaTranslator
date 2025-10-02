@@ -20,7 +20,7 @@ def _process_single_bubble(
     detection_bbox=None,
     is_sam=False,
     dilation_kernel=None,
-    constraint_erosion_kernel=None
+    constraint_erosion_kernel=None,
 ):
     """
     Process a single speech bubble mask to extract text regions and determine fill color.
@@ -48,7 +48,9 @@ def _process_single_bubble(
         if dilation_kernel is None:
             dilation_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         if constraint_erosion_kernel is None:
-            constraint_erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            constraint_erosion_kernel = cv2.getStructuringElement(
+                cv2.MORPH_ELLIPSE, (5, 5)
+            )
         masked_pixels = img_gray[base_mask == 255]
         if masked_pixels.size == 0:
             log_message(
@@ -73,7 +75,9 @@ def _process_single_bubble(
         roi_gray[roi_indices] = img_gray[roi_indices]
 
         # Invert for black bubbles to detect text properly
-        roi_for_thresholding = cv2.bitwise_not(roi_gray) if is_black_bubble else roi_gray
+        roi_for_thresholding = (
+            cv2.bitwise_not(roi_gray) if is_black_bubble else roi_gray
+        )
         thresholded_roi = np.zeros_like(img_gray)
 
         if use_otsu_threshold:
@@ -83,7 +87,7 @@ def _process_single_bubble(
             )
             log_message(
                 f"{'[SAM]' if is_sam else ''}  Otsu threshold: {thresh_val}",
-                verbose=verbose
+                verbose=verbose,
             )
             _, thresholded_roi = cv2.threshold(
                 roi_for_thresholding, thresh_val, 255, cv2.THRESH_BINARY
@@ -97,13 +101,19 @@ def _process_single_bubble(
 
         # Shrink ROI to avoid border artifacts
         dist_map = cv2.distanceTransform(roi_mask, cv2.DIST_L2, 3)
-        shrunk_roi_mask = np.where(dist_map >= float(roi_shrink_px), 255, 0).astype(np.uint8)
+        shrunk_roi_mask = np.where(dist_map >= float(roi_shrink_px), 255, 0).astype(
+            np.uint8
+        )
         thresholded_roi = cv2.bitwise_and(thresholded_roi, shrunk_roi_mask)
 
         # Use eroded mask to avoid erasing bubble outlines
-        eroded_constraint_mask = cv2.erode(base_mask, constraint_erosion_kernel, iterations=1)
+        eroded_constraint_mask = cv2.erode(
+            base_mask, constraint_erosion_kernel, iterations=1
+        )
 
-        contours, _ = cv2.findContours(thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            thresholded_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
         valid_contours = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
@@ -114,8 +124,11 @@ def _process_single_bubble(
                 continue
             cx = int(m["m10"] / m["m00"])
             cy = int(m["m01"] / m["m00"])
-            if (0 <= cx < img_width and 0 <= cy < img_height
-                    and eroded_constraint_mask[cy, cx] == 255):
+            if (
+                0 <= cx < img_width
+                and 0 <= cy < img_height
+                and eroded_constraint_mask[cy, cx] == 255
+            ):
                 valid_contours.append(cnt)
 
         log_message(
@@ -125,7 +138,9 @@ def _process_single_bubble(
 
         if valid_contours:
             validated_mask = np.zeros((img_height, img_width), dtype=np.uint8)
-            cv2.drawContours(validated_mask, valid_contours, -1, 255, thickness=cv2.FILLED)
+            cv2.drawContours(
+                validated_mask, valid_contours, -1, 255, thickness=cv2.FILLED
+            )
 
             # Re-contour to get clean boundary from validated mask
             boundary_contours, _ = cv2.findContours(
@@ -134,7 +149,9 @@ def _process_single_bubble(
             if boundary_contours:
                 largest_contour = max(boundary_contours, key=cv2.contourArea)
                 final_mask = np.zeros((img_height, img_width), dtype=np.uint8)
-                cv2.drawContours(final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
+                cv2.drawContours(
+                    final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED
+                )
                 return final_mask, fill_color_bgr
 
         return None, None
@@ -192,7 +209,9 @@ def clean_speech_bubbles(
         detections = (
             pre_computed_detections
             if pre_computed_detections is not None
-            else detect_speech_bubbles(image_path, model_path, confidence, device=device)
+            else detect_speech_bubbles(
+                image_path, model_path, confidence, device=device
+            )
         )
 
         processed_bubbles = []
@@ -207,15 +226,25 @@ def clean_speech_bubbles(
             sam_mask = detection.get("sam_mask")
             if sam_mask is not None:
                 final_mask, fill_color_bgr = _process_single_bubble(
-                    sam_mask, img_gray, img_height, img_width,
-                    thresholding_value, use_otsu_threshold, roi_shrink_px,
-                    verbose, detection.get('bbox'), is_sam=True,
+                    sam_mask,
+                    img_gray,
+                    img_height,
+                    img_width,
+                    thresholding_value,
+                    use_otsu_threshold,
+                    roi_shrink_px,
+                    verbose,
+                    detection.get("bbox"),
+                    is_sam=True,
                     dilation_kernel=dilation_kernel,
-                    constraint_erosion_kernel=constraint_erosion_kernel
+                    constraint_erosion_kernel=constraint_erosion_kernel,
                 )
             else:
                 if "mask_points" not in detection or not detection["mask_points"]:
-                    log_message(f"Skipping detection {detection.get('bbox')}: no mask points", verbose=verbose)
+                    log_message(
+                        f"Skipping detection {detection.get('bbox')}: no mask points",
+                        verbose=verbose,
+                    )
                     continue
 
                 try:
@@ -237,11 +266,18 @@ def clean_speech_bubbles(
                     cv2.fillPoly(yolo_mask, [points_int], 255)
 
                     final_mask, fill_color_bgr = _process_single_bubble(
-                        yolo_mask, img_gray, img_height, img_width,
-                        thresholding_value, use_otsu_threshold, roi_shrink_px,
-                        verbose, detection.get('bbox'), is_sam=False,
+                        yolo_mask,
+                        img_gray,
+                        img_height,
+                        img_width,
+                        thresholding_value,
+                        use_otsu_threshold,
+                        roi_shrink_px,
+                        verbose,
+                        detection.get("bbox"),
+                        is_sam=False,
                         dilation_kernel=dilation_kernel,
-                        constraint_erosion_kernel=constraint_erosion_kernel
+                        constraint_erosion_kernel=constraint_erosion_kernel,
                     )
 
                 except Exception as e:
@@ -250,11 +286,13 @@ def clean_speech_bubbles(
                     continue
 
             if final_mask is not None and fill_color_bgr is not None:
-                processed_bubbles.append({
-                    "mask": final_mask,
-                    "color": fill_color_bgr,
-                    "bbox": detection.get("bbox"),
-                })
+                processed_bubbles.append(
+                    {
+                        "mask": final_mask,
+                        "color": fill_color_bgr,
+                        "bbox": detection.get("bbox"),
+                    }
+                )
                 log_message(
                     f"Detection {detection.get('bbox')}: processed successfully",
                     verbose=verbose,
@@ -271,7 +309,9 @@ def clean_speech_bubbles(
 
             for color_bgr, masks in color_groups.items():
                 combined_mask = np.bitwise_or.reduce(masks)
-                num_channels = cleaned_image.shape[2] if len(cleaned_image.shape) == 3 else 1
+                num_channels = (
+                    cleaned_image.shape[2] if len(cleaned_image.shape) == 3 else 1
+                )
                 if num_channels == 4 and len(color_bgr) == 3:
                     fill_color = (*color_bgr, 255)
                 else:

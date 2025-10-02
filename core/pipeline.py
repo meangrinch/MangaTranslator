@@ -10,12 +10,12 @@ import torch
 from PIL import Image
 
 from core.models import (
-    DetectionConfig,
     CleaningConfig,
-    TranslationConfig,
-    RenderingConfig,
-    OutputConfig,
+    DetectionConfig,
     MangaTranslatorConfig,
+    OutputConfig,
+    RenderingConfig,
+    TranslationConfig,
 )
 from core.validation import autodetect_yolo_model_path
 from utils.logging import log_message
@@ -28,7 +28,9 @@ from .translation import call_translation_api_batch, sort_bubbles_by_reading_ord
 
 
 def translate_and_render(
-    image_path: Union[str, Path], config: MangaTranslatorConfig, output_path: Optional[Union[str, Path]] = None
+    image_path: Union[str, Path],
+    config: MangaTranslatorConfig,
+    output_path: Optional[Union[str, Path]] = None,
 ):
     """
     Main function to translate manga speech bubbles and render translations using a config object.
@@ -58,9 +60,13 @@ def translate_and_render(
         raise
 
     desired_format = config.output.output_format
-    output_ext_for_mode = Path(output_path).suffix.lower() if output_path else image_path.suffix.lower()
+    output_ext_for_mode = (
+        Path(output_path).suffix.lower() if output_path else image_path.suffix.lower()
+    )
 
-    if desired_format == "jpeg" or (desired_format == "auto" and output_ext_for_mode in [".jpg", ".jpeg"]):
+    if desired_format == "jpeg" or (
+        desired_format == "auto" and output_ext_for_mode in [".jpg", ".jpeg"]
+    ):
         target_mode = "RGB"
     else:  # Default to RGBA for PNG, WEBP, or other formats in auto mode
         target_mode = "RGBA"
@@ -72,9 +78,15 @@ def translate_and_render(
             if (
                 pil_image_processed.mode == "RGBA"
                 or pil_image_processed.mode == "LA"
-                or (pil_image_processed.mode == "P" and "transparency" in pil_image_processed.info)
+                or (
+                    pil_image_processed.mode == "P"
+                    and "transparency" in pil_image_processed.info
+                )
             ):
-                log_message(f"Converting {pil_image_processed.mode} to RGB (flattening transparency)", verbose=verbose)
+                log_message(
+                    f"Converting {pil_image_processed.mode} to RGB (flattening transparency)",
+                    verbose=verbose,
+                )
                 background = Image.new("RGB", pil_image_processed.size, (255, 255, 255))
                 try:
                     mask = None
@@ -82,7 +94,10 @@ def translate_and_render(
                         mask = pil_image_processed.split()[3]
                     elif pil_image_processed.mode == "LA":
                         mask = pil_image_processed.split()[1]
-                    elif pil_image_processed.mode == "P" and "transparency" in pil_image_processed.info:
+                    elif (
+                        pil_image_processed.mode == "P"
+                        and "transparency" in pil_image_processed.info
+                    ):
                         temp_rgba = pil_image_processed.convert("RGBA")
                         mask = temp_rgba.split()[3]
 
@@ -92,9 +107,14 @@ def translate_and_render(
                     else:
                         pil_image_processed = pil_image_processed.convert("RGB")
                 except Exception as paste_err:
-                    log_message(f"Warning: Paste failed, trying alpha_composite: {paste_err}", verbose=verbose)
+                    log_message(
+                        f"Warning: Paste failed, trying alpha_composite: {paste_err}",
+                        verbose=verbose,
+                    )
                     try:
-                        background_comp = Image.new("RGB", pil_image_processed.size, (255, 255, 255))
+                        background_comp = Image.new(
+                            "RGB", pil_image_processed.size, (255, 255, 255)
+                        )
                         img_rgba_for_composite = (
                             pil_image_processed
                             if pil_image_processed.mode == "RGBA"
@@ -103,18 +123,26 @@ def translate_and_render(
                         pil_image_processed = Image.alpha_composite(
                             background_comp.convert("RGBA"), img_rgba_for_composite
                         ).convert("RGB")
-                        log_message("Alpha composite conversion successful", verbose=verbose)
+                        log_message(
+                            "Alpha composite conversion successful", verbose=verbose
+                        )
                     except Exception as composite_err:
                         log_message(
                             f"Warning: Alpha composite failed, using simple convert: {composite_err}",
-                            verbose=verbose
+                            verbose=verbose,
                         )
-                        pil_image_processed = pil_image_processed.convert("RGB")  # Final fallback conversion
+                        pil_image_processed = pil_image_processed.convert(
+                            "RGB"
+                        )  # Final fallback conversion
             else:  # Non-transparent conversion to RGB
-                log_message(f"Converting {pil_image_processed.mode} to RGB", verbose=verbose)
+                log_message(
+                    f"Converting {pil_image_processed.mode} to RGB", verbose=verbose
+                )
                 pil_image_processed = pil_image_processed.convert("RGB")
         elif target_mode == "RGBA":
-            log_message(f"Converting {pil_image_processed.mode} to RGBA", verbose=verbose)
+            log_message(
+                f"Converting {pil_image_processed.mode} to RGBA", verbose=verbose
+            )
             pil_image_processed = pil_image_processed.convert("RGBA")
 
     original_cv_image = pil_to_cv2(pil_image_processed)
@@ -129,7 +157,9 @@ def translate_and_render(
             full_image_b64 = base64.b64encode(buffer).decode("utf-8")
             log_message("Encoded full image for context", verbose=verbose)
         except Exception as e:
-            log_message(f"Warning: Failed to encode full image context: {e}", always_print=True)
+            log_message(
+                f"Warning: Failed to encode full image context: {e}", always_print=True
+            )
 
     # --- Detection ---
     log_message("Detecting speech bubbles...", verbose=verbose)
@@ -171,7 +201,9 @@ def translate_and_render(
                 roi_shrink_px=config.cleaning.roi_shrink_px,
                 verbose=verbose,
             )
-            log_message(f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose)
+            log_message(
+                f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose
+            )
         except Exception as e:
             log_message(f"Error during cleaning: {e}", always_print=True)
             cleaned_image_cv = original_cv_image.copy()
@@ -200,9 +232,13 @@ def translate_and_render(
                         raise ValueError("cv2.imencode failed")
                     image_b64 = base64.b64encode(buffer).decode("utf-8")
                     bubble["image_b64"] = image_b64
-                    log_message(f"Bubble {x1},{y1} ({x2 - x1}x{y2 - y1})", verbose=verbose)
+                    log_message(
+                        f"Bubble {x1},{y1} ({x2 - x1}x{y2 - y1})", verbose=verbose
+                    )
                 except Exception as e:
-                    log_message(f"Error encoding bubble {bubble['bbox']}: {e}", verbose=verbose)
+                    log_message(
+                        f"Error encoding bubble {bubble['bbox']}: {e}", verbose=verbose
+                    )
                     bubble["image_b64"] = None
 
             valid_bubble_data = [b for b in bubble_data if b.get("image_b64")]
@@ -211,19 +247,25 @@ def translate_and_render(
             else:  # Only proceed if we have valid bubble data
                 # --- Sort and Translate ---
                 reading_direction = config.translation.reading_direction
-                log_message(f"Sorting bubbles ({reading_direction.upper()})", verbose=verbose)
+                log_message(
+                    f"Sorting bubbles ({reading_direction.upper()})", verbose=verbose
+                )
 
                 sorted_bubble_data = sort_bubbles_by_reading_order(
                     valid_bubble_data, reading_direction
                 )
 
-                bubble_images_b64 = [bubble["image_b64"] for bubble in sorted_bubble_data]
+                bubble_images_b64 = [
+                    bubble["image_b64"] for bubble in sorted_bubble_data
+                ]
                 translated_texts = []
                 if not bubble_images_b64:
                     log_message("No valid bubbles after sorting", always_print=True)
                 else:
                     if getattr(config, "test_mode", False):
-                        placeholder_long = "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+                        placeholder_long = (
+                            "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+                        )
                         placeholder_short = "Lorem ipsum dolor sit amet..."
                         log_message(
                             f"Test mode: generating placeholders for {len(sorted_bubble_data)} bubbles",
@@ -231,13 +273,18 @@ def translate_and_render(
                         )
                         # Map for rendering info used in probe
                         bubble_render_info_map_probe = {
-                            tuple(info["bbox"]): {"color": info["color"], "mask": info.get("mask")}
+                            tuple(info["bbox"]): {
+                                "color": info["color"],
+                                "mask": info.get("mask"),
+                            }
                             for info in processed_bubbles_info
                             if "bbox" in info and "color" in info and "mask" in info
                         }
                         for bubble in sorted_bubble_data:
                             bbox = bubble["bbox"]
-                            probe_info = bubble_render_info_map_probe.get(tuple(bbox), {})
+                            probe_info = bubble_render_info_map_probe.get(
+                                tuple(bbox), {}
+                            )
                             bubble_color_bgr = probe_info.get("color", (255, 255, 255))
                             cleaned_mask = probe_info.get("mask")
                             # Probe fit at max size without mutating the working image
@@ -262,7 +309,9 @@ def translate_and_render(
                                 padding_pixels=config.rendering.padding_pixels,
                                 verbose=verbose,
                             )
-                            translated_texts.append(placeholder_long if fits else placeholder_short)
+                            translated_texts.append(
+                                placeholder_long if fits else placeholder_short
+                            )
                     else:
                         log_message(
                             f"Translating {len(bubble_images_b64)} bubbles: "
@@ -277,9 +326,12 @@ def translate_and_render(
                                 debug=verbose,
                             )
                         except Exception as e:
-                            log_message(f"Translation API error: {e}", always_print=True)
+                            log_message(
+                                f"Translation API error: {e}", always_print=True
+                            )
                             translated_texts = [
-                                "[Translation Error: API call raised exception]" for _ in sorted_bubble_data
+                                "[Translation Error: API call raised exception]"
+                                for _ in sorted_bubble_data
                             ]
 
                 # --- Render Translations ---
@@ -303,7 +355,8 @@ def translate_and_render(
                             or text.startswith("API Error")
                             or text.startswith("[Translation Error]")
                             or text.startswith("[Translation Error:")
-                            or text.strip() in {
+                            or text.strip()
+                            in {
                                 "[OCR FAILED]",
                                 "[Empty response / no content]",
                                 f"[{config.translation.provider}: API call failed/blocked]",
@@ -311,10 +364,16 @@ def translate_and_render(
                                 f"[{config.translation.provider}: Failed to parse response]",
                             }
                         ):
-                            log_message(f"Skipping bubble {bbox} - invalid translation", verbose=verbose)
+                            log_message(
+                                f"Skipping bubble {bbox} - invalid translation",
+                                verbose=verbose,
+                            )
                             continue
 
-                        log_message(f"Rendering bubble {bbox}: '{text[:30]}...'", verbose=verbose)
+                        log_message(
+                            f"Rendering bubble {bbox}: '{text[:30]}...'",
+                            verbose=verbose,
+                        )
 
                         render_info = bubble_render_info_map.get(tuple(bbox))
                         bubble_color_bgr = (255, 255, 255)
@@ -348,7 +407,9 @@ def translate_and_render(
                             pil_cleaned_image = rendered_image
                             final_image_to_save = pil_cleaned_image
                         else:
-                            log_message(f"Failed to render bubble {bbox}", verbose=verbose)
+                            log_message(
+                                f"Failed to render bubble {bbox}", verbose=verbose
+                            )
                 else:
                     log_message(
                         f"Warning: Bubble/translation count mismatch "
@@ -413,7 +474,11 @@ def batch_translate_images(
     os.makedirs(output_dir, exist_ok=True)
 
     image_extensions = [".jpg", ".jpeg", ".png", ".webp"]
-    image_files = [f for f in input_dir.iterdir() if f.is_file() and f.suffix.lower() in image_extensions]
+    image_files = [
+        f
+        for f in input_dir.iterdir()
+        if f.is_file() and f.suffix.lower() in image_extensions
+    ]
 
     if not image_files:
         log_message(f"No image files found in '{input_dir}'", always_print=True)
@@ -433,7 +498,10 @@ def batch_translate_images(
         try:
             if progress_callback:
                 current_progress = i / total_images
-                progress_callback(current_progress, f"Processing image {i + 1}/{total_images}: {img_path.name}")
+                progress_callback(
+                    current_progress,
+                    f"Processing image {i + 1}/{total_images}: {img_path.name}",
+                )
 
             original_ext = img_path.suffix.lower()
             desired_format = config.output.output_format
@@ -452,7 +520,9 @@ def batch_translate_images(
                 )
 
             output_path = output_dir / f"{img_path.stem}_translated{output_ext}"
-            log_message(f"Processing {i + 1}/{total_images}: {img_path.name}", always_print=True)
+            log_message(
+                f"Processing {i + 1}/{total_images}: {img_path.name}", always_print=True
+            )
 
             translate_and_render(img_path, config, output_path)
 
@@ -460,16 +530,23 @@ def batch_translate_images(
 
             if progress_callback:
                 completed_progress = (i + 1) / total_images
-                progress_callback(completed_progress, f"Completed {i + 1}/{total_images} images")
+                progress_callback(
+                    completed_progress, f"Completed {i + 1}/{total_images} images"
+                )
 
         except Exception as e:
-            log_message(f"Error processing {img_path.name}: {str(e)}", always_print=True)
+            log_message(
+                f"Error processing {img_path.name}: {str(e)}", always_print=True
+            )
             results["error_count"] += 1
             results["errors"][img_path.name] = str(e)
 
             if progress_callback:
                 completed_progress = (i + 1) / total_images
-                progress_callback(completed_progress, f"Completed {i + 1}/{total_images} images (with errors)")
+                progress_callback(
+                    completed_progress,
+                    f"Completed {i + 1}/{total_images} images (with errors)",
+                )
 
     if progress_callback:
         progress_callback(1.0, "Processing complete")
@@ -492,18 +569,37 @@ def batch_translate_images(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Translate manga/comic speech bubbles using a configuration approach")
-    parser.add_argument("--input", type=str, required=True, help="Path to input image or directory (if using --batch)")
-    parser.add_argument(
-        "--output", type=str, required=False, help="Path to save the translated image or directory (if using --batch)"
+    parser = argparse.ArgumentParser(
+        description="Translate manga/comic speech bubbles using a configuration approach"
     )
-    parser.add_argument("--batch", action="store_true", help="Process all images in the input directory")
+    parser.add_argument(
+        "--input",
+        type=str,
+        required=True,
+        help="Path to input image or directory (if using --batch)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        required=False,
+        help="Path to save the translated image or directory (if using --batch)",
+    )
+    parser.add_argument(
+        "--batch", action="store_true", help="Process all images in the input directory"
+    )
     # --- Provider and API Key Arguments ---
     parser.add_argument(
         "--provider",
         type=str,
         default="Google",
-        choices=["Google", "OpenAI", "Anthropic", "xAI", "OpenRouter", "OpenAI-Compatible"],
+        choices=[
+            "Google",
+            "OpenAI",
+            "Anthropic",
+            "xAI",
+            "OpenRouter",
+            "OpenAI-Compatible",
+        ],
         help="LLM provider to use for translation",
     )
     parser.add_argument(
@@ -556,15 +652,24 @@ def main():
         help="Model name for the selected provider (e.g., 'gemini-2.0-flash'). "
         "If not provided, a default will be attempted based on the provider.",
     )
-    parser.add_argument("--font-dir", type=str, default="./fonts", help="Directory containing font files")
+    parser.add_argument(
+        "--font-dir",
+        type=str,
+        default="./fonts",
+        help="Directory containing font files",
+    )
     parser.add_argument(
         "--input-language",
         type=str,
         default="Japanese",
         help="Source language (use 'Auto' to autodetect)",
     )
-    parser.add_argument("--output-language", type=str, default="English", help="Target language")
-    parser.add_argument("--conf", type=float, default=0.35, help="Confidence threshold for detection")
+    parser.add_argument(
+        "--output-language", type=str, default="English", help="Target language"
+    )
+    parser.add_argument(
+        "--conf", type=float, default=0.35, help="Confidence threshold for detection"
+    )
     parser.add_argument(
         "--no-sam2",
         dest="use_sam2",
@@ -604,8 +709,15 @@ def main():
         ),
     )
     # Translation args
-    parser.add_argument("--temperature", type=float, default=0.1, help="Controls randomness in output (0.0-2.0)")
-    parser.add_argument("--top-p", type=float, default=0.95, help="Nucleus sampling parameter (0.0-1.0)")
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.1,
+        help="Controls randomness in output (0.0-2.0)",
+    )
+    parser.add_argument(
+        "--top-p", type=float, default=0.95, help="Nucleus sampling parameter (0.0-1.0)"
+    )
     parser.add_argument("--top-k", type=int, default=1, help="Limits to top k tokens")
     parser.add_argument(
         "--translation-mode",
@@ -630,9 +742,21 @@ def main():
         ),
     )
     # Rendering args
-    parser.add_argument("--max-font-size", type=int, default=14, help="Max font size for rendering text.")
-    parser.add_argument("--min-font-size", type=int, default=8, help="Min font size for rendering text.")
-    parser.add_argument("--line-spacing", type=float, default=1.0, help="Line spacing multiplier for rendered text.")
+    parser.add_argument(
+        "--max-font-size",
+        type=int,
+        default=14,
+        help="Max font size for rendering text.",
+    )
+    parser.add_argument(
+        "--min-font-size", type=int, default=8, help="Min font size for rendering text."
+    )
+    parser.add_argument(
+        "--line-spacing",
+        type=float,
+        default=1.0,
+        help="Line spacing multiplier for rendered text.",
+    )
     parser.add_argument(
         "--no-hyphenate-before-scaling",
         dest="hyphenate_before_scaling",
@@ -663,13 +787,21 @@ def main():
         type=float,
         default=8.0,
         help="Padding between text and the edge of the speech bubble (2-12). "
-             "Increase for more space between text and bubble boundaries.",
+        "Increase for more space between text and bubble boundaries.",
     )
     # Output args
-    parser.add_argument("--jpeg-quality", type=int, default=95, help="JPEG compression quality (1-100)")
-    parser.add_argument("--png-compression", type=int, default=6, help="PNG compression level (0-9)")
     parser.add_argument(
-        "--image-mode", type=str, default="RGBA", choices=["RGB", "RGBA"], help="Processing image mode (RGB or RGBA)"
+        "--jpeg-quality", type=int, default=95, help="JPEG compression quality (1-100)"
+    )
+    parser.add_argument(
+        "--png-compression", type=int, default=6, help="PNG compression level (0-9)"
+    )
+    parser.add_argument(
+        "--image-mode",
+        type=str,
+        default="RGBA",
+        choices=["RGB", "RGBA"],
+        help="Processing image mode (RGB or RGBA)",
     )
     # General args
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
@@ -697,7 +829,9 @@ def main():
         help="Disable sending the full page image as LLM context.",
     )
     parser.set_defaults(send_full_page_context=True)
-    parser.set_defaults(verbose=False, cpu=False, cleaning_only=False, enable_thinking=False)
+    parser.set_defaults(
+        verbose=False, cpu=False, cleaning_only=False, enable_thinking=False
+    )
 
     args = parser.parse_args()
 
@@ -735,7 +869,9 @@ def main():
         default_model = "openrouter/auto"
     elif provider == "OpenAI-Compatible":
         compatible_url = args.openai_compatible_url
-        api_key = args.openai_compatible_api_key or os.environ.get("OPENAI_COMPATIBLE_API_KEY")
+        api_key = args.openai_compatible_api_key or os.environ.get(
+            "OPENAI_COMPATIBLE_API_KEY"
+        )
         api_key_arg_name = "--openai-compatible-api-key"
         api_key_env_var = "OPENAI_COMPATIBLE_API_KEY"
         default_model = "default"
@@ -750,7 +886,11 @@ def main():
     if not args.model_name:
         print(f"Using default model for {provider}: {model_name}")
 
-    target_device = torch.device("cpu") if args.cpu or not torch.cuda.is_available() else torch.device("cuda")
+    target_device = (
+        torch.device("cpu")
+        if args.cpu or not torch.cuda.is_available()
+        else torch.device("cuda")
+    )
     print(f"Using {'CPU' if target_device.type == 'cpu' else 'CUDA'} device.")
 
     use_otsu_config_val = args.use_otsu_threshold
@@ -768,14 +908,34 @@ def main():
         ),
         translation=TranslationConfig(
             provider=provider,
-            google_api_key=api_key if provider == "Google" else os.environ.get("GOOGLE_API_KEY", ""),
-            openai_api_key=api_key if provider == "OpenAI" else os.environ.get("OPENAI_API_KEY", ""),
-            anthropic_api_key=api_key if provider == "Anthropic" else os.environ.get("ANTHROPIC_API_KEY", ""),
-            xai_api_key=api_key if provider == "xAI" else os.environ.get("XAI_API_KEY", ""),
-            openrouter_api_key=api_key if provider == "OpenRouter" else os.environ.get("OPENROUTER_API_KEY", ""),
+            google_api_key=(
+                api_key
+                if provider == "Google"
+                else os.environ.get("GOOGLE_API_KEY", "")
+            ),
+            openai_api_key=(
+                api_key
+                if provider == "OpenAI"
+                else os.environ.get("OPENAI_API_KEY", "")
+            ),
+            anthropic_api_key=(
+                api_key
+                if provider == "Anthropic"
+                else os.environ.get("ANTHROPIC_API_KEY", "")
+            ),
+            xai_api_key=(
+                api_key if provider == "xAI" else os.environ.get("XAI_API_KEY", "")
+            ),
+            openrouter_api_key=(
+                api_key
+                if provider == "OpenRouter"
+                else os.environ.get("OPENROUTER_API_KEY", "")
+            ),
             openai_compatible_url=compatible_url,
             openai_compatible_api_key=(
-                api_key if provider == "OpenAI-Compatible" else os.environ.get("OPENAI_COMPATIBLE_API_KEY", "")
+                api_key
+                if provider == "OpenAI-Compatible"
+                else os.environ.get("OPENAI_COMPATIBLE_API_KEY", "")
             ),
             model_name=model_name,
             temperature=args.temperature,
@@ -802,7 +962,9 @@ def main():
             padding_pixels=args.padding_pixels,
         ),
         output=OutputConfig(
-            jpeg_quality=args.jpeg_quality, png_compression=args.png_compression, image_mode=args.image_mode
+            jpeg_quality=args.jpeg_quality,
+            png_compression=args.png_compression,
+            image_mode=args.image_mode,
         ),
         test_mode=args.test_mode,
     )
@@ -853,7 +1015,9 @@ def main():
             detected_model_path = autodetect_yolo_model_path(models_base)
             config.yolo_model_path = str(detected_model_path)
         except Exception as autodetect_err:
-            log_message(f"Error auto-detecting YOLO model: {autodetect_err}", always_print=True)
+            log_message(
+                f"Error auto-detecting YOLO model: {autodetect_err}", always_print=True
+            )
             log_message(
                 "CLI requires a model at ./models/*.pt. Please add it and retry.",
                 always_print=True,
@@ -863,7 +1027,10 @@ def main():
         try:
             log_message(f"Processing {input_path}...", always_print=True)
             translate_and_render(input_path, config, output_path)
-            log_message(f"Translation complete. Result saved to {output_path}", always_print=True)
+            log_message(
+                f"Translation complete. Result saved to {output_path}",
+                always_print=True,
+            )
         except Exception as e:
             log_message(f"Error processing {input_path}: {e}", always_print=True)
 

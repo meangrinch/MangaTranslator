@@ -71,19 +71,30 @@ def validate_core_inputs(
 
     font_files = list(font_dir_path.glob("*.ttf")) + list(font_dir_path.glob("*.otf"))
     if not font_files:
-        raise ValidationError(f"No font files (.ttf or .otf) found in the font pack directory: '{font_dir_path}'")
+        raise ValidationError(
+            f"No font files (.ttf or .otf) found in the font pack directory: '{font_dir_path}'"
+        )
 
     # --- Rendering Config Validation ---
-    if not (isinstance(rendering_cfg.max_font_size, int) and rendering_cfg.max_font_size > 0):
+    if not (
+        isinstance(rendering_cfg.max_font_size, int) and rendering_cfg.max_font_size > 0
+    ):
         raise ValueError("Max Font Size must be a positive integer.")
-    if not (isinstance(rendering_cfg.min_font_size, int) and rendering_cfg.min_font_size > 0):
+    if not (
+        isinstance(rendering_cfg.min_font_size, int) and rendering_cfg.min_font_size > 0
+    ):
         raise ValueError("Min Font Size must be a positive integer.")
-    if not (isinstance(rendering_cfg.line_spacing, (int, float)) and float(rendering_cfg.line_spacing) > 0):
+    if not (
+        isinstance(rendering_cfg.line_spacing, (int, float))
+        and float(rendering_cfg.line_spacing) > 0
+    ):
         raise ValueError("Line Spacing must be a positive number.")
     if rendering_cfg.min_font_size > rendering_cfg.max_font_size:
         raise ValueError("Min Font Size cannot be larger than Max Font Size.")
     if rendering_cfg.font_hinting not in ["none", "slight", "normal", "full"]:
-        raise ValueError("Invalid Font Hinting value. Must be one of: none, slight, normal, full.")
+        raise ValueError(
+            "Invalid Font Hinting value. Must be one of: none, slight, normal, full."
+        )
 
     # --- Translation Config Validation (Basic) ---
     if not translation_cfg.provider:

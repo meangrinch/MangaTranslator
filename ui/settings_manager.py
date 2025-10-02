@@ -6,7 +6,11 @@ from typing import Any, Dict, List
 
 from utils.logging import log_message
 
-CONFIG_FILE = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))) / "MangaTranslator" / "config.json"
+CONFIG_FILE = (
+    Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")))
+    / "MangaTranslator"
+    / "config.json"
+)
 
 PROVIDER_MODELS: Dict[str, List[str]] = {
     "Google": [
@@ -65,11 +69,15 @@ DEFAULT_SETTINGS = {
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:11434/v1",
     "openai_compatible_api_key": "",
-    "model_name": PROVIDER_MODELS["Google"][0] if PROVIDER_MODELS["Google"] else None,  # Default active model
+    "model_name": (
+        PROVIDER_MODELS["Google"][0] if PROVIDER_MODELS["Google"] else None
+    ),  # Default active model
     "provider_models": {
         "Google": PROVIDER_MODELS["Google"][0] if PROVIDER_MODELS["Google"] else None,
         "OpenAI": PROVIDER_MODELS["OpenAI"][0] if PROVIDER_MODELS["OpenAI"] else None,
-        "Anthropic": PROVIDER_MODELS["Anthropic"][0] if PROVIDER_MODELS["Anthropic"] else None,
+        "Anthropic": (
+            PROVIDER_MODELS["Anthropic"][0] if PROVIDER_MODELS["Anthropic"] else None
+        ),
         "xAI": PROVIDER_MODELS["xAI"][0] if PROVIDER_MODELS["xAI"] else None,
         "OpenRouter": None,
         "OpenAI-Compatible": None,
@@ -129,7 +137,6 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "openrouter_api_key",
     "openai_compatible_url",
     "openai_compatible_api_key",
-
     # Translation behavior / LLM options
     "input_language",
     "output_language",
@@ -142,7 +149,6 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "enable_thinking",
     "reasoning_effort",
     "openrouter_reasoning_override",
-
     # Rendering
     "font_pack",
     "max_font_size",
@@ -155,26 +161,21 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "hyphen_penalty",
     "hyphenation_min_word_length",
     "badness_exponent",
-
     # Models / Detection
     "confidence",
     "use_sam2",
-
     # Cleaning
     "thresholding_value",
     "use_otsu_threshold",
     "roi_shrink_px",
-
     # Output
     "output_format",
     "jpeg_quality",
     "png_compression",
-
     # General
     "verbose",
     "cleaning_only",
     "test_mode",
-
     # Batch
     "batch_input_language",
     "batch_output_language",
@@ -237,7 +238,9 @@ def save_config(incoming_settings: Dict[str, Any]):
             current_value_on_disk = current_config_on_disk.get(key)
             default_value = all_defaults.get(key)
 
-            value_to_write = incoming_value if incoming_value is not None else default_value
+            value_to_write = (
+                incoming_value if incoming_value is not None else default_value
+            )
             config_to_write[key] = value_to_write
 
             changed = False
@@ -254,9 +257,13 @@ def save_config(incoming_settings: Dict[str, Any]):
 
         # Reorder keys according to canonical order, then append unknown keys alphabetically
         known_in_order = [k for k in CANONICAL_CONFIG_KEY_ORDER if k in config_to_write]
-        unknown_keys = sorted([k for k in config_to_write.keys() if k not in CANONICAL_CONFIG_KEY_ORDER])
+        unknown_keys = sorted(
+            [k for k in config_to_write.keys() if k not in CANONICAL_CONFIG_KEY_ORDER]
+        )
         ordered_keys = known_in_order + unknown_keys
-        ordered_config: Dict[str, Any] = OrderedDict((k, config_to_write[k]) for k in ordered_keys)
+        ordered_config: Dict[str, Any] = OrderedDict(
+            (k, config_to_write[k]) for k in ordered_keys
+        )
 
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(ordered_config, f, indent=2)
@@ -296,7 +303,10 @@ def get_saved_settings() -> Dict[str, Any]:
             if "provider_models" not in settings:
                 settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
             elif not isinstance(settings["provider_models"], dict):
-                log_message("Warning: 'provider_models' in config is not a dictionary. Resetting.", always_print=True)
+                log_message(
+                    "Warning: 'provider_models' in config is not a dictionary. Resetting.",
+                    always_print=True,
+                )
                 settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
 
             # Back-compat: migrate older configs
@@ -306,8 +316,11 @@ def get_saved_settings() -> Dict[str, Any]:
                     settings["provider"] = "Google"
 
                 # 2) API key: 'gemini_api_key' -> 'google_api_key'
-                if ("google_api_key" in settings and not settings["google_api_key"]) and (
-                    "gemini_api_key" in saved_config and saved_config.get("gemini_api_key")
+                if (
+                    "google_api_key" in settings and not settings["google_api_key"]
+                ) and (
+                    "gemini_api_key" in saved_config
+                    and saved_config.get("gemini_api_key")
                 ):
                     settings["google_api_key"] = saved_config.get("gemini_api_key", "")
 
@@ -324,25 +337,39 @@ def get_saved_settings() -> Dict[str, Any]:
                 pass
 
             loaded_provider = settings.get("provider", DEFAULT_SETTINGS["provider"])
-            provider_models_dict = settings.get("provider_models", DEFAULT_SETTINGS["provider_models"])
+            provider_models_dict = settings.get(
+                "provider_models", DEFAULT_SETTINGS["provider_models"]
+            )
             saved_model_for_provider = provider_models_dict.get(loaded_provider)
 
-            if loaded_provider == "OpenRouter" or loaded_provider == "OpenAI-Compatible":
+            if (
+                loaded_provider == "OpenRouter"
+                or loaded_provider == "OpenAI-Compatible"
+            ):
                 settings["model_name"] = saved_model_for_provider
             else:
                 valid_models = PROVIDER_MODELS.get(loaded_provider, [])
-                if saved_model_for_provider and saved_model_for_provider in valid_models:
+                if (
+                    saved_model_for_provider
+                    and saved_model_for_provider in valid_models
+                ):
                     settings["model_name"] = saved_model_for_provider
                 else:
-                    default_model_for_provider = DEFAULT_SETTINGS["provider_models"].get(loaded_provider)
-                    if default_model_for_provider and default_model_for_provider in valid_models:
+                    default_model_for_provider = DEFAULT_SETTINGS[
+                        "provider_models"
+                    ].get(loaded_provider)
+                    if (
+                        default_model_for_provider
+                        and default_model_for_provider in valid_models
+                    ):
                         settings["model_name"] = default_model_for_provider
                     elif valid_models:
                         settings["model_name"] = valid_models[0]
                     else:
                         settings["model_name"] = None
                     if (
-                        saved_model_for_provider and saved_model_for_provider != settings["model_name"]
+                        saved_model_for_provider
+                        and saved_model_for_provider != settings["model_name"]
                     ):  # Only warn if there *was* a saved value that's now invalid/different
                         log_message(
                             f"Warning: Saved model '{saved_model_for_provider}' not valid "
@@ -352,7 +379,10 @@ def get_saved_settings() -> Dict[str, Any]:
                         )
 
     except json.JSONDecodeError:
-        log_message(f"Warning: Could not decode config file at {CONFIG_FILE}. Using defaults.", always_print=True)
+        log_message(
+            f"Warning: Could not decode config file at {CONFIG_FILE}. Using defaults.",
+            always_print=True,
+        )
         default_provider = DEFAULT_SETTINGS["provider"]
         if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
             valid_models = PROVIDER_MODELS.get(default_provider, [])
@@ -360,7 +390,10 @@ def get_saved_settings() -> Dict[str, Any]:
         else:
             settings["model_name"] = None
     except Exception as e:
-        log_message(f"Warning: Error reading config file {CONFIG_FILE}: {e}. Using defaults.", always_print=True)
+        log_message(
+            f"Warning: Error reading config file {CONFIG_FILE}: {e}. Using defaults.",
+            always_print=True,
+        )
         default_provider = DEFAULT_SETTINGS["provider"]
         if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
             valid_models = PROVIDER_MODELS.get(default_provider, [])

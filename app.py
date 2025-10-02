@@ -28,13 +28,29 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MangaTranslator")
-    parser.add_argument("--models", type=str, default="./models", help="Directory containing YOLO model files")
     parser.add_argument(
-        "--fonts", type=str, default="./fonts", help="Base directory containing font pack subdirectories"
+        "--models",
+        type=str,
+        default="./models",
+        help="Directory containing YOLO model files",
     )
-    parser.add_argument("--open-browser", action="store_true", help="Automatically open in the default web browser")
-    parser.add_argument("--port", type=int, default=7676, help="Port number for the web UI")
-    parser.add_argument("--cpu", action="store_true", help="Force CPU usage even if CUDA is available")
+    parser.add_argument(
+        "--fonts",
+        type=str,
+        default="./fonts",
+        help="Base directory containing font pack subdirectories",
+    )
+    parser.add_argument(
+        "--open-browser",
+        action="store_true",
+        help="Automatically open in the default web browser",
+    )
+    parser.add_argument(
+        "--port", type=int, default=7676, help="Port number for the web UI"
+    )
+    parser.add_argument(
+        "--cpu", action="store_true", help="Force CPU usage even if CUDA is available"
+    )
     args = parser.parse_args()
 
     MODELS_DIR = Path(args.models)
@@ -43,7 +59,11 @@ if __name__ == "__main__":
     os.makedirs(MODELS_DIR, exist_ok=True)
     os.makedirs(FONTS_BASE_DIR, exist_ok=True)
 
-    target_device = torch.device("cpu") if args.cpu else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    target_device = (
+        torch.device("cpu")
+        if args.cpu
+        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    )
 
     device_info_str = "CPU"
     if target_device.type == "cuda":
@@ -56,7 +76,11 @@ if __name__ == "__main__":
     print(f"PyTorch version: {torch.__version__}")
     print(f"MangaTranslator version: {core.__version__}")
 
-    app = layout.create_layout(models_dir=MODELS_DIR, fonts_base_dir=FONTS_BASE_DIR, target_device=target_device)
+    app = layout.create_layout(
+        models_dir=MODELS_DIR,
+        fonts_base_dir=FONTS_BASE_DIR,
+        target_device=target_device,
+    )
 
     app.queue()
     app.launch(inbrowser=args.open_browser, server_port=args.port, show_error=True)
