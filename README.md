@@ -20,7 +20,7 @@ Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs
 
 ### Windows portable
 Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases)
-- Includes the recommended YOLO model and Komika/Comicka font packs
+- Includes the recommended YOLO model and Komika font pack
 
 ### Manual install
 1) Clone and enter the repo
