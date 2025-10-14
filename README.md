@@ -5,22 +5,23 @@ Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs
 ## Features
 - Speech bubble detection (YOLOv8)
 - Text cleaning (removes original bubble text)
-- LLM-powered translation (one-step or two-step)
-- Text rendering (with custom font pack)
+- LLM-powered OCR and translation
+- Text rendering (with custom font packs)
 - Two interfaces: Web UI (Gradio) and CLI
 
 ## Requirements
 - Python 3.10+
 - PyTorch (CPU or CUDA build for your system)
-- YOLO model trained for speech bubble detection (`.pt`)
+- YOLO model (`.pt`) for speech bubble detection; auto-downloaded
 - Font pack with `.ttf`/`.otf`
-- Vision-capable LLM (API or Local)
+- Vision-capable LLM (API or local)
 
 ## Installation
 
 ### Windows portable
 Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases)
-- Includes the recommended YOLO model and Komika font pack
+- Includes the Komika (for normal text) and Cookies (for OSB text) font packs
+- Run the `setup.bat` file before first launch to install dependencies
 
 ### Manual install
 1) Clone and enter the repo
@@ -38,25 +39,29 @@ source venv/bin/activate
 ```
 3) Install PyTorch (see: [PyTorch Install](https://pytorch.org/get-started/locally/))
 ```bash
-# Example (CUDA 12.6)
-pip install torch==2.6.0+cu126 torchvision==0.21.0+cu126 --extra-index-url https://download.pytorch.org/whl/cu126
+# Example (CUDA 12.8)
+pip install torch==2.7.1+cu128 torchvision==0.22.1+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
 # Example (CPU)
 pip install torch
 ```
-4) Install dependencies
+4) Install Nunchaku (optional, for inpainting outside-bubble text.)
+- Nunchaku wheels are not on PyPI. Install directly from the v1.0.1 GitHub release URL, matching your OS and Python version.
+```bash
+# Example (Windows, Python 3.13, PyTorch 2.7.1)
+pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.7-cp313-cp313-win_amd64.whl
+```
+5) Install dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
 ## Post-Install Setup
-### YOLO model
-- Place the necessary YOLO segmentation model (`.pt`) in `models/`
-- Recommended Model: [kitsumed/yolov8m_seg-speech-bubble](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble/resolve/main/model.pt)
-- The application will automatically detect and use the model (no manual selection needed)
+### Models
+- The application will automatically download and use all required models
 
 ### Fonts
 - Put font packs as subfolders in `fonts/` with `.otf`/`.ttf` files
-- Prefer filenames that include `italic`/`bold` so variants are detected
+- Prefer filenames that include `italic`/`bold` or `italic-bold` so variants are detected
 - Example structure:
 ```text
 fonts/
@@ -97,10 +102,15 @@ python main.py --input <image_path> \
 
 # Batch folder, custom languages (OpenAI-Compatible, e.g., Ollama)
 python main.py --input <folder_path> --batch \
-  --font-dir fonts/Komika \
+  --font-dir "fonts/Komika" \
   --input-language <src_lang> --output-language <tgt_lang> \
   --provider OpenAI-Compatible --openai-compatible-url http://localhost:11434/v1 \
   --output ./output
+
+# Single Image, Japanese → English (Google), outside speech bubble text detection, custom OSB font
+python main.py --input <image_path> \
+  --provider Google --google-api-key <AI...> \
+  --osb-enable --osb-font-name "fonts/fast_action"
 
 # Cleaning-only mode (no translation/rendering)
 python main.py --input <image_path> --cleaning-only
@@ -114,8 +124,8 @@ python main.py --help
 
 ## Web UI (Quick Start)
 1) Launch the Web UI (use `start-webui.bat` on Windows, or the command above)
-2) Translator tab (single) or Batch tab (multiple)
-3) Upload image(s) and choose a font pack; set source/target languages
+2) Upload image(s) in the Translator tab (single) or Batch tab (multiple)
+3) Choose a font pack; set source/target languages
 4) Open **Config** and set: LLM provider/model, API key or endpoint, reading direction (`rtl` for manga, `ltr` for comics)
 5) Click **Translate** / **Start Batch Translating** — outputs save to `./output/`
 6) Enable "Cleaning-only Mode" or "Test Mode" in **Other** to skip translation and/or render placeholder text
@@ -125,6 +135,7 @@ python main.py --help
 #### Normal Text
 - CC Wild Words
 - Anime Ace 3 BB
+- CC Astro City Int
 - Clementine
 - Komika Hand
 
@@ -132,6 +143,12 @@ python main.py --help
 - Fold & Staple BB
 - PP Handwriting
 - Dirty Finger
+
+#### Outside Speech Bubble Text
+- Fast Action
+- Shark Soft Bites
+- Cookies
+- Yankareshi
 
 ## Troubleshooting
 
@@ -143,8 +160,8 @@ python main.py --help
 - **Text too large/small:** Adjust "Max Font Size" and "Min Font Size" ranges
 
 ## Updating
-- Windows portable: download the latest release and replace the existing folder
-- Manual install: from the repo root:
+- Windows portable: run `update-standalone.bat` or download the latest release and replace the existing folder
+- Manual install: run `update.bat` or from the repo root:
 ```bash
 git pull
 ```
@@ -152,3 +169,12 @@ git pull
 ## License & credits
 - License: Apache-2.0 (see [LICENSE](LICENSE))
 - Author: [grinnch](https://github.com/meangrinch)
+
+#### ML Models
+- YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
+- Comic Speech Bubble Detector YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
+- SAM 2.1 (Segment Anything): [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
+- EasyOCR: [JaidedAI](https://github.com/JaidedAI/EasyOCR)
+- FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
+- Nunchaku: [Nunchaku Tech](https://github.com/nunchaku-tech/nunchaku)
+- 2x-AnimeSharpV4 RCAN: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
