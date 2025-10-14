@@ -174,7 +174,7 @@ python main.py --help
 - **OSB text not inpainted/cleaned:** Ensure "Outside Speech Bubble" is enabled, install Nunchaku (see Installation step 4), and set your Hugging Face token (`hf_token`).
 
 ## Updating
-- Windows portable: run `update_standalone.bat`
+- Windows portable: run `update-standalone.bat`
 - Manual install: from the repo root:
 ```bash
 git pull
