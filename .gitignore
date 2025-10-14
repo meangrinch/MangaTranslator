@@ -5,6 +5,7 @@ __pycache__/
 /venv/
 /.venv/
 /runtime/
+/deps/
 *.otf
 *.ttf
 *.pt
