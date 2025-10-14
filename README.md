@@ -82,6 +82,19 @@ fonts/
 - Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
 - OpenAI-compatible default URL: `http://localhost:11434/v1`
 
+### OSB text setup (optional)
+If you want to use the OSB text pipeline, you need a Hugging Face token with access to FLUX.1 Kontext.
+
+Follow these steps to create one:
+
+1. Sign in or create a Hugging Face account
+2. Visit and accept the terms on: [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
+3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
+4. Add the token to the app:
+
+   - Web UI: set `hf_token` in Config
+   - Env var (alternative): set `HUGGINGFACE_TOKEN`
+
 ## Run
 
 ### Web UI (Gradio)
@@ -158,6 +171,7 @@ python main.py --help
 - **Incoherent translations/API refusals:** Try "two-step" translation mode for less-capable LLMs **or** Disable "Send Full Page to LLM" in Config → Translation
 - **Inconsistent translations:** Adjust LLM parameters (e.g., "Temperature") for more creative/deterministic output
 - **Text too large/small:** Adjust "Max Font Size" and "Min Font Size" ranges
+- **OSB text not inpainted/cleaned:** Ensure "Outside Speech Bubble" is enabled, install Nunchaku (see Installation step 4), and set your Hugging Face token (`hf_token`).
 
 ## Updating
 - Windows portable: run `update-standalone.bat` or download the latest release and replace the existing folder
