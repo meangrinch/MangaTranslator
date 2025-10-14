@@ -18,3 +18,5 @@ __pycache__/
 Thumbs.db
 /.vscode/
 *.log
+* text=auto eol=lf
+*.bat text eol=crlf
