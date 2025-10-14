@@ -7,10 +7,12 @@ from typing import Any, Dict, List, Union
 
 from PIL import Image
 
-from core.models import MangaTranslatorConfig, RenderingConfig
+from core.config import MangaTranslatorConfig, RenderingConfig
 from core.pipeline import batch_translate_images, translate_and_render
 from core.validation import validate_core_inputs
-from utils.exceptions import ValidationError
+from utils.exceptions import (CleaningError, FontError, ImageProcessingError,
+                              RenderingError, TranslationError,
+                              ValidationError)
 from utils.logging import log_message
 
 
@@ -85,8 +87,6 @@ def translate_manga_logic(
             temp_image_path = Path(tempfile.mktemp(suffix=".png"))
             image.save(temp_image_path)
             image_path_for_processing = str(temp_image_path)
-        else:
-            raise ValueError(f"Unsupported input image type: {type(image)}")
 
         output_format = config.output.output_format
         if output_format == "auto":
@@ -114,6 +114,14 @@ def translate_manga_logic(
 
         return translated_image, save_path
 
+    except (FontError, RenderingError) as e:
+        raise LogicError(f"Text rendering failed: {str(e)}") from e
+    except CleaningError as e:
+        raise LogicError(f"Bubble cleaning failed: {str(e)}") from e
+    except TranslationError as e:
+        raise LogicError(f"Translation failed: {str(e)}") from e
+    except ImageProcessingError as e:
+        raise LogicError(f"Image processing failed: {str(e)}") from e
     except Exception as e:
         import traceback
 
@@ -206,7 +214,7 @@ def process_batch_logic(
         process_dir = None
         if isinstance(input_dir_or_files, list):
             if not input_dir_or_files:
-                raise ValueError("No files provided for batch processing.")
+                raise ValidationError("No files provided for batch processing.")
 
             temp_dir_path_obj = tempfile.TemporaryDirectory()
             temp_dir_path = Path(temp_dir_path_obj.name)
@@ -228,7 +236,7 @@ def process_batch_logic(
                     skipped_files.append(f"{p.name} (Not a supported image file)")
 
             if not image_files_to_copy:
-                raise ValueError(
+                raise ValidationError(
                     f"No valid image files found in the selection. "
                     f"Skipped: {', '.join(skipped_files) if skipped_files else 'None'}"
                 )
@@ -261,7 +269,7 @@ def process_batch_logic(
                     f"Input directory '{input_dir_or_files}' does not exist."
                 )
             if not input_path.is_dir():
-                raise ValueError(
+                raise ValidationError(
                     f"Input path '{input_dir_or_files}' is not a directory."
                 )
             process_dir = input_path
@@ -292,6 +300,20 @@ def process_batch_logic(
 
         return results
 
+    except (FontError, RenderingError) as e:
+        raise LogicError(
+            f"Text rendering failed during batch processing: {str(e)}"
+        ) from e
+    except CleaningError as e:
+        raise LogicError(
+            f"Bubble cleaning failed during batch processing: {str(e)}"
+        ) from e
+    except TranslationError as e:
+        raise LogicError(f"Translation failed during batch processing: {str(e)}") from e
+    except ImageProcessingError as e:
+        raise LogicError(
+            f"Image processing failed during batch processing: {str(e)}"
+        ) from e
     except Exception as e:
         import traceback
 

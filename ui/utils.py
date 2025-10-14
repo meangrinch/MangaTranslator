@@ -6,9 +6,11 @@ import gradio as gr
 import requests
 from PIL import Image
 
+from utils.exceptions import ValidationError
 from utils.logging import log_message
 
-from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_settings
+from .settings_manager import (DEFAULT_SETTINGS, PROVIDER_MODELS,
+                               get_saved_settings)
 
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
@@ -62,6 +64,17 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     return True, f"{provider} API key format looks valid"
 
 
+def validate_huggingface_token(token: str) -> tuple[bool, str]:
+    """Validate HuggingFace token format."""
+    if not token:
+        return True, "HuggingFace token is optional and not provided."
+
+    if not token.startswith("hf_"):
+        return False, "Invalid HuggingFace token format (should start with 'hf_')"
+
+    return True, "HuggingFace token format looks valid"
+
+
 def validate_image(image: Any) -> tuple[bool, str]:
     """Validate uploaded image (accepts path or PIL Image)"""
     if image is None:
@@ -85,6 +98,11 @@ def validate_image(image: Any) -> tuple[bool, str]:
                 False,
                 f"Image dimensions too small ({width}x{height}). Min recommended size is 600x600.",
             )
+        if width > 8000 or height > 8000:
+            return (
+                False,
+                f"Image dimensions too large ({width}x{height}). Max allowed size is 8000x8000.",
+            )
 
         return True, "Image is valid"
     except FileNotFoundError:
@@ -95,8 +113,6 @@ def validate_image(image: Any) -> tuple[bool, str]:
 
 def validate_font_directory(font_dir: Path) -> tuple[bool, str]:
     """Validate that the font directory contains at least one font file"""
-    if not font_dir:
-        return False, "Font directory not specified"
     if not font_dir.exists():
         return (
             False,
@@ -164,15 +180,29 @@ def refresh_models_and_fonts(models_dir: Path, fonts_base_dir: Path):
         )
         batch_font_result = gr.update(choices=font_packs, value=selected_batch_font_val)
 
+        current_osb_font = saved_settings.get("outside_text_osb_font_pack")
+        selected_osb_font_val = (
+            current_osb_font
+            if current_osb_font in font_packs
+            else (font_packs[0] if font_packs else None)
+        )
+        osb_font_result = gr.update(
+            choices=[""] + font_packs, value=selected_osb_font_val
+        )
+
         font_count = len(font_packs)
         font_text = "1 font pack" if font_count == 1 else f"{font_count} font packs"
         gr.Info(f"YOLO model auto-detected. Found {font_text}")
 
-        return single_font_result, batch_font_result
+        return single_font_result, batch_font_result, osb_font_result
     except Exception as e:
         gr.Error(f"Error refreshing resources: {str(e)}")
         font_packs, _ = get_available_font_packs(fonts_base_dir)
-        return gr.update(choices=font_packs), gr.update(choices=font_packs)
+        return (
+            gr.update(choices=font_packs),
+            gr.update(choices=font_packs),
+            gr.update(choices=[""] + font_packs),
+        )
 
 
 def update_translation_ui(provider: str, current_temp: float):
@@ -225,6 +255,14 @@ def update_translation_ui(provider: str, current_temp: float):
     )
     enable_thinking_update = gr.update(visible=enable_thinking_visible)
 
+    # Grounding checkbox is visible for Google provider and OpenRouter with Gemini models
+    enable_grounding_visible = provider == "Google" or (
+        provider == "OpenRouter"
+        and remembered_model
+        and "gemini" in remembered_model.lower()
+    )
+    enable_grounding_update = gr.update(visible=enable_grounding_visible)
+
     reasoning_effort_visible = False
     if provider == "OpenAI":
         reasoning_effort_visible = True
@@ -251,6 +289,7 @@ def update_translation_ui(provider: str, current_temp: float):
         temp_update,
         top_k_update,
         enable_thinking_update,
+        enable_grounding_update,
         reasoning_effort_visible_update,
         openrouter_override_visible_update,
     )
@@ -381,7 +420,20 @@ def update_params_for_model(
         visible=reasoning_visible, choices=reasoning_choices, value=value
     )
 
-    return temp_update, top_k_update, enable_thinking_update, reasoning_effort_update
+    # Grounding checkbox is visible for Google provider and OpenRouter with Gemini models
+    is_gemini_model = model_name and "gemini" in model_name.lower()
+    enable_grounding_visible = provider == "Google" or (
+        provider == "OpenRouter" and is_gemini_model
+    )
+    enable_grounding_update = gr.update(visible=enable_grounding_visible)
+
+    return (
+        temp_update,
+        top_k_update,
+        enable_thinking_update,
+        enable_grounding_update,
+        reasoning_effort_update,
+    )
 
 
 def switch_settings_view(
@@ -543,7 +595,7 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
             if isinstance(data.get("models"), list):
                 all_models_data = data["models"]
             else:
-                raise ValueError(
+                raise ValidationError(
                     "Invalid response format: 'data' or 'models' key not found or not a list."
                 )
 

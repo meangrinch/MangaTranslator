@@ -1,11 +1,22 @@
+from pathlib import Path
+from typing import Union
+
 import cv2
 import numpy as np
 from PIL import Image
 
+from utils.exceptions import (CleaningError, ImageProcessingError,
+                              ValidationError)
 from utils.logging import log_message
 
 from .detection import detect_speech_bubbles
 from .image_utils import pil_to_cv2
+
+GRAYSCALE_MIDPOINT = 128  # Threshold for determining black vs white bubbles
+MIN_CONTOUR_AREA = 50  # Minimum area threshold for filtering small contours
+DILATION_KERNEL_SIZE = (7, 7)  # Kernel size for morphological dilation
+EROSION_KERNEL_SIZE = (5, 5)  # Kernel size for morphological erosion
+DISTANCE_TRANSFORM_MASK_SIZE = 5  # Mask size for distance transform
 
 
 def _process_single_bubble(
@@ -38,7 +49,10 @@ def _process_single_bubble(
         is_sam (bool): Whether this is a SAM mask (for logging)
 
     Returns:
-        tuple: (final_mask, fill_color_bgr) or (None, None) if processing failed
+        tuple: (final_mask, fill_color_bgr)
+
+    Raises:
+        CleaningError: If processing fails
     """
     try:
         if base_mask.dtype != np.uint8:
@@ -46,10 +60,12 @@ def _process_single_bubble(
         base_mask = np.where(base_mask > 0, 255, 0).astype(np.uint8)
 
         if dilation_kernel is None:
-            dilation_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+            dilation_kernel = cv2.getStructuringElement(
+                cv2.MORPH_ELLIPSE, DILATION_KERNEL_SIZE
+            )
         if constraint_erosion_kernel is None:
             constraint_erosion_kernel = cv2.getStructuringElement(
-                cv2.MORPH_ELLIPSE, (5, 5)
+                cv2.MORPH_ELLIPSE, EROSION_KERNEL_SIZE
             )
         masked_pixels = img_gray[base_mask == 255]
         if masked_pixels.size == 0:
@@ -57,10 +73,10 @@ def _process_single_bubble(
                 f"{'[SAM]' if is_sam else ''}Skipping detection {detection_bbox}: empty mask",
                 verbose=verbose,
             )
-            return None, None
+            raise CleaningError(f"Empty mask for detection {detection_bbox}")
 
         mean_pixel_value = np.mean(masked_pixels)
-        is_black_bubble = mean_pixel_value < 128
+        is_black_bubble = mean_pixel_value < GRAYSCALE_MIDPOINT
         fill_color_bgr = (0, 0, 0) if is_black_bubble else (255, 255, 255)
 
         log_message(
@@ -100,7 +116,9 @@ def _process_single_bubble(
         thresholded_roi = cv2.bitwise_and(thresholded_roi, roi_mask)
 
         # Shrink ROI to avoid border artifacts
-        dist_map = cv2.distanceTransform(roi_mask, cv2.DIST_L2, 3)
+        dist_map = cv2.distanceTransform(
+            roi_mask, cv2.DIST_L2, DISTANCE_TRANSFORM_MASK_SIZE
+        )
         shrunk_roi_mask = np.where(dist_map >= float(roi_shrink_px), 255, 0).astype(
             np.uint8
         )
@@ -117,7 +135,7 @@ def _process_single_bubble(
         valid_contours = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if area <= 50:
+            if area <= MIN_CONTOUR_AREA:
                 continue
             m = cv2.moments(cnt)
             if m["m00"] == 0:
@@ -154,19 +172,18 @@ def _process_single_bubble(
                 )
                 return final_mask, fill_color_bgr
 
-        return None, None
+        raise CleaningError("Failed to process bubble mask")
 
     except Exception as e:
         log_message(
             f"Failed to process {'SAM' if is_sam else 'YOLO'} mask for {detection_bbox}: {e}",
             always_print=True,
-            is_error=True,
         )
-        return None, None
+        raise CleaningError("Failed to process bubble mask")
 
 
 def clean_speech_bubbles(
-    image_path,
+    image_input: Union[str, Path, Image.Image],
     model_path,
     confidence=0.35,
     pre_computed_detections=None,
@@ -180,7 +197,7 @@ def clean_speech_bubbles(
     Clean speech bubbles in the given image using YOLO detection and refined masking.
 
     Args:
-        image_path (str): Path to input image.
+        image_input (str, Path, or PIL.Image.Image): Path to input image or a PIL Image object.
         model_path (str): Path to YOLO model.
         confidence (float): Confidence threshold for detections.
         pre_computed_detections (list, optional): Pre-computed detections from previous call.
@@ -195,30 +212,44 @@ def clean_speech_bubbles(
         list[dict]: A list of dictionaries, each containing the 'mask' (numpy.ndarray)
                     and 'color' (tuple BGR) for each processed bubble.
     Raises:
-        ValueError: If the image cannot be loaded.
+        ValueError: If the image cannot be loaded or if an image object is passed without pre-computed detections.
         RuntimeError: If model loading or bubble detection fails.
     """
     try:
-        pil_image = Image.open(image_path)
+        if isinstance(image_input, (str, Path)):
+            pil_image = Image.open(image_input)
+            image_path = image_input
+        else:
+            pil_image = image_input
+            image_path = None  # In-memory image has no path
+
         image = pil_to_cv2(pil_image)
         img_height, img_width = image.shape[:2]
         img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
         cleaned_image = image.copy()
 
-        detections = (
-            pre_computed_detections
-            if pre_computed_detections is not None
-            else detect_speech_bubbles(
+        if pre_computed_detections is not None:
+            detections = pre_computed_detections
+        elif image_path is not None:
+            detections = detect_speech_bubbles(
                 image_path, model_path, confidence, device=device
             )
-        )
+        else:
+            raise ValidationError(
+                "Bubble detection requires an image path, but an image object "
+                "was provided without pre-computed detections."
+            )
 
         processed_bubbles = []
 
         # Create kernels once for efficiency
-        dilation_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-        constraint_erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        dilation_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, DILATION_KERNEL_SIZE
+        )
+        constraint_erosion_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, EROSION_KERNEL_SIZE
+        )
         for detection in detections:
             final_mask = None
             fill_color_bgr = None
@@ -282,7 +313,7 @@ def clean_speech_bubbles(
 
                 except Exception as e:
                     error_msg = f"Error processing YOLO mask for detection {detection.get('bbox')}: {e}"
-                    log_message(error_msg, always_print=True, is_error=True)
+                    log_message(error_msg, always_print=True)
                     continue
 
             if final_mask is not None and fill_color_bgr is not None:
@@ -309,18 +340,19 @@ def clean_speech_bubbles(
 
             for color_bgr, masks in color_groups.items():
                 combined_mask = np.bitwise_or.reduce(masks)
-                num_channels = (
-                    cleaned_image.shape[2] if len(cleaned_image.shape) == 3 else 1
-                )
-                if num_channels == 4 and len(color_bgr) == 3:
-                    fill_color = (*color_bgr, 255)
+
+                if cleaned_image.shape[2] == 4:
+                    cleaned_image[combined_mask == 255, :3] = (
+                        color_bgr  # Preserve alpha channel
+                    )
                 else:
-                    fill_color = color_bgr
+                    cleaned_image[combined_mask == 255] = color_bgr
 
-                cleaned_image[combined_mask == 255] = fill_color
-
+        log_message(
+            f"Cleaned {len(processed_bubbles)} speech bubbles", always_print=True
+        )
         return cleaned_image, processed_bubbles
     except IOError as e:
-        raise ValueError(f"Error loading image {image_path}: {str(e)}")
+        raise ImageProcessingError(f"Error loading image {image_input}: {str(e)}")
     except Exception as e:
-        raise RuntimeError(f"Error cleaning speech bubbles: {str(e)}")
+        raise CleaningError(f"Error cleaning speech bubbles: {str(e)}")

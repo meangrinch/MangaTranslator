@@ -2,17 +2,19 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from threading import Thread
 
 import gradio as gr
 import torch
 
 import core
 from ui import layout
+from utils.update_checker import check_for_update
 
 
 def custom_except_hook(exc_type, exc_value, exc_traceback):
-    if issubclass(exc_type, gr.Error) or issubclass(exc_type, gr.CancelledError):
-        print(f"Gradio-handled Error/Cancellation: {exc_value}")
+    if issubclass(exc_type, gr.Error):
+        print(f"Gradio-handled Error: {exc_value}")
     else:
         import traceback
 
@@ -74,7 +76,18 @@ if __name__ == "__main__":
             device_info_str = "CUDA (Unknown GPU Name)"
     print(f"Using device: {device_info_str.upper()}")
     print(f"PyTorch version: {torch.__version__}")
-    print(f"MangaTranslator version: {core.__version__}")
+    print(f"MangaTranslator version: {core.__version__}", end="", flush=True)
+
+    def _update_notice():
+        available, latest = check_for_update(
+            core.__version__, repo="meangrinch/MangaTranslator", timeout=3.0
+        )
+        if available and latest:
+            print(
+                f"\rMangaTranslator version: {core.__version__} (UPDATE AVAILABLE: {latest})"
+            )
+
+    Thread(target=_update_notice, daemon=True).start()
 
     app = layout.create_layout(
         models_dir=MODELS_DIR,

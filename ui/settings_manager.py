@@ -104,18 +104,36 @@ DEFAULT_SETTINGS = {
     "hyphen_penalty": 1000.0,
     "hyphenation_min_word_length": 8,
     "badness_exponent": 3.0,
-    "padding_pixels": 8.0,
+    "padding_pixels": 5.0,
     "font_pack": None,
     "verbose": False,
     "jpeg_quality": 95,
     "png_compression": 6,
     "output_format": "auto",
+    "upscale_final_image": False,
+    "upscale_final_image_factor": 2.0,
     "cleaning_only": False,
     "test_mode": False,
     "enable_thinking": True,  # Gemini 2.5 Flash & Claude reasoning models
     "reasoning_effort": "medium",  # OpenAI reasoning models; gpt-5 also supports 'minimal'
+    "enable_grounding": False,  # Enable Google Search grounding for Gemini models
     "send_full_page_context": True,
     "openrouter_reasoning_override": False,  # Forces max output tokens to 8192
+    "upscale_method": "model",  # "model", "lanczos", or "none"
+    # Outside text removal settings
+    "outside_text_enabled": False,
+    "outside_text_seed": 1,
+    "outside_text_huggingface_token": "",
+    "outside_text_flux_num_inference_steps": 8,
+    "outside_text_flux_residual_diff_threshold": 0.12,
+    "outside_text_osb_font_pack": "",
+    "outside_text_osb_max_font_size": 64,
+    "outside_text_osb_min_font_size": 12,
+    "outside_text_osb_use_ligatures": False,
+    "outside_text_osb_outline_width": 3.0,
+    "outside_text_osb_line_spacing": 1.0,
+    "outside_text_osb_use_subpixel_rendering": True,
+    "outside_text_osb_font_hinting": "none",
 }
 
 DEFAULT_BATCH_SETTINGS = {
@@ -148,6 +166,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "send_full_page_context",
     "enable_thinking",
     "reasoning_effort",
+    "enable_grounding",
     "openrouter_reasoning_override",
     # Rendering
     "font_pack",
@@ -168,10 +187,26 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "thresholding_value",
     "use_otsu_threshold",
     "roi_shrink_px",
+    # Outside Text Removal
+    "outside_text_enabled",
+    "outside_text_seed",
+    "outside_text_huggingface_token",
+    "outside_text_flux_num_inference_steps",
+    "outside_text_flux_residual_diff_threshold",
+    "outside_text_osb_font_pack",
+    "outside_text_osb_max_font_size",
+    "outside_text_osb_min_font_size",
+    "outside_text_osb_use_ligatures",
+    "outside_text_osb_outline_width",
+    "outside_text_osb_line_spacing",
+    "outside_text_osb_use_subpixel_rendering",
+    "outside_text_osb_font_hinting",
     # Output
     "output_format",
     "jpeg_quality",
     "png_compression",
+    "upscale_final_image",
+    "upscale_final_image_factor",
     # General
     "verbose",
     "cleaning_only",

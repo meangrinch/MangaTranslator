@@ -7,21 +7,17 @@ import gradio as gr
 import torch
 from PIL import Image
 
-from core.models import MangaTranslatorConfig
+from core.config import MangaTranslatorConfig
+from core.validation import validate_mutually_exclusive_modes
 from utils.exceptions import ValidationError
 
 from . import logic, settings_manager, utils
-from .ui_models import (
-    UICleaningSettings,
-    UIConfigState,
-    UIDetectionSettings,
-    UIGeneralSettings,
-    UIOutputSettings,
-    UIRenderingSettings,
-    UITranslationLLMSettings,
-    UITranslationProviderSettings,
-    map_ui_to_backend_config,
-)
+from .ui_models import (UICleaningSettings, UIConfigState, UIDetectionSettings,
+                        UIGeneralSettings, UIOutputSettings,
+                        UIOutsideTextSettings, UIRenderingSettings,
+                        UITranslationLLMSettings,
+                        UITranslationProviderSettings,
+                        map_ui_to_backend_config)
 
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
@@ -46,10 +42,220 @@ def _clean_error_message(message: Any) -> str:
     return f"{ERROR_PREFIX}{text}"
 
 
+def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
+    """Build UIConfigState from UI component arguments, handling single vs batch mode differences."""
+    (
+        confidence,
+        use_sam2_checkbox_val,
+        thresholding_value,
+        use_otsu_threshold,
+        roi_shrink_px,
+        provider_selector,
+        google_api_key,
+        openai_api_key,
+        anthropic_api_key,
+        xai_api_key,
+        openrouter_api_key,
+        openai_compatible_url_input,
+        openai_compatible_api_key_input,
+        config_model_name,
+        temperature,
+        top_p,
+        top_k,
+        config_reading_direction,
+        config_translation_mode,
+        input_language,
+        output_language,
+        font_dropdown,
+        max_font_size,
+        min_font_size,
+        line_spacing,
+        use_subpixel_rendering,
+        font_hinting,
+        use_ligatures,
+        output_format,
+        jpeg_quality,
+        png_compression,
+        verbose,
+        cleaning_only_toggle,
+        test_mode_toggle,
+        enable_thinking_checkbox_val,
+        enable_grounding_val,
+        reasoning_effort_val,
+        send_full_page_context_val,
+        upscale_method_val,
+        hyphenate_before_scaling_val,
+        openrouter_reasoning_override_val,
+        hyphen_penalty_val,
+        hyphenation_min_word_length_val,
+        badness_exponent_val,
+        padding_pixels_val,
+        outside_text_enabled_val,
+        outside_text_seed_val,
+        outside_text_flux_num_inference_steps_val,
+        outside_text_flux_residual_diff_threshold_val,
+        outside_text_huggingface_token_val,
+        outside_text_osb_font_pack_val,
+        outside_text_osb_max_font_size_val,
+        outside_text_osb_min_font_size_val,
+        outside_text_osb_use_ligatures_val,
+        outside_text_osb_outline_width_val,
+        outside_text_osb_line_spacing_val,
+        outside_text_osb_use_subpixel_rendering_val,
+        outside_text_osb_font_hinting_val,
+        outside_text_easyocr_min_size_val,
+        upscale_final_image_val,
+        upscale_final_image_factor_val,
+        batch_input_language,
+        batch_output_language,
+        batch_font_dropdown,
+    ) = args
+
+    # Select appropriate values based on batch mode
+    final_input_language = batch_input_language if is_batch else input_language
+    final_output_language = batch_output_language if is_batch else output_language
+    final_font_pack = batch_font_dropdown if is_batch else font_dropdown
+
+    return UIConfigState(
+        detection=UIDetectionSettings(
+            confidence=confidence, use_sam2=use_sam2_checkbox_val
+        ),
+        cleaning=UICleaningSettings(
+            thresholding_value=thresholding_value,
+            use_otsu_threshold=use_otsu_threshold,
+            roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
+        ),
+        outside_text=UIOutsideTextSettings(
+            enabled=outside_text_enabled_val,
+            seed=int(outside_text_seed_val),
+            huggingface_token=outside_text_huggingface_token_val,
+            flux_num_inference_steps=int(outside_text_flux_num_inference_steps_val),
+            flux_residual_diff_threshold=float(
+                outside_text_flux_residual_diff_threshold_val
+            ),
+            osb_font_name=outside_text_osb_font_pack_val,
+            osb_max_font_size=int(outside_text_osb_max_font_size_val),
+            osb_min_font_size=int(outside_text_osb_min_font_size_val),
+            osb_use_ligatures=outside_text_osb_use_ligatures_val,
+            osb_outline_width=float(outside_text_osb_outline_width_val),
+            osb_line_spacing=float(outside_text_osb_line_spacing_val),
+            osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
+            osb_font_hinting=outside_text_osb_font_hinting_val,
+            easyocr_min_size=int(outside_text_easyocr_min_size_val),
+        ),
+        provider_settings=UITranslationProviderSettings(
+            provider=provider_selector,
+            google_api_key=google_api_key,
+            openai_api_key=openai_api_key,
+            anthropic_api_key=anthropic_api_key,
+            xai_api_key=xai_api_key,
+            openrouter_api_key=openrouter_api_key,
+            openai_compatible_url=openai_compatible_url_input,
+            openai_compatible_api_key=openai_compatible_api_key_input,
+        ),
+        llm_settings=UITranslationLLMSettings(
+            model_name=config_model_name,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            reading_direction=config_reading_direction,
+            translation_mode=config_translation_mode,
+            send_full_page_context=send_full_page_context_val,
+            upscale_method=upscale_method_val,
+        ),
+        rendering=UIRenderingSettings(
+            max_font_size=max_font_size,
+            min_font_size=min_font_size,
+            line_spacing=line_spacing,
+            use_subpixel_rendering=use_subpixel_rendering,
+            font_hinting=font_hinting,
+            use_ligatures=use_ligatures,
+            hyphenate_before_scaling=hyphenate_before_scaling_val,
+            hyphen_penalty=hyphen_penalty_val,
+            hyphenation_min_word_length=hyphenation_min_word_length_val,
+            badness_exponent=badness_exponent_val,
+            padding_pixels=padding_pixels_val,
+        ),
+        output=UIOutputSettings(
+            output_format=output_format,
+            jpeg_quality=jpeg_quality,
+            png_compression=png_compression,
+            upscale_final_image=upscale_final_image_val,
+            upscale_final_image_factor=upscale_final_image_factor_val,
+        ),
+        general=UIGeneralSettings(
+            verbose=verbose,
+            cleaning_only=cleaning_only_toggle,
+            test_mode=test_mode_toggle,
+            enable_thinking=enable_thinking_checkbox_val,
+            enable_grounding=enable_grounding_val,
+            reasoning_effort=reasoning_effort_val,
+            openrouter_reasoning_override=openrouter_reasoning_override_val,
+        ),
+        input_language=final_input_language,
+        output_language=final_output_language,
+        font_pack=final_font_pack,
+        batch_input_language=batch_input_language,
+        batch_output_language=batch_output_language,
+        batch_font_pack=batch_font_dropdown,
+    )
+
+
+def _validate_ui_state(ui_state: UIConfigState) -> None:
+    """Validate UI state including modes and API keys. Raises gr.Error on validation failure."""
+    # --- Validate mutually exclusive modes ---
+    try:
+        validate_mutually_exclusive_modes(
+            ui_state.general.cleaning_only, ui_state.general.test_mode
+        )
+    except ValidationError as e:
+        raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
+
+    # --- API Key Validation ---
+    api_key_to_validate = ""
+    provider_selector = ui_state.provider_settings.provider
+    if provider_selector == "Google":
+        api_key_to_validate = ui_state.provider_settings.google_api_key
+    elif provider_selector == "OpenAI":
+        api_key_to_validate = ui_state.provider_settings.openai_api_key
+    elif provider_selector == "Anthropic":
+        api_key_to_validate = ui_state.provider_settings.anthropic_api_key
+    elif provider_selector == "xAI":
+        api_key_to_validate = ui_state.provider_settings.xai_api_key
+    elif provider_selector == "OpenRouter":
+        api_key_to_validate = ui_state.provider_settings.openrouter_api_key
+    elif provider_selector == "OpenAI-Compatible":
+        api_key_to_validate = ui_state.provider_settings.openai_compatible_api_key
+
+    api_valid, api_msg = utils.validate_api_key(api_key_to_validate, provider_selector)
+    if not api_valid and not (
+        provider_selector == "OpenAI-Compatible" and not api_key_to_validate
+    ):
+        raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
+
+    # --- OpenAI-Compatible URL Validation ---
+    if provider_selector == "OpenAI-Compatible":
+        if not ui_state.provider_settings.openai_compatible_url:
+            raise gr.Error(f"{ERROR_PREFIX}OpenAI-Compatible URL is required.")
+        if not ui_state.provider_settings.openai_compatible_url.startswith(
+            ("http://", "https://")
+        ):
+            raise gr.Error(
+                f"{ERROR_PREFIX}Invalid OpenAI-Compatible URL format. Must start with http:// or https://",
+            )
+
+    # --- HuggingFace Token Validation ---
+    if ui_state.outside_text.enabled and ui_state.outside_text.huggingface_token:
+        hf_valid, hf_msg = utils.validate_huggingface_token(
+            ui_state.outside_text.huggingface_token
+        )
+        if not hf_valid:
+            raise gr.Error(f"{ERROR_PREFIX}{hf_msg}")
+
+
 def _format_single_success_message(
     result_image: Image.Image,
     backend_config: MangaTranslatorConfig,
-    selected_yolo_model_name: str,
     font_dir_path: Path,
     save_path: Path,
     processing_time: float,
@@ -105,28 +311,56 @@ def _format_single_success_message(
     processing_mode_str = (
         "Cleaning Only" if backend_config.cleaning_only else "Translation"
     )
+
+    if backend_config.test_mode:
+        model_display = "<Test Mode>"
+    elif backend_config.cleaning_only:
+        model_display = "<Cleaning-only Mode>"
+    else:
+        model_display = f"{model_name}{thinking_status_str}"
+
     msg_parts = [
         f"{SUCCESS_PREFIX}{processing_mode_str} completed!\n",
         f"• Image Size: {width}x{height} pixels\n",
-        f"• Provider: {provider}\n",
-        f"• Model: {model_name}{thinking_status_str}\n",
-        f"• Source Language: {backend_config.translation.input_language}\n",
-        f"• Target Language: {backend_config.translation.output_language}\n",
-        f"• Reading Direction: {backend_config.translation.reading_direction.upper()}\n",
-        f"• Font Pack: {font_dir_path.name}\n",
-        f"• Translation Mode: {backend_config.translation.translation_mode}\n",
-        f"• YOLO Model: {selected_yolo_model_name}\n",
-        (
-            "• Brightness Threshold: Otsu\n"
-            if backend_config.cleaning.use_otsu_threshold
-            else f"• Brightness Threshold: {backend_config.cleaning.thresholding_value}\n"
-        ),
+        f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n",
     ]
+
+    if (
+        backend_config.outside_text.enabled
+        and backend_config.outside_text.osb_font_name
+    ):
+        osb_font_name = Path(backend_config.outside_text.osb_font_name).name
+        msg_parts.append(f"• OSB Font Pack: {osb_font_name}\n")
+
     if not backend_config.cleaning_only:
         msg_parts.append(
             f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
         )
+
+    msg_parts.append(
+        f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"
+    )
+
+    msg_parts.extend(
+        [
+            f"• Provider: {provider}\n",
+            f"• Model: {model_display}\n",
+            f"• Source Language: {backend_config.translation.input_language}\n",
+            f"• Target Language: {backend_config.translation.output_language}\n",
+            f"• Reading Direction: {backend_config.translation.reading_direction.upper()}\n",
+            f"• Translation Mode: {backend_config.translation.translation_mode}\n",
+        ]
+    )
+
+    if not backend_config.cleaning_only:
         msg_parts.append(f"{llm_params_str}\n")
+
+    msg_parts.append(f"• Font Pack: {font_dir_path.name}\n")
+
+    if backend_config.output.upscale_final_image:
+        msg_parts.append(
+            f"• Final Image Upscaling: {backend_config.output.upscale_final_image_factor}x\n"
+        )
 
     if backend_config.output.output_format == "png":
         msg_parts.append("• Output Format: png\n")
@@ -166,7 +400,6 @@ def _format_single_success_message(
 def _format_batch_success_message(
     results: Dict[str, Any],
     backend_config: MangaTranslatorConfig,
-    selected_yolo_model_name: str,
     font_dir_path: Path,
 ) -> str:
     """Formats the success message for batch processing."""
@@ -238,24 +471,56 @@ def _format_batch_success_message(
     processing_mode_str = (
         "Cleaning Only" if backend_config.cleaning_only else "Translation"
     )
+
+    # Determine model display based on mode
+    if backend_config.test_mode:
+        model_display = "<Test Mode>"
+    elif backend_config.cleaning_only:
+        model_display = "<Cleaning-only Mode>"
+    else:
+        model_display = f"{model_name}{thinking_status_str}"
+
     msg_parts = [
         f"{SUCCESS_PREFIX}Batch {processing_mode_str.lower()} completed!\n",
-        f"• Provider: {provider}\n",
-        f"• Model: {model_name}{thinking_status_str}\n",
-        f"• Source Language: {backend_config.translation.input_language}\n",
-        f"• Target Language: {backend_config.translation.output_language}\n",
-        f"• Reading Direction: {backend_config.translation.reading_direction.upper()}\n",
-        f"• Font Pack: {font_dir_path.name}\n",
-        f"• YOLO Model: {selected_yolo_model_name}\n",
-        f"• Translation Mode: {backend_config.translation.translation_mode}\n",
-        (
-            "• Brightness Threshold: Otsu\n"
-            if backend_config.cleaning.use_otsu_threshold
-            else f"• Brightness Threshold: {backend_config.cleaning.thresholding_value}\n"
-        ),
+        f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n",
     ]
+
+    if (
+        backend_config.outside_text.enabled
+        and backend_config.outside_text.osb_font_name
+    ):
+        osb_font_name = Path(backend_config.outside_text.osb_font_name).name
+        msg_parts.append(f"• OSB Font Pack: {osb_font_name}\n")
+
+    if not backend_config.cleaning_only:
+        msg_parts.append(
+            f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
+        )
+
+    msg_parts.append(
+        f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"
+    )
+
+    msg_parts.extend(
+        [
+            f"• Provider: {provider}\n",
+            f"• Model: {model_display}\n",
+            f"• Source Language: {backend_config.translation.input_language}\n",
+            f"• Target Language: {backend_config.translation.output_language}\n",
+            f"• Reading Direction: {backend_config.translation.reading_direction.upper()}\n",
+            f"• Translation Mode: {backend_config.translation.translation_mode}\n",
+        ]
+    )
+
     if not backend_config.cleaning_only:
         msg_parts.append(f"{llm_params_str}\n")
+
+    msg_parts.append(f"• Font Pack: {font_dir_path.name}\n")
+
+    if backend_config.output.upscale_final_image:
+        msg_parts.append(
+            f"• Final Image Upscaling: {backend_config.output.upscale_final_image_factor}x\n"
+        )
 
     if backend_config.output.output_format == "png":
         msg_parts.append("• Output Format: png\n")
@@ -304,53 +569,7 @@ def handle_translate_click(
     target_device: Optional[torch.device],
 ) -> Tuple[Optional[Image.Image], str]:
     """Callback for the 'Translate' button click. Uses dataclasses for config."""
-    (
-        input_image_path,
-        confidence,
-        use_sam2_checkbox_val,
-        thresholding_value,
-        use_otsu_threshold,
-        roi_shrink_px,
-        provider_selector,
-        google_api_key,
-        openai_api_key,
-        anthropic_api_key,
-        xai_api_key,
-        openrouter_api_key,
-        openai_compatible_url_input,
-        openai_compatible_api_key_input,
-        config_model_name,
-        temperature,
-        top_p,
-        top_k,
-        config_reading_direction,
-        config_translation_mode,
-        input_language,
-        output_language,
-        font_dropdown,
-        max_font_size,
-        min_font_size,
-        line_spacing,
-        use_subpixel_rendering,
-        font_hinting,
-        use_ligatures,
-        output_format,
-        jpeg_quality,
-        png_compression,
-        verbose,
-        cleaning_only_toggle,
-        test_mode_toggle,
-        enable_thinking_checkbox_val,
-        reasoning_effort_val,
-        send_full_page_context_val,
-        hyphenate_before_scaling_val,
-        openrouter_reasoning_override_val,
-        hyphen_penalty_val,
-        hyphenation_min_word_length_val,
-        badness_exponent_val,
-        padding_pixels_val,
-    ) = args
-    """Callback for the 'Translate' button click."""
+    input_image_path = args[0]
     start_time = time.time()
     try:
         # --- UI Validation ---
@@ -358,95 +577,11 @@ def handle_translate_click(
         if not img_valid:
             raise gr.Error(f"{ERROR_PREFIX}{img_msg}")
 
-        api_key_to_validate = ""
-        if provider_selector == "Google":
-            api_key_to_validate = google_api_key
-        elif provider_selector == "OpenAI":
-            api_key_to_validate = openai_api_key
-        elif provider_selector == "Anthropic":
-            api_key_to_validate = anthropic_api_key
-        elif provider_selector == "xAI":
-            api_key_to_validate = xai_api_key
-        elif provider_selector == "OpenRouter":
-            api_key_to_validate = openrouter_api_key
-        elif provider_selector == "OpenAI-Compatible":
-            api_key_to_validate = openai_compatible_api_key_input
-
-        api_valid, api_msg = utils.validate_api_key(
-            api_key_to_validate, provider_selector
-        )
-        if not api_valid and not (
-            provider_selector == "OpenAI-Compatible" and not api_key_to_validate
-        ):
-            raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
-
-        if provider_selector == "OpenAI-Compatible":
-            if not openai_compatible_url_input:
-                raise gr.Error(f"{ERROR_PREFIX}OpenAI-Compatible URL is required.")
-            if not openai_compatible_url_input.startswith(("http://", "https://")):
-                raise gr.Error(
-                    f"{ERROR_PREFIX}Invalid OpenAI-Compatible URL format. Must start with http:// or https://",
-                )
-
         # --- Build UI State Dataclass ---
-        ui_state = UIConfigState(
-            detection=UIDetectionSettings(
-                confidence=confidence, use_sam2=use_sam2_checkbox_val
-            ),
-            cleaning=UICleaningSettings(
-                thresholding_value=thresholding_value,
-                use_otsu_threshold=use_otsu_threshold,
-                roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
-            ),
-            provider_settings=UITranslationProviderSettings(
-                provider=provider_selector,
-                google_api_key=google_api_key,
-                openai_api_key=openai_api_key,
-                anthropic_api_key=anthropic_api_key,
-                xai_api_key=xai_api_key,
-                openrouter_api_key=openrouter_api_key,
-                openai_compatible_url=openai_compatible_url_input,
-                openai_compatible_api_key=openai_compatible_api_key_input,
-            ),
-            llm_settings=UITranslationLLMSettings(
-                model_name=config_model_name,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                reading_direction=config_reading_direction,
-                translation_mode=config_translation_mode,
-                send_full_page_context=send_full_page_context_val,
-            ),
-            rendering=UIRenderingSettings(
-                max_font_size=max_font_size,
-                min_font_size=min_font_size,
-                line_spacing=line_spacing,
-                use_subpixel_rendering=use_subpixel_rendering,
-                font_hinting=font_hinting,
-                use_ligatures=use_ligatures,
-                hyphenate_before_scaling=hyphenate_before_scaling_val,
-                hyphen_penalty=hyphen_penalty_val,
-                hyphenation_min_word_length=hyphenation_min_word_length_val,
-                badness_exponent=badness_exponent_val,
-                padding_pixels=padding_pixels_val,
-            ),
-            output=UIOutputSettings(
-                output_format=output_format,
-                jpeg_quality=jpeg_quality,
-                png_compression=png_compression,
-            ),
-            general=UIGeneralSettings(
-                verbose=verbose,
-                cleaning_only=cleaning_only_toggle,
-                test_mode=test_mode_toggle,
-                enable_thinking=enable_thinking_checkbox_val,
-                reasoning_effort=reasoning_effort_val,
-                openrouter_reasoning_override=openrouter_reasoning_override_val,
-            ),
-            input_language=input_language,
-            output_language=output_language,
-            font_pack=font_dropdown,
-        )
+        ui_state = _build_ui_state_from_args(args[1:], is_batch=False)
+
+        # --- Validate UI State ---
+        _validate_ui_state(ui_state)
 
         # --- Map UI State to Backend Config ---
         backend_config = map_ui_to_backend_config(
@@ -475,16 +610,9 @@ def handle_translate_click(
         )
 
         processing_time = time.time() - start_time
-        # We don't know the model filename ahead of time; extract from config
-        autodetected_model_name = (
-            Path(backend_config.yolo_model_path).name
-            if backend_config.yolo_model_path
-            else "(auto)"
-        )
         status_msg = _format_single_success_message(
             result_image,
             backend_config,
-            autodetected_model_name,
             font_dir_path,
             save_path,
             processing_time,
@@ -520,53 +648,7 @@ def handle_batch_click(
     progress=gr.Progress(track_tqdm=True),
 ) -> Tuple[List[str], str]:
     """Callback for the 'Start Batch Translating' button click. Uses dataclasses."""
-    (
-        input_files,
-        confidence,
-        use_sam2_checkbox_val,
-        thresholding_value,
-        use_otsu_threshold,
-        roi_shrink_px,
-        provider_selector,
-        google_api_key,
-        openai_api_key,
-        anthropic_api_key,
-        xai_api_key,
-        openrouter_api_key,
-        openai_compatible_url_input,
-        openai_compatible_api_key_input,
-        config_model_name,
-        temperature,
-        top_p,
-        top_k,
-        config_reading_direction,
-        config_translation_mode,
-        batch_input_language,
-        batch_output_language,
-        batch_font_dropdown,
-        max_font_size,
-        min_font_size,
-        line_spacing,
-        use_subpixel_rendering,
-        font_hinting,
-        use_ligatures,
-        output_format,
-        jpeg_quality,
-        png_compression,
-        verbose,
-        cleaning_only_toggle,
-        test_mode_toggle,
-        enable_thinking_checkbox_val,
-        reasoning_effort_val,
-        batch_send_full_page_context_val,
-        hyphenate_before_scaling_val,
-        openrouter_reasoning_override_val,
-        hyphen_penalty_val,
-        hyphenation_min_word_length_val,
-        badness_exponent_val,
-        padding_pixels_val,
-    ) = args
-    """Callback for the 'Start Batch Translating' button click."""
+    input_files = args[0]
     progress(0, desc="Starting batch process...")
     try:
         # --- UI Validation ---
@@ -578,95 +660,11 @@ def handle_batch_click(
                 f"{ERROR_PREFIX}Invalid input format. Expected a list of files."
             )
 
-        api_key_to_validate = ""
-        if provider_selector == "Google":
-            api_key_to_validate = google_api_key
-        elif provider_selector == "OpenAI":
-            api_key_to_validate = openai_api_key
-        elif provider_selector == "Anthropic":
-            api_key_to_validate = anthropic_api_key
-        elif provider_selector == "xAI":
-            api_key_to_validate = xai_api_key
-        elif provider_selector == "OpenRouter":
-            api_key_to_validate = openrouter_api_key
-        elif provider_selector == "OpenAI-Compatible":
-            api_key_to_validate = openai_compatible_api_key_input
-
-        api_valid, api_msg = utils.validate_api_key(
-            api_key_to_validate, provider_selector
-        )
-        if not api_valid and not (
-            provider_selector == "OpenAI-Compatible" and not api_key_to_validate
-        ):
-            raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
-
-        if provider_selector == "OpenAI-Compatible":
-            if not openai_compatible_url_input:
-                raise gr.Error(f"{ERROR_PREFIX}OpenAI-Compatible URL is required.")
-            if not openai_compatible_url_input.startswith(("http://", "https://")):
-                raise gr.Error(
-                    f"{ERROR_PREFIX}Invalid OpenAI-Compatible URL format. Must start with http:// or https://",
-                )
-
         # --- Build UI State Dataclass ---
-        ui_state = UIConfigState(
-            detection=UIDetectionSettings(
-                confidence=confidence, use_sam2=use_sam2_checkbox_val
-            ),
-            cleaning=UICleaningSettings(
-                thresholding_value=thresholding_value,
-                use_otsu_threshold=use_otsu_threshold,
-                roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
-            ),
-            provider_settings=UITranslationProviderSettings(
-                provider=provider_selector,
-                google_api_key=google_api_key,
-                openai_api_key=openai_api_key,
-                anthropic_api_key=anthropic_api_key,
-                xai_api_key=xai_api_key,
-                openrouter_api_key=openrouter_api_key,
-                openai_compatible_url=openai_compatible_url_input,
-                openai_compatible_api_key=openai_compatible_api_key_input,
-            ),
-            llm_settings=UITranslationLLMSettings(
-                model_name=config_model_name,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                reading_direction=config_reading_direction,
-                translation_mode=config_translation_mode,
-                send_full_page_context=batch_send_full_page_context_val,
-            ),
-            rendering=UIRenderingSettings(
-                max_font_size=max_font_size,
-                min_font_size=min_font_size,
-                line_spacing=line_spacing,
-                use_subpixel_rendering=use_subpixel_rendering,
-                font_hinting=font_hinting,
-                use_ligatures=use_ligatures,
-                hyphenate_before_scaling=hyphenate_before_scaling_val,
-                hyphen_penalty=hyphen_penalty_val,
-                hyphenation_min_word_length=hyphenation_min_word_length_val,
-                badness_exponent=badness_exponent_val,
-                padding_pixels=padding_pixels_val,
-            ),
-            output=UIOutputSettings(
-                output_format=output_format,
-                jpeg_quality=jpeg_quality,
-                png_compression=png_compression,
-            ),
-            general=UIGeneralSettings(
-                verbose=verbose,
-                cleaning_only=cleaning_only_toggle,
-                test_mode=test_mode_toggle,
-                enable_thinking=enable_thinking_checkbox_val,
-                reasoning_effort=reasoning_effort_val,
-                openrouter_reasoning_override=openrouter_reasoning_override_val,
-            ),
-            batch_input_language=batch_input_language,
-            batch_output_language=batch_output_language,
-            batch_font_pack=batch_font_dropdown,
-        )
+        ui_state = _build_ui_state_from_args(args[1:], is_batch=True)
+
+        # --- Validate UI State ---
+        _validate_ui_state(ui_state)
 
         # --- Map UI State to Backend Config ---
         backend_config = map_ui_to_backend_config(
@@ -707,13 +705,8 @@ def handle_batch_click(
             else Path(".")
         )
 
-        autodetected_model_name = (
-            Path(backend_config.yolo_model_path).name
-            if backend_config.yolo_model_path
-            else "(auto)"
-        )
         status_msg = _format_batch_success_message(
-            results, backend_config, autodetected_model_name, font_dir_path
+            results, backend_config, font_dir_path
         )
         progress(1.0, desc="Batch complete!")
         return gallery_images, status_msg
@@ -781,14 +774,32 @@ def handle_save_config_click(*args: Any) -> str:
         b_out_lang,
         b_font,
         enable_thinking_val,
+        enable_grounding_val,
         reasoning_effort_val,
         send_full_page_context_val,
+        upscale_method_val,
         hyphenate_before_scaling_val,
         openrouter_reasoning_override_val,
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
         padding_pixels_val,
+        outside_text_enabled_val,
+        outside_text_seed_val,
+        outside_text_flux_num_inference_steps_val,
+        outside_text_flux_residual_diff_threshold_val,
+        outside_text_huggingface_token_val,
+        outside_text_osb_font_pack_val,
+        outside_text_osb_max_font_size_val,
+        outside_text_osb_min_font_size_val,
+        outside_text_osb_use_ligatures_val,
+        outside_text_osb_outline_width_val,
+        outside_text_osb_line_spacing_val,
+        outside_text_osb_use_subpixel_rendering_val,
+        outside_text_osb_font_hinting_val,
+        outside_text_easyocr_min_size_val,
+        upscale_final_image_val,
+        upscale_final_image_factor_val,
     ) = args
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
@@ -798,6 +809,24 @@ def handle_save_config_click(*args: Any) -> str:
             thresholding_value=thresholding_val,
             use_otsu_threshold=otsu,
             roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
+        ),
+        outside_text=UIOutsideTextSettings(
+            enabled=outside_text_enabled_val,
+            seed=int(outside_text_seed_val),
+            huggingface_token=outside_text_huggingface_token_val,
+            flux_num_inference_steps=int(outside_text_flux_num_inference_steps_val),
+            flux_residual_diff_threshold=float(
+                outside_text_flux_residual_diff_threshold_val
+            ),
+            osb_font_name=outside_text_osb_font_pack_val,
+            osb_max_font_size=int(outside_text_osb_max_font_size_val),
+            osb_min_font_size=int(outside_text_osb_min_font_size_val),
+            osb_use_ligatures=outside_text_osb_use_ligatures_val,
+            osb_outline_width=float(outside_text_osb_outline_width_val),
+            osb_line_spacing=float(outside_text_osb_line_spacing_val),
+            osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
+            osb_font_hinting=outside_text_osb_font_hinting_val,
+            easyocr_min_size=int(outside_text_easyocr_min_size_val),
         ),
         provider_settings=UITranslationProviderSettings(
             provider=prov,
@@ -817,6 +846,7 @@ def handle_save_config_click(*args: Any) -> str:
             reading_direction=rd,
             translation_mode=trans_mode,
             send_full_page_context=send_full_page_context_val,
+            upscale_method=upscale_method_val,
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_fs,
@@ -835,12 +865,15 @@ def handle_save_config_click(*args: Any) -> str:
             output_format=out_fmt,
             jpeg_quality=jq,
             png_compression=pngc,
+            upscale_final_image=upscale_final_image_val,
+            upscale_final_image_factor=upscale_final_image_factor_val,
         ),
         general=UIGeneralSettings(
             verbose=verb,
             cleaning_only=cleaning_only_val,
             test_mode=test_mode_val,
             enable_thinking=enable_thinking_val,
+            enable_grounding=enable_grounding_val,
             reasoning_effort=reasoning_effort_val,
             openrouter_reasoning_override=openrouter_reasoning_override_val,
         ),
@@ -909,6 +942,11 @@ def handle_reset_defaults_click(
     enable_thinking_visible = (
         default_provider == "Google" and "gemini-2.5-flash" in default_model_name
     )
+    enable_grounding_visible = default_provider == "Google" or (
+        default_provider == "OpenRouter"
+        and default_model_name
+        and "gemini" in default_model_name.lower()
+    )
     reasoning_visible = default_provider == "OpenAI"
 
     return [
@@ -971,6 +1009,10 @@ def handle_reset_defaults_click(
             visible=enable_thinking_visible,
         ),
         gr.update(
+            value=default_ui_state.general.enable_grounding,
+            visible=enable_grounding_visible,
+        ),
+        gr.update(
             value=default_ui_state.general.reasoning_effort, visible=reasoning_visible
         ),
         "Settings reset to defaults (API keys preserved).",
@@ -1001,6 +1043,18 @@ def handle_output_format_change(output_format_value: str):
 def handle_refresh_resources_click(models_dir: Path, fonts_base_dir: Path):
     """Callback for the 'Refresh Models / Fonts' button."""
     return utils.refresh_models_and_fonts(models_dir, fonts_base_dir)
+
+
+def handle_unload_models_click():
+    """Callback for the 'Unload Models' button."""
+    try:
+        from core.ml.model_manager import get_model_manager
+
+        model_manager = get_model_manager()
+        model_manager.unload_all()
+        gr.Info("All models unloaded from memory successfully.")
+    except Exception as e:
+        gr.Error(f"Error unloading models: {str(e)}")
 
 
 def handle_model_change(provider: str, model_name: Optional[str], current_temp: float):
@@ -1039,3 +1093,15 @@ def handle_hyphenation_change(hyphenate_before_scaling: bool):
     return gr.update(interactive=hyphenate_before_scaling), gr.update(
         interactive=hyphenate_before_scaling
     )
+
+
+def handle_cleaning_only_change(cleaning_only: bool):
+    """Handles changes in the cleaning-only checkbox to disable test mode if enabled."""
+    return gr.update(
+        interactive=not cleaning_only, value=False if cleaning_only else None
+    )
+
+
+def handle_test_mode_change(test_mode: bool):
+    """Handles changes in the test mode checkbox to disable cleaning-only if enabled."""
+    return gr.update(interactive=not test_mode, value=False if test_mode else None)

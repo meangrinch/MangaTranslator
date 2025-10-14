@@ -330,6 +330,10 @@ def create_layout(
                             "Rendering", elem_classes="nav-button"
                         )
                         nav_buttons.append(nav_button_rendering)
+                        nav_button_outside_text = gr.Button(
+                            "OSB Text", elem_classes="nav-button"
+                        )
+                        nav_buttons.append(nav_button_outside_text)
                         nav_button_output = gr.Button(
                             "Output", elem_classes="nav-button"
                         )
@@ -354,13 +358,13 @@ def create_layout(
                             use_sam2_checkbox = gr.Checkbox(
                                 value=saved_settings.get("use_sam2", True),
                                 label="Use SAM 2.1 for Segmentation",
-                                info="Enhances bubble segmentation quality, specifically for oddly shaped bubbles.",
+                                info="Enhances bubble segmentation quality, especially for oddly shaped bubbles.",
                             )
                             config_reading_direction = gr.Radio(
                                 choices=["rtl", "ltr"],
                                 label="Reading Direction",
                                 value=saved_settings.get("reading_direction", "rtl"),
-                                info="Order for sorting bubbles (rtl=Manga, ltr=Comics).",
+                                info="Order for sorting bubbles (rtl=Manga, ltr=Comic).",
                                 elem_id="config_reading_direction",
                             )
                         setting_groups.append(group_detection)
@@ -392,9 +396,9 @@ def create_layout(
                                 8,
                                 value=saved_settings.get("roi_shrink_px", 4),
                                 step=1,
-                                label="Shrink Threshold ROI (pixels)",
+                                label="Shrink Threshold ROI (px)",
                                 info=(
-                                    "Shrink the threshold ROI inward by N pixels (0-8) before fill. "
+                                    "Shrink the threshold ROI inward by N pixels before fill. "
                                     "Lower helps clean edge-hugging text; higher preserves outlines."
                                 ),
                             )
@@ -557,6 +561,30 @@ def create_layout(
                                 visible=_initial_enable_thinking_visible,
                                 elem_id="enable_thinking_checkbox",
                             )
+
+                            _initial_enable_grounding_visible = False
+                            try:
+                                if config_initial_provider == "Google":
+                                    _initial_enable_grounding_visible = True
+                                elif (
+                                    config_initial_provider == "OpenRouter"
+                                    and config_initial_model_name
+                                    and "gemini" in config_initial_model_name.lower()
+                                ):
+                                    _initial_enable_grounding_visible = True
+                            except Exception:
+                                _initial_enable_grounding_visible = False
+
+                            enable_grounding_checkbox = gr.Checkbox(
+                                label="Enable Grounding",
+                                value=saved_settings.get("enable_grounding", False),
+                                info=(
+                                    "Allows Gemini models to use Google Search for up-to-date information. "
+                                    "Could improve translation quality."
+                                ),
+                                visible=_initial_enable_grounding_visible,
+                                elem_id="enable_grounding_checkbox",
+                            )
                             # Compute initial visibility for reasoning effort (OpenAI and OpenRouter OpenAI models)
                             _initial_reasoning_effort_visible = False
                             try:
@@ -656,6 +684,18 @@ def create_layout(
                                     "Disable if encountering refusals or using less-capable LLMs."
                                 ),
                             )
+                            upscale_method = gr.Radio(
+                                choices=[
+                                    ("Model", "model"),
+                                    ("LANCZOS", "lanczos"),
+                                    ("None", "none"),
+                                ],
+                                value=saved_settings.get("upscale_method", "model"),
+                                label="Translation Image Upscaling",
+                                info=(
+                                    "Method for upscaling images before sending to translation API."
+                                ),
+                            )
                         setting_groups.append(group_translation)
 
                         # --- Rendering Settings ---
@@ -692,7 +732,10 @@ def create_layout(
                                     "use_subpixel_rendering", False
                                 ),
                                 label="Use Subpixel Rendering",
-                                info="Improves text clarity on LCD screens, but can cause color fringing.",
+                                info=(
+                                    "Improves text clarity on RGB-based displays. "
+                                    "Disable if using a PenTile-based display (i.e., an OLED screen)"
+                                ),
                             )
                             font_hinting = gr.Radio(
                                 choices=["none", "slight", "normal", "full"],
@@ -752,13 +795,164 @@ def create_layout(
                             padding_pixels = gr.Slider(
                                 2,
                                 12,
-                                value=saved_settings.get("padding_pixels", 8.0),
+                                value=saved_settings.get("padding_pixels", 5.0),
                                 step=1,
                                 label="Padding Pixels",
                                 info="Padding between text and the edge of the speech bubble. "
                                 "Increase for more space between text and bubble boundaries.",
                             )
                         setting_groups.append(group_rendering)
+
+                        # --- Outside Text Removal Settings ---
+                        with gr.Group(
+                            visible=False, elem_classes="settings-group"
+                        ) as group_outside_text:
+                            gr.Markdown("### Outside Speech Bubble Text")
+                            outside_text_enabled = gr.Checkbox(
+                                value=saved_settings.get("outside_text_enabled", False),
+                                label="Enable OSB Detection",
+                                info="Detect, inpaint, and translate text outside speech bubbles.",
+                            )
+
+                            # Wrap all settings except the enable checkbox in a Column with visibility control
+                            with gr.Column(
+                                visible=saved_settings.get(
+                                    "outside_text_enabled", False
+                                )
+                            ) as outside_text_settings_wrapper:
+                                gr.Markdown("### Detection")
+                                outside_text_easyocr_min_size = gr.Slider(
+                                    10,
+                                    500,
+                                    value=saved_settings.get(
+                                        "outside_text_easyocr_min_size", 200
+                                    ),
+                                    step=10,
+                                    label="Min Text Size (px)",
+                                    info="Minimum text region size in pixels for OSB text detection. "
+                                    "Smaller text may render awkwardly.",
+                                )
+                                gr.Markdown("### Inpainting")
+                                outside_text_huggingface_token = gr.Textbox(
+                                    value=saved_settings.get(
+                                        "outside_text_huggingface_token", ""
+                                    ),
+                                    label="HuggingFace Token (Required)",
+                                    type="password",
+                                    info="Required for downloading Flux Kontext files from HuggingFace Hub.",
+                                )
+                                outside_text_flux_num_inference_steps = gr.Slider(
+                                    1,
+                                    30,
+                                    value=saved_settings.get(
+                                        "outside_text_flux_num_inference_steps", 8
+                                    ),
+                                    step=1,
+                                    label="Steps",
+                                    info=(
+                                        "Number of denoising steps for Flux Kontext. "
+                                        "15 is best for quality (diminishing returns beyond); "
+                                        "below 6 shows noticeable degradation."
+                                    ),
+                                )
+                                outside_text_flux_residual_diff_threshold = gr.Slider(
+                                    0.0,
+                                    1.0,
+                                    value=saved_settings.get(
+                                        "outside_text_flux_residual_diff_threshold",
+                                        0.12,
+                                    ),
+                                    step=0.01,
+                                    label="Residual Diff Threshold",
+                                    info=(
+                                        "First Block Caching threshold for inference "
+                                        "(higher = faster, lower quality)."
+                                    ),
+                                )
+                                outside_text_seed = gr.Number(
+                                    value=saved_settings.get("outside_text_seed", 1),
+                                    label="Seed",
+                                    info="Seed for reproducible inpainting (-1 = random)",
+                                    precision=0,
+                                )
+
+                                gr.Markdown("### Font Rendering")
+                                outside_text_osb_font_pack = gr.Dropdown(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_font_pack", ""
+                                    ),
+                                    choices=[""] + font_choices,
+                                    label="Text Font",
+                                    info="Font for rendering OSB text translations (leave empty to use main font)",
+                                )
+                                outside_text_osb_max_font_size = gr.Slider(
+                                    5,
+                                    96,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_max_font_size", 64
+                                    ),
+                                    step=1,
+                                    label="Max Font Size (px)",
+                                    info="The largest font size the renderer will attempt to use for OSB text.",
+                                )
+                                outside_text_osb_min_font_size = gr.Slider(
+                                    5,
+                                    50,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_min_font_size", 12
+                                    ),
+                                    step=1,
+                                    label="Min Font Size (px)",
+                                    info="The smallest font size the renderer will attempt to use for OSB text.",
+                                )
+                                outside_text_osb_line_spacing = gr.Slider(
+                                    0.5,
+                                    2.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_line_spacing", 1.0
+                                    ),
+                                    step=0.05,
+                                    label="Line Spacing Multiplier",
+                                    info="Adjusts the vertical space between lines of text (1.0 = standard).",
+                                )
+                                outside_text_osb_use_subpixel_rendering = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_use_subpixel_rendering", True
+                                    ),
+                                    label="Use Subpixel Rendering",
+                                    info=(
+                                        "Improves text clarity on RGB-based displays. "
+                                        "Disable if using a PenTile-based display (i.e., an OLED screen)"
+                                    ),
+                                )
+                                outside_text_osb_font_hinting = gr.Radio(
+                                    choices=["none", "slight", "normal", "full"],
+                                    value=saved_settings.get(
+                                        "outside_text_osb_font_hinting", "none"
+                                    ),
+                                    label="Font Hinting",
+                                    info="Adjusts glyph outlines to fit pixel grid. 'None' is often best for "
+                                    "high-res displays.",
+                                )
+                                outside_text_osb_use_ligatures = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_use_ligatures", False
+                                    ),
+                                    label="Use Standard Ligatures (e.g., fi, fl)",
+                                    info="Enables common letter combinations to be rendered as single glyphs "
+                                    "(must be supported by the font).",
+                                )
+                                outside_text_osb_outline_width = gr.Slider(
+                                    0,
+                                    10,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_outline_width", 3.0
+                                    ),
+                                    step=0.5,
+                                    label="Outline Width (px)",
+                                    info="Width of text outline for OSB text.",
+                                )
+                        setting_groups.append(group_outside_text)
 
                         # --- Output Settings ---
                         with gr.Group(
@@ -789,6 +983,27 @@ def create_layout(
                                 interactive=saved_settings.get("output_format", "auto")
                                 != "jpeg",
                             )
+                            upscale_final_image = gr.Checkbox(
+                                value=saved_settings.get("upscale_final_image", False),
+                                label="Upscale Final Image",
+                                info=(
+                                    "Upscale the final translated image using the '2x-AnimeSharpV4_RCAN' model. "
+                                    "Alpha channel will be flattened for compatibility."
+                                ),
+                            )
+                            upscale_final_image_factor = gr.Slider(
+                                1.0,
+                                8.0,
+                                value=saved_settings.get(
+                                    "upscale_final_image_factor", 2.0
+                                ),
+                                step=0.1,
+                                label="Upscale Factor",
+                                info="Factor by which to upscale the final image.",
+                                interactive=saved_settings.get(
+                                    "upscale_final_image", False
+                                ),
+                            )
                         setting_groups.append(group_output)
 
                         # --- Other Settings ---
@@ -797,9 +1012,14 @@ def create_layout(
                         ) as group_other:
                             gr.Markdown("### Other")
                             refresh_resources_button = gr.Button(
-                                "Refresh Model / Fonts",
+                                "Refresh Models / Fonts",
                                 variant="secondary",
-                                elem_classes="config-refresh-button",
+                                elem_classes="config-button",
+                            )
+                            unload_models_button = gr.Button(
+                                "Force Unload Models",
+                                variant="secondary",
+                                elem_classes="config-button",
                             )
                             verbose = gr.Checkbox(
                                 value=saved_settings.get("verbose", False),
@@ -810,11 +1030,17 @@ def create_layout(
                                 value=saved_settings.get("cleaning_only", False),
                                 label="Cleaning-only Mode",
                                 info="Skip translation and text rendering, output only the cleaned speech bubbles.",
+                                interactive=not saved_settings.get("test_mode", False),
                             )
                             test_mode_toggle = gr.Checkbox(
                                 value=saved_settings.get("test_mode", False),
-                                label="Test Mode (use placeholder text)",
-                                info=("Bypass translation and render lorem ipsum."),
+                                label="Test Mode",
+                                info=(
+                                    "Skip translation and render placeholder text (lorem ipsum)."
+                                ),
+                                interactive=not saved_settings.get(
+                                    "cleaning_only", False
+                                ),
                             )
                         setting_groups.append(group_other)
 
@@ -858,14 +1084,32 @@ def create_layout(
             batch_output_language,
             batch_font_dropdown,
             enable_thinking_checkbox,
+            enable_grounding_checkbox,
             reasoning_effort_dropdown,
             send_full_page_context,
+            upscale_method,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
             padding_pixels,
+            outside_text_enabled,
+            outside_text_seed,
+            outside_text_flux_num_inference_steps,
+            outside_text_flux_residual_diff_threshold,
+            outside_text_huggingface_token,
+            outside_text_osb_font_pack,
+            outside_text_osb_max_font_size,
+            outside_text_osb_min_font_size,
+            outside_text_osb_use_ligatures,
+            outside_text_osb_outline_width,
+            outside_text_osb_line_spacing,
+            outside_text_osb_use_subpixel_rendering,
+            outside_text_osb_font_hinting,
+            outside_text_easyocr_min_size,
+            upscale_final_image,
+            upscale_final_image_factor,
         ]
 
         reset_outputs = [
@@ -907,11 +1151,29 @@ def create_layout(
             batch_output_language,
             batch_font_dropdown,
             enable_thinking_checkbox,
+            enable_grounding_checkbox,
             reasoning_effort_dropdown,
             config_status,
             send_full_page_context,
+            upscale_method,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
+            outside_text_enabled,
+            outside_text_seed,
+            outside_text_flux_num_inference_steps,
+            outside_text_flux_residual_diff_threshold,
+            outside_text_huggingface_token,
+            outside_text_osb_font_pack,
+            outside_text_osb_max_font_size,
+            outside_text_osb_min_font_size,
+            outside_text_osb_use_ligatures,
+            outside_text_osb_outline_width,
+            outside_text_osb_line_spacing,
+            outside_text_osb_use_subpixel_rendering,
+            outside_text_osb_font_hinting,
+            outside_text_easyocr_min_size,
+            upscale_final_image,
+            upscale_final_image_factor,
         ]
 
         translate_inputs = [
@@ -951,14 +1213,35 @@ def create_layout(
             cleaning_only_toggle,
             test_mode_toggle,
             enable_thinking_checkbox,
+            enable_grounding_checkbox,
             reasoning_effort_dropdown,
             send_full_page_context,
+            upscale_method,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
             padding_pixels,
+            outside_text_enabled,
+            outside_text_seed,
+            outside_text_flux_num_inference_steps,
+            outside_text_flux_residual_diff_threshold,
+            outside_text_huggingface_token,
+            outside_text_osb_font_pack,
+            outside_text_osb_max_font_size,
+            outside_text_osb_min_font_size,
+            outside_text_osb_use_ligatures,
+            outside_text_osb_outline_width,
+            outside_text_osb_line_spacing,
+            outside_text_osb_use_subpixel_rendering,
+            outside_text_osb_font_hinting,
+            outside_text_easyocr_min_size,
+            upscale_final_image,
+            upscale_final_image_factor,
+            batch_input_language,
+            batch_output_language,
+            batch_font_dropdown,
         ]
 
         batch_inputs = [
@@ -982,9 +1265,9 @@ def create_layout(
             top_k,
             config_reading_direction,
             config_translation_mode,
-            batch_input_language,
-            batch_output_language,
-            batch_font_dropdown,
+            input_language,
+            output_language,
+            font_dropdown,
             max_font_size,
             min_font_size,
             line_spacing,
@@ -998,14 +1281,34 @@ def create_layout(
             cleaning_only_toggle,
             test_mode_toggle,
             enable_thinking_checkbox,
+            enable_grounding_checkbox,
             reasoning_effort_dropdown,
             send_full_page_context,
+            upscale_method,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
             padding_pixels,
+            outside_text_enabled,
+            outside_text_seed,
+            outside_text_flux_num_inference_steps,
+            outside_text_flux_residual_diff_threshold,
+            outside_text_huggingface_token,
+            outside_text_osb_font_pack,
+            outside_text_osb_max_font_size,
+            outside_text_osb_min_font_size,
+            outside_text_osb_use_ligatures,
+            outside_text_osb_outline_width,
+            outside_text_osb_line_spacing,
+            outside_text_osb_use_subpixel_rendering,
+            outside_text_osb_font_hinting,
+            upscale_final_image,
+            upscale_final_image_factor,
+            batch_input_language,
+            batch_output_language,
+            batch_font_dropdown,
         ]
 
         # Config Tab Navigation & Updates
@@ -1038,15 +1341,22 @@ def create_layout(
             outputs=output_components_for_switch,
             queue=False,
         )
-        nav_button_output.click(
+        nav_button_outside_text.click(
             fn=lambda idx=4: utils.switch_settings_view(
                 idx, setting_groups, nav_buttons
             ),
             outputs=output_components_for_switch,
             queue=False,
         )
-        nav_button_other.click(
+        nav_button_output.click(
             fn=lambda idx=5: utils.switch_settings_view(
+                idx, setting_groups, nav_buttons
+            ),
+            outputs=output_components_for_switch,
+            queue=False,
+        )
+        nav_button_other.click(
+            fn=lambda idx=6: utils.switch_settings_view(
                 idx, setting_groups, nav_buttons
             ),
             outputs=output_components_for_switch,
@@ -1057,6 +1367,13 @@ def create_layout(
             fn=callbacks.handle_output_format_change,
             inputs=output_format,
             outputs=[jpeg_quality, png_compression],
+            queue=False,
+        )
+
+        upscale_final_image.change(
+            fn=lambda x: gr.update(interactive=x),
+            inputs=upscale_final_image,
+            outputs=upscale_final_image_factor,
             queue=False,
         )
 
@@ -1075,6 +1392,7 @@ def create_layout(
                 temperature,
                 top_k,
                 enable_thinking_checkbox,
+                enable_grounding_checkbox,
                 reasoning_effort_dropdown,
                 openrouter_reasoning_override,
             ],
@@ -1105,6 +1423,7 @@ def create_layout(
                 temperature,
                 top_k,
                 enable_thinking_checkbox,
+                enable_grounding_checkbox,
                 reasoning_effort_dropdown,
             ],
             queue=False,
@@ -1123,6 +1442,29 @@ def create_layout(
             fn=callbacks.handle_hyphenation_change,
             inputs=hyphenate_before_scaling,
             outputs=[hyphen_penalty, hyphenation_min_word_length],
+            queue=False,
+        )
+
+        # Cleaning-only and Test mode mutual exclusivity handlers
+        cleaning_only_toggle.change(
+            fn=callbacks.handle_cleaning_only_change,
+            inputs=cleaning_only_toggle,
+            outputs=test_mode_toggle,
+            queue=False,
+        )
+
+        test_mode_toggle.change(
+            fn=callbacks.handle_test_mode_change,
+            inputs=test_mode_toggle,
+            outputs=cleaning_only_toggle,
+            queue=False,
+        )
+
+        # OSB enable/disable handler
+        outside_text_enabled.change(
+            fn=lambda x: gr.update(visible=x),
+            inputs=outside_text_enabled,
+            outputs=outside_text_settings_wrapper,
             queue=False,
         )
 
@@ -1146,7 +1488,11 @@ def create_layout(
         ).then(fn=None, inputs=None, outputs=None, js=js_status_fade, queue=False)
 
         # Refresh Button
-        refresh_outputs = [font_dropdown, batch_font_dropdown]
+        refresh_outputs = [
+            font_dropdown,
+            batch_font_dropdown,
+            outside_text_osb_font_pack,
+        ]
         refresh_resources_button.click(
             fn=functools.partial(
                 callbacks.handle_refresh_resources_click,
@@ -1157,6 +1503,13 @@ def create_layout(
             outputs=refresh_outputs,
             js=js_refresh_button_processing,
         ).then(fn=None, inputs=None, outputs=None, js=js_refresh_button_reset)
+
+        # Unload Models Button
+        unload_models_button.click(
+            fn=callbacks.handle_unload_models_click,
+            inputs=[],
+            outputs=[],
+        )
 
         # Translator Tab Button
         translate_button.click(

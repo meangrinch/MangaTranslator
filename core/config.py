@@ -10,7 +10,6 @@ class DetectionConfig:
 
     confidence: float = 0.35
     use_sam2: bool = True
-    sam2_model_id: str = "facebook/sam2.1-hiera-large"
 
 
 @dataclass
@@ -49,6 +48,8 @@ class TranslationConfig:
     )
     send_full_page_context: bool = True
     openrouter_reasoning_override: bool = False  # Forces max output tokens to 8192
+    upscale_method: str = "model"  # "model", "lanczos", or "none"
+    enable_grounding: bool = False  # Enable Google Search grounding for Gemini models
 
 
 @dataclass
@@ -66,7 +67,30 @@ class RenderingConfig:
     hyphen_penalty: float = 1000.0
     hyphenation_min_word_length: int = 8
     badness_exponent: float = 3.0
-    padding_pixels: float = 8.0
+    padding_pixels: float = 5.0
+
+
+@dataclass
+class OutsideTextConfig:
+    """Configuration for outside speech bubble text detection and removal."""
+
+    enabled: bool = False
+    seed: int = 1  # -1 = random
+    huggingface_token: str = ""  # Required for Flux Kontext model downloads
+    flux_num_inference_steps: int = 8
+    flux_residual_diff_threshold: float = 0.12
+    osb_font_name: Optional[str] = None  # None = use main font as fallback
+    osb_max_font_size: int = 64
+    osb_min_font_size: int = 12
+    osb_use_ligatures: bool = False
+    osb_outline_width: float = 3.0
+    osb_line_spacing: float = 1.0
+    osb_use_subpixel_rendering: bool = False
+    osb_font_hinting: str = "none"
+    bbox_expansion_percent: float = 0.1
+    flux_guidance_scale: float = 2.5
+    flux_prompt: str = "Remove all text."
+    easyocr_min_size: int = 200
 
 
 @dataclass
@@ -76,6 +100,8 @@ class OutputConfig:
     jpeg_quality: int = 95
     png_compression: int = 6
     output_format: str = "auto"
+    upscale_final_image: bool = False
+    upscale_final_image_factor: float = 2.0
 
 
 @dataclass
@@ -88,6 +114,7 @@ class MangaTranslatorConfig:
     translation: TranslationConfig = field(default_factory=TranslationConfig)
     rendering: RenderingConfig = field(default_factory=RenderingConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
+    outside_text: OutsideTextConfig = field(default_factory=OutsideTextConfig)
     verbose: bool = False
     device: Optional[torch.device] = None
     cleaning_only: bool = False

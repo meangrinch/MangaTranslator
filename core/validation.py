@@ -1,29 +1,21 @@
 from pathlib import Path
 from typing import Tuple
 
-from core.models import RenderingConfig, TranslationConfig
+from core.config import (MangaTranslatorConfig, RenderingConfig,
+                         TranslationConfig)
 from utils.exceptions import ValidationError
 
 
 def autodetect_yolo_model_path(models_dir: Path) -> Path:
-    """Auto-detect the YOLO model inside models/ directory.
+    """Returns the path for the primary YOLO speech bubble model.
 
-    Looks for .pt files in the models directory (recursively). If multiple are found,
-    picks the first in sorted order. Raises if none found.
+    This function provides a consistent path for the model, which will be
+    auto-downloaded by the ModelManager if it doesn't exist. It does not
+    validate file existence here. This function previously scanned for any .pt
+    file, but now returns a deterministic path to align with auto-downloading.
     """
-    if not models_dir.exists() or not models_dir.is_dir():
-        raise FileNotFoundError(
-            f"Models directory not found: {models_dir}. "
-            f"Create it and place your .pt model there."
-        )
-
-    candidates = sorted(models_dir.rglob("*.pt"))
-    if not candidates:
-        raise ValidationError(
-            f"No YOLO .pt model found in {models_dir}. Place a segmentation model there."
-        )
-
-    return candidates[0].resolve()
+    yolo_dir = models_dir / "yolo"
+    return yolo_dir / "yolov8m_seg-speech-bubble.pt"
 
 
 def validate_core_inputs(
@@ -79,33 +71,64 @@ def validate_core_inputs(
     if not (
         isinstance(rendering_cfg.max_font_size, int) and rendering_cfg.max_font_size > 0
     ):
-        raise ValueError("Max Font Size must be a positive integer.")
+        raise ValidationError("Max Font Size must be a positive integer.")
     if not (
         isinstance(rendering_cfg.min_font_size, int) and rendering_cfg.min_font_size > 0
     ):
-        raise ValueError("Min Font Size must be a positive integer.")
+        raise ValidationError("Min Font Size must be a positive integer.")
     if not (
         isinstance(rendering_cfg.line_spacing, (int, float))
         and float(rendering_cfg.line_spacing) > 0
     ):
-        raise ValueError("Line Spacing must be a positive number.")
+        raise ValidationError("Line Spacing must be a positive number.")
     if rendering_cfg.min_font_size > rendering_cfg.max_font_size:
-        raise ValueError("Min Font Size cannot be larger than Max Font Size.")
+        raise ValidationError("Min Font Size cannot be larger than Max Font Size.")
     if rendering_cfg.font_hinting not in ["none", "slight", "normal", "full"]:
-        raise ValueError(
+        raise ValidationError(
             "Invalid Font Hinting value. Must be one of: none, slight, normal, full."
         )
 
     # --- Translation Config Validation (Basic) ---
     if not translation_cfg.provider:
-        raise ValueError("Translation provider cannot be empty.")
+        raise ValidationError("Translation provider cannot be empty.")
     if not translation_cfg.model_name:
-        raise ValueError("Translation model name cannot be empty.")
+        raise ValidationError("Translation model name cannot be empty.")
     if not translation_cfg.input_language:
-        raise ValueError("Input language cannot be empty.")
+        raise ValidationError("Input language cannot be empty.")
     if not translation_cfg.output_language:
-        raise ValueError("Output language cannot be empty.")
+        raise ValidationError("Output language cannot be empty.")
     if translation_cfg.reading_direction not in ["rtl", "ltr"]:
-        raise ValueError("Reading direction must be 'rtl' or 'ltr'.")
+        raise ValidationError("Reading direction must be 'rtl' or 'ltr'.")
 
     return yolo_model_path.resolve(), font_dir_path.resolve()
+
+
+def validate_mutually_exclusive_modes(cleaning_only: bool, test_mode: bool) -> None:
+    """
+    Validates that cleaning_only and test_mode are not both enabled.
+
+    Args:
+        cleaning_only (bool): Whether cleaning-only mode is enabled.
+        test_mode (bool): Whether test mode is enabled.
+
+    Raises:
+        ValidationError: If both modes are enabled simultaneously.
+    """
+    if cleaning_only and test_mode:
+        raise ValidationError(
+            "Cleaning-only mode and Test mode cannot be enabled together. "
+            "Only one mode can be active at a time."
+        )
+
+
+def validate_config(config: MangaTranslatorConfig) -> None:
+    """
+    Validates the MangaTranslatorConfig object for mutually exclusive settings.
+
+    Args:
+        config (MangaTranslatorConfig): The configuration to validate.
+
+    Raises:
+        ValidationError: If invalid configuration is detected.
+    """
+    validate_mutually_exclusive_modes(config.cleaning_only, config.test_mode)

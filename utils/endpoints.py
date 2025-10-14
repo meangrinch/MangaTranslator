@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 
 
@@ -17,6 +18,7 @@ def call_gemini_endpoint(
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
+    enable_grounding: bool = False,
 ) -> Optional[str]:
     """
     Calls the Google API endpoint with the provided data and handles retries.
@@ -41,7 +43,7 @@ def call_gemini_endpoint(
                       connection errors, or response processing fails.
     """
     if not api_key:
-        raise ValueError("API key is required for Google endpoint")
+        raise ValidationError("API key is required for Google endpoint")
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
 
@@ -59,6 +61,9 @@ def call_gemini_endpoint(
     }
     if system_prompt:
         payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
+
+    if enable_grounding:
+        payload["tools"] = [{"googleSearch": {}}]
 
     for attempt in range(max_retries + 1):
         current_delay = min(
@@ -107,7 +112,7 @@ def call_gemini_endpoint(
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(
+                raise TranslationError(
                     f"Error processing successful Google API response: {str(e)}"
                 ) from e
 
@@ -128,7 +133,7 @@ def call_gemini_endpoint(
                         f"Rate limited after {max_retries + 1} attempts: {error_text}"
                     )
 
-                raise RuntimeError(f"Google API HTTP Error: {error_reason}") from e
+                raise TranslationError(f"Google API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
@@ -139,11 +144,11 @@ def call_gemini_endpoint(
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(
+                raise TranslationError(
                     f"Google API Connection Error after retries: {str(e)}"
                 ) from e
 
-    raise RuntimeError(
+    raise TranslationError(
         f"Failed to get response from Google API after {max_retries + 1} attempts."
     )
 
@@ -184,11 +189,13 @@ def call_openai_endpoint(
                       connection errors, or response processing fails.
     """
     if not api_key:
-        raise ValueError("API key is required for OpenAI endpoint")
+        raise ValidationError("API key is required for OpenAI endpoint")
     text_part = next((p for p in parts if "text" in p), None)
     image_parts = [p for p in parts if "inline_data" in p]
     if not text_part:
-        raise ValueError("Invalid 'parts' format for OpenAI: No text prompt found.")
+        raise ValidationError(
+            "Invalid 'parts' format for OpenAI: No text prompt found."
+        )
 
     url = "https://api.openai.com/v1/responses"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -295,7 +302,7 @@ def call_openai_endpoint(
                 return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(
+                raise TranslationError(
                     f"Error processing successful OpenAI API response: {str(e)}"
                 ) from e
 
@@ -318,7 +325,7 @@ def call_openai_endpoint(
                 elif status_code == 400:
                     error_reason += " (Check model name and payload)"
 
-                raise RuntimeError(f"OpenAI API HTTP Error: {error_reason}") from e
+                raise TranslationError(f"OpenAI API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
@@ -329,11 +336,11 @@ def call_openai_endpoint(
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(
+                raise TranslationError(
                     f"OpenAI API Connection Error after retries: {str(e)}"
                 ) from e
 
-    raise RuntimeError(
+    raise TranslationError(
         f"Failed to get response from OpenAI Responses API after {max_retries + 1} attempts."
     )
 
@@ -373,7 +380,7 @@ def call_anthropic_endpoint(
                       connection errors, or response processing fails.
     """
     if not api_key:
-        raise ValueError("API key is required for Anthropic endpoint")
+        raise ValidationError("API key is required for Anthropic endpoint")
     user_prompt_part = None
     image_parts = []
     for part in reversed(parts):
@@ -383,7 +390,7 @@ def call_anthropic_endpoint(
             image_parts.insert(0, part)
 
     if not user_prompt_part:
-        raise ValueError(
+        raise ValidationError(
             "Invalid 'parts' format for Anthropic: No text prompt found for user message."
         )
 
@@ -422,7 +429,7 @@ def call_anthropic_endpoint(
 
     user_content.append({"type": "text", "text": user_prompt_text})
     if not user_content:
-        raise ValueError(
+        raise ValidationError(
             "No valid content (images/text) could be prepared for Anthropic user message."
         )
 
@@ -473,7 +480,7 @@ def call_anthropic_endpoint(
                     error_message = error_data.get(
                         "message", "No error message provided."
                     )
-                    raise RuntimeError(
+                    raise TranslationError(
                         f"Anthropic API returned error: {error_type} - {error_message}"
                     )
 
@@ -508,7 +515,7 @@ def call_anthropic_endpoint(
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(
+                raise TranslationError(
                     f"Error processing successful Anthropic API response: {str(e)}"
                 ) from e
 
@@ -539,7 +546,9 @@ def call_anthropic_endpoint(
                 log_message(
                     f"Anthropic API HTTP Error: {error_reason}", always_print=True
                 )
-                raise RuntimeError(f"Anthropic API HTTP Error: {error_reason}") from e
+                raise TranslationError(
+                    f"Anthropic API HTTP Error: {error_reason}"
+                ) from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
@@ -550,11 +559,11 @@ def call_anthropic_endpoint(
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(
+                raise TranslationError(
                     f"Anthropic API Connection Error after retries: {str(e)}"
                 ) from e
 
-    raise RuntimeError(
+    raise TranslationError(
         f"Failed to get response from Anthropic API after {max_retries + 1} attempts."
     )
 
@@ -594,12 +603,12 @@ def call_xai_endpoint(
                       connection errors, or response processing fails.
     """
     if not api_key:
-        raise ValueError("API key is required for xAI endpoint")
+        raise ValidationError("API key is required for xAI endpoint")
 
     text_part = next((p for p in parts if "text" in p), None)
     image_parts = [p for p in parts if "inline_data" in p]
     if not text_part:
-        raise ValueError("Invalid 'parts' format for xAI: No text prompt found.")
+        raise ValidationError("Invalid 'parts' format for xAI: No text prompt found.")
 
     url = "https://api.x.ai/v1/responses"
     headers = {
@@ -695,13 +704,13 @@ def call_xai_endpoint(
 
                 if "error" in result:
                     error_msg = result.get("error", {}).get("message", "Unknown error")
-                    raise RuntimeError(f"xAI API returned error: {error_msg}")
+                    raise TranslationError(f"xAI API returned error: {error_msg}")
 
                 log_message("No text content in xAI response", verbose=debug)
                 return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(
+                raise TranslationError(
                     f"Error processing xAI API response: {str(e)}"
                 ) from e
 
@@ -729,7 +738,7 @@ def call_xai_endpoint(
                     error_reason += " (Permission denied, check API key/plan)"
 
                 log_message(f"xAI API HTTP Error: {error_reason}", always_print=True)
-                raise RuntimeError(f"xAI API HTTP Error: {error_reason}") from e
+                raise TranslationError(f"xAI API HTTP Error: {error_reason}") from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
@@ -744,11 +753,11 @@ def call_xai_endpoint(
                     f"xAI connection failed after {max_retries + 1} attempts: {str(e)}",
                     always_print=True,
                 )
-                raise RuntimeError(
+                raise TranslationError(
                     f"xAI API Connection Error after retries: {str(e)}"
                 ) from e
 
-    raise RuntimeError(
+    raise TranslationError(
         f"Failed to get response from xAI API after {max_retries + 1} attempts."
     )
 
@@ -763,6 +772,7 @@ def call_openrouter_endpoint(
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
+    enable_grounding: bool = False,
 ) -> Optional[str]:
     """
     Calls the OpenRouter Chat Completions API endpoint (OpenAI compatible) and handles retries.
@@ -790,11 +800,13 @@ def call_openrouter_endpoint(
                       connection errors, or response processing fails.
     """
     if not api_key:
-        raise ValueError("API key is required for OpenRouter endpoint")
+        raise ValidationError("API key is required for OpenRouter endpoint")
     text_part = next((p for p in parts if "text" in p), None)
     image_parts = [p for p in parts if "inline_data" in p]
     if not text_part:
-        raise ValueError("Invalid 'parts' format for OpenRouter: No text prompt found.")
+        raise ValidationError(
+            "Invalid 'parts' format for OpenRouter: No text prompt found."
+        )
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -835,6 +847,11 @@ def call_openrouter_endpoint(
         "messages": messages,
         "max_tokens": generation_config.get("max_tokens", 2048),
     }
+
+    # Handle grounding for Gemini models via :online suffix
+    if enable_grounding and "gemini" in model_name.lower():
+        if not model_name.endswith(":online"):
+            payload["model"] = f"{model_name}:online"
 
     is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")
     is_anthropic_model = "anthropic/" in model_name or model_name.startswith("claude-")
@@ -931,13 +948,13 @@ def call_openrouter_endpoint(
                         error_msg = result.get("error", {}).get(
                             "message", "Unknown error"
                         )
-                        raise RuntimeError(
+                        raise TranslationError(
                             f"OpenRouter API returned error: {error_msg}"
                         )
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(
+                raise TranslationError(
                     f"Error processing OpenRouter API response: {str(e)}"
                 ) from e
 
@@ -969,7 +986,9 @@ def call_openrouter_endpoint(
                 log_message(
                     f"OpenRouter API HTTP Error: {error_reason}", always_print=True
                 )
-                raise RuntimeError(f"OpenRouter API HTTP Error: {error_reason}") from e
+                raise TranslationError(
+                    f"OpenRouter API HTTP Error: {error_reason}"
+                ) from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
@@ -984,11 +1003,11 @@ def call_openrouter_endpoint(
                     f"OpenRouter connection failed after {max_retries + 1} attempts: {str(e)}",
                     always_print=True,
                 )
-                raise RuntimeError(
+                raise TranslationError(
                     f"OpenRouter API Connection Error after retries: {str(e)}"
                 ) from e
 
-    raise RuntimeError(
+    raise TranslationError(
         f"Failed to get response from OpenRouter API after {max_retries + 1} attempts."
     )
 
@@ -1094,11 +1113,11 @@ def call_openai_compatible_endpoint(
                       connection errors, or response processing fails.
     """
     if not base_url:
-        raise ValueError("Base URL is required for OpenAI-Compatible endpoint")
+        raise ValidationError("Base URL is required for OpenAI-Compatible endpoint")
     text_part = next((p for p in parts if "text" in p), None)
     image_parts = [p for p in parts if "inline_data" in p]
     if not text_part:
-        raise ValueError(
+        raise ValidationError(
             "Invalid 'parts' format for OpenAI-Compatible: No text prompt found."
         )
 
@@ -1194,13 +1213,13 @@ def call_openai_compatible_endpoint(
                         error_msg = result.get("error", {}).get(
                             "message", "Unknown error"
                         )
-                        raise RuntimeError(
+                        raise TranslationError(
                             f"OpenAI-Compatible API returned error: {error_msg}"
                         )
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise RuntimeError(
+                raise TranslationError(
                     f"Error processing successful OpenAI-Compatible API response: {str(e)}"
                 ) from e
 
@@ -1227,7 +1246,7 @@ def call_openai_compatible_endpoint(
                 elif status_code == 403:
                     error_reason += " (Permission denied)"
 
-                raise RuntimeError(
+                raise TranslationError(
                     f"OpenAI-Compatible API HTTP Error: {error_reason}"
                 ) from e
 
@@ -1240,10 +1259,10 @@ def call_openai_compatible_endpoint(
                 time.sleep(current_delay)
                 continue
             else:
-                raise RuntimeError(
+                raise TranslationError(
                     f"OpenAI-Compatible API Connection Error after retries: {str(e)}"
                 ) from e
 
-    raise RuntimeError(
+    raise TranslationError(
         f"Failed to get response from OpenAI-Compatible API ({url}) after {max_retries + 1} attempts."
     )

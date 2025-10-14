@@ -3,28 +3,44 @@ import base64
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import cv2
 import torch
 from PIL import Image
 
-from core.models import (
-    CleaningConfig,
-    DetectionConfig,
-    MangaTranslatorConfig,
-    OutputConfig,
-    RenderingConfig,
-    TranslationConfig,
-)
-from core.validation import autodetect_yolo_model_path
+from core.caching import get_cache
+from core.config import (CleaningConfig, DetectionConfig,
+                         MangaTranslatorConfig, OutputConfig,
+                         OutsideTextConfig, TranslationConfig)
+from core.validation import (autodetect_yolo_model_path,
+                             validate_mutually_exclusive_modes)
+from utils.exceptions import (CleaningError, FontError, ImageProcessingError,
+                              RenderingError, TranslationError)
 from utils.logging import log_message
 
-from .cleaning import clean_speech_bubbles
-from .detection import detect_speech_bubbles
-from .image_utils import cv2_to_pil, pil_to_cv2, save_image_with_compression
-from .rendering import render_text_skia
-from .translation import call_translation_api_batch, sort_bubbles_by_reading_order
+from .image.cleaning import clean_speech_bubbles
+from .image.detection import detect_speech_bubbles
+from .image.image_utils import (convert_image_to_target_mode, cv2_to_pil,
+                                pil_to_cv2, resize_to_max_side,
+                                save_image_with_compression, upscale_image,
+                                upscale_image_to_dimension)
+from .ml.model_manager import get_model_manager
+from .outside_text_processor import process_outside_text
+from .services.translation import (call_translation_api_batch,
+                                   prepare_bubble_images_for_translation,
+                                   sort_bubbles_by_reading_order)
+from .text.text_renderer import RenderingConfig, render_text_skia
+
+BUBBLE_MIN_SIDE_PIXELS = 200  # Target minimum side length for speech bubble upscaling
+CONTEXT_IMAGE_MAX_SIDE_PIXELS = 1568  # Target maximum side length for full page image
+
+
+def get_image_encoding_params(pil_image_format: Optional[str]) -> Tuple[str, str]:
+    """Returns (mime_type, cv2_ext) for a given PIL image format."""
+    if pil_image_format and pil_image_format.upper() == "PNG":
+        return "image/png", ".png"
+    return "image/jpeg", ".jpg"
 
 
 def translate_and_render(
@@ -52,6 +68,12 @@ def translate_and_render(
 
     try:
         pil_original = Image.open(image_path)
+        image_format = pil_original.format
+        mime_type, cv2_ext = get_image_encoding_params(image_format)
+        log_message(
+            f"Original image format: {image_format} -> MIME: {mime_type}",
+            verbose=verbose,
+        )
     except FileNotFoundError:
         log_message(f"Error: Input image not found at {image_path}", always_print=True)
         raise
@@ -72,89 +94,64 @@ def translate_and_render(
         target_mode = "RGBA"
     log_message(f"Target mode: {target_mode}", verbose=verbose)
 
-    pil_image_processed = pil_original
-    if pil_image_processed.mode != target_mode:
-        if target_mode == "RGB":
-            if (
-                pil_image_processed.mode == "RGBA"
-                or pil_image_processed.mode == "LA"
-                or (
-                    pil_image_processed.mode == "P"
-                    and "transparency" in pil_image_processed.info
-                )
-            ):
-                log_message(
-                    f"Converting {pil_image_processed.mode} to RGB (flattening transparency)",
-                    verbose=verbose,
-                )
-                background = Image.new("RGB", pil_image_processed.size, (255, 255, 255))
-                try:
-                    mask = None
-                    if pil_image_processed.mode == "RGBA":
-                        mask = pil_image_processed.split()[3]
-                    elif pil_image_processed.mode == "LA":
-                        mask = pil_image_processed.split()[1]
-                    elif (
-                        pil_image_processed.mode == "P"
-                        and "transparency" in pil_image_processed.info
-                    ):
-                        temp_rgba = pil_image_processed.convert("RGBA")
-                        mask = temp_rgba.split()[3]
+    pil_image_processed = convert_image_to_target_mode(
+        pil_original, target_mode, verbose
+    )
 
-                    if mask:
-                        background.paste(pil_image_processed, mask=mask)
-                        pil_image_processed = background
-                    else:
-                        pil_image_processed = pil_image_processed.convert("RGB")
-                except Exception as paste_err:
-                    log_message(
-                        f"Warning: Paste failed, trying alpha_composite: {paste_err}",
-                        verbose=verbose,
-                    )
-                    try:
-                        background_comp = Image.new(
-                            "RGB", pil_image_processed.size, (255, 255, 255)
-                        )
-                        img_rgba_for_composite = (
-                            pil_image_processed
-                            if pil_image_processed.mode == "RGBA"
-                            else pil_image_processed.convert("RGBA")
-                        )
-                        pil_image_processed = Image.alpha_composite(
-                            background_comp.convert("RGBA"), img_rgba_for_composite
-                        ).convert("RGB")
-                        log_message(
-                            "Alpha composite conversion successful", verbose=verbose
-                        )
-                    except Exception as composite_err:
-                        log_message(
-                            f"Warning: Alpha composite failed, using simple convert: {composite_err}",
-                            verbose=verbose,
-                        )
-                        pil_image_processed = pil_image_processed.convert(
-                            "RGB"
-                        )  # Final fallback conversion
-            else:  # Non-transparent conversion to RGB
-                log_message(
-                    f"Converting {pil_image_processed.mode} to RGB", verbose=verbose
-                )
-                pil_image_processed = pil_image_processed.convert("RGB")
-        elif target_mode == "RGBA":
-            log_message(
-                f"Converting {pil_image_processed.mode} to RGBA", verbose=verbose
-            )
-            pil_image_processed = pil_image_processed.convert("RGBA")
+    get_cache().set_current_image(pil_image_processed, verbose)
 
     original_cv_image = pil_to_cv2(pil_image_processed)
 
-    # --- Encode Full Image for Context (optional) ---
+    # Process outside text detection and inpainting
+    pil_image_processed, outside_text_data = process_outside_text(
+        pil_image_processed, config, image_path, image_format, verbose
+    )
+    original_cv_image = pil_to_cv2(pil_image_processed)
+
     full_image_b64 = None
+    full_image_mime_type = None
     if config.translation.send_full_page_context:
         try:
-            is_success, buffer = cv2.imencode(".jpg", original_cv_image)
+            # Prepare full page context based on upscale method
+            context_image_pil = cv2_to_pil(original_cv_image)
+
+            if config.translation.upscale_method == "model":
+                # Use upscaling model for full page context
+                model_manager = get_model_manager()
+                with model_manager.upscale_context() as upscale_model:
+                    context_image_pil = upscale_image_to_dimension(
+                        upscale_model,
+                        context_image_pil,
+                        CONTEXT_IMAGE_MAX_SIDE_PIXELS,
+                        config.device,
+                        "max",
+                        verbose,
+                    )
+                log_message(
+                    "Upscaled full image for context with model", verbose=verbose
+                )
+            elif config.translation.upscale_method == "lanczos":
+                # Use LANCZOS resampling (current behavior)
+                context_image_pil = resize_to_max_side(
+                    context_image_pil,
+                    CONTEXT_IMAGE_MAX_SIDE_PIXELS,
+                    verbose=verbose,
+                )
+                log_message(
+                    "Resized full image for context with LANCZOS", verbose=verbose
+                )
+            else:  # upscale_method == "none"
+                # No resizing/upscaling
+                log_message(
+                    "Using full image for context without resizing", verbose=verbose
+                )
+
+            context_image_cv = pil_to_cv2(context_image_pil)
+            is_success, buffer = cv2.imencode(cv2_ext, context_image_cv)
             if not is_success:
-                raise ValueError("Full image encoding to JPEG failed")
+                raise ImageProcessingError(f"Full image encoding to {cv2_ext} failed")
             full_image_b64 = base64.b64encode(buffer).decode("utf-8")
+            full_image_mime_type = mime_type
             log_message("Encoded full image for context", verbose=verbose)
         except Exception as e:
             log_message(
@@ -171,7 +168,6 @@ def translate_and_render(
             verbose=verbose,
             device=device,
             use_sam2=config.detection.use_sam2,
-            sam2_model_id=config.detection.sam2_model_id,
         )
     except Exception as e:
         log_message(f"Error during detection: {e}", always_print=True)
@@ -191,7 +187,7 @@ def translate_and_render(
             use_otsu = config.cleaning.use_otsu_threshold
 
             cleaned_image_cv, processed_bubbles_info = clean_speech_bubbles(
-                image_path,
+                pil_image_processed,
                 config.yolo_model_path,
                 config.detection.confidence,
                 pre_computed_detections=bubble_data,
@@ -204,6 +200,10 @@ def translate_and_render(
             log_message(
                 f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose
             )
+        except CleaningError as e:
+            log_message(f"Cleaning failed: {e}", always_print=True)
+            cleaned_image_cv = original_cv_image.copy()
+            processed_bubbles_info = []
         except Exception as e:
             log_message(f"Error during cleaning: {e}", always_print=True)
             cleaned_image_cv = original_cv_image.copy()
@@ -221,52 +221,68 @@ def translate_and_render(
         else:
             # --- Prepare images for Translation ---
             log_message("Preparing bubble images...", verbose=verbose)
-            for bubble in bubble_data:
-                x1, y1, x2, y2 = bubble["bbox"]
 
-                bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
+            model_manager = get_model_manager()
+            with model_manager.upscale_context() as upscale_model:
+                bubble_data = prepare_bubble_images_for_translation(
+                    bubble_data,
+                    original_cv_image,
+                    upscale_model,
+                    config.device,
+                    mime_type,
+                    config.translation.upscale_method,
+                    verbose,
+                )
 
-                try:
-                    is_success, buffer = cv2.imencode(".jpg", bubble_image_cv)
-                    if not is_success:
-                        raise ValueError("cv2.imencode failed")
-                    image_b64 = base64.b64encode(buffer).decode("utf-8")
-                    bubble["image_b64"] = image_b64
-                    log_message(
-                        f"Bubble {x1},{y1} ({x2 - x1}x{y2 - y1})", verbose=verbose
-                    )
-                except Exception as e:
-                    log_message(
-                        f"Error encoding bubble {bubble['bbox']}: {e}", verbose=verbose
-                    )
-                    bubble["image_b64"] = None
-
+            log_message(
+                f"Upscaled {len(bubble_data)} bubble images for translation",
+                always_print=True,
+            )
             valid_bubble_data = [b for b in bubble_data if b.get("image_b64")]
             if not valid_bubble_data:
                 log_message("No valid bubble images for translation", always_print=True)
             else:  # Only proceed if we have valid bubble data
                 # --- Sort and Translate ---
                 reading_direction = config.translation.reading_direction
+                # Merge outside text data with speech bubbles for reading order calculation
+                if outside_text_data:
+                    log_message(
+                        f"Including {len(outside_text_data)} outside text regions in reading order calculation",
+                        verbose=verbose,
+                    )
+                    # Combine speech bubbles and OSB text for unified reading order sorting
+                    all_text_data = valid_bubble_data + outside_text_data
+                else:
+                    all_text_data = valid_bubble_data
+
                 log_message(
-                    f"Sorting bubbles ({reading_direction.upper()})", verbose=verbose
+                    f"Sorting all text elements ({reading_direction.upper()})",
+                    verbose=verbose,
                 )
 
+                # Sort all text elements (speech bubbles + OSB text) by reading order
                 sorted_bubble_data = sort_bubbles_by_reading_order(
-                    valid_bubble_data, reading_direction
+                    all_text_data, reading_direction
                 )
 
                 bubble_images_b64 = [
-                    bubble["image_b64"] for bubble in sorted_bubble_data
+                    bubble["image_b64"]
+                    for bubble in sorted_bubble_data
+                    if "image_b64" in bubble
+                ]
+                bubble_mime_types = [
+                    bubble["mime_type"]
+                    for bubble in sorted_bubble_data
+                    if "image_b64" in bubble and "mime_type" in bubble
                 ]
                 translated_texts = []
                 if not bubble_images_b64:
                     log_message("No valid bubbles after sorting", always_print=True)
                 else:
                     if getattr(config, "test_mode", False):
-                        placeholder_long = (
-                            "Lorem **ipsum** *dolor* sit amet, consectetur adipiscing elit."
-                        )
+                        placeholder_long = "Lorem **ipsum** *dolor* sit amet, consectetur adipiscing elit."
                         placeholder_short = "Lorem **ipsum** *dolor* sit amet..."
+                        placeholder_osb = "Lorem"
                         log_message(
                             f"Test mode: generating placeholders for {len(sorted_bubble_data)} bubbles",
                             always_print=True,
@@ -280,8 +296,15 @@ def translate_and_render(
                             for info in processed_bubbles_info
                             if "bbox" in info and "color" in info and "mask" in info
                         }
-                        for bubble in sorted_bubble_data:
+                        for i, bubble in enumerate(sorted_bubble_data):
                             bbox = bubble["bbox"]
+                            is_outside_text = bubble.get("is_outside_text", False)
+
+                            # Use simple "Lorem ipsum" for OSB text in test mode
+                            if is_outside_text:
+                                translated_texts.append(placeholder_osb)
+                                continue
+
                             probe_info = bubble_render_info_map_probe.get(
                                 tuple(bbox), {}
                             )
@@ -289,13 +312,7 @@ def translate_and_render(
                             cleaned_mask = probe_info.get("mask")
                             # Probe fit at max size without mutating the working image
                             _probe_canvas = pil_cleaned_image.copy()
-                            _, fits = render_text_skia(
-                                pil_image=_probe_canvas,
-                                text=placeholder_long,
-                                bbox=bbox,
-                                font_dir=config.rendering.font_dir,
-                                cleaned_mask=cleaned_mask,
-                                bubble_color_bgr=bubble_color_bgr,
+                            probe_config = RenderingConfig(
                                 min_font_size=config.rendering.max_font_size,
                                 max_font_size=config.rendering.max_font_size,
                                 line_spacing_mult=config.rendering.line_spacing,
@@ -307,8 +324,31 @@ def translate_and_render(
                                 hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
                                 badness_exponent=config.rendering.badness_exponent,
                                 padding_pixels=config.rendering.padding_pixels,
-                                verbose=verbose,
                             )
+                            try:
+                                _ = render_text_skia(
+                                    pil_image=_probe_canvas,
+                                    text=placeholder_long,
+                                    bbox=bbox,
+                                    font_dir=config.rendering.font_dir,
+                                    cleaned_mask=cleaned_mask,
+                                    bubble_color_bgr=bubble_color_bgr,
+                                    config=probe_config,
+                                    verbose=verbose,
+                                    bubble_id=str(i + 1),
+                                )
+                                fits = True
+                            except (RenderingError, FontError) as e:
+                                log_message(
+                                    f"Probe rendering failed: {e}", verbose=verbose
+                                )
+                                fits = False
+                            except Exception as e:
+                                log_message(
+                                    f"Probe rendering unexpected error: {e}",
+                                    always_print=True,
+                                )
+                                fits = False
                             translated_texts.append(
                                 placeholder_long if fits else placeholder_short
                             )
@@ -323,7 +363,16 @@ def translate_and_render(
                                 config=config.translation,
                                 images_b64=bubble_images_b64,
                                 full_image_b64=full_image_b64 or "",
+                                mime_types=bubble_mime_types,
+                                full_image_mime_type=full_image_mime_type
+                                or "image/jpeg",
+                                bubble_metadata=sorted_bubble_data,
                                 debug=verbose,
+                            )
+                        except TranslationError as e:
+                            log_message(f"Translation failed: {e}", always_print=True)
+                            translated_texts = [f"[Translation Error: {e}]"] * len(
+                                bubble_images_b64
                             )
                         except Exception as e:
                             log_message(
@@ -349,6 +398,12 @@ def translate_and_render(
                         bubble["translation"] = translated_texts[i]
                         bbox = bubble["bbox"]
                         text = bubble.get("translation", "")
+                        is_outside_text = bubble.get("is_outside_text", False)
+
+                        # Convert OSB text to uppercase
+                        if is_outside_text and text:
+                            text = text.upper()
+                            bubble["translation"] = text
 
                         if (
                             not text
@@ -364,44 +419,124 @@ def translate_and_render(
                                 f"[{config.translation.provider}: Failed to parse response]",
                             }
                         ):
+                            entry_type = "outside text" if is_outside_text else "bubble"
                             log_message(
-                                f"Skipping bubble {bbox} - invalid translation",
+                                f"Skipping {entry_type} {bbox} - invalid translation",
                                 verbose=verbose,
                             )
                             continue
 
-                        log_message(
-                            f"Rendering bubble {bbox}: '{text[:30]}...'",
-                            verbose=verbose,
-                        )
+                        # Use OSB-specific settings for outside text, regular settings for speech bubbles
+                        if is_outside_text:
+                            log_message(
+                                f"Rendering outside text {bbox}: '{text[:30]}...'",
+                                verbose=verbose,
+                            )
+                            font_dir = (
+                                config.outside_text.osb_font_name
+                                if config.outside_text.osb_font_name
+                                else config.rendering.font_dir
+                            )
+                            min_font = config.outside_text.osb_min_font_size
+                            max_font = config.outside_text.osb_max_font_size
+                            line_spacing = config.outside_text.osb_line_spacing
+                            use_ligs = config.outside_text.osb_use_ligatures
+                            # Outside text was inpainted, no mask needed
+                            cleaned_mask = None
+                            # Use the detected text color from outside_text_processor
+                            is_dark_text = bubble.get("is_dark_text", True)
+                            # Set bubble_color_bgr to mimic the original text color
+                            # Dark text → dark background value → white rendering
+                            # Light text → light background value → black rendering
+                            bubble_color_bgr = (
+                                (50, 50, 50) if is_dark_text else (255, 255, 255)
+                            )
+                            # Orientation & aspect decision for OSB
+                            angle_signed = float(bubble.get("orientation_deg", 0.0))
+                            x1, y1, x2, y2 = bbox
+                            w = max(1.0, float(x2 - x1))
+                            h = max(1.0, float(y2 - y1))
+                            aspect_ratio = float(bubble.get("aspect_ratio", h / w))
+                            # Determine verticality based on residual from perfect vertical (±90°)
+                            residual_to_vertical = (
+                                angle_signed - 90.0
+                                if angle_signed >= 0.0
+                                else angle_signed + 90.0
+                            )
+                            near_vertical = abs(residual_to_vertical) <= 5.0
+                            portrait = aspect_ratio >= 1.5
+                            vertical_stack = bool(near_vertical and portrait)
+                            # Carry orientation:
+                            # - If stacked: rotate only by the residual from perfect vertical
+                            # - Else: rotate by full angle (negative due to Y-down)
+                            rotation_deg = (
+                                residual_to_vertical if vertical_stack else angle_signed
+                            )
+                        else:
+                            log_message(
+                                f"Rendering bubble {bbox}: '{text[:30]}...'",
+                                verbose=verbose,
+                            )
+                            font_dir = config.rendering.font_dir
+                            min_font = config.rendering.min_font_size
+                            max_font = config.rendering.max_font_size
+                            line_spacing = config.rendering.line_spacing
+                            use_ligs = config.rendering.use_ligatures
+                            render_info = bubble_render_info_map.get(tuple(bbox))
+                            bubble_color_bgr = (255, 255, 255)
+                            cleaned_mask = None
+                            if render_info:
+                                bubble_color_bgr = render_info["color"]
+                                cleaned_mask = render_info.get("mask")
+                            # No rotation/stacking for regular bubbles
+                            vertical_stack = False
+                            rotation_deg = 0.0
 
-                        render_info = bubble_render_info_map.get(tuple(bbox))
-                        bubble_color_bgr = (255, 255, 255)
-                        cleaned_mask = None
-                        if render_info:
-                            bubble_color_bgr = render_info["color"]
-                            cleaned_mask = render_info.get("mask")
-
-                        rendered_image, success = render_text_skia(
-                            pil_image=pil_cleaned_image,
-                            text=text,
-                            bbox=bbox,
-                            font_dir=config.rendering.font_dir,
-                            cleaned_mask=cleaned_mask,
-                            bubble_color_bgr=bubble_color_bgr,
-                            min_font_size=config.rendering.min_font_size,
-                            max_font_size=config.rendering.max_font_size,
-                            line_spacing_mult=config.rendering.line_spacing,
-                            use_subpixel_rendering=config.rendering.use_subpixel_rendering,
-                            font_hinting=config.rendering.font_hinting,
-                            use_ligatures=config.rendering.use_ligatures,
+                        render_config = RenderingConfig(
+                            min_font_size=min_font,
+                            max_font_size=max_font,
+                            line_spacing_mult=line_spacing,
+                            use_subpixel_rendering=(
+                                config.outside_text.osb_use_subpixel_rendering
+                                if is_outside_text
+                                else config.rendering.use_subpixel_rendering
+                            ),
+                            font_hinting=(
+                                config.outside_text.osb_font_hinting
+                                if is_outside_text
+                                else config.rendering.font_hinting
+                            ),
+                            use_ligatures=use_ligs,
                             hyphenate_before_scaling=config.rendering.hyphenate_before_scaling,
                             hyphen_penalty=config.rendering.hyphen_penalty,
                             hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
                             badness_exponent=config.rendering.badness_exponent,
                             padding_pixels=config.rendering.padding_pixels,
-                            verbose=verbose,
+                            outline_width=(
+                                config.outside_text.osb_outline_width
+                                if is_outside_text
+                                else 0.0
+                            ),
                         )
+                        try:
+                            rendered_image = render_text_skia(
+                                pil_image=pil_cleaned_image,
+                                text=text,
+                                bbox=bbox,
+                                font_dir=font_dir,
+                                cleaned_mask=cleaned_mask,
+                                bubble_color_bgr=bubble_color_bgr,
+                                config=render_config,
+                                verbose=verbose,
+                                bubble_id=str(i + 1),
+                                rotation_deg=rotation_deg,
+                                vertical_stack=vertical_stack,
+                            )
+                            success = True
+                        except (RenderingError, FontError) as e:
+                            log_message(f"Text rendering failed: {e}", verbose=verbose)
+                            rendered_image = pil_cleaned_image
+                            success = False
 
                         if success:
                             pil_cleaned_image = rendered_image
@@ -417,19 +552,32 @@ def translate_and_render(
                         always_print=True,
                     )
 
+    # --- Final Image Upscaling (optional) ---
+    if config.output.upscale_final_image:
+        log_message("Upscaling final image...", verbose=verbose, always_print=True)
+        final_image_to_save = upscale_image(
+            final_image_to_save,
+            config.output.upscale_final_image_factor,
+            verbose=verbose,
+        )
+
     # --- Save Output ---
     if output_path:
         if final_image_to_save.mode != target_mode:
             log_message(f"Converting final image to {target_mode}", verbose=verbose)
             final_image_to_save = final_image_to_save.convert(target_mode)
 
-        save_image_with_compression(
-            final_image_to_save,
-            output_path,
-            jpeg_quality=config.output.jpeg_quality,
-            png_compression=config.output.png_compression,
-            verbose=verbose,
-        )
+        try:
+            save_image_with_compression(
+                final_image_to_save,
+                output_path,
+                jpeg_quality=config.output.jpeg_quality,
+                png_compression=config.output.png_compression,
+                verbose=verbose,
+            )
+        except ImageProcessingError as e:
+            log_message(f"Failed to save image: {e}", always_print=True)
+            raise
 
     end_time = time.time()
     processing_time = end_time - start_time
@@ -674,7 +822,7 @@ def main():
         "--no-sam2",
         dest="use_sam2",
         action="store_false",
-        help="Disable SAM 2.1 guided segmentation",
+        help="Disable SAM 2.1 segmentation",
     )
     parser.set_defaults(use_sam2=True)
     parser.add_argument(
@@ -713,23 +861,34 @@ def main():
         "--temperature",
         type=float,
         default=0.1,
-        help="Controls randomness in output (0.0-2.0)",
+        help="Controls creativity. Lower is more deterministic, higher is more random (0.0-2.0)",
     )
     parser.add_argument(
-        "--top-p", type=float, default=0.95, help="Nucleus sampling parameter (0.0-1.0)"
+        "--top-p",
+        type=float,
+        default=0.95,
+        help="Controls diversity. Lower is more focused, higher is more random (0.0-1.0)",
     )
-    parser.add_argument("--top-k", type=int, default=1, help="Limits to top k tokens")
+    parser.add_argument(
+        "--top-k", type=int, default=1, help="Limits sampling pool to top K tokens"
+    )
     parser.add_argument(
         "--translation-mode",
         type=str,
         default="one-step",
         choices=["one-step", "two-step"],
-        help="Translation process mode (one-step or two-step)",
+        help=(
+            "Method for translation ('one-step' combines OCR/Translate, 'two-step' separates them). "
+            "'two-step' might improve translation quality for less-capable LLMs"
+        ),
     )
     parser.add_argument(
         "--openrouter-reasoning-override",
         action="store_true",
-        help="Forces max output tokens to 8192 (for reasoning-capable LLM issues).",
+        help=(
+            "Forces max output tokens to 8192. Enable if you encounter issues with "
+            "reasoning-capable LLMs"
+        ),
     )
     parser.add_argument(
         "--reasoning-effort",
@@ -737,8 +896,8 @@ def main():
         default="medium",
         choices=["minimal", "low", "medium", "high"],
         help=(
-            "Internal reasoning effort for OpenAI reasoning models (o1/o3/o4-mini/gpt-5*). "
-            "Note: 'minimal' is only supported by gpt-5 series."
+            "Controls internal reasoning effort for OpenAI/OpenRouter OpenAI reasoning models "
+            "(o1/o3/o4-mini/gpt-5*). Note: 'minimal' is only supported by gpt-5 series."
         ),
     )
     # Rendering args
@@ -746,16 +905,38 @@ def main():
         "--max-font-size",
         type=int,
         default=14,
-        help="Max font size for rendering text.",
+        help="Max font size for rendering text (px)",
     )
     parser.add_argument(
-        "--min-font-size", type=int, default=8, help="Min font size for rendering text."
+        "--min-font-size",
+        type=int,
+        default=8,
+        help="Min font size for rendering text (px)",
     )
     parser.add_argument(
         "--line-spacing",
         type=float,
         default=1.0,
-        help="Line spacing multiplier for rendered text.",
+        help="Line spacing for rendering text (1.0 = standard)",
+    )
+    parser.add_argument(
+        "--no-subpixel-rendering",
+        dest="use_subpixel_rendering",
+        action="store_false",
+        help="Disable subpixel rendering for speech bubble text (disable for OLED displays)",
+    )
+    parser.set_defaults(use_subpixel_rendering=True)
+    parser.add_argument(
+        "--font-hinting",
+        type=str,
+        choices=["none", "slight", "normal", "full"],
+        default="none",
+        help="Font hinting mode for speech bubble text",
+    )
+    parser.add_argument(
+        "--use-ligatures",
+        action="store_true",
+        help="Enable standard ligatures for speech bubble text (e.g., fi, fl)",
     )
     parser.add_argument(
         "--no-hyphenate-before-scaling",
@@ -774,7 +955,7 @@ def main():
         "--hyphenation-min-word-length",
         type=int,
         default=8,
-        help="Minimum word length for hyphenation (6-10).",
+        help="Minimum word length required for hyphenation (6-10)",
     )
     parser.add_argument(
         "--badness-exponent",
@@ -785,16 +966,40 @@ def main():
     parser.add_argument(
         "--padding-pixels",
         type=float,
-        default=8.0,
+        default=5.0,
         help="Padding between text and the edge of the speech bubble (2-12). "
         "Increase for more space between text and bubble boundaries.",
     )
     # Output args
     parser.add_argument(
-        "--jpeg-quality", type=int, default=95, help="JPEG compression quality (1-100)"
+        "--jpeg-quality",
+        type=int,
+        default=95,
+        help="JPEG compression quality (1-100)",
     )
     parser.add_argument(
-        "--png-compression", type=int, default=6, help="PNG compression level (0-9)"
+        "--png-compression",
+        type=int,
+        default=6,
+        help="PNG compression level (0-9)",
+    )
+    parser.add_argument(
+        "--output-format",
+        type=str,
+        choices=["auto", "png", "jpeg"],
+        default="auto",
+        help="Output image format (auto uses input format)",
+    )
+    parser.add_argument(
+        "--upscale-final-image",
+        action="store_true",
+        help="Upscale final translated image using 2x-AnimeSharpV4_RCAN",
+    )
+    parser.add_argument(
+        "--upscale-final-image-factor",
+        type=float,
+        default=2.0,
+        help="Upscale factor for final image (1.0-8.0)",
     )
     # General args
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
@@ -802,31 +1007,163 @@ def main():
     parser.add_argument(
         "--cleaning-only",
         action="store_true",
-        help="Only perform detection and cleaning, skip translation and rendering.",
+        help="Skip translation and text rendering, output only the cleaned speech bubbles",
     )
     parser.add_argument(
         "--test-mode",
         action="store_true",
-        help="Bypass translation and render placeholder lorem ipsum for testing.",
+        help="Skip translation and render placeholder text (lorem ipsum)",
     )
     parser.add_argument(
         "--enable-thinking",
         action="store_true",
-        help="Enable 'thinking' capabilities for Gemini 2.5 Flash models.",
+        help=(
+            "Enables 'thinking' capabilities for Gemini 2.5 Flash (Lite), Claude reasoning models, "
+            "and OpenRouter Gemini/Anthropic/Grok models"
+        ),
+    )
+    parser.add_argument(
+        "--enable-grounding",
+        action="store_true",
+        help=(
+            "Enable Google Search grounding for Gemini models (Google and OpenRouter)"
+        ),
     )
     # Full page context toggle
     parser.add_argument(
         "--no-full-page-context",
         dest="send_full_page_context",
         action="store_false",
-        help="Disable sending the full page image as LLM context.",
+        help=(
+            "Disable including the full page image as context for translation. Enable if "
+            "encountering refusals or using less-capable LLMs"
+        ),
     )
+    # Translation upscaling method
+    parser.add_argument(
+        "--upscale-method",
+        type=str,
+        choices=["model", "lanczos", "none"],
+        default="model",
+        help=(
+            "Method for upscaling images before translation API. "
+            "model: Use 2x-AnimeSharpV4 upscaling model (best quality, slower), "
+            "lanczos: Use LANCZOS resampling (fast, good quality), "
+            "none: No upscaling (may affect OCR quality for small text)"
+        ),
+    )
+
+    # --- Outside Speech Bubble (OSB) Text Settings ---
+    parser.add_argument(
+        "--osb-enable",
+        action="store_true",
+        help="Enable outside speech bubble text detection and removal",
+    )
+    parser.add_argument(
+        "--osb-huggingface-token",
+        type=str,
+        default=None,
+        help="HuggingFace token for Flux Kontext model downloads (overrides HUGGINGFACE_TOKEN env var)",
+    )
+    parser.add_argument(
+        "--osb-flux-steps",
+        type=int,
+        default=8,
+        help=(
+            "Number of denoising steps for Flux Kontext (1-30). "
+            "15 is best for quality (diminishing returns beyond); "
+            "below 6 shows noticeable degradation."
+        ),
+    )
+    parser.add_argument(
+        "--osb-flux-residual-threshold",
+        type=float,
+        default=0.12,
+        help="Residual diff threshold for Flux inference (0.0-1.0)",
+    )
+    parser.add_argument(
+        "--osb-seed",
+        type=int,
+        default=1,
+        help="Seed for reproducible inpainting (-1 = random)",
+    )
+    parser.add_argument(
+        "--osb-font-name",
+        type=str,
+        default=None,
+        help="Font name for OSB text rendering (default: use main font)",
+    )
+    parser.add_argument(
+        "--osb-max-font-size",
+        type=int,
+        default=64,
+        help="Maximum font size for OSB text (5-96px)",
+    )
+    parser.add_argument(
+        "--osb-min-font-size",
+        type=int,
+        default=12,
+        help="Minimum font size for OSB text (5-50px)",
+    )
+    parser.add_argument(
+        "--osb-use-ligatures",
+        action="store_true",
+        help="Enable standard ligatures for OSB text (e.g., fi, fl)",
+    )
+    parser.add_argument(
+        "--osb-outline-width",
+        type=float,
+        default=3.0,
+        help="Outline width for OSB text (0-10px)",
+    )
+    parser.add_argument(
+        "--osb-line-spacing",
+        type=float,
+        default=1.0,
+        help="Line spacing multiplier for OSB text (0.5-2.0)",
+    )
+    parser.add_argument(
+        "--osb-use-subpixel",
+        action="store_true",
+        default=True,
+        help="Enable subpixel rendering for OSB text (disable for OLED displays)",
+    )
+    parser.add_argument(
+        "--osb-font-hinting",
+        type=str,
+        choices=["none", "slight", "normal", "full"],
+        default="none",
+        help="Font hinting mode for OSB text",
+    )
+    parser.add_argument(
+        "--osb-bbox-expansion",
+        type=float,
+        default=0.1,
+        help="Bounding box expansion percent for OSB detection",
+    )
+    parser.add_argument(
+        "--osb-easyocr-min-size",
+        type=int,
+        default=200,
+        help="Minimum text region size in pixels for OSB text detection",
+    )
+
     parser.set_defaults(send_full_page_context=True)
     parser.set_defaults(
-        verbose=False, cpu=False, cleaning_only=False, enable_thinking=False
+        verbose=False,
+        cpu=False,
+        cleaning_only=False,
+        enable_thinking=False,
+        enable_grounding=False,
     )
 
     args = parser.parse_args()
+
+    # --- Validate mutually exclusive flags ---
+    try:
+        validate_mutually_exclusive_modes(args.cleaning_only, args.test_mode)
+    except Exception as e:
+        parser.error(str(e))
 
     # --- Create Config Object ---
     provider = args.provider
@@ -870,21 +1207,25 @@ def main():
         default_model = "default"
 
     if provider != "OpenAI-Compatible" and not api_key:
-        print(
+        log_message(
             f"Warning: {provider} API key not provided via {api_key_arg_name} or {api_key_env_var} "
-            f"environment variable. Translation will likely fail."
+            f"environment variable. Translation will likely fail.",
+            always_print=True,
         )
 
     model_name = args.model_name or default_model
     if not args.model_name:
-        print(f"Using default model for {provider}: {model_name}")
+        log_message(f"Using default model for {provider}: {model_name}", verbose=True)
 
     target_device = (
         torch.device("cpu")
         if args.cpu or not torch.cuda.is_available()
         else torch.device("cuda")
     )
-    print(f"Using {'CPU' if target_device.type == 'cpu' else 'CUDA'} device.")
+    log_message(
+        f"Using {'CPU' if target_device.type == 'cpu' else 'CUDA'} device.",
+        always_print=True,
+    )
 
     use_otsu_config_val = args.use_otsu_threshold
 
@@ -940,14 +1281,19 @@ def main():
             reading_direction=args.reading_direction,
             translation_mode=args.translation_mode,
             enable_thinking=args.enable_thinking,
+            enable_grounding=args.enable_grounding,
             reasoning_effort=args.reasoning_effort,
             send_full_page_context=args.send_full_page_context,
+            upscale_method=args.upscale_method,
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,
             max_font_size=args.max_font_size,
             min_font_size=args.min_font_size,
             line_spacing=args.line_spacing,
+            use_subpixel_rendering=args.use_subpixel_rendering,
+            font_hinting=args.font_hinting,
+            use_ligatures=args.use_ligatures,
             hyphenate_before_scaling=args.hyphenate_before_scaling,
             hyphen_penalty=args.hyphen_penalty,
             hyphenation_min_word_length=args.hyphenation_min_word_length,
@@ -955,8 +1301,29 @@ def main():
             padding_pixels=args.padding_pixels,
         ),
         output=OutputConfig(
+            output_format=args.output_format,
             jpeg_quality=args.jpeg_quality,
             png_compression=args.png_compression,
+            upscale_final_image=args.upscale_final_image,
+            upscale_final_image_factor=args.upscale_final_image_factor,
+        ),
+        outside_text=OutsideTextConfig(
+            enabled=args.osb_enable,
+            huggingface_token=args.osb_huggingface_token
+            or os.environ.get("HUGGINGFACE_TOKEN", ""),
+            flux_num_inference_steps=args.osb_flux_steps,
+            flux_residual_diff_threshold=args.osb_flux_residual_threshold,
+            seed=args.osb_seed,
+            osb_font_name=args.osb_font_name,
+            osb_max_font_size=args.osb_max_font_size,
+            osb_min_font_size=args.osb_min_font_size,
+            osb_use_ligatures=args.osb_use_ligatures,
+            osb_outline_width=args.osb_outline_width,
+            osb_line_spacing=args.osb_line_spacing,
+            osb_use_subpixel_rendering=args.osb_use_subpixel,
+            osb_font_hinting=args.osb_font_hinting,
+            bbox_expansion_percent=args.osb_bbox_expansion,
+            easyocr_min_size=args.osb_easyocr_min_size,
         ),
         test_mode=args.test_mode,
     )
@@ -965,7 +1332,10 @@ def main():
     if args.batch:
         input_path = Path(args.input)
         if not input_path.is_dir():
-            print(f"Error: --batch requires --input '{args.input}' to be a directory.")
+            log_message(
+                f"Error: --batch requires --input '{args.input}' to be a directory.",
+                always_print=True,
+            )
             exit(1)
 
         output_dir = Path(args.output) if args.output else None
@@ -973,17 +1343,24 @@ def main():
         if args.output:
             output_dir = Path(args.output)
             if not output_dir.exists():
-                print(f"Creating output directory: {output_dir}")
+                log_message(
+                    f"Creating output directory: {output_dir}", always_print=True
+                )
                 output_dir.mkdir(parents=True, exist_ok=True)
             elif not output_dir.is_dir():
-                print(f"Error: Specified --output '{output_dir}' is not a directory.")
+                log_message(
+                    f"Error: Specified --output '{output_dir}' is not a directory.",
+                    always_print=True,
+                )
                 exit(1)
 
         batch_translate_images(input_path, config, output_dir)
     else:
         input_path = Path(args.input)
         if not input_path.is_file():
-            print(f"Error: Input '{args.input}' is not a valid file.")
+            log_message(
+                f"Error: Input '{args.input}' is not a valid file.", always_print=True
+            )
             exit(1)
 
         output_path_arg = args.output
@@ -994,11 +1371,17 @@ def main():
             output_dir = Path("./output")
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / f"MangaTranslator_{timestamp}{output_ext}"
-            print(f"--output not specified, using default: {output_path}")
+            log_message(
+                f"--output not specified, using default: {output_path}",
+                always_print=True,
+            )
         else:
             output_path = Path(output_path_arg)
             if not output_path.parent.exists():
-                print(f"Creating directory for output file: {output_path.parent}")
+                log_message(
+                    f"Creating directory for output file: {output_path.parent}",
+                    always_print=True,
+                )
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Auto-detect YOLO model for CLI using ./models/

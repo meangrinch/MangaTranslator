@@ -163,8 +163,8 @@
     box-shadow: none !important;
 }
 
-/* --- CONFIG REFRESH BUTTON --- */
-.config-refresh-button {
+/* --- CONFIG BUTTON --- */
+.config-button {
     margin-bottom: 20px !important;
     font-weight: normal !important;
     display: inline-block !important;
@@ -179,17 +179,17 @@
     transition: background-color 0.2s ease, color 0.2s ease !important;
 }
 
-.config-refresh-button:hover {
+.config-button:hover {
     background-color: var(--background-fill-secondary-hover) !important;
     color: var(--body-text-color-hover) !important;
 }
 
-.dark .config-refresh-button {
+.dark .config-button {
     background-color: var(--neutral-800) !important;
     color: var(--body-text-color-hover) !important;
 }
 
-.dark .config-refresh-button:hover {
+.dark .config-button:hover {
     background-color: var(--neutral-900) !important;
 }
 

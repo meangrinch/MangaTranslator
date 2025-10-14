@@ -4,14 +4,9 @@ from typing import Any, Dict, Optional
 
 import torch
 
-from core.models import (
-    CleaningConfig,
-    DetectionConfig,
-    MangaTranslatorConfig,
-    OutputConfig,
-    RenderingConfig,
-    TranslationConfig,
-)
+from core.config import (CleaningConfig, DetectionConfig,
+                         MangaTranslatorConfig, OutputConfig,
+                         OutsideTextConfig, RenderingConfig, TranslationConfig)
 
 
 @dataclass
@@ -57,6 +52,7 @@ class UITranslationLLMSettings:
     reading_direction: str = "rtl"
     send_full_page_context: bool = True
     openrouter_reasoning_override: bool = False
+    upscale_method: str = "model"
 
 
 @dataclass
@@ -73,7 +69,7 @@ class UIRenderingSettings:
     hyphen_penalty: float = 1000.0
     hyphenation_min_word_length: int = 8
     badness_exponent: float = 3.0
-    padding_pixels: float = 8.0
+    padding_pixels: float = 5.0
 
 
 @dataclass
@@ -83,6 +79,28 @@ class UIOutputSettings:
     output_format: str = "auto"
     jpeg_quality: int = 95
     png_compression: int = 6
+    upscale_final_image: bool = False
+    upscale_final_image_factor: float = 2.0
+
+
+@dataclass
+class UIOutsideTextSettings:
+    """UI state for outside speech bubble text removal settings."""
+
+    enabled: bool = False
+    seed: int = 1  # -1 = random
+    huggingface_token: str = ""
+    flux_num_inference_steps: int = 8
+    flux_residual_diff_threshold: float = 0.12
+    osb_font_name: str = ""  # Empty = use main font
+    osb_max_font_size: int = 64
+    osb_min_font_size: int = 12
+    osb_use_ligatures: bool = False
+    osb_outline_width: float = 3.0
+    osb_line_spacing: float = 1.0
+    osb_use_subpixel_rendering: bool = True
+    osb_font_hinting: str = "none"
+    easyocr_min_size: int = 200
 
 
 @dataclass
@@ -93,6 +111,7 @@ class UIGeneralSettings:
     cleaning_only: bool = False
     test_mode: bool = False
     enable_thinking: bool = True
+    enable_grounding: bool = False
     reasoning_effort: str = "medium"
     openrouter_reasoning_override: bool = False
 
@@ -111,6 +130,7 @@ class UIConfigState:
     )
     rendering: UIRenderingSettings = field(default_factory=UIRenderingSettings)
     output: UIOutputSettings = field(default_factory=UIOutputSettings)
+    outside_text: UIOutsideTextSettings = field(default_factory=UIOutsideTextSettings)
     general: UIGeneralSettings = field(default_factory=UIGeneralSettings)
 
     # Specific UI elements state (saved in config.json)
@@ -144,6 +164,7 @@ class UIConfigState:
             "top_k": self.llm_settings.top_k,
             "translation_mode": self.llm_settings.translation_mode,
             "send_full_page_context": self.llm_settings.send_full_page_context,
+            "upscale_method": self.llm_settings.upscale_method,
             "openrouter_reasoning_override": self.general.openrouter_reasoning_override,
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
@@ -157,13 +178,29 @@ class UIConfigState:
             "hyphenation_min_word_length": self.rendering.hyphenation_min_word_length,
             "badness_exponent": self.rendering.badness_exponent,
             "padding_pixels": self.rendering.padding_pixels,
+            "outside_text_enabled": self.outside_text.enabled,
+            "outside_text_seed": self.outside_text.seed,
+            "outside_text_huggingface_token": self.outside_text.huggingface_token,
+            "outside_text_flux_num_inference_steps": self.outside_text.flux_num_inference_steps,
+            "outside_text_flux_residual_diff_threshold": self.outside_text.flux_residual_diff_threshold,
+            "outside_text_osb_font_pack": self.outside_text.osb_font_name,
+            "outside_text_osb_max_font_size": self.outside_text.osb_max_font_size,
+            "outside_text_osb_min_font_size": self.outside_text.osb_min_font_size,
+            "outside_text_osb_use_ligatures": self.outside_text.osb_use_ligatures,
+            "outside_text_osb_outline_width": self.outside_text.osb_outline_width,
+            "outside_text_osb_line_spacing": self.outside_text.osb_line_spacing,
+            "outside_text_osb_use_subpixel_rendering": self.outside_text.osb_use_subpixel_rendering,
+            "outside_text_osb_font_hinting": self.outside_text.osb_font_hinting,
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
             "png_compression": self.output.png_compression,
+            "upscale_final_image": self.output.upscale_final_image,
+            "upscale_final_image_factor": self.output.upscale_final_image_factor,
             "verbose": self.general.verbose,
             "cleaning_only": self.general.cleaning_only,
             "test_mode": self.general.test_mode,
             "enable_thinking": self.general.enable_thinking,
+            "enable_grounding": self.general.enable_grounding,
             "reasoning_effort": self.general.reasoning_effort,
             "input_language": self.input_language,
             "output_language": self.output_language,
@@ -177,9 +214,8 @@ class UIConfigState:
     def from_dict(data: Dict[str, Any]) -> "UIConfigState":
         """Creates a UIConfigState instance from a dictionary (e.g., loaded from config.json)."""
 
-        from . import (
-            settings_manager,
-        )  # Local import to avoid circular dependency issues
+        from . import \
+            settings_manager  # Local import to avoid circular dependency issues
 
         defaults = settings_manager.DEFAULT_SETTINGS.copy()
         defaults.update(settings_manager.DEFAULT_BATCH_SETTINGS)
@@ -199,6 +235,30 @@ class UIConfigState:
                 roi_shrink_px=data.get(
                     "roi_shrink_px", defaults.get("roi_shrink_px", 4)
                 ),
+            ),
+            outside_text=UIOutsideTextSettings(
+                enabled=data.get("outside_text_enabled", False),
+                seed=data.get("outside_text_seed", 1),
+                huggingface_token=data.get("outside_text_huggingface_token", ""),
+                flux_num_inference_steps=data.get(
+                    "outside_text_flux_num_inference_steps", 8
+                ),
+                flux_residual_diff_threshold=data.get(
+                    "outside_text_flux_residual_diff_threshold", 0.12
+                ),
+                osb_font_name=data.get(
+                    "outside_text_osb_font_pack",
+                    defaults.get("outside_text_osb_font_pack", ""),
+                ),
+                osb_max_font_size=data.get("outside_text_osb_max_font_size", 64),
+                osb_min_font_size=data.get("outside_text_osb_min_font_size", 12),
+                osb_use_ligatures=data.get("outside_text_osb_use_ligatures", False),
+                osb_outline_width=data.get("outside_text_osb_outline_width", 3.0),
+                osb_line_spacing=data.get("outside_text_osb_line_spacing", 1.0),
+                osb_use_subpixel_rendering=data.get(
+                    "outside_text_osb_use_subpixel_rendering", True
+                ),
+                osb_font_hinting=data.get("outside_text_osb_font_hinting", "none"),
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=data.get("provider", defaults["provider"]),
@@ -232,6 +292,9 @@ class UIConfigState:
                     "reading_direction", defaults["reading_direction"]
                 ),
                 send_full_page_context=data.get("send_full_page_context", True),
+                upscale_method=data.get(
+                    "upscale_method", defaults.get("upscale_method", "model")
+                ),
             ),
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
@@ -257,7 +320,7 @@ class UIConfigState:
                     "badness_exponent", defaults.get("badness_exponent", 3.0)
                 ),
                 padding_pixels=data.get(
-                    "padding_pixels", defaults.get("padding_pixels", 8.0)
+                    "padding_pixels", defaults.get("padding_pixels", 5.0)
                 ),
             ),
             output=UIOutputSettings(
@@ -265,6 +328,13 @@ class UIConfigState:
                 jpeg_quality=data.get("jpeg_quality", defaults["jpeg_quality"]),
                 png_compression=data.get(
                     "png_compression", defaults["png_compression"]
+                ),
+                upscale_final_image=data.get(
+                    "upscale_final_image", defaults.get("upscale_final_image", False)
+                ),
+                upscale_final_image_factor=data.get(
+                    "upscale_final_image_factor",
+                    defaults.get("upscale_final_image_factor", 2.0),
                 ),
             ),
             general=UIGeneralSettings(
@@ -340,6 +410,7 @@ def map_ui_to_backend_config(
         translation_mode=ui_state.llm_settings.translation_mode,
         enable_thinking=ui_state.general.enable_thinking,
         send_full_page_context=ui_state.llm_settings.send_full_page_context,
+        upscale_method=ui_state.llm_settings.upscale_method,
     )
 
     rendering_cfg = RenderingConfig(
@@ -352,7 +423,7 @@ def map_ui_to_backend_config(
         use_ligatures=ui_state.rendering.use_ligatures,
         hyphenate_before_scaling=ui_state.rendering.hyphenate_before_scaling,
         hyphen_penalty=ui_state.rendering.hyphen_penalty,
-        hyphenation_min_word_length=ui_state.rendering.hyphenation_min_word_length,
+        hyphenation_min_word_length=(ui_state.rendering.hyphenation_min_word_length),
         badness_exponent=ui_state.rendering.badness_exponent,
         padding_pixels=ui_state.rendering.padding_pixels,
     )
@@ -361,6 +432,33 @@ def map_ui_to_backend_config(
         output_format=ui_state.output.output_format,
         jpeg_quality=ui_state.output.jpeg_quality,
         png_compression=ui_state.output.png_compression,
+        upscale_final_image=ui_state.output.upscale_final_image,
+        upscale_final_image_factor=ui_state.output.upscale_final_image_factor,
+    )
+
+    # Determine OSB font (use main font if not specified)
+    osb_font = (
+        ui_state.outside_text.osb_font_name
+        if ui_state.outside_text.osb_font_name
+        else ui_state.font_pack
+    )
+    osb_font_path = fonts_base_dir / osb_font if osb_font else None
+
+    outside_text_cfg = OutsideTextConfig(
+        enabled=ui_state.outside_text.enabled,
+        seed=ui_state.outside_text.seed,
+        huggingface_token=ui_state.outside_text.huggingface_token,
+        flux_num_inference_steps=ui_state.outside_text.flux_num_inference_steps,
+        flux_residual_diff_threshold=ui_state.outside_text.flux_residual_diff_threshold,
+        osb_font_name=str(osb_font_path) if osb_font_path else None,
+        osb_max_font_size=ui_state.outside_text.osb_max_font_size,
+        osb_min_font_size=ui_state.outside_text.osb_min_font_size,
+        osb_use_ligatures=ui_state.outside_text.osb_use_ligatures,
+        osb_outline_width=ui_state.outside_text.osb_outline_width,
+        osb_line_spacing=ui_state.outside_text.osb_line_spacing,
+        osb_use_subpixel_rendering=ui_state.outside_text.osb_use_subpixel_rendering,
+        osb_font_hinting=ui_state.outside_text.osb_font_hinting,
+        easyocr_min_size=ui_state.outside_text.easyocr_min_size,
     )
 
     backend_config = MangaTranslatorConfig(
@@ -372,6 +470,7 @@ def map_ui_to_backend_config(
         translation=translation_cfg,
         rendering=rendering_cfg,
         output=output_cfg,
+        outside_text=outside_text_cfg,
         cleaning_only=ui_state.general.cleaning_only,
         test_mode=ui_state.general.test_mode,
     )
