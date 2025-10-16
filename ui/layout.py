@@ -158,6 +158,7 @@ def create_layout(
                             input_language = gr.Dropdown(
                                 [
                                     "Auto",
+                                    "English",
                                     "Japanese",
                                     "Korean",
                                     "Chinese",
@@ -408,6 +409,46 @@ def create_layout(
                         with gr.Group(
                             visible=False, elem_classes="settings-group"
                         ) as group_translation:
+                            gr.Markdown("### OCR & Translation")
+                            config_translation_mode = gr.Radio(
+                                choices=["one-step", "two-step"],
+                                label="LLM Translation Mode",
+                                value=saved_settings.get(
+                                    "translation_mode",
+                                    settings_manager.DEFAULT_SETTINGS[
+                                        "translation_mode"
+                                    ],
+                                ),
+                                info=(
+                                    "Determines whether to run OCR and Translation in one step or two. "
+                                    "'two-step' might improve translation quality for less-capable LLMs."
+                                ),
+                                elem_id="config_translation_mode",
+                            )
+
+                            gr.Markdown("### Context & Upscaling")
+                            send_full_page_context = gr.Checkbox(
+                                value=saved_settings.get(
+                                    "send_full_page_context", True
+                                ),
+                                label="Send Full Page to LLM",
+                                info=(
+                                    "Include full page image as context. Disable if refusals/less-capable models."
+                                ),
+                            )
+                            upscale_method = gr.Radio(
+                                choices=[
+                                    ("Model", "model"),
+                                    ("LANCZOS", "lanczos"),
+                                    ("None", "none"),
+                                ],
+                                value=saved_settings.get("upscale_method", "model"),
+                                label="Image Upscaling",
+                                info=(
+                                    "Method for upscaling images before sending to LLM. Does not affect output quality."
+                                ),
+                            )
+
                             gr.Markdown("### LLM Settings")
                             provider_selector = gr.Radio(
                                 choices=list(settings_manager.PROVIDER_MODELS.keys()),
@@ -423,8 +464,7 @@ def create_layout(
                                 show_copy_button=False,
                                 visible=(config_initial_provider == "Google"),
                                 elem_id="google_api_key",
-                                info="Stored locally in config file. Can also be set via GOOGLE_API_KEY "
-                                "environment variable.",
+                                info="Stored locally. Or set via GOOGLE_API_KEY env var.",
                             )
                             openai_api_key = gr.Textbox(
                                 label="OpenAI API Key",
@@ -434,8 +474,7 @@ def create_layout(
                                 show_copy_button=False,
                                 visible=(config_initial_provider == "OpenAI"),
                                 elem_id="openai_api_key",
-                                info="Stored locally in config file. Can also be set via OPENAI_API_KEY "
-                                "environment variable.",
+                                info="Stored locally. Or set via OPENAI_API_KEY env var.",
                             )
                             anthropic_api_key = gr.Textbox(
                                 label="Anthropic API Key",
@@ -445,8 +484,7 @@ def create_layout(
                                 show_copy_button=False,
                                 visible=(config_initial_provider == "Anthropic"),
                                 elem_id="anthropic_api_key",
-                                info="Stored locally in config file. Can also be set via ANTHROPIC_API_KEY "
-                                "environment variable.",
+                                info="Stored locally. Or set via ANTHROPIC_API_KEY env var.",
                             )
                             xai_api_key = gr.Textbox(
                                 label="xAI API Key",
@@ -456,8 +494,7 @@ def create_layout(
                                 show_copy_button=False,
                                 visible=(config_initial_provider == "xAI"),
                                 elem_id="xai_api_key",
-                                info="Stored locally in config file. Can also be set via XAI_API_KEY "
-                                "environment variable.",
+                                info="Stored locally. Or set via XAI_API_KEY env var.",
                             )
                             openrouter_api_key = gr.Textbox(
                                 label="OpenRouter API Key",
@@ -467,8 +504,7 @@ def create_layout(
                                 show_copy_button=False,
                                 visible=(config_initial_provider == "OpenRouter"),
                                 elem_id="openrouter_api_key",
-                                info="Stored locally in config file. Can also be set via OPENROUTER_API_KEY "
-                                "environment variable.",
+                                info="Stored locally. Or set via OPENROUTER_API_KEY env var.",
                             )
                             openai_compatible_url_input = gr.Textbox(
                                 label="OpenAI-Compatible URL",
@@ -485,7 +521,7 @@ def create_layout(
                                     config_initial_provider == "OpenAI-Compatible"
                                 ),
                                 elem_id="openai_compatible_url_input",
-                                info="The base URL of your OpenAI-Compatible API endpoint.",
+                                info="Base URL of your OpenAI-Compatible API endpoint.",
                             )
                             openai_compatible_api_key_input = gr.Textbox(
                                 label="OpenAI-Compatible API Key (Optional)",
@@ -499,8 +535,7 @@ def create_layout(
                                     config_initial_provider == "OpenAI-Compatible"
                                 ),
                                 elem_id="openai_compatible_api_key_input",
-                                info="Stored locally in config file. Can also be set via "
-                                "OPENAI_COMPATIBLE_API_KEY environment variable.",
+                                info="Stored locally. Or set via OPENAI_COMPATIBLE_API_KEY env var.",
                             )
                             config_model_name = gr.Dropdown(
                                 choices=config_initial_models_choices,
@@ -555,8 +590,7 @@ def create_layout(
                                 label="Enable Thinking",
                                 value=saved_settings.get("enable_thinking", True),
                                 info=(
-                                    "Enables 'thinking' capabilities for Gemini 2.5 Flash (Lite), Claude "
-                                    "reasoning models, and OpenRouter Gemini/Anthropic/Grok models."
+                                    "Enable reasoning for Gemini 2.5 Flash, Claude, or Grok (via OpenRouter)."
                                 ),
                                 visible=_initial_enable_thinking_visible,
                                 elem_id="enable_thinking_checkbox",
@@ -579,8 +613,8 @@ def create_layout(
                                 label="Enable Grounding",
                                 value=saved_settings.get("enable_grounding", False),
                                 info=(
-                                    "Allows Gemini models to use Google Search for up-to-date information. "
-                                    "Could improve translation quality."
+                                    "Allow Gemini to use Google Search for up-to-date info. "
+                                    "Might improve translation quality."
                                 ),
                                 visible=_initial_enable_grounding_visible,
                                 elem_id="enable_grounding_checkbox",
@@ -612,8 +646,8 @@ def create_layout(
                                 label="Reasoning Effort (OpenAI/OpenRouter)",
                                 value=saved_settings.get("reasoning_effort", "medium"),
                                 info=(
-                                    "Controls internal reasoning effort for OpenAI reasoning models "
-                                    "and OpenRouter OpenAI models."
+                                    "Controls internal effort for OpenAI reasoning and "
+                                    "OpenRouter OpenAI models."
                                 ),
                                 visible=_initial_reasoning_effort_visible,
                                 elem_id="reasoning_effort_dropdown",
@@ -624,8 +658,7 @@ def create_layout(
                                     "openrouter_reasoning_override", False
                                 ),
                                 info=(
-                                    "Forces max output tokens to 8192. "
-                                    "Enable if you encounter issues with reasoning-capable LLMs."
+                                    "Force max output tokens to 8192 (for reasoning-capable LLMs)."
                                 ),
                                 visible=(config_initial_provider == "OpenRouter"),
                                 elem_id="openrouter_reasoning_override",
@@ -636,7 +669,7 @@ def create_layout(
                                 value=saved_settings.get("temperature", 0.1),
                                 step=0.05,
                                 label="Temperature",
-                                info="Controls creativity. Lower is more deterministic, higher is more random.",
+                                info="Controls creativity. Lower = deterministic; higher = random.",
                                 elem_id="config_temperature",
                             )
                             top_p = gr.Slider(
@@ -645,7 +678,7 @@ def create_layout(
                                 value=saved_settings.get("top_p", 0.95),
                                 step=0.05,
                                 label="Top P",
-                                info="Controls diversity. Lower is more focused, higher is more random.",
+                                info="Controls diversity. Lower = focused; higher = random.",
                                 elem_id="config_top_p",
                             )
                             top_k = gr.Slider(
@@ -657,44 +690,6 @@ def create_layout(
                                 info="Limits sampling pool to top K tokens.",
                                 interactive=(config_initial_provider != "OpenAI"),
                                 elem_id="config_top_k",
-                            )
-                            config_translation_mode = gr.Radio(
-                                choices=["one-step", "two-step"],
-                                label="Translation Mode",
-                                value=saved_settings.get(
-                                    "translation_mode",
-                                    settings_manager.DEFAULT_SETTINGS[
-                                        "translation_mode"
-                                    ],
-                                ),
-                                info=(
-                                    "Method for translation ('one-step' combines OCR/Translate, 'two-step' "
-                                    "separates them). 'two-step' might improve translation quality for "
-                                    "less-capable LLMs."
-                                ),
-                                elem_id="config_translation_mode",
-                            )
-                            send_full_page_context = gr.Checkbox(
-                                value=saved_settings.get(
-                                    "send_full_page_context", True
-                                ),
-                                label="Send Full Page to LLM",
-                                info=(
-                                    "Include the full page image as context for translation. "
-                                    "Disable if encountering refusals or using less-capable LLMs."
-                                ),
-                            )
-                            upscale_method = gr.Radio(
-                                choices=[
-                                    ("Model", "model"),
-                                    ("LANCZOS", "lanczos"),
-                                    ("None", "none"),
-                                ],
-                                value=saved_settings.get("upscale_method", "model"),
-                                label="Translation Image Upscaling",
-                                info=(
-                                    "Method for upscaling images before sending to translation API."
-                                ),
                             )
                         setting_groups.append(group_translation)
 
