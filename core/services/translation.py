@@ -32,7 +32,7 @@ def _build_system_prompt_ocr(
 ) -> str:
     lang_label = (
         f"{input_language} "
-        if input_language and input_language.lower() != "auto"
+        if input_language
         else ""
     )
     direction = (
