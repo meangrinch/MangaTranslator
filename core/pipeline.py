@@ -13,8 +13,7 @@ from core.caching import get_cache
 from core.config import (CleaningConfig, DetectionConfig,
                          MangaTranslatorConfig, OutputConfig,
                          OutsideTextConfig, TranslationConfig)
-from core.validation import (autodetect_yolo_model_path,
-                             validate_mutually_exclusive_modes)
+from core.validation import validate_mutually_exclusive_modes
 from utils.exceptions import (CleaningError, FontError, ImageProcessingError,
                               RenderingError, TranslationError)
 from utils.logging import log_message
@@ -810,7 +809,7 @@ def main():
         "--input-language",
         type=str,
         default="Japanese",
-        help="Source language (use 'Auto' to autodetect)",
+        help="Source language",
     )
     parser.add_argument(
         "--output-language", type=str, default="English", help="Target language"
@@ -1383,21 +1382,6 @@ def main():
                     always_print=True,
                 )
                 output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Auto-detect YOLO model for CLI using ./models/
-        try:
-            models_base = Path("./models")
-            detected_model_path = autodetect_yolo_model_path(models_base)
-            config.yolo_model_path = str(detected_model_path)
-        except Exception as autodetect_err:
-            log_message(
-                f"Error auto-detecting YOLO model: {autodetect_err}", always_print=True
-            )
-            log_message(
-                "CLI requires a model at ./models/*.pt. Please add it and retry.",
-                always_print=True,
-            )
-            exit(1)
 
         try:
             log_message(f"Processing {input_path}...", always_print=True)
