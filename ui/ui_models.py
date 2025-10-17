@@ -53,6 +53,9 @@ class UITranslationLLMSettings:
     send_full_page_context: bool = True
     openrouter_reasoning_override: bool = False
     upscale_method: str = "model"
+    bubble_min_side_pixels: int = 128
+    context_image_max_side_pixels: int = 1536
+    osb_min_side_pixels: int = 128
 
 
 @dataclass
@@ -165,6 +168,9 @@ class UIConfigState:
             "translation_mode": self.llm_settings.translation_mode,
             "send_full_page_context": self.llm_settings.send_full_page_context,
             "upscale_method": self.llm_settings.upscale_method,
+            "bubble_min_side_pixels": self.llm_settings.bubble_min_side_pixels,
+            "context_image_max_side_pixels": self.llm_settings.context_image_max_side_pixels,
+            "osb_min_side_pixels": self.llm_settings.osb_min_side_pixels,
             "openrouter_reasoning_override": self.general.openrouter_reasoning_override,
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
@@ -295,6 +301,9 @@ class UIConfigState:
                 upscale_method=data.get(
                     "upscale_method", defaults.get("upscale_method", "model")
                 ),
+                bubble_min_side_pixels=data.get("bubble_min_side_pixels", 128),
+                context_image_max_side_pixels=data.get("context_image_max_side_pixels", 1536),
+                osb_min_side_pixels=data.get("osb_min_side_pixels", 128),
             ),
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
@@ -411,6 +420,9 @@ def map_ui_to_backend_config(
         enable_thinking=ui_state.general.enable_thinking,
         send_full_page_context=ui_state.llm_settings.send_full_page_context,
         upscale_method=ui_state.llm_settings.upscale_method,
+        bubble_min_side_pixels=ui_state.llm_settings.bubble_min_side_pixels,
+        context_image_max_side_pixels=ui_state.llm_settings.context_image_max_side_pixels,
+        osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
     )
 
     rendering_cfg = RenderingConfig(

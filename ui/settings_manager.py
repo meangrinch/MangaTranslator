@@ -120,6 +120,9 @@ DEFAULT_SETTINGS = {
     "send_full_page_context": True,
     "openrouter_reasoning_override": False,  # Forces max output tokens to 8192
     "upscale_method": "model",  # "model", "lanczos", or "none"
+    "bubble_min_side_pixels": 128,
+    "context_image_max_side_pixels": 1536,
+    "osb_min_side_pixels": 128,
     # Outside text removal settings
     "outside_text_enabled": False,
     "outside_text_seed": 1,

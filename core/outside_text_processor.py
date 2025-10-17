@@ -16,9 +16,6 @@ from core.image.ocr_detection import OCR_LANGUAGE_MAP, OutsideTextDetector
 from core.ml.model_manager import get_model_manager
 from utils.logging import log_message
 
-# Outside text upscaling minimum side length
-OSB_MIN_SIDE_PIXELS = 200
-
 
 def process_outside_text(
     pil_image: Image.Image,
@@ -193,15 +190,15 @@ def process_outside_text(
                         outside_text_image_pil,
                         upscale_model,
                         config.device,
-                        OSB_MIN_SIDE_PIXELS,
+                        config.translation.osb_min_side_pixels,
                         "min",
                         verbose,
                     )
             elif config.translation.upscale_method == "lanczos":
                 w, h = outside_text_image_pil.size
                 min_side = min(w, h)
-                if min_side < OSB_MIN_SIDE_PIXELS:
-                    scale_factor = OSB_MIN_SIDE_PIXELS / min_side
+                if min_side < config.translation.osb_min_side_pixels:
+                    scale_factor = config.translation.osb_min_side_pixels / min_side
                     new_w = int(w * scale_factor)
                     new_h = int(h * scale_factor)
                     resized_text = outside_text_image_pil.resize(

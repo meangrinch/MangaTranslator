@@ -14,6 +14,8 @@ _ALPHABETICAL_LANGUAGES = [
     "Bengali",
     "Bosnian",
     "Bulgarian",
+    "Chinese (Simplified)",
+    "Chinese (Traditional)",
     "Croatian",
     "Czech",
     "Danish",
@@ -29,6 +31,8 @@ _ALPHABETICAL_LANGUAGES = [
     "Indonesian",
     "Irish",
     "Italian",
+    "Japanese",
+    "Korean",
     "Latvian",
     "Lithuanian",
     "Malay",
@@ -64,9 +68,16 @@ SOURCE_LANGUAGES = [
     "Korean",
     "Simplified Chinese",
     "Traditional Chinese",
-] + _ALPHABETICAL_LANGUAGES
+] + [
+    lang
+    for lang in _ALPHABETICAL_LANGUAGES
+    if lang
+    not in ["Japanese", "Korean", "Chinese (Simplified)", "Chinese (Traditional)"]
+]
 
-TARGET_LANGUAGES = ["English"] + _ALPHABETICAL_LANGUAGES
+TARGET_LANGUAGES = ["English"] + [
+    lang for lang in _ALPHABETICAL_LANGUAGES if lang != "English"
+]
 
 js_credits = """
 function() {
@@ -443,29 +454,6 @@ def create_layout(
                                 elem_id="config_translation_mode",
                             )
 
-                            gr.Markdown("### Context & Upscaling")
-                            send_full_page_context = gr.Checkbox(
-                                value=saved_settings.get(
-                                    "send_full_page_context", True
-                                ),
-                                label="Send Full Page to LLM",
-                                info=(
-                                    "Include full page image as context. Disable if refusals/less-capable models."
-                                ),
-                            )
-                            upscale_method = gr.Radio(
-                                choices=[
-                                    ("Model", "model"),
-                                    ("LANCZOS", "lanczos"),
-                                    ("None", "none"),
-                                ],
-                                value=saved_settings.get("upscale_method", "model"),
-                                label="Image Upscaling",
-                                info=(
-                                    "Method for upscaling images before sending to LLM. Does not affect output quality."
-                                ),
-                            )
-
                             gr.Markdown("### LLM Settings")
                             provider_selector = gr.Radio(
                                 choices=list(settings_manager.PROVIDER_MODELS.keys()),
@@ -707,6 +695,65 @@ def create_layout(
                                 info="Limits sampling pool to top K tokens.",
                                 interactive=(config_initial_provider != "OpenAI"),
                                 elem_id="config_top_k",
+                            )
+
+                            gr.Markdown("### Context & Upscaling")
+                            send_full_page_context = gr.Checkbox(
+                                value=saved_settings.get(
+                                    "send_full_page_context", True
+                                ),
+                                label="Send Full Page to LLM",
+                                info=(
+                                    "Include full page image as context. Disable if refusals/using less-capable models."
+                                ),
+                            )
+                            upscale_method = gr.Radio(
+                                choices=[
+                                    ("Model", "model"),
+                                    ("LANCZOS", "lanczos"),
+                                    ("None", "none"),
+                                ],
+                                value=saved_settings.get("upscale_method", "model"),
+                                label="Image Upscaling",
+                                info=(
+                                    "Method for upscaling images before sending to LLM. Does not affect output quality."
+                                ),
+                            )
+                            initial_upscale_method = saved_settings.get(
+                                "upscale_method", "model"
+                            )
+                            sliders_interactive = initial_upscale_method != "none"
+                            bubble_min_side_pixels = gr.Slider(
+                                64,
+                                512,
+                                value=saved_settings.get("bubble_min_side_pixels", 128),
+                                step=16,
+                                label="Bubble Min Side Pixels",
+                                info="Target minimum side length for speech bubble upscaling",
+                                elem_id="config_bubble_min_side_pixels",
+                                interactive=sliders_interactive,
+                            )
+                            context_image_max_side_pixels = gr.Slider(
+                                512,
+                                2560,
+                                value=saved_settings.get(
+                                    "context_image_max_side_pixels", 1536
+                                ),
+                                step=128,
+                                label="Context Image Max Side Pixels",
+                                info="Target maximum side length for full page image",
+                                elem_id="config_context_image_max_side_pixels",
+                                interactive=sliders_interactive,
+                            )
+                            osb_min_side_pixels = gr.Slider(
+                                64,
+                                512,
+                                value=saved_settings.get("osb_min_side_pixels", 128),
+                                step=16,
+                                label="OSB Text Min Side Pixels",
+                                info="Target minimum side length for outside speech bubble upscaling",
+                                elem_id="config_osb_min_side_pixels",
+                                interactive=sliders_interactive,
                             )
                         setting_groups.append(group_translation)
 
@@ -1100,6 +1147,9 @@ def create_layout(
             reasoning_effort_dropdown,
             send_full_page_context,
             upscale_method,
+            bubble_min_side_pixels,
+            context_image_max_side_pixels,
+            osb_min_side_pixels,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
             hyphen_penalty,
@@ -1229,6 +1279,9 @@ def create_layout(
             reasoning_effort_dropdown,
             send_full_page_context,
             upscale_method,
+            bubble_min_side_pixels,
+            context_image_max_side_pixels,
+            osb_min_side_pixels,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
             hyphen_penalty,
@@ -1297,6 +1350,9 @@ def create_layout(
             reasoning_effort_dropdown,
             send_full_page_context,
             upscale_method,
+            bubble_min_side_pixels,
+            context_image_max_side_pixels,
+            osb_min_side_pixels,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
             hyphen_penalty,
@@ -1477,6 +1533,22 @@ def create_layout(
             fn=lambda x: gr.update(visible=x),
             inputs=outside_text_enabled,
             outputs=outside_text_settings_wrapper,
+            queue=False,
+        )
+
+        # Upscale method change handler
+        upscale_method.change(
+            fn=lambda x: [
+                gr.update(interactive=x != "none"),
+                gr.update(interactive=x != "none"),
+                gr.update(interactive=x != "none"),
+            ],
+            inputs=upscale_method,
+            outputs=[
+                bubble_min_side_pixels,
+                context_image_max_side_pixels,
+                osb_min_side_pixels,
+            ],
             queue=False,
         )
 

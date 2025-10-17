@@ -31,9 +31,6 @@ from .services.translation import (call_translation_api_batch,
                                    sort_bubbles_by_reading_order)
 from .text.text_renderer import RenderingConfig, render_text_skia
 
-BUBBLE_MIN_SIDE_PIXELS = 200  # Target minimum side length for speech bubble upscaling
-CONTEXT_IMAGE_MAX_SIDE_PIXELS = 1568  # Target maximum side length for full page image
-
 
 def get_image_encoding_params(pil_image_format: Optional[str]) -> Tuple[str, str]:
     """Returns (mime_type, cv2_ext) for a given PIL image format."""
@@ -121,19 +118,25 @@ def translate_and_render(
                     context_image_pil = upscale_image_to_dimension(
                         upscale_model,
                         context_image_pil,
-                        CONTEXT_IMAGE_MAX_SIDE_PIXELS,
+                        config.translation.context_image_max_side_pixels,
                         config.device,
                         "max",
                         verbose,
                     )
-                log_message(
-                    "Upscaled full image for context with model", verbose=verbose
-                )
+                    # Resize to exact target dimension (downscale if needed)
+                    context_image_pil = resize_to_max_side(
+                        context_image_pil,
+                        config.translation.context_image_max_side_pixels,
+                        verbose=verbose,
+                    )
+                    log_message(
+                        "Upscaled full image for context with model", verbose=verbose
+                    )
             elif config.translation.upscale_method == "lanczos":
                 # Use LANCZOS resampling (current behavior)
                 context_image_pil = resize_to_max_side(
                     context_image_pil,
-                    CONTEXT_IMAGE_MAX_SIDE_PIXELS,
+                    config.translation.context_image_max_side_pixels,
                     verbose=verbose,
                 )
                 log_message(
@@ -229,6 +232,7 @@ def translate_and_render(
                     upscale_model,
                     config.device,
                     mime_type,
+                    config.translation.bubble_min_side_pixels,
                     config.translation.upscale_method,
                     verbose,
                 )
@@ -1146,6 +1150,24 @@ def main():
         default=200,
         help="Minimum text region size in pixels for OSB text detection",
     )
+    parser.add_argument(
+        "--bubble-min-side-pixels",
+        type=int,
+        default=128,
+        help="Target minimum side length for speech bubble upscaling",
+    )
+    parser.add_argument(
+        "--context-image-max-side-pixels",
+        type=int,
+        default=1536,
+        help="Target maximum side length for full page image",
+    )
+    parser.add_argument(
+        "--osb-min-side-pixels",
+        type=int,
+        default=128,
+        help="Target minimum side length for outside speech bubble upscaling",
+    )
 
     parser.set_defaults(send_full_page_context=True)
     parser.set_defaults(
@@ -1284,6 +1306,9 @@ def main():
             reasoning_effort=args.reasoning_effort,
             send_full_page_context=args.send_full_page_context,
             upscale_method=args.upscale_method,
+            bubble_min_side_pixels=args.bubble_min_side_pixels,
+            context_image_max_side_pixels=args.context_image_max_side_pixels,
+            osb_min_side_pixels=args.osb_min_side_pixels,
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,

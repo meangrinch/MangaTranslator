@@ -30,11 +30,7 @@ def _build_system_prompt_ocr(
     num_speech_bubbles: int = 0,
     num_osb_text: int = 0,
 ) -> str:
-    lang_label = (
-        f"{input_language} "
-        if input_language
-        else ""
-    )
+    lang_label = f"{input_language} " if input_language else ""
     direction = (
         "right-to-left"
         if (reading_direction or "rtl").lower() == "rtl"
@@ -1082,6 +1078,7 @@ def prepare_bubble_images_for_translation(
     upscale_model: Any,
     device: Any,
     mime_type: str,
+    bubble_min_side_pixels: int,
     upscale_method: str = "model",
     verbose: bool = False,
 ) -> List[Dict[str, Any]]:
@@ -1107,16 +1104,11 @@ def prepare_bubble_images_for_translation(
         List of bubble dicts with added 'image_b64' and 'mime_type' keys
         (immutable approach - returns new list without mutating input)
     """
-    BUBBLE_MIN_SIDE_PIXELS = (
-        200  # Target minimum side length for speech bubble upscaling
-    )
-
     # Determine CV2 extension from MIME type
     cv2_ext = ".png" if mime_type == "image/png" else ".jpg"
 
     prepared_bubbles = []
 
-    # Log upscale method activity
     if upscale_method == "model":
         log_message(
             f"Upscaling {len(bubble_data)} bubble images with 2x-AnimeSharpV4_RCAN",
@@ -1147,15 +1139,15 @@ def prepare_bubble_images_for_translation(
                 bubble_image_pil,
                 upscale_model,
                 device,
-                BUBBLE_MIN_SIDE_PIXELS,
+                bubble_min_side_pixels,
                 "min",
                 verbose,
             )
         elif upscale_method == "lanczos":
             w, h = bubble_image_pil.size
             min_side = min(w, h)
-            if min_side < BUBBLE_MIN_SIDE_PIXELS:
-                scale_factor = BUBBLE_MIN_SIDE_PIXELS / min_side
+            if min_side < bubble_min_side_pixels:
+                scale_factor = bubble_min_side_pixels / min_side
                 new_w = int(w * scale_factor)
                 new_h = int(h * scale_factor)
                 resized_bubble = bubble_image_pil.resize((new_w, new_h), Image.LANCZOS)

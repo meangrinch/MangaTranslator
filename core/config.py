@@ -31,7 +31,7 @@ class TranslationConfig:
     anthropic_api_key: str = ""
     xai_api_key: str = ""
     openrouter_api_key: str = ""
-    openai_compatible_url: str = "http://localhost:11434/v1"
+    openai_compatible_url: str = "http://localhost:1234/v1"
     openai_compatible_api_key: Optional[str] = ""
     model_name: str = "gemini-2.5-flash"
     provider_models: dict[str, Optional[str]] = field(default_factory=dict)
@@ -50,6 +50,9 @@ class TranslationConfig:
     openrouter_reasoning_override: bool = False  # Forces max output tokens to 8192
     upscale_method: str = "model"  # "model", "lanczos", or "none"
     enable_grounding: bool = False  # Enable Google Search grounding for Gemini models
+    bubble_min_side_pixels: int = 128
+    context_image_max_side_pixels: int = 1536
+    osb_min_side_pixels: int = 128
 
 
 @dataclass
