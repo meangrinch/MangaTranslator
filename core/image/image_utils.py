@@ -481,11 +481,14 @@ def _mkl_transfer(source: np.ndarray, reference: np.ndarray) -> np.ndarray:
     mu_s, cov_s = src_pixels.mean(axis=1, keepdims=True), np.cov(src_pixels)
     mu_r, cov_r = ref_pixels.mean(axis=1, keepdims=True), np.cov(ref_pixels)
 
+    # Add small epsilon to prevent division by zero warnings
+    epsilon = 1e-10
+
     eig_val_s, eig_vec_s = np.linalg.eigh(cov_s)
     eig_val_s[eig_val_s < 0] = 0
+    eig_val_s = eig_val_s + epsilon
     cov_s_sqrt = eig_vec_s @ np.diag(np.sqrt(eig_val_s)) @ eig_vec_s.T
     inv_eig_val_s = 1.0 / np.sqrt(eig_val_s)
-    inv_eig_val_s[np.isinf(inv_eig_val_s)] = 0
     cov_s_inv_sqrt = eig_vec_s @ np.diag(inv_eig_val_s) @ eig_vec_s.T
 
     middle_term = cov_s_sqrt @ cov_r @ cov_s_sqrt
