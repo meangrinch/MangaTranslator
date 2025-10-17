@@ -86,12 +86,13 @@ fonts/
 ### OSB text setup (optional)
 - If you want to use the OSB text pipeline, you need a Hugging Face token with access to FLUX.1 Kontext.
 - Follow these steps to create one:
-  1. Sign in or create a Hugging Face account
-  2. Visit and accept the terms on: [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
-  3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
-  4. Add the token to the app:
-      - Web UI: set `hf_token` in Config
-      - Env var (alternative): set `HUGGINGFACE_TOKEN`
+
+1. Sign in or create a Hugging Face account
+2. Visit and accept the terms on: [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
+3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
+4. Add the token to the app:
+   - Web UI: set `hf_token` in Config
+   - Env var (alternative): set `HUGGINGFACE_TOKEN`
 
 ## Run
 
