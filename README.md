@@ -3,15 +3,16 @@
 Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs for OCR+translation. Features a Gradio Web UI and a CLI.
 
 ## Features
-- Speech bubble detection (YOLOv8)
-- Text cleaning (removes original bubble text)
-- LLM-powered OCR and translation
+- Speech bubble detection, segmentation, cleaning (YOLOv8 + SAM 2.1)
+- Outside speech bubble text detection & inpainting (EasyOCR + Flux Kontext)
+- LLM-powered OCR and translations
 - Text rendering (with custom font packs)
+- Upscaling (2x-AnimeSharpV4)
 - Two interfaces: Web UI (Gradio) and CLI
 
 ## Requirements
 - Python 3.10+
-- PyTorch (CPU or CUDA build for your system)
+- PyTorch (CPU or CUDA)
 - YOLO model (`.pt`) for speech bubble detection; auto-downloaded
 - Font pack with `.ttf`/`.otf`
 - Vision-capable LLM (API or local)
