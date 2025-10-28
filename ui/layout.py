@@ -240,7 +240,6 @@ def create_layout(
                                 value=saved_settings.get("output_language", "English"),
                                 allow_custom_value=True,
                             )
-                            # Moved 'Send full page to LLM' to Config > LLM Settings
                     with gr.Column(scale=1):
                         output_image = gr.Image(
                             type="pil",
@@ -293,7 +292,6 @@ def create_layout(
                                 ),
                                 allow_custom_value=True,
                             )
-                            # Moved 'Send full page to LLM' to Config > LLM Settings
                     with gr.Column(scale=1):
                         batch_output_gallery = gr.Gallery(
                             label="Translated Images",

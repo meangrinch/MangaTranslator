@@ -71,7 +71,6 @@ class ModelManager:
 
             # Flux-specific configuration
             self.flux_cache_dir = Path("./models/flux")
-            # Note: Users should set their own Hugging Face token if needed
             self.flux_hf_token = None
             self.flux_residual_diff_threshold = 0.12
 
