@@ -5,7 +5,7 @@ Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs
 ## Features
 - Speech bubble detection, segmentation, cleaning (YOLOv8 + SAM 2.1)
 - Outside speech bubble text detection & inpainting (EasyOCR + Flux Kontext)
-- LLM-powered OCR and translations
+- LLM-powered OCR and translations (supports 54 languages)
 - Text rendering (with custom font packs)
 - Upscaling (2x-AnimeSharpV4)
 - Two interfaces: Web UI (Gradio) and CLI
@@ -21,8 +21,9 @@ Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs
 
 ### Windows portable
 Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases)
-- Includes the Komika (for normal text) and Cookies (for OSB text) font packs
-- Run the `setup.bat` file before first launch to install dependencies
+- Normal package: Run the `setup.bat` file before first launch to install dependencies, and `update-standalone.bat` to update to the latest version. Installs `PyTorch v2.7.1+cu128`.
+- Pre-downloaded package: Run the `setup.bat` file before first launch to install dependencies; no included update script. Uses `PyTorch v2.6.0+cu126`.
+- Both include the Komika (for normal text) and Cookies (for OSB text) font packs
 
 ### Manual install
 1) Clone and enter the repo
