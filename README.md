@@ -22,7 +22,7 @@ Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs
 ### Windows portable
 Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases)
 - Normal package: Run the `setup.bat` file before first launch to install dependencies, and `update-standalone.bat` to update to the latest version. Installs `PyTorch v2.7.1+cu128`.
-- Pre-downloaded package: Run the `setup.bat` file before first launch to install dependencies; no included update script. Uses `PyTorch v2.6.0+cu126`.
+- Pre-downloaded package: No setup required, and no included update script. Uses `PyTorch v2.6.0+cu126`.
 - Both include the Komika (for normal text) and Cookies (for OSB text) font packs
 
 ### Manual install
