@@ -1,6 +1,6 @@
 ## MangaTranslator
 
-Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs for OCR+translation. Features a Gradio Web UI and a CLI.
+Web application for automating the translation of manga/comic page images using AI. Targets speech bubbles and text outside of speech bubbles. Supports 54 languages and custom font pack usage.
 
 ## Features
 - Speech bubble detection, segmentation, cleaning (YOLOv8 + SAM 2.1)
@@ -17,7 +17,7 @@ Translate manga/comic speech bubbles using AI: YOLOv8 for bubble detection, LLMs
 - Font pack with `.ttf`/`.otf`
 - Vision-capable LLM (API or local)
 
-## Installation
+## Install
 
 ### Windows portable
 Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases)
@@ -82,7 +82,7 @@ fonts/
 - Web UI: configure provider/model/key in the Config tab (stored locally)
 - CLI: pass keys/URLs as flags or via env vars
 - Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
-- OpenAI-compatible default URL: `http://localhost:11434/v1`
+- OpenAI-compatible default URL: `http://localhost:1234/v1`
 
 ### OSB text setup (optional)
 - If you want to use the OSB text pipeline, you need a Hugging Face token with access to FLUX.1 Kontext.
