@@ -944,28 +944,30 @@ def handle_reset_defaults_click(
     xai_visible = default_provider == "xAI"
     openrouter_visible = default_provider == "OpenRouter"
     compatible_visible = default_provider == "OpenAI-Compatible"
-    temp_update, top_k_update = utils.update_params_for_model(
+    (
+        temp_update,
+        top_k_update,
+        enable_thinking_update,
+        enable_grounding_update,
+        reasoning_effort_update,
+    ) = utils.update_params_for_model(
         default_provider, default_model_name, default_ui_state.llm_settings.temperature
     )
     temp_val = temp_update.get("value", default_ui_state.llm_settings.temperature)
     temp_max = temp_update.get("maximum", 2.0)
     top_k_interactive = top_k_update.get("interactive", True)
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
-    enable_thinking_visible = (
-        default_provider == "Google" and "gemini-2.5-flash" in default_model_name
-    )
-    enable_grounding_visible = default_provider == "Google" or (
-        default_provider == "OpenRouter"
-        and default_model_name
-        and "gemini" in default_model_name.lower()
-    )
-    reasoning_visible = default_provider == "OpenAI"
+    enable_thinking_visible = enable_thinking_update.get("visible", False)
+    enable_grounding_visible = enable_grounding_update.get("visible", False)
+    reasoning_visible = reasoning_effort_update.get("visible", False)
 
     return [
         default_ui_state.detection.confidence,
         default_ui_state.detection.use_sam2,
         default_ui_state.llm_settings.reading_direction,
+        default_ui_state.cleaning.thresholding_value,
         default_ui_state.cleaning.use_otsu_threshold,
+        default_ui_state.cleaning.roi_shrink_px,
         gr.update(value=default_provider),
         gr.update(
             value=default_ui_state.provider_settings.google_api_key,
@@ -1010,6 +1012,7 @@ def handle_reset_defaults_click(
         default_ui_state.output.png_compression,
         default_ui_state.general.verbose,
         default_ui_state.general.cleaning_only,
+        default_ui_state.general.test_mode,
         default_ui_state.input_language,
         default_ui_state.output_language,
         gr.update(value=default_ui_state.font_pack),
@@ -1029,7 +1032,25 @@ def handle_reset_defaults_click(
         ),
         "Settings reset to defaults (API keys preserved).",
         gr.update(value=default_ui_state.llm_settings.send_full_page_context),
+        gr.update(value=default_ui_state.llm_settings.upscale_method),
         gr.update(value=default_ui_state.rendering.hyphenate_before_scaling),
+        default_ui_state.general.openrouter_reasoning_override,
+        default_ui_state.outside_text.enabled,
+        default_ui_state.outside_text.seed,
+        default_ui_state.outside_text.flux_num_inference_steps,
+        default_ui_state.outside_text.flux_residual_diff_threshold,
+        default_ui_state.outside_text.huggingface_token,
+        gr.update(value=default_ui_state.outside_text.osb_font_name),
+        default_ui_state.outside_text.osb_max_font_size,
+        default_ui_state.outside_text.osb_min_font_size,
+        default_ui_state.outside_text.osb_use_ligatures,
+        default_ui_state.outside_text.osb_outline_width,
+        default_ui_state.outside_text.osb_line_spacing,
+        default_ui_state.outside_text.osb_use_subpixel_rendering,
+        default_ui_state.outside_text.osb_font_hinting,
+        default_ui_state.outside_text.easyocr_min_size,
+        default_ui_state.output.upscale_final_image,
+        default_ui_state.output.upscale_final_image_factor,
     ]
 
 

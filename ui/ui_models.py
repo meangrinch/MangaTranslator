@@ -197,6 +197,7 @@ class UIConfigState:
             "outside_text_osb_line_spacing": self.outside_text.osb_line_spacing,
             "outside_text_osb_use_subpixel_rendering": self.outside_text.osb_use_subpixel_rendering,
             "outside_text_osb_font_hinting": self.outside_text.osb_font_hinting,
+            "outside_text_easyocr_min_size": self.outside_text.easyocr_min_size,
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
             "png_compression": self.output.png_compression,
@@ -265,6 +266,7 @@ class UIConfigState:
                     "outside_text_osb_use_subpixel_rendering", True
                 ),
                 osb_font_hinting=data.get("outside_text_osb_font_hinting", "none"),
+                easyocr_min_size=data.get("outside_text_easyocr_min_size", 200),
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=data.get("provider", defaults["provider"]),
@@ -352,6 +354,9 @@ class UIConfigState:
                 test_mode=data.get("test_mode", defaults.get("test_mode", False)),
                 enable_thinking=data.get(
                     "enable_thinking", defaults.get("enable_thinking", True)
+                ),
+                enable_grounding=data.get(
+                    "enable_grounding", defaults.get("enable_grounding", False)
                 ),
                 reasoning_effort=data.get(
                     "reasoning_effort", defaults.get("reasoning_effort", "medium")
