@@ -76,16 +76,14 @@ if __name__ == "__main__":
             device_info_str = "CUDA (Unknown GPU Name)"
     print(f"Using device: {device_info_str.upper()}")
     print(f"PyTorch version: {torch.__version__}")
-    print(f"MangaTranslator version: {core.__version__}", end="", flush=True)
+    print(f"MangaTranslator version: {core.__version__}")
 
     def _update_notice():
         available, latest = check_for_update(
             core.__version__, repo="meangrinch/MangaTranslator", timeout=3.0
         )
         if available and latest:
-            print(
-                f"\rMangaTranslator version: {core.__version__} (UPDATE AVAILABLE: {latest})"
-            )
+            print(f"UPDATE AVAILABLE: {latest}")
 
     Thread(target=_update_notice, daemon=True).start()
 
