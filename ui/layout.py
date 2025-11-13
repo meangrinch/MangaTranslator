@@ -1370,6 +1370,7 @@ def create_layout(
             outside_text_osb_line_spacing,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
+            outside_text_easyocr_min_size,
             upscale_final_image,
             upscale_final_image_factor,
             batch_input_language,
