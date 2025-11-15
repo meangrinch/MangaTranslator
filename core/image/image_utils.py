@@ -236,6 +236,30 @@ def calculate_centroid_expansion_box(
         # Ray-cast from centroid to find maximum safe dimensions
         cx, cy = int(round(centroid_x)), int(round(centroid_y))
         mask_h, mask_w = safe_area_mask.shape
+
+        # Verify centroid is within safe area, adjust if needed
+        if (
+            cy < 0
+            or cy >= mask_h
+            or cx < 0
+            or cx >= mask_w
+            or safe_area_mask[cy, cx] != 255
+        ):
+            # Centroid is outside safe area, find nearest safe pixel
+            safe_pixels = np.argwhere(safe_area_mask == 255)
+            if safe_pixels.size == 0:
+                raise ImageProcessingError("No safe pixels found in safe_area_mask")
+            # Find nearest safe pixel to calculated centroid
+            distances = np.sqrt(
+                (safe_pixels[:, 0] - centroid_y) ** 2
+                + (safe_pixels[:, 1] - centroid_x) ** 2
+            )
+            nearest_idx = np.argmin(distances)
+            cy, cx = safe_pixels[nearest_idx]
+            # Update centroid to the adjusted position
+            centroid_x, centroid_y = float(cx), float(cy)
+            centroid = (centroid_x, centroid_y)
+
         left_zeros = np.where(safe_area_mask[cy, 0:cx] == 0)[0]
         dist_to_left_edge = cx - (left_zeros.max() if left_zeros.size > 0 else 0)
 
@@ -248,9 +272,14 @@ def calculate_centroid_expansion_box(
         down_zeros = np.where(safe_area_mask[cy:, cx] == 0)[0]
         dist_to_bottom_edge = down_zeros.min() if down_zeros.size > 0 else mask_h - cy
 
-        # Calculate symmetrical box dimensions
-        max_safe_width = 2 * max(0, min(dist_to_left_edge, dist_to_right_edge) - 1)
-        max_safe_height = 2 * max(0, min(dist_to_top_edge, dist_to_bottom_edge) - 1)
+        # Only subtract 1 if distance > 1, otherwise use the distance directly
+        # This prevents collapsing 1-pixel safe areas to 0x0
+        min_width_dist = min(dist_to_left_edge, dist_to_right_edge)
+        min_height_dist = min(dist_to_top_edge, dist_to_bottom_edge)
+        safe_width_base = min_width_dist - 1 if min_width_dist > 1 else min_width_dist
+        safe_height_base = min_height_dist - 1 if min_height_dist > 1 else min_height_dist
+        max_safe_width = 2 * max(0, safe_width_base)
+        max_safe_height = 2 * max(0, safe_height_base)
 
         if max_safe_width <= 0 or max_safe_height <= 0:
             log_message(

@@ -11,7 +11,7 @@ from core.text.drawing_engine import (draw_layout, load_font_resources,
 from core.text.font_manager import find_font_variants, get_font_features
 from core.text.layout_engine import find_optimal_layout
 from core.text.text_processing import parse_styled_segments
-from utils.exceptions import FontError, RenderingError
+from utils.exceptions import FontError, ImageProcessingError, RenderingError
 from utils.logging import log_message
 
 GRAYSCALE_MIDPOINT = 128  # Threshold for determining text color
@@ -120,9 +120,17 @@ def render_text_skia(
     # --- Step 2: Calculate Safe Rendering Area ---
     safe_area_result = None
     if cleaned_mask is not None:
-        safe_area_result = calculate_centroid_expansion_box(
-            cleaned_mask, padding_pixels=config.padding_pixels, verbose=verbose
-        )
+        try:
+            safe_area_result = calculate_centroid_expansion_box(
+                cleaned_mask, padding_pixels=config.padding_pixels, verbose=verbose
+            )
+        except ImageProcessingError:
+            # Safe area calculation failed, will use fallback below
+            safe_area_result = None
+            log_message(
+                "Safe area calculation failed, falling back to padded bbox method",
+                verbose=verbose,
+            )
 
     if safe_area_result is not None:
         guaranteed_box, _ = safe_area_result
