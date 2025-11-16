@@ -228,7 +228,7 @@ def call_openai_endpoint(
             generation_config.get("temperature") if model_name != "o4-mini" else 1.0
         ),
         "top_p": generation_config.get("top_p") if model_name != "o4-mini" else None,
-        "max_output_tokens": generation_config.get("max_output_tokens", 2048),
+        "max_output_tokens": generation_config.get("max_output_tokens", 4096),
     }
     if system_prompt:
         payload["instructions"] = system_prompt
@@ -445,12 +445,12 @@ def call_anthropic_endpoint(
         "temperature": clamped_temp,
         "top_p": generation_config.get("top_p"),
         "top_k": generation_config.get("top_k"),
-        "max_tokens": generation_config.get("max_tokens", 2048),
+        "max_tokens": generation_config.get("max_tokens", 4096),
     }
     # Include Anthropic thinking parameter for supported models when requested
     try:
         if generation_config.get("anthropic_thinking"):
-            payload["thinking"] = {"type": "enabled", "budget_tokens": 8192}
+            payload["thinking"] = {"type": "enabled", "budget_tokens": 16384}
             beta_header_value = generation_config.get("anthropic_beta") or "thinking-v1"
             headers["anthropic-beta"] = beta_header_value
     except Exception:
@@ -661,10 +661,10 @@ def call_xai_endpoint(
     )
 
     if is_reasoning_model:
-        payload["reasoning_tokens"] = generation_config.get("reasoning_tokens", 8192)
-        payload["max_output_tokens"] = generation_config.get("max_tokens", 2048)
+        payload["reasoning_tokens"] = generation_config.get("reasoning_tokens", 16384)
+        payload["max_output_tokens"] = generation_config.get("max_tokens", 4096)
     else:
-        payload["max_output_tokens"] = generation_config.get("max_tokens", 2048)
+        payload["max_output_tokens"] = generation_config.get("max_tokens", 4096)
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
@@ -845,7 +845,7 @@ def call_openrouter_endpoint(
     payload = {
         "model": model_name,
         "messages": messages,
-        "max_tokens": generation_config.get("max_tokens", 2048),
+        "max_tokens": generation_config.get("max_tokens", 4096),
     }
 
     # Handle grounding for Gemini models via :online suffix
@@ -892,7 +892,7 @@ def call_openrouter_endpoint(
         and ":thinking" not in model_name.lower()
         and generation_config.get("enable_thinking")
     ):
-        reasoning_config["max_tokens"] = 8192
+        reasoning_config["max_tokens"] = 16384
 
     # Check for Grok 4 Fast
     if (
@@ -1155,7 +1155,7 @@ def call_openai_compatible_endpoint(
     payload = {
         "model": model_name,
         "messages": messages,
-        "max_tokens": generation_config.get("max_tokens", 2048),
+        "max_tokens": generation_config.get("max_tokens", 4096),
     }
 
     temp = generation_config.get("temperature")

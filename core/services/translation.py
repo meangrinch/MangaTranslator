@@ -209,6 +209,12 @@ def _is_reasoning_model_xai(model_name: str) -> bool:
     return "reasoning" in lm or lm.startswith("grok-4-fast-reasoning")
 
 
+def _is_reasoning_model_openai_compatible(model_name: str) -> bool:
+    """Check if an OpenAI-Compatible model is reasoning-capable."""
+    lm = (model_name or "").lower()
+    return "thinking" in lm or "reasoning" in lm
+
+
 def _build_generation_config(
     provider: str,
     model_name: str,
@@ -237,14 +243,32 @@ def _build_generation_config(
     top_p = config.top_p
     top_k = config.top_k
 
+    # Determine max_tokens: use config value if provided, otherwise use default logic
+    if config.max_tokens is not None:
+        max_tokens_value = config.max_tokens
+    else:
+        # Default logic: 16384 for reasoning models, 4096 otherwise
+        is_reasoning = False
+        if provider == "Google":
+            is_reasoning = _is_reasoning_model_google(model_name)
+        elif provider == "OpenAI":
+            is_reasoning = _is_reasoning_model_openai(model_name)
+        elif provider == "Anthropic":
+            is_reasoning = _is_reasoning_model_anthropic(model_name)
+        elif provider == "xAI":
+            is_reasoning = _is_reasoning_model_xai(model_name)
+        elif provider == "OpenRouter":
+            is_reasoning = openrouter_is_reasoning_model(model_name, debug)
+        elif provider == "OpenAI-Compatible":
+            is_reasoning = _is_reasoning_model_openai_compatible(model_name)
+        max_tokens_value = 16384 if is_reasoning else 4096
+
     if provider == "Google":
-        is_reasoning = _is_reasoning_model_google(model_name)
-        max_output_tokens = 8192 if is_reasoning else 2048
         generation_config = {
             "temperature": temperature,
             "topP": top_p,
             "topK": top_k,
-            "maxOutputTokens": max_output_tokens,
+            "maxOutputTokens": max_tokens_value,
         }
         # Handle thinking config for Gemini 2.5 Flash
         if "gemini-2.5-flash" in model_name:
@@ -256,12 +280,10 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "OpenAI":
-        is_reasoning = _is_reasoning_model_openai(model_name)
-        max_output_tokens = 8192 if is_reasoning else 2048
         generation_config = {
             "temperature": temperature,
             "top_p": top_p,
-            "max_output_tokens": max_output_tokens,
+            "max_output_tokens": max_tokens_value,
         }  # top_k not supported by OpenAI
         if config.reasoning_effort:
             generation_config["reasoning_effort"] = config.reasoning_effort
@@ -269,13 +291,12 @@ def _build_generation_config(
 
     elif provider == "Anthropic":
         is_reasoning = _is_reasoning_model_anthropic(model_name)
-        max_tokens = 8192 if is_reasoning else 2048
         clamped_temp = min(temperature, 1.0)  # Anthropic caps at 1.0
         return {
             "temperature": clamped_temp,
             "top_p": top_p,
             "top_k": top_k,
-            "max_tokens": max_tokens,
+            "max_tokens": max_tokens_value,
             "anthropic_thinking": bool(config.enable_thinking and is_reasoning),
         }
 
@@ -284,19 +305,13 @@ def _build_generation_config(
         generation_config = {
             "temperature": temperature,
             "top_p": top_p,
-            "max_tokens": 2048,
+            "max_tokens": max_tokens_value,
         }
         if is_reasoning:
-            generation_config["reasoning_tokens"] = 8192
+            generation_config["reasoning_tokens"] = max(16384, max_tokens_value)
         return generation_config
 
     elif provider == "OpenRouter":
-        is_reasoning = (
-            config.openrouter_reasoning_override
-            or openrouter_is_reasoning_model(model_name, debug)
-        )
-        max_tokens = 8192 if is_reasoning else 2048
-
         model_lower = (model_name or "").lower()
         is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
         is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith(
@@ -309,7 +324,7 @@ def _build_generation_config(
             "temperature": temperature,
             "top_p": top_p,
             "top_k": top_k,
-            "max_tokens": max_tokens,
+            "max_tokens": max_tokens_value,
         }
 
         # Add reasoning parameters based on underlying model
@@ -329,7 +344,7 @@ def _build_generation_config(
             "temperature": temperature,
             "top_p": top_p,
             "top_k": top_k,
-            "max_tokens": 2048,
+            "max_tokens": max_tokens_value,
         }
 
     else:

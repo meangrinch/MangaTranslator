@@ -6,6 +6,7 @@ import gradio as gr
 import requests
 from PIL import Image
 
+from utils.endpoints import openrouter_is_reasoning_model
 from utils.exceptions import ValidationError
 from utils.logging import log_message
 
@@ -159,7 +160,7 @@ def update_font_dropdown(fonts_base_dir: Path):
         return gr.update(choices=[]), gr.update(choices=[]), f"{ERROR_PREFIX}{str(e)}"
 
 
-def refresh_models_and_fonts(models_dir: Path, fonts_base_dir: Path):
+def refresh_models_and_fonts(fonts_base_dir: Path):
     """Update font dropdown lists; YOLO is auto-detected so no model dropdown update."""
     try:
         font_packs, _ = get_available_font_packs(fonts_base_dir)
@@ -205,6 +206,46 @@ def refresh_models_and_fonts(models_dir: Path, fonts_base_dir: Path):
         )
 
 
+def _is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
+    """Check if a model is reasoning-capable based on provider and model name."""
+    if not model_name:
+        return False
+
+    if provider == "Google":
+        return "gemini-2.5" in (model_name or "").lower()
+    elif provider == "OpenAI":
+        lm = (model_name or "").lower()
+        return (
+            lm.startswith("gpt-5")
+            or lm.startswith("o1")
+            or lm.startswith("o3")
+            or lm.startswith("o4-mini")
+        )
+    elif provider == "Anthropic":
+        lm = (model_name or "").lower()
+        reasoning_prefixes = [
+            "claude-opus-4-1",
+            "claude-opus-4",
+            "claude-sonnet-4",
+            "claude-3-7-sonnet",
+        ]
+        return any(lm.startswith(p) for p in reasoning_prefixes)
+    elif provider == "xAI":
+        lm = (model_name or "").lower()
+        return "reasoning" in lm or lm.startswith("grok-4-fast-reasoning")
+    elif provider == "OpenRouter":
+        try:
+            return openrouter_is_reasoning_model(model_name, debug=False)
+        except Exception:
+            # Fallback to False if detection fails
+            return False
+    elif provider == "OpenAI-Compatible":
+        lm = (model_name or "").lower()
+        return "thinking" in lm or "reasoning" in lm
+    else:
+        return False
+
+
 def update_translation_ui(provider: str, current_temp: float):
     """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity."""
     saved_settings = get_saved_settings()
@@ -247,6 +288,15 @@ def update_translation_ui(provider: str, current_temp: float):
     top_k_interactive = provider != "OpenAI" and provider != "xAI"
     top_k_update = gr.update(interactive=top_k_interactive)
 
+    # Determine max_tokens based on reasoning capability
+    if remembered_model:
+        is_reasoning = _is_reasoning_model(provider, remembered_model)
+        max_tokens_value = 16384 if is_reasoning else 4096
+    else:
+        # Default to non-reasoning value if no model selected
+        max_tokens_value = 4096
+    max_tokens_update = gr.update(value=max_tokens_value)
+
     enable_thinking_visible = (
         provider == "Google"
         or provider == "Anthropic"
@@ -274,9 +324,6 @@ def update_translation_ui(provider: str, current_temp: float):
         reasoning_effort_visible = is_reasoning_capable
     reasoning_effort_visible_update = gr.update(visible=reasoning_effort_visible)
 
-    # Visibility for OpenRouter override
-    openrouter_override_visible_update = gr.update(visible=(provider == "OpenRouter"))
-
     return (
         google_visible_update,
         openai_visible_update,
@@ -288,10 +335,10 @@ def update_translation_ui(provider: str, current_temp: float):
         model_update,
         temp_update,
         top_k_update,
+        max_tokens_update,
         enable_thinking_update,
         enable_grounding_update,
         reasoning_effort_visible_update,
-        openrouter_override_visible_update,
     )
 
 
@@ -427,9 +474,15 @@ def update_params_for_model(
     )
     enable_grounding_update = gr.update(visible=enable_grounding_visible)
 
+    # Determine max_tokens based on reasoning capability
+    is_reasoning = _is_reasoning_model(provider, model_name)
+    max_tokens_value = 16384 if is_reasoning else 4096
+    max_tokens_update = gr.update(value=max_tokens_value)
+
     return (
         temp_update,
         top_k_update,
+        max_tokens_update,
         enable_thinking_update,
         enable_grounding_update,
         reasoning_effort_update,
@@ -651,8 +704,3 @@ def initial_dynamic_fetch(provider: str, url: str, key: Optional[str]):
     elif provider == "OpenAI-Compatible":
         return fetch_and_update_compatible_models(url, key)
     return gr.update()
-
-
-def update_openrouter_override_visibility(provider: str):
-    """Return a gr.update controlling the OpenRouter override checkbox visibility."""
-    return gr.update(visible=(provider == "OpenRouter"))

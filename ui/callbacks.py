@@ -62,6 +62,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         temperature,
         top_p,
         top_k,
+        max_tokens,
         config_reading_direction,
         config_translation_mode,
         input_language,
@@ -88,7 +89,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         context_image_max_side_pixels_val,
         osb_min_side_pixels_val,
         hyphenate_before_scaling_val,
-        openrouter_reasoning_override_val,
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
@@ -164,6 +164,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
+            max_tokens=max_tokens,
             reading_direction=config_reading_direction,
             translation_mode=config_translation_mode,
             send_full_page_context=send_full_page_context_val,
@@ -200,7 +201,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             enable_thinking=enable_thinking_checkbox_val,
             enable_grounding=enable_grounding_val,
             reasoning_effort=reasoning_effort_val,
-            openrouter_reasoning_override=openrouter_reasoning_override_val,
         ),
         input_language=final_input_language,
         output_language=final_output_language,
@@ -764,6 +764,7 @@ def handle_save_config_click(*args: Any) -> str:
         temp,
         tp,
         tk,
+        max_tokens,
         trans_mode,
         max_fs,
         min_fs,
@@ -792,7 +793,6 @@ def handle_save_config_click(*args: Any) -> str:
         context_image_max_side_pixels_val,
         osb_min_side_pixels_val,
         hyphenate_before_scaling_val,
-        openrouter_reasoning_override_val,
         special_instructions_val,
         batch_special_instructions_val,
         hyphen_penalty_val,
@@ -858,6 +858,7 @@ def handle_save_config_click(*args: Any) -> str:
             temperature=temp,
             top_p=tp,
             top_k=tk,
+            max_tokens=max_tokens,
             reading_direction=rd,
             translation_mode=trans_mode,
             send_full_page_context=send_full_page_context_val,
@@ -894,7 +895,6 @@ def handle_save_config_click(*args: Any) -> str:
             enable_thinking=enable_thinking_val,
             enable_grounding=enable_grounding_val,
             reasoning_effort=reasoning_effort_val,
-            openrouter_reasoning_override=openrouter_reasoning_override_val,
         ),
         input_language=s_in_lang,
         output_language=s_out_lang,
@@ -955,6 +955,7 @@ def handle_reset_defaults_click(
     (
         temp_update,
         top_k_update,
+        _,  # max_tokens_update - unused (using saved default instead)
         enable_thinking_update,
         enable_grounding_update,
         reasoning_effort_update,
@@ -965,6 +966,7 @@ def handle_reset_defaults_click(
     temp_max = temp_update.get("maximum", 2.0)
     top_k_interactive = top_k_update.get("interactive", True)
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
+    max_tokens_val = default_ui_state.llm_settings.max_tokens
     enable_thinking_visible = enable_thinking_update.get("visible", False)
     enable_grounding_visible = enable_grounding_update.get("visible", False)
     reasoning_visible = reasoning_effort_update.get("visible", False)
@@ -1008,6 +1010,7 @@ def handle_reset_defaults_click(
         gr.update(value=temp_val, maximum=temp_max),
         default_ui_state.llm_settings.top_p,
         gr.update(value=top_k_val, interactive=top_k_interactive),
+        gr.update(value=max_tokens_val),
         gr.update(value=default_ui_state.llm_settings.translation_mode),
         default_ui_state.rendering.max_font_size,
         default_ui_state.rendering.min_font_size,
@@ -1042,7 +1045,6 @@ def handle_reset_defaults_click(
         gr.update(value=default_ui_state.llm_settings.send_full_page_context),
         gr.update(value=default_ui_state.llm_settings.upscale_method),
         gr.update(value=default_ui_state.rendering.hyphenate_before_scaling),
-        default_ui_state.general.openrouter_reasoning_override,
         default_ui_state.llm_settings.special_instructions or "",
         default_ui_state.batch_special_instructions or "",
         default_ui_state.outside_text.enabled,
@@ -1083,9 +1085,9 @@ def handle_output_format_change(output_format_value: str):
     )
 
 
-def handle_refresh_resources_click(models_dir: Path, fonts_base_dir: Path):
+def handle_refresh_resources_click(fonts_base_dir: Path):
     """Callback for the 'Refresh Models / Fonts' button."""
-    return utils.refresh_models_and_fonts(models_dir, fonts_base_dir)
+    return utils.refresh_models_and_fonts(fonts_base_dir)
 
 
 def handle_unload_models_click():
@@ -1119,11 +1121,6 @@ def update_button_state(
         interactive=not processing,
         value=button_text_processing if processing else button_text_idle,
     )
-
-
-def trigger_status_fade(status_element_id: str):
-    """Returns JS code to fade out a status message element after a delay."""
-    return None
 
 
 def handle_thresholding_change(use_otsu_threshold: bool):

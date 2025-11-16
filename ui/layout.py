@@ -209,6 +209,13 @@ def create_layout(
                 initial_provider, []
             )
 
+        saved_max_tokens = saved_settings.get("max_tokens")
+        if saved_max_tokens is not None:
+            initial_max_tokens = saved_max_tokens
+        else:
+            is_reasoning = utils._is_reasoning_model(initial_provider, initial_model_name)
+            initial_max_tokens = 16384 if is_reasoning else 4096
+
         # --- Define UI Components ---
         with gr.Tabs():
             with gr.TabItem("Translator"):
@@ -669,17 +676,6 @@ def create_layout(
                                 visible=_initial_reasoning_effort_visible,
                                 elem_id="reasoning_effort_dropdown",
                             )
-                            openrouter_reasoning_override = gr.Checkbox(
-                                label="Force Extend Context",
-                                value=saved_settings.get(
-                                    "openrouter_reasoning_override", False
-                                ),
-                                info=(
-                                    "Force max output tokens to 8192 (for reasoning-capable LLMs)."
-                                ),
-                                visible=(config_initial_provider == "OpenRouter"),
-                                elem_id="openrouter_reasoning_override",
-                            )
                             temperature = gr.Slider(
                                 0,
                                 2.0,
@@ -707,6 +703,15 @@ def create_layout(
                                 info="Limits sampling pool to top K tokens.",
                                 interactive=(config_initial_provider != "OpenAI"),
                                 elem_id="config_top_k",
+                            )
+                            max_tokens = gr.Slider(
+                                2048,
+                                32768,
+                                value=initial_max_tokens,
+                                step=1024,
+                                label="Max Tokens",
+                                info="Maximum number of tokens in the response.",
+                                elem_id="config_max_tokens",
                             )
 
                             gr.Markdown("### Context & Upscaling")
@@ -1135,6 +1140,7 @@ def create_layout(
             temperature,
             top_p,
             top_k,
+            max_tokens,
             config_translation_mode,
             max_font_size,
             min_font_size,
@@ -1163,7 +1169,6 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
-            openrouter_reasoning_override,
             special_instructions,
             batch_special_instructions,
             hyphen_penalty,
@@ -1207,6 +1212,7 @@ def create_layout(
             temperature,
             top_p,
             top_k,
+            max_tokens,
             config_translation_mode,
             max_font_size,
             min_font_size,
@@ -1233,7 +1239,6 @@ def create_layout(
             send_full_page_context,
             upscale_method,
             hyphenate_before_scaling,
-            openrouter_reasoning_override,
             special_instructions,
             batch_special_instructions,
             outside_text_enabled,
@@ -1273,6 +1278,7 @@ def create_layout(
             temperature,
             top_p,
             top_k,
+            max_tokens,
             config_reading_direction,
             config_translation_mode,
             input_language,
@@ -1299,7 +1305,6 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
-            openrouter_reasoning_override,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
@@ -1346,6 +1351,7 @@ def create_layout(
             temperature,
             top_p,
             top_k,
+            max_tokens,
             config_reading_direction,
             config_translation_mode,
             input_language,
@@ -1372,7 +1378,6 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
-            openrouter_reasoning_override,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
@@ -1396,6 +1401,7 @@ def create_layout(
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
+            special_instructions,
             batch_special_instructions,
         ]
 
@@ -1479,10 +1485,10 @@ def create_layout(
                 config_model_name,
                 temperature,
                 top_k,
+                max_tokens,
                 enable_thinking_checkbox,
                 enable_grounding_checkbox,
                 reasoning_effort_dropdown,
-                openrouter_reasoning_override,
             ],
             queue=False,
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.
@@ -1510,6 +1516,7 @@ def create_layout(
             outputs=[
                 temperature,
                 top_k,
+                max_tokens,
                 enable_thinking_checkbox,
                 enable_grounding_checkbox,
                 reasoning_effort_dropdown,
@@ -1599,7 +1606,6 @@ def create_layout(
         refresh_resources_button.click(
             fn=functools.partial(
                 callbacks.handle_refresh_resources_click,
-                models_dir=models_dir,
                 fonts_base_dir=fonts_base_dir,
             ),
             inputs=[],

@@ -96,6 +96,7 @@ DEFAULT_SETTINGS = {
     "temperature": 0.1,
     "top_p": 0.95,
     "top_k": 64,
+    "max_tokens": 4096,
     "max_font_size": 14,
     "min_font_size": 8,
     "line_spacing": 1.0,
@@ -120,7 +121,6 @@ DEFAULT_SETTINGS = {
     "reasoning_effort": "medium",  # OpenAI reasoning models; gpt-5 also supports 'minimal'
     "enable_grounding": False,  # Enable Google Search grounding for Gemini models
     "send_full_page_context": True,
-    "openrouter_reasoning_override": False,  # Forces max output tokens to 8192
     "special_instructions": "",
     "upscale_method": "model",  # "model", "lanczos", or "none"
     "bubble_min_side_pixels": 128,
@@ -170,11 +170,11 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "temperature",
     "top_p",
     "top_k",
+    "max_tokens",
     "send_full_page_context",
     "enable_thinking",
     "reasoning_effort",
     "enable_grounding",
-    "openrouter_reasoning_override",
     "special_instructions",
     "batch_special_instructions",
     # Rendering

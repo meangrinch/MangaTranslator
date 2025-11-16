@@ -48,10 +48,10 @@ class UITranslationLLMSettings:
     temperature: float = 0.1
     top_p: float = 0.95
     top_k: int = 64
+    max_tokens: Optional[int] = None
     translation_mode: str = "one-step"
     reading_direction: str = "rtl"
     send_full_page_context: bool = True
-    openrouter_reasoning_override: bool = False
     upscale_method: str = "model"
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1536
@@ -117,7 +117,6 @@ class UIGeneralSettings:
     enable_thinking: bool = True
     enable_grounding: bool = False
     reasoning_effort: str = "medium"
-    openrouter_reasoning_override: bool = False
 
 
 @dataclass
@@ -167,6 +166,7 @@ class UIConfigState:
             "temperature": self.llm_settings.temperature,
             "top_p": self.llm_settings.top_p,
             "top_k": self.llm_settings.top_k,
+            "max_tokens": self.llm_settings.max_tokens,
             "translation_mode": self.llm_settings.translation_mode,
             "send_full_page_context": self.llm_settings.send_full_page_context,
             "upscale_method": self.llm_settings.upscale_method,
@@ -174,7 +174,6 @@ class UIConfigState:
             "context_image_max_side_pixels": self.llm_settings.context_image_max_side_pixels,
             "osb_min_side_pixels": self.llm_settings.osb_min_side_pixels,
             "special_instructions": self.llm_settings.special_instructions or "",
-            "openrouter_reasoning_override": self.general.openrouter_reasoning_override,
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
             "min_font_size": self.rendering.min_font_size,
@@ -297,6 +296,7 @@ class UIConfigState:
                 temperature=data.get("temperature", defaults["temperature"]),
                 top_p=data.get("top_p", defaults["top_p"]),
                 top_k=data.get("top_k", defaults["top_k"]),
+                max_tokens=data.get("max_tokens", defaults.get("max_tokens")),
                 translation_mode=data.get(
                     "translation_mode", defaults["translation_mode"]
                 ),
@@ -366,10 +366,6 @@ class UIConfigState:
                 reasoning_effort=data.get(
                     "reasoning_effort", defaults.get("reasoning_effort", "medium")
                 ),
-                openrouter_reasoning_override=data.get(
-                    "openrouter_reasoning_override",
-                    defaults.get("openrouter_reasoning_override", False),
-                ),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
             output_language=data.get("output_language", defaults["output_language"]),
@@ -423,7 +419,7 @@ def map_ui_to_backend_config(
         temperature=ui_state.llm_settings.temperature,
         top_p=ui_state.llm_settings.top_p,
         top_k=ui_state.llm_settings.top_k,
-        openrouter_reasoning_override=ui_state.general.openrouter_reasoning_override,
+        max_tokens=ui_state.llm_settings.max_tokens,
         input_language=input_lang,
         output_language=output_lang,
         reading_direction=ui_state.llm_settings.reading_direction,

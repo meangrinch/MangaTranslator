@@ -800,7 +800,7 @@ def main():
         "--model-name",
         type=str,
         default=None,
-        help="Model name for the selected provider (e.g., 'gemini-2.0-flash'). "
+        help="Model name for the selected provider (e.g., 'gemini-2.5-flash'). "
         "If not provided, a default will be attempted based on the provider.",
     )
     parser.add_argument(
@@ -876,6 +876,15 @@ def main():
         "--top-k", type=int, default=1, help="Limits sampling pool to top K tokens"
     )
     parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=None,
+        help=(
+            "Maximum number of tokens in the response (2048-32768). "
+            "Default: 4096 for non-reasoning models, 16384 for reasoning models"
+        ),
+    )
+    parser.add_argument(
         "--translation-mode",
         type=str,
         default="one-step",
@@ -883,14 +892,6 @@ def main():
         help=(
             "Method for translation ('one-step' combines OCR/Translate, 'two-step' separates them). "
             "'two-step' might improve translation quality for less-capable LLMs"
-        ),
-    )
-    parser.add_argument(
-        "--openrouter-reasoning-override",
-        action="store_true",
-        help=(
-            "Forces max output tokens to 8192. Enable if you encounter issues with "
-            "reasoning-capable LLMs"
         ),
     )
     parser.add_argument(
@@ -1302,7 +1303,7 @@ def main():
             temperature=args.temperature,
             top_p=args.top_p,
             top_k=args.top_k,
-            openrouter_reasoning_override=args.openrouter_reasoning_override,
+            max_tokens=args.max_tokens,
             input_language=args.input_language,
             output_language=args.output_language,
             reading_direction=args.reading_direction,
