@@ -84,7 +84,6 @@ def render_text_skia(
         RenderingError: If rendering fails due to invalid inputs, font issues, or layout problems
         FontError: If font loading fails
     """
-    # --- Step 1: Validate inputs ---
     x1, y1, x2, y2 = bbox
     bubble_width = x2 - x1
     bubble_height = y2 - y1
@@ -117,7 +116,6 @@ def render_text_skia(
     if config is None:
         config = RenderingConfig()
 
-    # --- Step 2: Calculate Safe Rendering Area ---
     safe_area_result = None
     if cleaned_mask is not None:
         try:
@@ -156,7 +154,6 @@ def render_text_skia(
         target_center_x = x1 + bubble_width / 2.0
         target_center_y = y1 + bubble_height / 2.0
 
-    # --- Step 3: Load Font Family ---
     try:
         font_variants = find_font_variants(font_dir, verbose=verbose)
         regular_font_path = font_variants.get("regular")
@@ -192,7 +189,6 @@ def render_text_skia(
             if _hb_face:
                 preload_hb_faces[style_key] = _hb_face
 
-    # --- Step 4: Find Optimal Layout ---
     try:
         layout_data = find_optimal_layout(
             layout_text,
@@ -215,7 +211,6 @@ def render_text_skia(
     except RenderingError as e:
         raise RenderingError(f"Layout optimization failed: {e}") from e
 
-    # --- Step 5: Load Font Resources for Drawing ---
     required_styles = {"regular"} | {
         style for _, style in parse_styled_segments(clean_text)
     }
@@ -244,7 +239,6 @@ def render_text_skia(
                     verbose=verbose,
                 )
 
-    # --- Step 6: Prepare Drawing Surface ---
     try:
         surface = pil_to_skia_surface(pil_image)
     except RenderingError as e:
@@ -267,7 +261,6 @@ def render_text_skia(
         except Exception:
             text_color = skia.ColorBLACK
 
-    # --- Step 7: Draw Layout ---
     # Delegate rotation/translate to drawing_engine so Skia state is consistent
     success = draw_layout(
         surface,
@@ -303,7 +296,6 @@ def render_text_skia(
         log_message("Drawing failed", always_print=True)
         raise RenderingError("Text drawing failed")
 
-    # --- Step 8: Convert Back to PIL ---
     try:
         final_pil_image = skia_surface_to_pil(surface)
     except RenderingError as e:
