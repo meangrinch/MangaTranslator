@@ -240,6 +240,13 @@ def create_layout(
                                 value=saved_settings.get("output_language", "English"),
                                 allow_custom_value=True,
                             )
+                        special_instructions = gr.Textbox(
+                            label="Special Instructions",
+                            placeholder="Give the LLM optional context, formatting instructions, etc.",
+                            value=saved_settings.get("special_instructions", ""),
+                            lines=1,
+                            max_lines=10,
+                        )
                     with gr.Column(scale=1):
                         output_image = gr.Image(
                             type="pil",
@@ -292,6 +299,13 @@ def create_layout(
                                 ),
                                 allow_custom_value=True,
                             )
+                        batch_special_instructions = gr.Textbox(
+                            label="Special Instructions",
+                            placeholder="Give the LLM optional context, formatting instructions, etc.",
+                            value=saved_settings.get("batch_special_instructions", ""),
+                            lines=1,
+                            max_lines=10,
+                        )
                     with gr.Column(scale=1):
                         batch_output_gallery = gr.Gallery(
                             label="Translated Images",
@@ -1150,6 +1164,8 @@ def create_layout(
             osb_min_side_pixels,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
+            special_instructions,
+            batch_special_instructions,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
@@ -1218,6 +1234,8 @@ def create_layout(
             upscale_method,
             hyphenate_before_scaling,
             openrouter_reasoning_override,
+            special_instructions,
+            batch_special_instructions,
             outside_text_enabled,
             outside_text_seed,
             outside_text_flux_num_inference_steps,
@@ -1305,6 +1323,8 @@ def create_layout(
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
+            special_instructions,
+            batch_special_instructions,
         ]
 
         batch_inputs = [
@@ -1376,6 +1396,7 @@ def create_layout(
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
+            batch_special_instructions,
         ]
 
         # Config Tab Navigation & Updates
@@ -1562,7 +1583,6 @@ def create_layout(
         reset_defaults_btn.click(
             fn=functools.partial(
                 callbacks.handle_reset_defaults_click,
-                models_dir=models_dir,
                 fonts_base_dir=fonts_base_dir,
             ),
             inputs=[],

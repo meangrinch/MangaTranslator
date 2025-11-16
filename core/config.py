@@ -53,6 +53,7 @@ class TranslationConfig:
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1536
     osb_min_side_pixels: int = 128
+    special_instructions: Optional[str] = None
 
 
 @dataclass

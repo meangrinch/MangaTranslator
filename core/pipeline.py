@@ -1032,6 +1032,12 @@ def main():
             "Enable Google Search grounding for Gemini models (Google and OpenRouter)"
         ),
     )
+    parser.add_argument(
+        "--special-instructions",
+        type=str,
+        default=None,
+        help="Optional special instructions for the LLM (formatting, context, character names, etc.)",
+    )
     # Full page context toggle
     parser.add_argument(
         "--no-full-page-context",
@@ -1309,6 +1315,7 @@ def main():
             bubble_min_side_pixels=args.bubble_min_side_pixels,
             context_image_max_side_pixels=args.context_image_max_side_pixels,
             osb_min_side_pixels=args.osb_min_side_pixels,
+            special_instructions=args.special_instructions,
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,

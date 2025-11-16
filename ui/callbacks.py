@@ -112,12 +112,15 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_input_language,
         batch_output_language,
         batch_font_dropdown,
+        special_instructions_val,
+        batch_special_instructions_val,
     ) = args
 
     # Select appropriate values based on batch mode
     final_input_language = batch_input_language if is_batch else input_language
     final_output_language = batch_output_language if is_batch else output_language
     final_font_pack = batch_font_dropdown if is_batch else font_dropdown
+    final_special_instructions = batch_special_instructions_val if is_batch else special_instructions_val
 
     return UIConfigState(
         detection=UIDetectionSettings(
@@ -168,6 +171,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             bubble_min_side_pixels=bubble_min_side_pixels_val,
             context_image_max_side_pixels=context_image_max_side_pixels_val,
             osb_min_side_pixels=osb_min_side_pixels_val,
+            special_instructions=final_special_instructions,
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_font_size,
@@ -789,6 +793,8 @@ def handle_save_config_click(*args: Any) -> str:
         osb_min_side_pixels_val,
         hyphenate_before_scaling_val,
         openrouter_reasoning_override_val,
+        special_instructions_val,
+        batch_special_instructions_val,
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
@@ -859,6 +865,7 @@ def handle_save_config_click(*args: Any) -> str:
             bubble_min_side_pixels=bubble_min_side_pixels_val,
             context_image_max_side_pixels=context_image_max_side_pixels_val,
             osb_min_side_pixels=osb_min_side_pixels_val,
+            special_instructions=special_instructions_val,
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_fs,
@@ -895,6 +902,7 @@ def handle_save_config_click(*args: Any) -> str:
         batch_input_language=b_in_lang,
         batch_output_language=b_out_lang,
         batch_font_pack=b_font,
+        batch_special_instructions=batch_special_instructions_val,
     )
 
     # Convert UI state to dictionary for saving
@@ -906,7 +914,7 @@ def handle_save_config_click(*args: Any) -> str:
 
 
 def handle_reset_defaults_click(
-    models_dir: Path, fonts_base_dir: Path
+    fonts_base_dir: Path
 ) -> List[gr.update]:
     """Callback for the 'Reset Defaults' button. Uses dataclasses."""
 
@@ -1035,6 +1043,8 @@ def handle_reset_defaults_click(
         gr.update(value=default_ui_state.llm_settings.upscale_method),
         gr.update(value=default_ui_state.rendering.hyphenate_before_scaling),
         default_ui_state.general.openrouter_reasoning_override,
+        default_ui_state.llm_settings.special_instructions or "",
+        default_ui_state.batch_special_instructions or "",
         default_ui_state.outside_text.enabled,
         default_ui_state.outside_text.seed,
         default_ui_state.outside_text.flux_num_inference_steps,

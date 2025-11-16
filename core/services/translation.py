@@ -786,6 +786,14 @@ You have been provided with {num_osb_text} non-dialogue text images.
 These contain text outside speech bubbles such as sound effects, environmental text, or narrative elements."""
                 osb_text_context = f" and {num_osb_text} non-dialogue text images,"
 
+            special_instructions_section = ""
+            if config.special_instructions and config.special_instructions.strip():
+                special_instructions_section = f"""
+
+## SPECIAL INSTRUCTIONS
+{config.special_instructions.strip()}
+"""
+
             ocr_prompt = f"""
 ## CONTEXT
 You have been provided with {num_speech_bubbles} individual dialogue text images{osb_text_context} from a manga page. They are presented in their natural reading order ({reading_order_desc}).
@@ -794,7 +802,7 @@ You have been provided with {num_speech_bubbles} individual dialogue text images
 {osb_text_section}
 
 ## TASK
-Apply your OCR transcription rules to each image provided.
+Apply your OCR transcription rules to each image provided.{special_instructions_section}
 """  # noqa
 
             log_message("Starting OCR step", verbose=debug)
@@ -885,6 +893,14 @@ Apply your OCR transcription rules to each image provided.
                 else ""
             )
 
+            special_instructions_section = ""
+            if config.special_instructions and config.special_instructions.strip():
+                special_instructions_section = f"""
+
+## SPECIAL INSTRUCTIONS
+{config.special_instructions.strip()}
+"""
+
             translation_prompt = f"""
 ## CONTEXT
 You have been provided with a list of {num_speech_bubbles} transcribed dialogue texts{osb_text_context} from a manga page. {full_page_context}
@@ -895,7 +911,7 @@ You have been provided with a list of {num_speech_bubbles} transcribed dialogue 
 
 ## TASK
 Apply your translation and styling rules to the text in the `## INPUT DATA` section. 
-The target language is {output_language}. Use the appropriate translation approach for each text type.
+The target language is {output_language}. Use the appropriate translation approach for each text type.{special_instructions_section}
 """  # noqa
 
             translation_parts = []
@@ -985,6 +1001,14 @@ You have been provided with {num_osb_text} non-dialogue text images.
 These contain text outside speech bubbles such as sound effects, environmental text, or narrative elements."""
                 osb_text_context = f" and {num_osb_text} transcribed non-dialogue texts"
 
+            special_instructions_section = ""
+            if config.special_instructions and config.special_instructions.strip():
+                special_instructions_section = f"""
+
+## SPECIAL INSTRUCTIONS
+{config.special_instructions.strip()}
+"""
+
             one_step_prompt = f"""
 ## CONTEXT
 You have been provided with {num_speech_bubbles} individual dialogue text images{osb_text_context} from a manga page. {full_page_context}
@@ -995,7 +1019,7 @@ You have been provided with {num_speech_bubbles} individual dialogue text images
 ## TASK
 For each image, you must perform two steps:
 1.  **Transcribe:** Extract the original text exactly as it appears.
-2.  **Translate:** Translate the text you just transcribed into {output_language}, applying your translation and styling rules.
+2.  **Translate:** Translate the text you just transcribed into {output_language}, applying your translation and styling rules.{special_instructions_section}
 
 ## OUTPUT FORMAT
 You must return your response in separate sections for each text type. Each section must have 

@@ -121,6 +121,7 @@ DEFAULT_SETTINGS = {
     "enable_grounding": False,  # Enable Google Search grounding for Gemini models
     "send_full_page_context": True,
     "openrouter_reasoning_override": False,  # Forces max output tokens to 8192
+    "special_instructions": "",
     "upscale_method": "model",  # "model", "lanczos", or "none"
     "bubble_min_side_pixels": 128,
     "context_image_max_side_pixels": 1536,
@@ -145,6 +146,7 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_input_language": "Japanese",
     "batch_output_language": "English",
     "batch_font_pack": None,
+    "batch_special_instructions": "",
 }
 
 
@@ -173,6 +175,8 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "reasoning_effort",
     "enable_grounding",
     "openrouter_reasoning_override",
+    "special_instructions",
+    "batch_special_instructions",
     # Rendering
     "font_pack",
     "max_font_size",

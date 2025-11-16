@@ -56,6 +56,7 @@ class UITranslationLLMSettings:
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1536
     osb_min_side_pixels: int = 128
+    special_instructions: Optional[str] = None
 
 
 @dataclass
@@ -143,6 +144,7 @@ class UIConfigState:
     batch_input_language: str = "Japanese"
     batch_output_language: str = "English"
     batch_font_pack: Optional[str] = None
+    batch_special_instructions: Optional[str] = None
 
     def to_save_dict(self) -> Dict[str, Any]:
         """Converts the UI state into a dictionary suitable for saving to config.json."""
@@ -171,6 +173,7 @@ class UIConfigState:
             "bubble_min_side_pixels": self.llm_settings.bubble_min_side_pixels,
             "context_image_max_side_pixels": self.llm_settings.context_image_max_side_pixels,
             "osb_min_side_pixels": self.llm_settings.osb_min_side_pixels,
+            "special_instructions": self.llm_settings.special_instructions or "",
             "openrouter_reasoning_override": self.general.openrouter_reasoning_override,
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
@@ -214,6 +217,7 @@ class UIConfigState:
             "batch_input_language": self.batch_input_language,
             "batch_output_language": self.batch_output_language,
             "batch_font_pack": self.batch_font_pack,
+            "batch_special_instructions": self.batch_special_instructions or "",
         }
         return data
 
@@ -306,6 +310,7 @@ class UIConfigState:
                 bubble_min_side_pixels=data.get("bubble_min_side_pixels", 128),
                 context_image_max_side_pixels=data.get("context_image_max_side_pixels", 1536),
                 osb_min_side_pixels=data.get("osb_min_side_pixels", 128),
+                special_instructions=data.get("special_instructions") or None,
             ),
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
@@ -376,6 +381,7 @@ class UIConfigState:
                 "batch_output_language", defaults["batch_output_language"]
             ),
             batch_font_pack=data.get("batch_font_pack"),
+            batch_special_instructions=data.get("batch_special_instructions") or None,
         )
 
 
@@ -428,6 +434,7 @@ def map_ui_to_backend_config(
         bubble_min_side_pixels=ui_state.llm_settings.bubble_min_side_pixels,
         context_image_max_side_pixels=ui_state.llm_settings.context_image_max_side_pixels,
         osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
+        special_instructions=ui_state.llm_settings.special_instructions,
     )
 
     rendering_cfg = RenderingConfig(
