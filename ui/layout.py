@@ -735,10 +735,10 @@ def create_layout(
                                     ("None", "none"),
                                 ],
                                 value=saved_settings.get("upscale_method", "model"),
-                                label="Bubble Upscaling Method",
+                                label="Bubble/Context Upscaling Method",
                                 info=(
-                                    "Determines how to upscale cropped bubble images before sending to LLM. "
-                                    "Does not affect image quality."
+                                    "Determines how to upscale cropped bubble images/full page before sending to LLM. "
+                                    "Improves OCR; does not affect output image quality."
                                 ),
                             )
                             initial_upscale_method = saved_settings.get(
