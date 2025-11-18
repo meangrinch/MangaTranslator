@@ -8,6 +8,7 @@ Web application for automating the translation of manga/comic page images using 
 - LLM-powered OCR and translations (supports 54 languages)
 - Text rendering (with custom font packs)
 - Upscaling (2x-AnimeSharpV4)
+- Single/Batch image processing with directory structure preservation and ZIP file support
 - Two interfaces: Web UI (Gradio) and CLI
 
 ## Requirements
