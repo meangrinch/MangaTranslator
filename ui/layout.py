@@ -277,9 +277,9 @@ def create_layout(
             with gr.TabItem("Batch"):
                 with gr.Row():
                     with gr.Column(scale=1):
-                        input_files = gr.Files(
+                        input_files = gr.File(
                             label="Upload Images or Folder",
-                            file_count="multiple",
+                            file_count="directory",
                             file_types=["image"],
                             type="filepath",
                         )
@@ -1064,7 +1064,7 @@ def create_layout(
                                 label="Upscale Final Image",
                                 info=(
                                     "Upscale the final translated image using the '2x-AnimeSharpV4_RCAN' model. "
-                                    "Alpha channel will be flattened for compatibility."
+                                    "Alpha channel will be flattened for model compatibility."
                                 ),
                             )
                             upscale_final_image_factor = gr.Slider(
