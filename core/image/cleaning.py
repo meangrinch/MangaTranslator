@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from core.scaling import scale_area, scale_kernel, scale_scalar
 from utils.exceptions import (CleaningError, ImageProcessingError,
                               ValidationError)
 from utils.logging import log_message
@@ -32,6 +33,7 @@ def _process_single_bubble(
     is_sam=False,
     dilation_kernel=None,
     constraint_erosion_kernel=None,
+    min_contour_area: float = MIN_CONTOUR_AREA,
 ):
     """
     Process a single speech bubble mask to extract text regions and determine fill color.
@@ -135,7 +137,7 @@ def _process_single_bubble(
         valid_contours = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if area <= MIN_CONTOUR_AREA:
+            if area <= min_contour_area:
                 continue
             m = cv2.moments(cnt)
             if m["m00"] == 0:
@@ -192,6 +194,7 @@ def clean_speech_bubbles(
     use_otsu_threshold: bool = False,
     roi_shrink_px: int = 4,
     verbose: bool = False,
+    processing_scale: float = 1.0,
 ):
     """
     Clean speech bubbles in the given image using YOLO detection and refined masking.
@@ -243,12 +246,25 @@ def clean_speech_bubbles(
 
         processed_bubbles = []
 
-        # Create kernels once for efficiency
+        effective_roi_shrink_px = float(
+            scale_scalar(
+                roi_shrink_px,
+                processing_scale,
+                minimum=0.0,
+                maximum=64.0,
+            )
+        )
         dilation_kernel = cv2.getStructuringElement(
-            cv2.MORPH_ELLIPSE, DILATION_KERNEL_SIZE
+            cv2.MORPH_ELLIPSE, scale_kernel(DILATION_KERNEL_SIZE, processing_scale)
         )
         constraint_erosion_kernel = cv2.getStructuringElement(
-            cv2.MORPH_ELLIPSE, EROSION_KERNEL_SIZE
+            cv2.MORPH_ELLIPSE, scale_kernel(EROSION_KERNEL_SIZE, processing_scale)
+        )
+        min_contour_area = scale_area(
+            MIN_CONTOUR_AREA,
+            processing_scale,
+            minimum=MIN_CONTOUR_AREA,
+            maximum=5000,
         )
         for detection in detections:
             final_mask = None
@@ -263,12 +279,13 @@ def clean_speech_bubbles(
                     img_width,
                     thresholding_value,
                     use_otsu_threshold,
-                    roi_shrink_px,
+                    effective_roi_shrink_px,
                     verbose,
                     detection.get("bbox"),
                     is_sam=True,
                     dilation_kernel=dilation_kernel,
                     constraint_erosion_kernel=constraint_erosion_kernel,
+                    min_contour_area=min_contour_area,
                 )
             else:
                 if "mask_points" not in detection or not detection["mask_points"]:
@@ -303,12 +320,13 @@ def clean_speech_bubbles(
                         img_width,
                         thresholding_value,
                         use_otsu_threshold,
-                        roi_shrink_px,
+                        effective_roi_shrink_px,
                         verbose,
                         detection.get("bbox"),
                         is_sam=False,
                         dilation_kernel=dilation_kernel,
                         constraint_erosion_kernel=constraint_erosion_kernel,
+                        min_contour_area=min_contour_area,
                     )
 
                 except Exception as e:

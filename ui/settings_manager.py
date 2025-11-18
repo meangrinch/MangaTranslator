@@ -113,8 +113,8 @@ DEFAULT_SETTINGS = {
     "jpeg_quality": 95,
     "png_compression": 6,
     "output_format": "auto",
-    "upscale_final_image": False,
-    "upscale_final_image_factor": 2.0,
+    "image_upscale_mode": "off",
+    "image_upscale_factor": 2.0,
     "cleaning_only": False,
     "test_mode": False,
     "enable_thinking": True,  # Gemini 2.5 Flash & Claude reasoning models
@@ -214,8 +214,8 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "output_format",
     "jpeg_quality",
     "png_compression",
-    "upscale_final_image",
-    "upscale_final_image_factor",
+    "image_upscale_mode",
+    "image_upscale_factor",
     # General
     "verbose",
     "cleaning_only",

@@ -38,7 +38,9 @@ class TranslationConfig:
     temperature: float = 0.1
     top_p: float = 0.95
     top_k: int = 64
-    max_tokens: Optional[int] = None  # None = use default logic (16384 for reasoning, 4096 otherwise)
+    max_tokens: Optional[int] = (
+        None  # None = use default logic (16384 for reasoning, 4096 otherwise)
+    )
     input_language: str = "Japanese"
     output_language: str = "English"
     reading_direction: str = "rtl"
@@ -105,7 +107,7 @@ class OutputConfig:
     png_compression: int = 6
     output_format: str = "auto"
     upscale_final_image: bool = False
-    upscale_final_image_factor: float = 2.0
+    image_upscale_factor: float = 2.0
 
 
 @dataclass
@@ -119,10 +121,14 @@ class MangaTranslatorConfig:
     rendering: RenderingConfig = field(default_factory=RenderingConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     outside_text: OutsideTextConfig = field(default_factory=OutsideTextConfig)
+    preprocessing: "PreprocessingConfig" = field(
+        default_factory=lambda: PreprocessingConfig()
+    )
     verbose: bool = False
     device: Optional[torch.device] = None
     cleaning_only: bool = False
     test_mode: bool = False
+    processing_scale: float = 1.0
 
     def __post_init__(self):
         # Load API keys from environment variables if not already set
@@ -151,3 +157,11 @@ class MangaTranslatorConfig:
         if self.device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         pass
+
+
+@dataclass
+class PreprocessingConfig:
+    """Configuration for image preprocessing before detection/cleaning."""
+
+    enabled: bool = False
+    factor: float = 2.0

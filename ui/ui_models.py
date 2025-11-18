@@ -6,7 +6,8 @@ import torch
 
 from core.config import (CleaningConfig, DetectionConfig,
                          MangaTranslatorConfig, OutputConfig,
-                         OutsideTextConfig, RenderingConfig, TranslationConfig)
+                         OutsideTextConfig, PreprocessingConfig,
+                         RenderingConfig, TranslationConfig)
 
 
 @dataclass
@@ -83,8 +84,8 @@ class UIOutputSettings:
     output_format: str = "auto"
     jpeg_quality: int = 95
     png_compression: int = 6
-    upscale_final_image: bool = False
-    upscale_final_image_factor: float = 2.0
+    image_upscale_mode: str = "off"  # "off", "initial", "final"
+    image_upscale_factor: float = 2.0
 
 
 @dataclass
@@ -203,8 +204,8 @@ class UIConfigState:
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
             "png_compression": self.output.png_compression,
-            "upscale_final_image": self.output.upscale_final_image,
-            "upscale_final_image_factor": self.output.upscale_final_image_factor,
+            "image_upscale_mode": self.output.image_upscale_mode,
+            "image_upscale_factor": self.output.image_upscale_factor,
             "verbose": self.general.verbose,
             "cleaning_only": self.general.cleaning_only,
             "test_mode": self.general.test_mode,
@@ -308,7 +309,9 @@ class UIConfigState:
                     "upscale_method", defaults.get("upscale_method", "model")
                 ),
                 bubble_min_side_pixels=data.get("bubble_min_side_pixels", 128),
-                context_image_max_side_pixels=data.get("context_image_max_side_pixels", 1536),
+                context_image_max_side_pixels=data.get(
+                    "context_image_max_side_pixels", 1536
+                ),
                 osb_min_side_pixels=data.get("osb_min_side_pixels", 128),
                 special_instructions=data.get("special_instructions") or None,
             ),
@@ -345,12 +348,12 @@ class UIConfigState:
                 png_compression=data.get(
                     "png_compression", defaults["png_compression"]
                 ),
-                upscale_final_image=data.get(
-                    "upscale_final_image", defaults.get("upscale_final_image", False)
+                image_upscale_mode=data.get(
+                    "image_upscale_mode", defaults.get("image_upscale_mode", "off")
                 ),
-                upscale_final_image_factor=data.get(
-                    "upscale_final_image_factor",
-                    defaults.get("upscale_final_image_factor", 2.0),
+                image_upscale_factor=data.get(
+                    "image_upscale_factor",
+                    defaults.get("image_upscale_factor", 2.0),
                 ),
             ),
             general=UIGeneralSettings(
@@ -448,12 +451,15 @@ def map_ui_to_backend_config(
         padding_pixels=ui_state.rendering.padding_pixels,
     )
 
+    upscale_mode = ui_state.output.image_upscale_mode
+    upscale_factor = ui_state.output.image_upscale_factor
+
     output_cfg = OutputConfig(
         output_format=ui_state.output.output_format,
         jpeg_quality=ui_state.output.jpeg_quality,
         png_compression=ui_state.output.png_compression,
-        upscale_final_image=ui_state.output.upscale_final_image,
-        upscale_final_image_factor=ui_state.output.upscale_final_image_factor,
+        upscale_final_image=upscale_mode == "final",
+        image_upscale_factor=upscale_factor,
     )
 
     # Determine OSB font (use main font if not specified)
@@ -481,6 +487,11 @@ def map_ui_to_backend_config(
         easyocr_min_size=ui_state.outside_text.easyocr_min_size,
     )
 
+    preprocessing_cfg = PreprocessingConfig(
+        enabled=upscale_mode == "initial",
+        factor=upscale_factor,
+    )
+
     backend_config = MangaTranslatorConfig(
         yolo_model_path=str(yolo_path),
         verbose=ui_state.general.verbose,
@@ -491,6 +502,7 @@ def map_ui_to_backend_config(
         rendering=rendering_cfg,
         output=output_cfg,
         outside_text=outside_text_cfg,
+        preprocessing=preprocessing_cfg,
         cleaning_only=ui_state.general.cleaning_only,
         test_mode=ui_state.general.test_mode,
     )

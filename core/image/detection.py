@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -173,6 +174,7 @@ def detect_speech_bubbles(
     verbose=False,
     device=None,
     use_sam2: bool = True,
+    image_override: Optional[Image.Image] = None,
 ):
     """Detect speech bubbles using dual YOLO models and SAM2.
 
@@ -199,10 +201,18 @@ def detect_speech_bubbles(
     )
     log_message(f"Using device: {_device}", verbose=verbose)
     try:
-        image_cv = cv2.imread(str(image_path))
-        if image_cv is None:
-            raise ImageProcessingError(f"Could not read image at {image_path}")
-        image_pil = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+        if image_override is not None:
+            image_pil = (
+                image_override
+                if image_override.mode == "RGB"
+                else image_override.convert("RGB")
+            )
+            image_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
+        else:
+            image_cv = cv2.imread(str(image_path))
+            if image_cv is None:
+                raise ImageProcessingError(f"Could not read image at {image_path}")
+            image_pil = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
         log_message(
             f"Processing image: {image_path.name} ({image_cv.shape[1]}x{image_cv.shape[0]})",
             verbose=verbose,

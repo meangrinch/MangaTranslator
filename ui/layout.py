@@ -213,7 +213,9 @@ def create_layout(
         if saved_max_tokens is not None:
             initial_max_tokens = saved_max_tokens
         else:
-            is_reasoning = utils._is_reasoning_model(initial_provider, initial_model_name)
+            is_reasoning = utils._is_reasoning_model(
+                initial_provider, initial_model_name
+            )
             initial_max_tokens = 16384 if is_reasoning else 4096
 
         # --- Define UI Components ---
@@ -733,9 +735,10 @@ def create_layout(
                                     ("None", "none"),
                                 ],
                                 value=saved_settings.get("upscale_method", "model"),
-                                label="Image Upscaling",
+                                label="Bubble Upscaling Method",
                                 info=(
-                                    "Method for upscaling images before sending to LLM. Does not affect output quality."
+                                    "Determines how to upscale cropped bubble images before sending to LLM. "
+                                    "Does not affect image quality."
                                 ),
                             )
                             initial_upscale_method = saved_settings.get(
@@ -1033,6 +1036,19 @@ def create_layout(
                         setting_groups.append(group_outside_text)
 
                         # --- Output Settings ---
+                        image_upscale_mode_default = saved_settings.get(
+                            "image_upscale_mode", "off"
+                        )
+                        if image_upscale_mode_default not in {
+                            "off",
+                            "initial",
+                            "final",
+                        }:
+                            image_upscale_mode_default = "off"
+                        image_upscale_factor_default = float(
+                            saved_settings.get("image_upscale_factor", 2.0)
+                        )
+
                         with gr.Group(
                             visible=False, elem_classes="settings-group"
                         ) as group_output:
@@ -1061,26 +1077,23 @@ def create_layout(
                                 interactive=saved_settings.get("output_format", "auto")
                                 != "jpeg",
                             )
-                            upscale_final_image = gr.Checkbox(
-                                value=saved_settings.get("upscale_final_image", False),
-                                label="Upscale Final Image",
+                            image_upscale_mode = gr.Radio(
+                                choices=["off", "initial", "final"],
+                                value=image_upscale_mode_default,
+                                label="Image Upscaling Method",
                                 info=(
-                                    "Upscale the final translated image using the '2x-AnimeSharpV4_RCAN' model. "
-                                    "Alpha channel will be flattened for model compatibility."
+                                    "Determines whether to upscale the initial untranslated image or the final "
+                                    "translated image. 'Initial' results in cleaner text, but consumes more memory."
                                 ),
                             )
-                            upscale_final_image_factor = gr.Slider(
+                            image_upscale_factor = gr.Slider(
                                 1.0,
                                 8.0,
-                                value=saved_settings.get(
-                                    "upscale_final_image_factor", 2.0
-                                ),
+                                value=image_upscale_factor_default,
                                 step=0.1,
                                 label="Upscale Factor",
-                                info="Factor by which to upscale the final image.",
-                                interactive=saved_settings.get(
-                                    "upscale_final_image", False
-                                ),
+                                info="Factor for the selected upscaling mode.",
+                                interactive=image_upscale_mode_default != "off",
                             )
                         setting_groups.append(group_output)
 
@@ -1191,8 +1204,8 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_easyocr_min_size,
-            upscale_final_image,
-            upscale_final_image_factor,
+            image_upscale_mode,
+            image_upscale_factor,
         ]
 
         reset_outputs = [
@@ -1257,8 +1270,8 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_easyocr_min_size,
-            upscale_final_image,
-            upscale_final_image_factor,
+            image_upscale_mode,
+            image_upscale_factor,
         ]
 
         translate_inputs = [
@@ -1325,8 +1338,8 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_easyocr_min_size,
-            upscale_final_image,
-            upscale_final_image_factor,
+            image_upscale_mode,
+            image_upscale_factor,
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
@@ -1399,8 +1412,8 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_easyocr_min_size,
-            upscale_final_image,
-            upscale_final_image_factor,
+            image_upscale_mode,
+            image_upscale_factor,
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
@@ -1467,10 +1480,10 @@ def create_layout(
             queue=False,
         )
 
-        upscale_final_image.change(
-            fn=lambda x: gr.update(interactive=x),
-            inputs=upscale_final_image,
-            outputs=upscale_final_image_factor,
+        image_upscale_mode.change(
+            fn=lambda mode: gr.update(interactive=mode != "off"),
+            inputs=image_upscale_mode,
+            outputs=image_upscale_factor,
             queue=False,
         )
 

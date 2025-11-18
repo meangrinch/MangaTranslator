@@ -14,7 +14,9 @@ from PIL import Image
 from core.caching import get_cache
 from core.config import (CleaningConfig, DetectionConfig,
                          MangaTranslatorConfig, OutputConfig,
-                         OutsideTextConfig, TranslationConfig)
+                         OutsideTextConfig, PreprocessingConfig,
+                         TranslationConfig)
+from core.scaling import scale_font_size, scale_length, scale_scalar
 from core.validation import validate_mutually_exclusive_modes
 from utils.exceptions import (CancellationError, CleaningError, FontError,
                               ImageProcessingError, RenderingError,
@@ -43,6 +45,36 @@ def get_image_encoding_params(pil_image_format: Optional[str]) -> Tuple[str, str
     if pil_image_format and pil_image_format.upper() == "PNG":
         return "image/png", ".png"
     return "image/jpeg", ".jpg"
+
+
+def _resolve_pre_upscale_factor(
+    pre_cfg: Optional[PreprocessingConfig],
+    verbose: bool = False,
+) -> float:
+    if pre_cfg is None or not pre_cfg.enabled:
+        return 1.0
+
+    factor = max(1.0, min(float(pre_cfg.factor or 1.0), 8.0))
+    if factor <= 1.01:
+        return 1.0
+
+    log_message(f"Pre-processing upscaling enabled: {factor:.2f}x", verbose=verbose)
+    return factor
+
+
+def _apply_pre_upscale_if_needed(
+    image: Image.Image,
+    config: MangaTranslatorConfig,
+    verbose: bool = False,
+) -> Tuple[Image.Image, float]:
+    factor = _resolve_pre_upscale_factor(
+        getattr(config, "preprocessing", None), verbose
+    )
+    if factor == 1.0:
+        return image, 1.0
+
+    upscaled = upscale_image(image, factor, verbose=verbose)
+    return upscaled, factor
 
 
 def translate_and_render(
@@ -103,6 +135,9 @@ def translate_and_render(
     pil_image_processed = convert_image_to_target_mode(
         pil_original, target_mode, verbose
     )
+    pil_image_processed, processing_scale = _apply_pre_upscale_if_needed(
+        pil_image_processed, config, verbose
+    )
 
     get_cache().set_current_image(pil_image_processed, verbose)
 
@@ -110,7 +145,7 @@ def translate_and_render(
 
     # Process outside text detection and inpainting
     pil_image_processed, outside_text_data = process_outside_text(
-        pil_image_processed, config, image_path, image_format, verbose
+        pil_image_processed, config, image_path, image_format, processing_scale, verbose
     )
     original_cv_image = pil_to_cv2(pil_image_processed)
 
@@ -120,6 +155,12 @@ def translate_and_render(
         try:
             # Prepare full page context based on upscale method
             context_image_pil = cv2_to_pil(original_cv_image)
+            effective_context_max_side = scale_length(
+                config.translation.context_image_max_side_pixels,
+                processing_scale,
+                minimum=512,
+                maximum=4096,
+            )
 
             if config.translation.upscale_method == "model":
                 # Use upscaling model for full page context
@@ -128,7 +169,7 @@ def translate_and_render(
                     context_image_pil = upscale_image_to_dimension(
                         upscale_model,
                         context_image_pil,
-                        config.translation.context_image_max_side_pixels,
+                        effective_context_max_side,
                         config.device,
                         "max",
                         verbose,
@@ -136,7 +177,7 @@ def translate_and_render(
                     # Resize to exact target dimension (downscale if needed)
                     context_image_pil = resize_to_max_side(
                         context_image_pil,
-                        config.translation.context_image_max_side_pixels,
+                        effective_context_max_side,
                         verbose=verbose,
                     )
                     log_message(
@@ -146,7 +187,7 @@ def translate_and_render(
                 # Use LANCZOS resampling (current behavior)
                 context_image_pil = resize_to_max_side(
                     context_image_pil,
-                    config.translation.context_image_max_side_pixels,
+                    effective_context_max_side,
                     verbose=verbose,
                 )
                 log_message(
@@ -183,6 +224,7 @@ def translate_and_render(
             verbose=verbose,
             device=device,
             use_sam2=config.detection.use_sam2,
+            image_override=pil_image_processed,
         )
     except Exception as e:
         log_message(f"Error during detection: {e}", always_print=True)
@@ -214,6 +256,7 @@ def translate_and_render(
                 use_otsu_threshold=use_otsu,
                 roi_shrink_px=config.cleaning.roi_shrink_px,
                 verbose=verbose,
+                processing_scale=processing_scale,
             )
             log_message(
                 f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose
@@ -237,6 +280,39 @@ def translate_and_render(
         if config.cleaning_only:
             log_message("Cleaning only mode - skipping translation", always_print=True)
         else:
+            main_min_font = scale_font_size(
+                config.rendering.min_font_size, processing_scale, minimum=4, maximum=256
+            )
+            main_max_font = scale_font_size(
+                config.rendering.max_font_size,
+                processing_scale,
+                minimum=main_min_font,
+                maximum=384,
+            )
+            padding_pixels = scale_scalar(
+                config.rendering.padding_pixels,
+                processing_scale,
+                minimum=1.0,
+                maximum=80.0,
+            )
+            osb_min_font = scale_font_size(
+                config.outside_text.osb_min_font_size,
+                processing_scale,
+                minimum=4,
+                maximum=512,
+            )
+            osb_max_font = scale_font_size(
+                config.outside_text.osb_max_font_size,
+                processing_scale,
+                minimum=osb_min_font,
+                maximum=640,
+            )
+            osb_outline_width = scale_scalar(
+                config.outside_text.osb_outline_width,
+                processing_scale,
+                minimum=0.0,
+                maximum=24.0,
+            )
             # --- Prepare images for Translation ---
             log_message("Preparing bubble images...", verbose=verbose)
 
@@ -335,8 +411,8 @@ def translate_and_render(
                             # Probe fit at max size without mutating the working image
                             _probe_canvas = pil_cleaned_image.copy()
                             probe_config = RenderingConfig(
-                                min_font_size=config.rendering.max_font_size,
-                                max_font_size=config.rendering.max_font_size,
+                                min_font_size=main_max_font,
+                                max_font_size=main_max_font,
                                 line_spacing_mult=config.rendering.line_spacing,
                                 use_subpixel_rendering=config.rendering.use_subpixel_rendering,
                                 font_hinting=config.rendering.font_hinting,
@@ -345,7 +421,7 @@ def translate_and_render(
                                 hyphen_penalty=config.rendering.hyphen_penalty,
                                 hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
                                 badness_exponent=config.rendering.badness_exponent,
-                                padding_pixels=config.rendering.padding_pixels,
+                                padding_pixels=padding_pixels,
                             )
                             try:
                                 _ = render_text_skia(
@@ -459,8 +535,8 @@ def translate_and_render(
                                 if config.outside_text.osb_font_name
                                 else config.rendering.font_dir
                             )
-                            min_font = config.outside_text.osb_min_font_size
-                            max_font = config.outside_text.osb_max_font_size
+                            min_font = osb_min_font
+                            max_font = osb_max_font
                             line_spacing = config.outside_text.osb_line_spacing
                             use_ligs = config.outside_text.osb_use_ligatures
                             # Outside text was inpainted, no mask needed
@@ -500,8 +576,8 @@ def translate_and_render(
                                 verbose=verbose,
                             )
                             font_dir = config.rendering.font_dir
-                            min_font = config.rendering.min_font_size
-                            max_font = config.rendering.max_font_size
+                            min_font = main_min_font
+                            max_font = main_max_font
                             line_spacing = config.rendering.line_spacing
                             use_ligs = config.rendering.use_ligatures
                             render_info = bubble_render_info_map.get(tuple(bbox))
@@ -533,11 +609,9 @@ def translate_and_render(
                             hyphen_penalty=config.rendering.hyphen_penalty,
                             hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
                             badness_exponent=config.rendering.badness_exponent,
-                            padding_pixels=config.rendering.padding_pixels,
+                            padding_pixels=padding_pixels,
                             outline_width=(
-                                config.outside_text.osb_outline_width
-                                if is_outside_text
-                                else 0.0
+                                osb_outline_width if is_outside_text else 0.0
                             ),
                         )
                         try:
@@ -579,7 +653,7 @@ def translate_and_render(
         log_message("Upscaling final image...", verbose=verbose, always_print=True)
         final_image_to_save = upscale_image(
             final_image_to_save,
-            config.output.upscale_final_image_factor,
+            config.output.image_upscale_factor,
             verbose=verbose,
         )
 
@@ -1055,15 +1129,16 @@ def main():
         help="Output image format (auto uses input format)",
     )
     parser.add_argument(
-        "--upscale-final-image",
-        action="store_true",
-        help="Upscale final translated image using 2x-AnimeSharpV4_RCAN",
+        "--image-upscale-mode",
+        choices=["off", "initial", "final"],
+        default="off",
+        help="Image upscaling mode: 'off' (none), 'initial' (before processing), or 'final' (after processing).",
     )
     parser.add_argument(
-        "--upscale-final-image-factor",
+        "--image-upscale-factor",
         type=float,
         default=2.0,
-        help="Upscale factor for final image (1.0-8.0)",
+        help="Factor for the selected upscaling mode (1.0-8.0).",
     )
     # General args
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
@@ -1396,8 +1471,8 @@ def main():
             output_format=args.output_format,
             jpeg_quality=args.jpeg_quality,
             png_compression=args.png_compression,
-            upscale_final_image=args.upscale_final_image,
-            upscale_final_image_factor=args.upscale_final_image_factor,
+            upscale_final_image=args.image_upscale_mode == "final",
+            image_upscale_factor=args.image_upscale_factor,
         ),
         outside_text=OutsideTextConfig(
             enabled=args.osb_enable,
@@ -1416,6 +1491,10 @@ def main():
             osb_font_hinting=args.osb_font_hinting,
             bbox_expansion_percent=args.osb_bbox_expansion,
             easyocr_min_size=args.osb_easyocr_min_size,
+        ),
+        preprocessing=PreprocessingConfig(
+            enabled=args.image_upscale_mode == "initial",
+            factor=args.image_upscale_factor,
         ),
         test_mode=args.test_mode,
     )

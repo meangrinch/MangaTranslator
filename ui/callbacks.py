@@ -112,8 +112,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
         outside_text_easyocr_min_size_val,
-        upscale_final_image_val,
-        upscale_final_image_factor_val,
+        image_upscale_mode_val,
+        image_upscale_factor_val,
         batch_input_language,
         batch_output_language,
         batch_font_dropdown,
@@ -198,8 +198,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             output_format=output_format,
             jpeg_quality=jpeg_quality,
             png_compression=png_compression,
-            upscale_final_image=upscale_final_image_val,
-            upscale_final_image_factor=upscale_final_image_factor_val,
+            image_upscale_mode=image_upscale_mode_val,
+            image_upscale_factor=image_upscale_factor_val,
         ),
         general=UIGeneralSettings(
             verbose=verbose,
@@ -374,9 +374,17 @@ def _format_single_success_message(
 
     msg_parts.append(f"• Font Pack: {font_dir_path.name}\n")
 
+    if (
+        getattr(backend_config, "preprocessing", None)
+        and backend_config.preprocessing.enabled
+    ):
+        msg_parts.append(
+            f"• Initial Image Upscaling: {backend_config.preprocessing.factor}x\n"
+        )
+
     if backend_config.output.upscale_final_image:
         msg_parts.append(
-            f"• Final Image Upscaling: {backend_config.output.upscale_final_image_factor}x\n"
+            f"• Final Image Upscaling: {backend_config.output.image_upscale_factor}x\n"
         )
 
     if backend_config.output.output_format == "png":
@@ -534,9 +542,17 @@ def _format_batch_success_message(
 
     msg_parts.append(f"• Font Pack: {font_dir_path.name}\n")
 
+    if (
+        getattr(backend_config, "preprocessing", None)
+        and backend_config.preprocessing.enabled
+    ):
+        msg_parts.append(
+            f"• Initial Image Upscaling: {backend_config.preprocessing.factor}x\n"
+        )
+
     if backend_config.output.upscale_final_image:
         msg_parts.append(
-            f"• Final Image Upscaling: {backend_config.output.upscale_final_image_factor}x\n"
+            f"• Final Image Upscaling: {backend_config.output.image_upscale_factor}x\n"
         )
 
     if backend_config.output.output_format == "png":
@@ -859,8 +875,8 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
         outside_text_easyocr_min_size_val,
-        upscale_final_image_val,
-        upscale_final_image_factor_val,
+        image_upscale_mode_val,
+        image_upscale_factor_val,
     ) = args
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
@@ -931,8 +947,8 @@ def handle_save_config_click(*args: Any) -> str:
             output_format=out_fmt,
             jpeg_quality=jq,
             png_compression=pngc,
-            upscale_final_image=upscale_final_image_val,
-            upscale_final_image_factor=upscale_final_image_factor_val,
+            image_upscale_mode=image_upscale_mode_val,
+            image_upscale_factor=image_upscale_factor_val,
         ),
         general=UIGeneralSettings(
             verbose=verb,
@@ -1105,8 +1121,11 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.osb_use_subpixel_rendering,
         default_ui_state.outside_text.osb_font_hinting,
         default_ui_state.outside_text.easyocr_min_size,
-        default_ui_state.output.upscale_final_image,
-        default_ui_state.output.upscale_final_image_factor,
+        gr.update(value=default_ui_state.output.image_upscale_mode),
+        gr.update(
+            value=default_ui_state.output.image_upscale_factor,
+            interactive=default_ui_state.output.image_upscale_mode != "off",
+        ),
     ]
 
 

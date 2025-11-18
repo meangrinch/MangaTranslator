@@ -14,6 +14,7 @@ from core.image.image_utils import (cv2_to_pil, pil_to_cv2,
 from core.image.inpainting import FluxKontextInpainter
 from core.image.ocr_detection import OCR_LANGUAGE_MAP, OutsideTextDetector
 from core.ml.model_manager import get_model_manager
+from core.scaling import scale_length
 from utils.logging import log_message
 
 
@@ -22,6 +23,7 @@ def process_outside_text(
     config: MangaTranslatorConfig,
     image_path: Union[str, Path],
     image_format: Optional[str],
+    processing_scale: float,
     verbose: bool = False,
 ) -> Tuple[Image.Image, List[Dict[str, Any]]]:
     """
@@ -37,6 +39,7 @@ def process_outside_text(
         config: MangaTranslatorConfig containing all settings
         image_path: Path to the original image file
         image_format: Original image format (PNG, JPEG, etc.)
+        processing_scale: The scale factor for image processing
         verbose: Whether to print detailed logging
 
     Returns:
@@ -49,6 +52,13 @@ def process_outside_text(
 
     log_message("Detecting text outside speech bubbles...", verbose=verbose)
 
+    easyocr_min_size = scale_length(
+        config.outside_text.easyocr_min_size,
+        processing_scale,
+        minimum=32,
+        maximum=4096,
+    )
+
     try:
         ocr_language = OCR_LANGUAGE_MAP.get(config.translation.input_language, "ja")
 
@@ -59,7 +69,8 @@ def process_outside_text(
             str(image_path),
             yolo_model_path=config.yolo_model_path,
             verbose=verbose,
-            min_size=config.outside_text.easyocr_min_size,
+            min_size=easyocr_min_size,
+            image_override=pil_image,
         )
 
         if not outside_text_results:
@@ -137,7 +148,9 @@ def process_outside_text(
             str(image_path),
             bbox_expansion_percent=config.outside_text.bbox_expansion_percent,
             verbose=verbose,
-            min_size=config.outside_text.easyocr_min_size,
+            min_size=easyocr_min_size,
+            image_override=pil_image,
+            existing_results=outside_text_results,
         )
 
         current_image = pil_image

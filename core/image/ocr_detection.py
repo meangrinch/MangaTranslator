@@ -255,6 +255,7 @@ class OutsideTextDetector:
         yolo_model_path: Optional[str] = None,
         verbose: bool = False,
         min_size: int = 200,
+        image_override: Optional[Image.Image] = None,
     ):
         """Detect non-dialogue text by subtracting YOLO speech bubbles from OCR results.
 
@@ -267,7 +268,7 @@ class OutsideTextDetector:
         Returns:
             list: Detected regions outside bubbles as (bbox, text, confidence).
         """
-        if not os.path.exists(image_path):
+        if image_override is None and not os.path.exists(image_path):
             raise FileNotFoundError(f"Error: The file '{image_path}' was not found.")
 
         self.initialize_models(yolo_model_path)
@@ -275,7 +276,11 @@ class OutsideTextDetector:
         log_message(f"Using device: {self.device}", verbose=verbose)
 
         log_message("Running YOLO detection for speech bubbles...", verbose=verbose)
-        raw_image = Image.open(image_path).convert("RGB")
+        raw_image = (
+            image_override.convert("RGB")
+            if (image_override is not None and image_override.mode != "RGB")
+            else (image_override or Image.open(image_path).convert("RGB"))
+        )
         yolo_results = self.yolo_model(raw_image, device=self.device)
         yolo_boxes = (
             yolo_results[0].boxes.xyxy if yolo_results[0].boxes is not None else None
@@ -371,6 +376,8 @@ class OutsideTextDetector:
         bbox_expansion_percent: float = 0.0,
         verbose: bool = False,
         min_size: int = 200,
+        image_override: Optional[Image.Image] = None,
+        existing_results: Optional[List] = None,
     ) -> Tuple[Optional[List], Optional[Image.Image]]:
         """Create rectangular masks from OCR bounding boxes for inpainting.
 
@@ -391,14 +398,28 @@ class OutsideTextDetector:
                     'confidence': float,
                 }.
         """
-        results = self.detect_outside_text(
-            image_path, verbose=verbose, min_size=min_size
+        results = (
+            existing_results
+            if existing_results is not None
+            else self.detect_outside_text(
+                image_path,
+                verbose=verbose,
+                min_size=min_size,
+                image_override=image_override,
+            )
         )
 
         if not results:
             return None, None
 
-        image_pil = Image.open(image_path).convert("RGB")
+        if image_override is not None:
+            image_pil = (
+                image_override.convert("RGB")
+                if image_override.mode != "RGB"
+                else image_override
+            )
+        else:
+            image_pil = Image.open(image_path).convert("RGB")
         img_w, img_h = image_pil.size
 
         log_message(
