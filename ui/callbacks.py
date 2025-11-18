@@ -11,9 +11,10 @@ from core.config import MangaTranslatorConfig
 from core.validation import (normalize_zip_file_input,
                              validate_mutually_exclusive_modes,
                              validate_zip_file)
-from utils.exceptions import ValidationError
+from utils.exceptions import CancellationError, ValidationError
 
 from . import logic, settings_manager, utils
+from .cancellation import CancellationManager
 from .ui_models import (UICleaningSettings, UIConfigState, UIDetectionSettings,
                         UIGeneralSettings, UIOutputSettings,
                         UIOutsideTextSettings, UIRenderingSettings,
@@ -23,6 +24,8 @@ from .ui_models import (UICleaningSettings, UIConfigState, UIDetectionSettings,
 
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
+
+CANCELLATION_MANAGER: Optional[CancellationManager] = None
 
 
 def _clean_error_message(message: Any) -> str:
@@ -585,6 +588,8 @@ def handle_translate_click(
     """Callback for the 'Translate' button click. Uses dataclasses for config."""
     input_image_path = args[0]
     start_time = time.time()
+    global CANCELLATION_MANAGER
+    CANCELLATION_MANAGER = CancellationManager()
     try:
         # --- UI Validation ---
         img_valid, img_msg = utils.validate_image(input_image_path)
@@ -613,6 +618,7 @@ def handle_translate_click(
             selected_font_pack_name=selected_font_pack_name,
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
+            cancellation_manager=CANCELLATION_MANAGER,
         )
 
         # --- Format Success Output ---
@@ -639,6 +645,8 @@ def handle_translate_click(
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
         return gr.update(), cleaned
+    except CancellationError:
+        return gr.update(), "Translation cancelled by user."
     except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
         # Backend/validation errors (e.g., missing YOLO model)
         cleaned = _clean_error_message(e)
@@ -665,6 +673,8 @@ def handle_batch_click(
     input_files = args[0]
     input_zip = args[1] if len(args) > 1 else None
     progress(0, desc="Starting batch process...")
+    global CANCELLATION_MANAGER
+    CANCELLATION_MANAGER = CancellationManager()
     try:
         zip_file_path = None
         if input_zip:
@@ -718,6 +728,7 @@ def handle_batch_click(
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
             gradio_progress=progress,
+            cancellation_manager=CANCELLATION_MANAGER,
         )
 
         # --- Format Success Output ---
@@ -758,6 +769,9 @@ def handle_batch_click(
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
         return gr.update(), cleaned
+    except CancellationError:
+        progress(1.0, desc="Cancelled")
+        return gr.update(), "Batch process cancelled by user."
     except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
         progress(1.0, desc="Error occurred")
         cleaned = _clean_error_message(e)
@@ -1143,14 +1157,32 @@ def handle_app_load(provider: str, url: str, key: Optional[str]):
 
 
 # --- Button/Status Update Callbacks ---
-def update_button_state(
+def update_process_buttons(
     processing: bool, button_text_processing: str, button_text_idle: str
 ):
-    """Generic function to update button text and interactivity."""
-    return gr.update(
-        interactive=not processing,
-        value=button_text_processing if processing else button_text_idle,
+    """Toggle visibility and interactivity of processing buttons."""
+    global CANCELLATION_MANAGER
+    if not processing:
+        CANCELLATION_MANAGER = None
+    return (
+        gr.update(
+            interactive=not processing,
+            value=button_text_processing if processing else button_text_idle,
+        ),
+        gr.update(visible=not processing),  # Clear button
+        gr.update(visible=processing),  # Cancel button
+        # Also update the other tab's buttons to prevent concurrent runs
+        gr.update(interactive=not processing),
+        gr.update(visible=not processing),
+        gr.update(visible=processing),
     )
+
+
+def cancel_process():
+    """Signal that the current process should be cancelled."""
+    global CANCELLATION_MANAGER
+    if CANCELLATION_MANAGER:
+        CANCELLATION_MANAGER.cancel()
 
 
 def handle_thresholding_change(use_otsu_threshold: bool):

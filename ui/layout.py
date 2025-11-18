@@ -269,9 +269,9 @@ def create_layout(
                         )
                         with gr.Row():
                             translate_button = gr.Button("Translate", variant="primary")
-                            _ = gr.ClearButton(
-                                [input_image, output_image, status_message],
-                                value="Clear",
+                            clear_button = gr.Button("Clear")
+                            cancel_button = gr.Button(
+                                "Cancel", variant="stop", visible=False
                             )
 
             with gr.TabItem("Batch"):
@@ -338,14 +338,9 @@ def create_layout(
                             batch_process_button = gr.Button(
                                 "Start Batch Translating", variant="primary"
                             )
-                            batch_clear_button = gr.ClearButton(  # noqa
-                                [
-                                    input_files,
-                                    input_zip,
-                                    batch_output_gallery,
-                                    batch_status_message,
-                                ],
-                                value="Clear",
+                            batch_clear_button = gr.Button("Clear")
+                            batch_cancel_button = gr.Button(
+                                "Cancel", variant="stop", visible=False
                             )
 
             with gr.TabItem("Config", elem_id="settings-tab-container"):
@@ -1629,14 +1624,36 @@ def create_layout(
         )
 
         # Translator Tab Button
-        translate_button.click(
+        clear_button.click(
+            fn=lambda: (None, None, ""),
+            outputs=[input_image, output_image, status_message],
+            queue=False,
+        )
+        batch_clear_button.click(
+            fn=lambda: (None, None, None, ""),
+            outputs=[
+                input_files,
+                input_zip,
+                batch_output_gallery,
+                batch_status_message,
+            ],
+            queue=False,
+        )
+        translate_event = translate_button.click(
             fn=functools.partial(
-                callbacks.update_button_state,
+                callbacks.update_process_buttons,
                 processing=True,
                 button_text_processing="Translating...",
                 button_text_idle="Translate",
             ),
-            outputs=translate_button,
+            outputs=[
+                translate_button,
+                clear_button,
+                cancel_button,
+                batch_process_button,
+                batch_clear_button,
+                batch_cancel_button,
+            ],
             queue=False,
         ).then(
             fn=functools.partial(
@@ -1647,28 +1664,47 @@ def create_layout(
             ),
             inputs=translate_inputs,
             outputs=[output_image, status_message],
-        ).then(
+        )
+        translate_event.then(
             fn=functools.partial(
-                callbacks.update_button_state,
+                callbacks.update_process_buttons,
                 processing=False,
                 button_text_processing="Translating...",
                 button_text_idle="Translate",
             ),
-            outputs=translate_button,
+            outputs=[
+                translate_button,
+                clear_button,
+                cancel_button,
+                batch_process_button,
+                batch_clear_button,
+                batch_cancel_button,
+            ],
             queue=False,
-        ).then(
-            fn=None, inputs=None, outputs=None, queue=False
+        ).then(fn=None, inputs=None, outputs=None, queue=False)
+
+        cancel_button.click(
+            fn=callbacks.cancel_process,
+            cancels=translate_event,
+            queue=False,
         )
 
         # Batch Tab Button
-        batch_process_button.click(
+        batch_event = batch_process_button.click(
             fn=functools.partial(
-                callbacks.update_button_state,
+                callbacks.update_process_buttons,
                 processing=True,
                 button_text_processing="Processing...",
                 button_text_idle="Start Batch Translating",
             ),
-            outputs=batch_process_button,
+            outputs=[
+                batch_process_button,
+                batch_clear_button,
+                batch_cancel_button,
+                translate_button,
+                clear_button,
+                cancel_button,
+            ],
             queue=False,
         ).then(
             fn=functools.partial(
@@ -1679,17 +1715,29 @@ def create_layout(
             ),
             inputs=batch_inputs,
             outputs=[batch_output_gallery, batch_status_message],
-        ).then(
+        )
+        batch_event.then(
             fn=functools.partial(
-                callbacks.update_button_state,
+                callbacks.update_process_buttons,
                 processing=False,
                 button_text_processing="Processing...",
                 button_text_idle="Start Batch Translating",
             ),
-            outputs=batch_process_button,
+            outputs=[
+                batch_process_button,
+                batch_clear_button,
+                batch_cancel_button,
+                translate_button,
+                clear_button,
+                cancel_button,
+            ],
             queue=False,
-        ).then(
-            fn=None, inputs=None, outputs=None, queue=False
+        ).then(fn=None, inputs=None, outputs=None, queue=False)
+
+        batch_cancel_button.click(
+            fn=callbacks.cancel_process,
+            cancels=batch_event,
+            queue=False,
         )
 
         app.load(

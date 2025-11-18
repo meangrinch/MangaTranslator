@@ -5,7 +5,7 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
 import cv2
 import torch
@@ -16,8 +16,9 @@ from core.config import (CleaningConfig, DetectionConfig,
                          MangaTranslatorConfig, OutputConfig,
                          OutsideTextConfig, TranslationConfig)
 from core.validation import validate_mutually_exclusive_modes
-from utils.exceptions import (CleaningError, FontError, ImageProcessingError,
-                              RenderingError, TranslationError)
+from utils.exceptions import (CancellationError, CleaningError, FontError,
+                              ImageProcessingError, RenderingError,
+                              TranslationError)
 from utils.logging import log_message
 
 from .image.cleaning import clean_speech_bubbles
@@ -33,6 +34,9 @@ from .services.translation import (call_translation_api_batch,
                                    sort_bubbles_by_reading_order)
 from .text.text_renderer import RenderingConfig, render_text_skia
 
+if TYPE_CHECKING:
+    from ui.cancellation import CancellationManager
+
 
 def get_image_encoding_params(pil_image_format: Optional[str]) -> Tuple[str, str]:
     """Returns (mime_type, cv2_ext) for a given PIL image format."""
@@ -45,6 +49,7 @@ def translate_and_render(
     image_path: Union[str, Path],
     config: MangaTranslatorConfig,
     output_path: Optional[Union[str, Path]] = None,
+    cancellation_manager: Optional["CancellationManager"] = None,
 ):
     """
     Main function to translate manga speech bubbles and render translations using a config object.
@@ -78,6 +83,9 @@ def translate_and_render(
     except Exception as e:
         log_message(f"Error opening image {image_path}: {e}", always_print=True)
         raise
+
+    if cancellation_manager and cancellation_manager.is_cancelled():
+        raise TranslationError("Process cancelled by user.")
 
     desired_format = config.output.output_format
     output_ext_for_mode = (
@@ -162,6 +170,9 @@ def translate_and_render(
                 f"Warning: Failed to encode full image context: {e}", always_print=True
             )
 
+    if cancellation_manager and cancellation_manager.is_cancelled():
+        raise CancellationError("Process cancelled by user.")
+
     # --- Detection ---
     log_message("Detecting speech bubbles...", verbose=verbose)
     try:
@@ -184,6 +195,9 @@ def translate_and_render(
         log_message("No speech bubbles detected", always_print=True)
     else:
         log_message(f"Detected {len(bubble_data)} bubbles", verbose=verbose)
+
+        if cancellation_manager and cancellation_manager.is_cancelled():
+            raise CancellationError("Process cancelled by user.")
 
         # --- Cleaning ---
         log_message("Cleaning speech bubbles...", verbose=verbose)
@@ -247,6 +261,9 @@ def translate_and_render(
             if not valid_bubble_data:
                 log_message("No valid bubble images for translation", always_print=True)
             else:  # Only proceed if we have valid bubble data
+                if cancellation_manager and cancellation_manager.is_cancelled():
+                    raise CancellationError("Process cancelled by user.")
+
                 # --- Sort and Translate ---
                 reading_direction = config.translation.reading_direction
                 # Merge outside text data with speech bubbles for reading order calculation
@@ -597,6 +614,7 @@ def batch_translate_images(
     output_dir: Optional[Union[str, Path]] = None,
     progress_callback: Optional[Callable[[float, str], None]] = None,
     preserve_structure: bool = False,
+    cancellation_manager: Optional["CancellationManager"] = None,
 ) -> Dict[str, Any]:
     """
     Process all images in a directory using a configuration object.
@@ -678,6 +696,9 @@ def batch_translate_images(
                 display_path = img_path.name
                 error_key = img_path.name
 
+            if cancellation_manager and cancellation_manager.is_cancelled():
+                raise CancellationError("Batch process cancelled by user.")
+
             if progress_callback:
                 current_progress = i / total_images
                 progress_callback(
@@ -706,7 +727,9 @@ def batch_translate_images(
                 f"Processing {i + 1}/{total_images}: {display_path}", always_print=True
             )
 
-            translate_and_render(img_path, config, output_path)
+            translate_and_render(
+                img_path, config, output_path, cancellation_manager=cancellation_manager
+            )
 
             results["success_count"] += 1
 
@@ -716,6 +739,12 @@ def batch_translate_images(
                     completed_progress, f"Completed {i + 1}/{total_images} images"
                 )
 
+        except CancellationError:
+            log_message(
+                f"Batch cancelled during processing of {display_path}",
+                verbose=config.verbose,
+            )
+            raise
         except Exception as e:
             log_message(f"Error processing {display_path}: {str(e)}", always_print=True)
             results["error_count"] += 1
@@ -1481,7 +1510,9 @@ def main():
             output_ext = original_ext
             output_dir = Path("./output")
             output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = output_dir / f"{input_path.stem}_translated_{timestamp}{output_ext}"
+            output_path = (
+                output_dir / f"{input_path.stem}_translated_{timestamp}{output_ext}"
+            )
             log_message(
                 f"--output not specified, using default: {output_path}",
                 always_print=True,

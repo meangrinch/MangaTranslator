@@ -4,17 +4,20 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from PIL import Image
 
 from core.config import MangaTranslatorConfig, RenderingConfig
 from core.pipeline import batch_translate_images, translate_and_render
 from core.validation import validate_batch_input_path, validate_core_inputs
-from utils.exceptions import (CleaningError, FontError, ImageProcessingError,
-                              RenderingError, TranslationError,
-                              ValidationError)
+from utils.exceptions import (CancellationError, CleaningError, FontError,
+                              ImageProcessingError, RenderingError,
+                              TranslationError, ValidationError)
 from utils.logging import log_message
+
+if TYPE_CHECKING:
+    from ui.cancellation import CancellationManager
 
 
 class LogicError(Exception):
@@ -76,6 +79,7 @@ def translate_manga_logic(
     models_dir: Path,
     fonts_base_dir: Path,
     output_base_dir: Path = Path("./output"),
+    cancellation_manager: Optional["CancellationManager"] = None,
 ) -> tuple[Image.Image, Path]:
     """
     Processes a single manga image. Handles core validation, calls the core pipeline,
@@ -88,6 +92,7 @@ def translate_manga_logic(
         models_dir: Path to the directory containing YOLO models.
         fonts_base_dir: Path to the base directory containing font pack subdirectories.
         output_base_dir: Base directory to save the output image.
+        cancellation_manager: Optional manager to handle cancellation.
 
     Returns:
         A tuple containing:
@@ -101,6 +106,9 @@ def translate_manga_logic(
         LogicError: For processing failures within this function.
         Exception: For unexpected errors during processing.
     """
+    display_name = (
+        Path(image).name if isinstance(image, (str, Path)) else "uploaded image"
+    )
     try:
         # Create temporary config for validation since we only have the font pack name
         rendering_cfg_for_val = RenderingConfig(
@@ -157,10 +165,15 @@ def translate_manga_logic(
         else:
             # PIL.Image object - no original filename available
             original_name = "MangaTranslator"
-        save_path = output_base_dir / f"{original_name}_translated_{timestamp}{output_ext}"
+        save_path = (
+            output_base_dir / f"{original_name}_translated_{timestamp}{output_ext}"
+        )
 
         translated_image = translate_and_render(
-            image_path=image_path_for_processing, config=config, output_path=save_path
+            image_path=image_path_for_processing,
+            config=config,
+            output_path=save_path,
+            cancellation_manager=cancellation_manager,
         )
 
         if not translated_image:
@@ -176,6 +189,9 @@ def translate_manga_logic(
         raise LogicError(f"Translation failed: {str(e)}") from e
     except ImageProcessingError as e:
         raise LogicError(f"Image processing failed: {str(e)}") from e
+    except CancellationError as e:
+        log_message(f"Translation cancelled for {display_name}", verbose=config.verbose)
+        raise e
     except Exception as e:
         import traceback
 
@@ -201,6 +217,7 @@ def process_batch_logic(
     fonts_base_dir: Path,
     output_base_dir: Path = Path("./output"),
     gradio_progress: Any = None,
+    cancellation_manager: Optional["CancellationManager"] = None,
 ) -> Dict[str, Any]:
     """
     Processes a batch of manga images. Handles core validation, calls the core batch pipeline,
@@ -266,6 +283,8 @@ def process_batch_logic(
             gradio_progress(value, desc=desc)
         elif config.verbose:
             log_message(f"Progress: {desc} [{value * 100:.1f}%]", verbose=True)
+        if cancellation_manager and cancellation_manager.is_cancelled():
+            raise CancellationError("Batch process cancelled by user.")
 
     temp_dir_path_obj = None
     zip_temp_dir_obj = None
@@ -404,6 +423,7 @@ def process_batch_logic(
             output_dir=batch_output_path,
             progress_callback=_batch_progress_callback,
             preserve_structure=preserve_structure,
+            cancellation_manager=cancellation_manager,
         )
 
         processing_time = time.time() - start_time
@@ -436,6 +456,8 @@ def process_batch_logic(
         raise LogicError(
             f"Image processing failed during batch processing: {str(e)}"
         ) from e
+    except CancellationError as e:
+        raise e
     except Exception as e:
         import traceback
 

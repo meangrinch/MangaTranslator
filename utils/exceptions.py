@@ -22,7 +22,7 @@ class RenderingError(RuntimeError):
     pass
 
 
-class ImageProcessingError(RuntimeError):
+class ImageProcessingError(Exception):
     """Custom exception for image operations failures."""
 
     pass
@@ -40,7 +40,11 @@ class DetectionError(RuntimeError):
     pass
 
 
-class CleaningError(RuntimeError):
+class CleaningError(Exception):
     """Custom exception for bubble cleaning failures."""
 
+    pass
+
+
+class CancellationError(Exception):
     pass
