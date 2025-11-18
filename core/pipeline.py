@@ -58,7 +58,7 @@ def _resolve_pre_upscale_factor(
     if factor <= 1.01:
         return 1.0
 
-    log_message(f"Pre-processing upscaling enabled: {factor:.2f}x", verbose=verbose)
+    log_message(f"Initial upscaling enabled: {factor:.2f}x", verbose=verbose)
     return factor
 
 
@@ -153,11 +153,12 @@ def translate_and_render(
     full_image_mime_type = None
     if config.translation.send_full_page_context:
         try:
-            # Prepare full page context based on upscale method
+            # Prepare full page context based on upscale method.
+            # processing_scale is intentionally not used for context_image_max_side_pixels
             context_image_pil = cv2_to_pil(original_cv_image)
             effective_context_max_side = scale_length(
                 config.translation.context_image_max_side_pixels,
-                processing_scale,
+                None,
                 minimum=512,
                 maximum=4096,
             )
@@ -184,7 +185,7 @@ def translate_and_render(
                         "Upscaled full image for context with model", verbose=verbose
                     )
             elif config.translation.upscale_method == "lanczos":
-                # Use LANCZOS resampling (current behavior)
+                # Use LANCZOS resampling
                 context_image_pil = resize_to_max_side(
                     context_image_pil,
                     effective_context_max_side,
