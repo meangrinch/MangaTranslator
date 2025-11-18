@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple, Union
 
 from core.config import (MangaTranslatorConfig, RenderingConfig,
                          TranslationConfig)
@@ -132,3 +132,75 @@ def validate_config(config: MangaTranslatorConfig) -> None:
         ValidationError: If invalid configuration is detected.
     """
     validate_mutually_exclusive_modes(config.cleaning_only, config.test_mode)
+
+
+def normalize_zip_file_input(zip_input: Any) -> str:
+    """
+    Normalizes ZIP file input from Gradio (handles both string and file-like objects).
+
+    Args:
+        zip_input: ZIP file input from Gradio (can be str or file-like object).
+
+    Returns:
+        str: Normalized file path as string.
+
+    Raises:
+        ValidationError: If the input format is invalid.
+    """
+    if isinstance(zip_input, str):
+        return zip_input
+    elif hasattr(zip_input, "name"):
+        zip_path = zip_input.name
+        return zip_path if isinstance(zip_path, str) else str(zip_path)
+    else:
+        raise ValidationError("Invalid ZIP file format.")
+
+
+def validate_zip_file(zip_path: Union[str, Path]) -> Path:
+    """
+    Validates that a ZIP file exists and has the correct extension.
+
+    Args:
+        zip_path: Path to the ZIP file to validate.
+
+    Returns:
+        Path: Validated Path object to the ZIP file.
+
+    Raises:
+        FileNotFoundError: If the ZIP file does not exist.
+        ValidationError: If the file is not a ZIP archive.
+    """
+    zip_file_path = Path(zip_path)
+    if not zip_file_path.exists():
+        raise FileNotFoundError(f"ZIP file not found: {zip_path}")
+
+    if not zip_file_path.suffix.lower() == ".zip":
+        raise ValidationError(f"File is not a ZIP archive: {zip_path}")
+
+    return zip_file_path
+
+
+def validate_batch_input_path(input_path: Union[str, Path]) -> Path:
+    """
+    Validates that a batch input path exists and is either a directory or ZIP file.
+
+    Args:
+        input_path: Path to validate (directory or ZIP file).
+
+    Returns:
+        Path: Validated Path object.
+
+    Raises:
+        FileNotFoundError: If the path does not exist.
+        ValidationError: If the path is neither a directory nor a ZIP file.
+    """
+    path = Path(input_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Input path '{input_path}' does not exist.")
+
+    if not (path.is_dir() or (path.is_file() and path.suffix.lower() == ".zip")):
+        raise ValidationError(
+            f"Input path '{input_path}' is neither a directory nor a ZIP file."
+        )
+
+    return path

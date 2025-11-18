@@ -1,7 +1,9 @@
 import argparse
 import base64
 import os
+import tempfile
 import time
+import zipfile
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
@@ -594,6 +596,7 @@ def batch_translate_images(
     config: MangaTranslatorConfig,
     output_dir: Optional[Union[str, Path]] = None,
     progress_callback: Optional[Callable[[float, str], None]] = None,
+    preserve_structure: bool = False,
 ) -> Dict[str, Any]:
     """
     Process all images in a directory using a configuration object.
@@ -604,6 +607,8 @@ def batch_translate_images(
         output_dir (str or Path, optional): Directory to save translated images.
                                             If None, uses input_dir / "output_translated".
         progress_callback (callable, optional): Function to call with progress updates (0.0-1.0, message).
+        preserve_structure (bool): If True, recursively process subdirectories and preserve folder structure
+                                   in the output. If False, only processes files in the root directory.
 
     Returns:
         dict: Processing results with keys:
@@ -625,11 +630,21 @@ def batch_translate_images(
     os.makedirs(output_dir, exist_ok=True)
 
     image_extensions = [".jpg", ".jpeg", ".png", ".webp"]
-    image_files = [
-        f
-        for f in input_dir.iterdir()
-        if f.is_file() and f.suffix.lower() in image_extensions
-    ]
+
+    if preserve_structure:
+        # Recursively find all image files preserving directory structure
+        image_files = []
+        for root, dirs, files in os.walk(input_dir):
+            for file in files:
+                file_path = Path(root) / file
+                if file_path.suffix.lower() in image_extensions:
+                    image_files.append(file_path)
+    else:
+        image_files = [
+            f
+            for f in input_dir.iterdir()
+            if f.is_file() and f.suffix.lower() in image_extensions
+        ]
 
     if not image_files:
         log_message(f"No image files found in '{input_dir}'", always_print=True)
@@ -647,11 +662,27 @@ def batch_translate_images(
 
     for i, img_path in enumerate(image_files):
         try:
+            # Calculate relative path from input directory for structure preservation
+            if preserve_structure:
+                relative_path = img_path.relative_to(input_dir)
+                # Create output subdirectory structure
+                output_subdir = output_dir / relative_path.parent
+                os.makedirs(output_subdir, exist_ok=True)
+                # Use relative path for output filename
+                output_filename = f"{relative_path.stem}_translated"
+                display_path = str(relative_path)
+                error_key = str(relative_path)
+            else:
+                output_subdir = output_dir
+                output_filename = f"{img_path.stem}_translated"
+                display_path = img_path.name
+                error_key = img_path.name
+
             if progress_callback:
                 current_progress = i / total_images
                 progress_callback(
                     current_progress,
-                    f"Processing image {i + 1}/{total_images}: {img_path.name}",
+                    f"Processing image {i + 1}/{total_images}: {display_path}",
                 )
 
             original_ext = img_path.suffix.lower()
@@ -670,9 +701,9 @@ def batch_translate_images(
                     always_print=True,
                 )
 
-            output_path = output_dir / f"{img_path.stem}_translated{output_ext}"
+            output_path = output_subdir / f"{output_filename}{output_ext}"
             log_message(
-                f"Processing {i + 1}/{total_images}: {img_path.name}", always_print=True
+                f"Processing {i + 1}/{total_images}: {display_path}", always_print=True
             )
 
             translate_and_render(img_path, config, output_path)
@@ -686,11 +717,9 @@ def batch_translate_images(
                 )
 
         except Exception as e:
-            log_message(
-                f"Error processing {img_path.name}: {str(e)}", always_print=True
-            )
+            log_message(f"Error processing {display_path}: {str(e)}", always_print=True)
             results["error_count"] += 1
-            results["errors"][img_path.name] = str(e)
+            results["errors"][error_key] = str(e)
 
             if progress_callback:
                 completed_progress = (i + 1) / total_images
@@ -727,7 +756,7 @@ def main():
         "--input",
         type=str,
         required=True,
-        help="Path to input image or directory (if using --batch)",
+        help="Path to input image, directory, or ZIP archive (if using --batch)",
     )
     parser.add_argument(
         "--output",
@@ -736,7 +765,9 @@ def main():
         help="Path to save the translated image or directory (if using --batch)",
     )
     parser.add_argument(
-        "--batch", action="store_true", help="Process all images in the input directory"
+        "--batch",
+        action="store_true",
+        help="Process all images in the input directory or ZIP archive (preserves folder structure for ZIP files)",
     )
     # --- Provider and API Key Arguments ---
     parser.add_argument(
@@ -1363,9 +1394,41 @@ def main():
     # --- Execute ---
     if args.batch:
         input_path = Path(args.input)
-        if not input_path.is_dir():
+        zip_temp_dir_obj = None
+        preserve_structure = False
+
+        if input_path.is_file() and input_path.suffix.lower() == ".zip":
+            log_message(f"Detected ZIP archive: {input_path.name}", always_print=True)
+            try:
+                temp_dir_obj = tempfile.TemporaryDirectory()
+                temp_dir_path = Path(temp_dir_obj.name)
+                zip_temp_dir_obj = temp_dir_obj
+
+                with zipfile.ZipFile(input_path, "r") as zip_ref:
+                    zip_ref.extractall(temp_dir_path)
+
+                log_message(
+                    "Extracted ZIP archive to temporary directory",
+                    always_print=True,
+                )
+
+                input_path = temp_dir_path
+                preserve_structure = True
+            except zipfile.BadZipFile:
+                log_message(
+                    f"Error: '{args.input}' is not a valid ZIP archive.",
+                    always_print=True,
+                )
+                exit(1)
+            except Exception as e:
+                log_message(
+                    f"Error extracting ZIP archive: {str(e)}",
+                    always_print=True,
+                )
+                exit(1)
+        elif not input_path.is_dir():
             log_message(
-                f"Error: --batch requires --input '{args.input}' to be a directory.",
+                f"Error: --batch requires --input '{args.input}' to be a directory or ZIP archive.",
                 always_print=True,
             )
             exit(1)
@@ -1386,7 +1449,23 @@ def main():
                 )
                 exit(1)
 
-        batch_translate_images(input_path, config, output_dir)
+        try:
+            batch_translate_images(
+                input_path, config, output_dir, preserve_structure=preserve_structure
+            )
+        finally:
+            if zip_temp_dir_obj:
+                try:
+                    zip_temp_dir_obj.cleanup()
+                    log_message(
+                        "Cleaned up ZIP extraction temporary directory",
+                        always_print=True,
+                    )
+                except Exception as e_clean:
+                    log_message(
+                        f"Warning: Failed to clean up temporary directory: {e_clean}",
+                        always_print=True,
+                    )
     else:
         input_path = Path(args.input)
         if not input_path.is_file():

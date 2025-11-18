@@ -283,6 +283,12 @@ def create_layout(
                             file_types=["image"],
                             type="filepath",
                         )
+                        input_zip = gr.File(
+                            label="Upload ZIP Archive",
+                            file_count="single",
+                            file_types=[".zip"],
+                            type="filepath",
+                        )
                         batch_font_dropdown = gr.Dropdown(
                             choices=font_choices,
                             label="Text Font",
@@ -335,6 +341,7 @@ def create_layout(
                             batch_clear_button = gr.ClearButton(  # noqa
                                 [
                                     input_files,
+                                    input_zip,
                                     batch_output_gallery,
                                     batch_status_message,
                                 ],
@@ -1334,6 +1341,7 @@ def create_layout(
 
         batch_inputs = [
             input_files,
+            input_zip,
             confidence,
             use_sam2_checkbox,
             thresholding_value,

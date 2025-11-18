@@ -8,7 +8,9 @@ import torch
 from PIL import Image
 
 from core.config import MangaTranslatorConfig
-from core.validation import validate_mutually_exclusive_modes
+from core.validation import (normalize_zip_file_input,
+                             validate_mutually_exclusive_modes,
+                             validate_zip_file)
 from utils.exceptions import ValidationError
 
 from . import logic, settings_manager, utils
@@ -120,7 +122,9 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
     final_input_language = batch_input_language if is_batch else input_language
     final_output_language = batch_output_language if is_batch else output_language
     final_font_pack = batch_font_dropdown if is_batch else font_dropdown
-    final_special_instructions = batch_special_instructions_val if is_batch else special_instructions_val
+    final_special_instructions = (
+        batch_special_instructions_val if is_batch else special_instructions_val
+    )
 
     return UIConfigState(
         detection=UIDetectionSettings(
@@ -659,19 +663,40 @@ def handle_batch_click(
 ) -> Tuple[List[str], str]:
     """Callback for the 'Start Batch Translating' button click. Uses dataclasses."""
     input_files = args[0]
+    input_zip = args[1] if len(args) > 1 else None
     progress(0, desc="Starting batch process...")
     try:
-        # --- UI Validation ---
-        if not input_files:
-            raise gr.Error(f"{ERROR_PREFIX}Please upload images or a folder.")
+        zip_file_path = None
+        if input_zip:
+            try:
+                zip_path_str = normalize_zip_file_input(input_zip)
+                zip_file_path = validate_zip_file(zip_path_str)
+            except (ValidationError, FileNotFoundError) as e:
+                raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
 
-        if not isinstance(input_files, list):
+        if input_files:
+            if not isinstance(input_files, list):
+                raise gr.Error(
+                    f"{ERROR_PREFIX}Invalid input format. Expected a list of files."
+                )
+
+        if not zip_file_path and not input_files:
             raise gr.Error(
-                f"{ERROR_PREFIX}Invalid input format. Expected a list of files."
+                f"{ERROR_PREFIX}Please upload images, a folder, or a ZIP archive."
             )
 
+        if zip_file_path and input_files:
+            input_to_process = {
+                "zip": str(zip_file_path),
+                "files": input_files,
+            }
+        elif zip_file_path:
+            input_to_process = str(zip_file_path)
+        else:
+            input_to_process = input_files
+
         # --- Build UI State Dataclass ---
-        ui_state = _build_ui_state_from_args(args[1:], is_batch=True)
+        ui_state = _build_ui_state_from_args(args[2:], is_batch=True)
 
         # --- Validate UI State ---
         _validate_ui_state(ui_state)
@@ -687,7 +712,7 @@ def handle_batch_click(
 
         # --- Call Logic ---
         results = logic.process_batch_logic(
-            input_dir_or_files=input_files,
+            input_dir_or_files=input_to_process,
             config=backend_config,
             selected_font_pack_name=selected_font_pack_name,
             models_dir=models_dir,
@@ -699,7 +724,14 @@ def handle_batch_click(
         output_path = results["output_path"]
         gallery_images = []
         if output_path.exists():
-            processed_files = list(output_path.glob("*.*"))
+            # Use rglob to recursively find all images when structure is preserved
+            processed_files = list(output_path.rglob("*.*"))
+            image_extensions = [".jpg", ".jpeg", ".png", ".webp"]
+            processed_files = [
+                f
+                for f in processed_files
+                if f.is_file() and f.suffix.lower() in image_extensions
+            ]
             processed_files.sort(  # Sort naturally (e.g., page_1, page_2, page_10)
                 key=lambda x: tuple(
                     int(part) if part.isdigit() else part
@@ -913,9 +945,7 @@ def handle_save_config_click(*args: Any) -> str:
     return message
 
 
-def handle_reset_defaults_click(
-    fonts_base_dir: Path
-) -> List[gr.update]:
+def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     """Callback for the 'Reset Defaults' button. Uses dataclasses."""
 
     default_settings_dict = settings_manager.reset_to_defaults()
