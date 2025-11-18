@@ -152,7 +152,12 @@ def translate_manga_logic(
             output_ext = ".png"
 
         os.makedirs(output_base_dir, exist_ok=True)
-        save_path = output_base_dir / f"MangaTranslator_{timestamp}{output_ext}"
+        if isinstance(image, (str, Path)):
+            original_name = input_path.stem
+        else:
+            # PIL.Image object - no original filename available
+            original_name = "MangaTranslator"
+        save_path = output_base_dir / f"{original_name}_translated_{timestamp}{output_ext}"
 
         translated_image = translate_and_render(
             image_path=image_path_for_processing, config=config, output_path=save_path

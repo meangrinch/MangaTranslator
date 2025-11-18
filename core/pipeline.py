@@ -1481,7 +1481,7 @@ def main():
             output_ext = original_ext
             output_dir = Path("./output")
             output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = output_dir / f"MangaTranslator_{timestamp}{output_ext}"
+            output_path = output_dir / f"{input_path.stem}_translated_{timestamp}{output_ext}"
             log_message(
                 f"--output not specified, using default: {output_path}",
                 always_print=True,
