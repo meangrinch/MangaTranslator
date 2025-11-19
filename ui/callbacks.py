@@ -88,6 +88,9 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         enable_thinking_checkbox_val,
         thinking_level_val,
         enable_grounding_val,
+        media_resolution_val,
+        media_resolution_bubbles_val,
+        media_resolution_context_val,
         reasoning_effort_val,
         send_full_page_context_val,
         upscale_method_val,
@@ -209,6 +212,9 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             enable_thinking=enable_thinking_checkbox_val,
             thinking_level=thinking_level_val,
             enable_grounding=enable_grounding_val,
+            media_resolution=media_resolution_val,
+            media_resolution_bubbles=media_resolution_bubbles_val,
+            media_resolution_context=media_resolution_context_val,
             reasoning_effort=reasoning_effort_val,
         ),
         input_language=final_input_language,
@@ -860,6 +866,9 @@ def handle_save_config_click(*args: Any) -> str:
         enable_thinking_val,
         thinking_level_val,
         enable_grounding_val,
+        media_resolution_val,
+        media_resolution_bubbles_val,
+        media_resolution_context_val,
         reasoning_effort_val,
         send_full_page_context_val,
         upscale_method_val,
@@ -969,6 +978,9 @@ def handle_save_config_click(*args: Any) -> str:
             enable_thinking=enable_thinking_val,
             thinking_level=thinking_level_val,
             enable_grounding=enable_grounding_val,
+            media_resolution=media_resolution_val,
+            media_resolution_bubbles=media_resolution_bubbles_val,
+            media_resolution_context=media_resolution_context_val,
             reasoning_effort=reasoning_effort_val,
         ),
         input_language=s_in_lang,
@@ -1032,6 +1044,9 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         enable_thinking_update,
         thinking_level_update,
         enable_grounding_update,
+        media_resolution_update,
+        media_resolution_bubbles_update,
+        media_resolution_context_update,
         reasoning_effort_update,
     ) = utils.update_params_for_model(
         default_provider, default_model_name, default_ui_state.llm_settings.temperature
@@ -1044,6 +1059,13 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     enable_thinking_visible = enable_thinking_update.get("visible", False)
     thinking_level_visible = thinking_level_update.get("visible", False)
     enable_grounding_visible = enable_grounding_update.get("visible", False)
+    media_resolution_visible = media_resolution_update.get("visible", False)
+    media_resolution_bubbles_visible = media_resolution_bubbles_update.get(
+        "visible", False
+    )
+    media_resolution_context_visible = media_resolution_context_update.get(
+        "visible", False
+    )
     reasoning_visible = reasoning_effort_update.get("visible", False)
 
     return [
@@ -1116,6 +1138,18 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(
             value=default_ui_state.general.enable_grounding,
             visible=enable_grounding_visible,
+        ),
+        gr.update(
+            value=default_ui_state.general.media_resolution,
+            visible=media_resolution_visible,
+        ),
+        gr.update(
+            value=default_ui_state.general.media_resolution_bubbles,
+            visible=media_resolution_bubbles_visible,
+        ),
+        gr.update(
+            value=default_ui_state.general.media_resolution_context,
+            visible=media_resolution_context_visible,
         ),
         gr.update(
             value=default_ui_state.general.reasoning_effort, visible=reasoning_visible

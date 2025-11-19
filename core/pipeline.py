@@ -1033,7 +1033,7 @@ def main():
         "--reasoning-effort",
         type=str,
         default="medium",
-        choices=["minimal", "low", "medium", "high"],
+        choices=["high", "medium", "low", "minimal"],
         help=(
             "Controls internal reasoning effort for OpenAI/OpenRouter OpenAI reasoning models "
             "(o1/o3/o4-mini/gpt-5*). Note: 'minimal' is only supported by gpt-5 series."
@@ -1166,8 +1166,8 @@ def main():
         "--thinking-level",
         type=str,
         default="high",
-        choices=["low", "high"],
-        help=("Thinking level for Gemini 3 models"),
+        choices=["high", "low"],
+        help=("Reasoning effort for Gemini 3 models"),
     )
     parser.add_argument(
         "--enable-grounding",
@@ -1175,6 +1175,27 @@ def main():
         help=(
             "Enable Google Search grounding for Gemini models (Google and OpenRouter)"
         ),
+    )
+    parser.add_argument(
+        "--media-resolution",
+        type=str,
+        choices=["auto", "high", "medium", "low"],
+        default="auto",
+        help="Media resolution for Gemini models (Google provider only, not used for Gemini 3)",
+    )
+    parser.add_argument(
+        "--media-resolution-bubbles",
+        type=str,
+        choices=["auto", "high", "medium", "low"],
+        default="auto",
+        help="Media resolution for bubble images (Gemini 3 only)",
+    )
+    parser.add_argument(
+        "--media-resolution-context",
+        type=str,
+        choices=["auto", "high", "medium", "low"],
+        default="auto",
+        help="Media resolution for context (full page) images (Gemini 3 only)",
     )
     parser.add_argument(
         "--special-instructions",
@@ -1454,6 +1475,9 @@ def main():
             enable_thinking=args.enable_thinking,
             thinking_level=args.thinking_level,
             enable_grounding=args.enable_grounding,
+            media_resolution=args.media_resolution,
+            media_resolution_bubbles=args.media_resolution_bubbles,
+            media_resolution_context=args.media_resolution_context,
             reasoning_effort=args.reasoning_effort,
             send_full_page_context=args.send_full_page_context,
             upscale_method=args.upscale_method,

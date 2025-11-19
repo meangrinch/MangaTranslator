@@ -53,6 +53,9 @@ class TranslationConfig:
     send_full_page_context: bool = True
     upscale_method: str = "model"  # "model", "lanczos", or "none"
     enable_grounding: bool = False  # Enable Google Search grounding for Gemini models
+    media_resolution: str = "auto"  # Media resolution for Gemini models (auto/high/medium/low)
+    media_resolution_bubbles: str = "auto"  # Media resolution for bubble images (Gemini 3 only)
+    media_resolution_context: str = "auto"  # Media resolution for context images (Gemini 3 only)
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1536
     osb_min_side_pixels: int = 128

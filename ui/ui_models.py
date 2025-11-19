@@ -118,6 +118,13 @@ class UIGeneralSettings:
     enable_thinking: bool = True
     thinking_level: str = "high"
     enable_grounding: bool = False
+    media_resolution: str = "auto"
+    media_resolution_bubbles: str = (
+        "auto"  # Media resolution for bubble images (Gemini 3 only)
+    )
+    media_resolution_context: str = (
+        "auto"  # Media resolution for context images (Gemini 3 only)
+    )
     reasoning_effort: str = "medium"
 
 
@@ -213,6 +220,9 @@ class UIConfigState:
             "enable_thinking": self.general.enable_thinking,
             "thinking_level": self.general.thinking_level,
             "enable_grounding": self.general.enable_grounding,
+            "media_resolution": self.general.media_resolution,
+            "media_resolution_bubbles": self.general.media_resolution_bubbles,
+            "media_resolution_context": self.general.media_resolution_context,
             "reasoning_effort": self.general.reasoning_effort,
             "input_language": self.input_language,
             "output_language": self.output_language,
@@ -371,6 +381,18 @@ class UIConfigState:
                 enable_grounding=data.get(
                     "enable_grounding", defaults.get("enable_grounding", False)
                 ),
+                media_resolution=data.get(
+                    "media_resolution",
+                    defaults.get("media_resolution", "auto"),
+                ),
+                media_resolution_bubbles=data.get(
+                    "media_resolution_bubbles",
+                    defaults.get("media_resolution_bubbles", "auto"),
+                ),
+                media_resolution_context=data.get(
+                    "media_resolution_context",
+                    defaults.get("media_resolution_context", "auto"),
+                ),
                 reasoning_effort=data.get(
                     "reasoning_effort", defaults.get("reasoning_effort", "medium")
                 ),
@@ -434,6 +456,10 @@ def map_ui_to_backend_config(
         translation_mode=ui_state.llm_settings.translation_mode,
         enable_thinking=ui_state.general.enable_thinking,
         thinking_level=ui_state.general.thinking_level,
+        enable_grounding=ui_state.general.enable_grounding,
+        media_resolution=ui_state.general.media_resolution,
+        media_resolution_bubbles=ui_state.general.media_resolution_bubbles,
+        media_resolution_context=ui_state.general.media_resolution_context,
         send_full_page_context=ui_state.llm_settings.send_full_page_context,
         upscale_method=ui_state.llm_settings.upscale_method,
         bubble_min_side_pixels=ui_state.llm_settings.bubble_min_side_pixels,

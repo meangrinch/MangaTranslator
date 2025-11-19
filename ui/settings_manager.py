@@ -122,6 +122,9 @@ DEFAULT_SETTINGS = {
     "thinking_level": "high",  # Gemini 3 models (low or high)
     "reasoning_effort": "medium",  # OpenAI reasoning models; gpt-5 also supports 'minimal'
     "enable_grounding": False,  # Enable Google Search grounding for Gemini models
+    "media_resolution": "auto",  # Media resolution for Gemini models (auto/high/medium/low)
+    "media_resolution_bubbles": "auto",  # Media resolution for bubble images (Gemini 3 only)
+    "media_resolution_context": "auto",  # Media resolution for context images (Gemini 3 only)
     "send_full_page_context": True,
     "special_instructions": "",
     "upscale_method": "model",  # "model", "lanczos", or "none"

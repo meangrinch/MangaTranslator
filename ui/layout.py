@@ -642,7 +642,7 @@ def create_layout(
                             except Exception:
                                 _initial_thinking_level_visible = False
 
-                            thinking_level_dropdown = gr.Dropdown(
+                            thinking_level_dropdown = gr.Radio(
                                 label="Thinking Level",
                                 choices=["high", "low"],
                                 value=saved_settings.get("thinking_level", "high"),
@@ -674,6 +674,71 @@ def create_layout(
                                 visible=_initial_enable_grounding_visible,
                                 elem_id="enable_grounding_checkbox",
                             )
+
+                            # Compute initial visibility for media_resolution (Google provider only, but NOT Gemini 3)
+                            _initial_media_resolution_visible = False
+                            try:
+                                if config_initial_provider == "Google":
+                                    if (
+                                        config_initial_model_name
+                                        and "gemini-3" in config_initial_model_name.lower()
+                                    ):
+                                        _initial_media_resolution_visible = False
+                                    else:
+                                        _initial_media_resolution_visible = True
+                            except Exception:
+                                _initial_media_resolution_visible = False
+                            initial_media_resolution_value = saved_settings.get(
+                                "media_resolution", "auto"
+                            )
+
+                            media_resolution_dropdown = gr.Radio(
+                                label="Media Resolution",
+                                choices=["auto", "high", "medium", "low"],
+                                value=initial_media_resolution_value,
+                                info="Resolution for Gemini to process bubble/context images.",
+                                visible=_initial_media_resolution_visible,
+                                elem_id="media_resolution_dropdown",
+                            )
+
+                            # Compute initial visibility for Gemini 3 specific media resolution options
+                            _initial_media_resolution_bubbles_visible = False
+                            _initial_media_resolution_context_visible = False
+                            try:
+                                if (
+                                    config_initial_provider == "Google"
+                                    and config_initial_model_name
+                                ):
+                                    if "gemini-3" in config_initial_model_name.lower():
+                                        _initial_media_resolution_bubbles_visible = True
+                                        _initial_media_resolution_context_visible = True
+                            except Exception:
+                                pass
+                            initial_media_resolution_bubbles_value = saved_settings.get(
+                                "media_resolution_bubbles", "auto"
+                            )
+                            initial_media_resolution_context_value = saved_settings.get(
+                                "media_resolution_context", "auto"
+                            )
+
+                            media_resolution_bubbles_dropdown = gr.Radio(
+                                label="Media Resolution (Bubbles)",
+                                choices=["auto", "high", "medium", "low"],
+                                value=initial_media_resolution_bubbles_value,
+                                info="Resolution for Gemini 3 to process bubble images.",
+                                visible=_initial_media_resolution_bubbles_visible,
+                                elem_id="media_resolution_bubbles_dropdown",
+                            )
+
+                            media_resolution_context_dropdown = gr.Radio(
+                                label="Media Resolution (Context)",
+                                choices=["auto", "high", "medium", "low"],
+                                value=initial_media_resolution_context_value,
+                                info="Resolution for Gemini 3 to process context (full page) images.",
+                                visible=_initial_media_resolution_context_visible,
+                                elem_id="media_resolution_context_dropdown",
+                            )
+
                             # Compute initial visibility for reasoning effort (OpenAI and OpenRouter OpenAI models)
                             _initial_reasoning_effort_visible = False
                             try:
@@ -696,7 +761,7 @@ def create_layout(
                             except Exception:
                                 _initial_reasoning_effort_visible = False
 
-                            reasoning_effort_dropdown = gr.Dropdown(
+                            reasoning_effort_dropdown = gr.Radio(
                                 choices=["high", "medium", "low"],
                                 label="Reasoning Effort (OpenAI/OpenRouter)",
                                 value=saved_settings.get("reasoning_effort", "medium"),
@@ -1205,6 +1270,9 @@ def create_layout(
             enable_thinking_checkbox,
             thinking_level_dropdown,
             enable_grounding_checkbox,
+            media_resolution_dropdown,
+            media_resolution_bubbles_dropdown,
+            media_resolution_context_dropdown,
             reasoning_effort_dropdown,
             send_full_page_context,
             upscale_method,
@@ -1278,6 +1346,9 @@ def create_layout(
             enable_thinking_checkbox,
             thinking_level_dropdown,
             enable_grounding_checkbox,
+            media_resolution_dropdown,
+            media_resolution_bubbles_dropdown,
+            media_resolution_context_dropdown,
             reasoning_effort_dropdown,
             config_status,
             send_full_page_context,
@@ -1343,6 +1414,9 @@ def create_layout(
             enable_thinking_checkbox,
             thinking_level_dropdown,
             enable_grounding_checkbox,
+            media_resolution_dropdown,
+            media_resolution_bubbles_dropdown,
+            media_resolution_context_dropdown,
             reasoning_effort_dropdown,
             send_full_page_context,
             upscale_method,
@@ -1418,6 +1492,9 @@ def create_layout(
             enable_thinking_checkbox,
             thinking_level_dropdown,
             enable_grounding_checkbox,
+            media_resolution_dropdown,
+            media_resolution_bubbles_dropdown,
+            media_resolution_context_dropdown,
             reasoning_effort_dropdown,
             send_full_page_context,
             upscale_method,
@@ -1536,6 +1613,9 @@ def create_layout(
                 enable_thinking_checkbox,
                 thinking_level_dropdown,
                 enable_grounding_checkbox,
+                media_resolution_dropdown,
+                media_resolution_bubbles_dropdown,
+                media_resolution_context_dropdown,
                 reasoning_effort_dropdown,
             ],
             queue=False,
@@ -1568,6 +1648,9 @@ def create_layout(
                 enable_thinking_checkbox,
                 thinking_level_dropdown,
                 enable_grounding_checkbox,
+                media_resolution_dropdown,
+                media_resolution_bubbles_dropdown,
+                media_resolution_context_dropdown,
                 reasoning_effort_dropdown,
             ],
             queue=False,

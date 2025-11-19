@@ -218,6 +218,41 @@ def _is_reasoning_model_openai_compatible(model_name: str) -> bool:
     return "thinking" in lm or "reasoning" in lm
 
 
+def _add_media_resolution_to_part(
+    part: Dict[str, Any],
+    media_resolution_ui: str,
+    is_gemini_3: bool,
+) -> Dict[str, Any]:
+    """
+    Add media_resolution to an inline_data part for Gemini 3 models.
+
+    Args:
+        part: Part dictionary with inline_data
+        media_resolution_ui: UI format media resolution ("auto"/"high"/"medium"/"low")
+        is_gemini_3: Whether the model is Gemini 3
+
+    Returns:
+        Part dictionary with media_resolution added if Gemini 3, otherwise unchanged
+    """
+    if not is_gemini_3 or "inline_data" not in part:
+        return part
+
+    media_resolution_mapping = {
+        "auto": "MEDIA_RESOLUTION_UNSPECIFIED",
+        "high": "MEDIA_RESOLUTION_HIGH",
+        "medium": "MEDIA_RESOLUTION_MEDIUM",
+        "low": "MEDIA_RESOLUTION_LOW",
+    }
+    backend_media_resolution = media_resolution_mapping.get(
+        media_resolution_ui.lower(), "MEDIA_RESOLUTION_UNSPECIFIED"
+    )
+
+    # Create a copy to avoid mutating the original
+    result = part.copy()
+    result["media_resolution"] = {"level": backend_media_resolution}
+    return result
+
+
 def _build_generation_config(
     provider: str,
     model_name: str,
@@ -267,14 +302,29 @@ def _build_generation_config(
         max_tokens_value = 16384 if is_reasoning else 4096
 
     if provider == "Google":
+        is_gemini_3 = "gemini-3" in model_name.lower()
         generation_config = {
             "temperature": temperature,
             "topP": top_p,
             "topK": top_k,
             "maxOutputTokens": max_tokens_value,
         }
+        # For Gemini 3, media_resolution can be set per-part
+        # For other Gemini models, media_resolution is set globally in generation_config
+        if not is_gemini_3:
+            # Convert UI format to backend format for API
+            media_resolution_mapping = {
+                "auto": "MEDIA_RESOLUTION_UNSPECIFIED",
+                "high": "MEDIA_RESOLUTION_HIGH",
+                "medium": "MEDIA_RESOLUTION_MEDIUM",
+                "low": "MEDIA_RESOLUTION_LOW",
+            }
+            backend_media_resolution = media_resolution_mapping.get(
+                config.media_resolution.lower(), "MEDIA_RESOLUTION_UNSPECIFIED"
+            )
+            generation_config["media_resolution"] = backend_media_resolution
         # Handle thinking config for Gemini 3 models
-        if "gemini-3" in model_name.lower():
+        if is_gemini_3:
             generation_config["thinkingConfig"] = {
                 "thinkingLevel": config.thinking_level
             }
@@ -782,19 +832,31 @@ def call_translation_api_batch(
         log_message("  - Using cached translation", verbose=debug)
         return cached_translation
 
+    # Check if model is Gemini 3 for per-part media_resolution
+    model_name = config.model_name
+    is_gemini_3 = provider == "Google" and "gemini-3" in model_name.lower()
+
     base_parts = []
     if config.send_full_page_context and full_image_b64:
-        base_parts.append(
-            {
-                "inline_data": {
-                    "mime_type": full_image_mime_type,
-                    "data": full_image_b64,
-                }
+        context_part = {
+            "inline_data": {
+                "mime_type": full_image_mime_type,
+                "data": full_image_b64,
             }
-        )
+        }
+        if is_gemini_3:
+            context_part = _add_media_resolution_to_part(
+                context_part, config.media_resolution_context, is_gemini_3
+            )
+        base_parts.append(context_part)
     for i, img_b64 in enumerate(images_b64):
         mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
-        base_parts.append({"inline_data": {"mime_type": mime_type, "data": img_b64}})
+        bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
+        if is_gemini_3:
+            bubble_part = _add_media_resolution_to_part(
+                bubble_part, config.media_resolution_bubbles, is_gemini_3
+            )
+        base_parts.append(bubble_part)
 
     try:
         if translation_mode == "two-step":
@@ -839,9 +901,12 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
             ocr_parts = []
             for i, img_b64 in enumerate(images_b64):
                 mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
-                ocr_parts.append(
-                    {"inline_data": {"mime_type": mime_type, "data": img_b64}}
-                )
+                bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
+                if is_gemini_3:
+                    bubble_part = _add_media_resolution_to_part(
+                        bubble_part, config.media_resolution_bubbles, is_gemini_3
+                    )
+                ocr_parts.append(bubble_part)
 
             ocr_system = _build_system_prompt_ocr(
                 input_language, reading_direction, num_speech_bubbles, num_osb_text
@@ -946,14 +1011,17 @@ The target language is {output_language}. Use the appropriate translation approa
 
             translation_parts = []
             if config.send_full_page_context and full_image_b64:
-                translation_parts.append(
-                    {
-                        "inline_data": {
-                            "mime_type": full_image_mime_type,
-                            "data": full_image_b64,
-                        }
+                context_part = {
+                    "inline_data": {
+                        "mime_type": full_image_mime_type,
+                        "data": full_image_b64,
                     }
-                )
+                }
+                if is_gemini_3:
+                    context_part = _add_media_resolution_to_part(
+                        context_part, config.media_resolution_context, is_gemini_3
+                    )
+                translation_parts.append(context_part)
 
             translation_system = _build_system_prompt_translation(
                 output_language,

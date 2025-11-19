@@ -334,6 +334,24 @@ def update_translation_ui(provider: str, current_temp: float):
     )
     enable_grounding_update = gr.update(visible=enable_grounding_visible)
 
+    # Media resolution dropdowns visibility logic for Gemini 3 models
+    is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
+
+    # Single media_resolution dropdown: visible for Google provider but NOT Gemini 3
+    media_resolution_visible = provider == "Google" and not is_gemini_3
+    media_resolution_update = gr.update(visible=media_resolution_visible)
+
+    # Gemini 3 specific dropdowns: visible only for Gemini 3 models
+    media_resolution_bubbles_visible = is_gemini_3
+    media_resolution_bubbles_update = gr.update(
+        visible=media_resolution_bubbles_visible
+    )
+
+    media_resolution_context_visible = is_gemini_3
+    media_resolution_context_update = gr.update(
+        visible=media_resolution_context_visible
+    )
+
     reasoning_effort_visible = False
     if provider == "OpenAI":
         reasoning_effort_visible = True
@@ -360,6 +378,9 @@ def update_translation_ui(provider: str, current_temp: float):
         enable_thinking_update,
         thinking_level_update,
         enable_grounding_update,
+        media_resolution_update,
+        media_resolution_bubbles_update,
+        media_resolution_context_update,
         reasoning_effort_visible_update,
     )
 
@@ -491,7 +512,11 @@ def update_params_for_model(
     ):
         lm = model_name.lower()
         reasoning_visible = True
-        reasoning_choices = ["high", "medium", "low"]
+        is_gpt5 = "gpt-5" in lm
+        if is_gpt5:
+            reasoning_choices = ["high", "medium", "low", "minimal"]
+        else:
+            reasoning_choices = ["high", "medium", "low"]
 
     # Pick a safe value if saved value not allowed in current choices
     saved = get_saved_settings()
@@ -512,6 +537,30 @@ def update_params_for_model(
     )
     enable_grounding_update = gr.update(visible=enable_grounding_visible)
 
+    # Media resolution dropdowns visibility logic for Gemini 3 models
+    is_gemini_3_google = (
+        provider == "Google" and model_name and _is_gemini_3_model(model_name)
+    )
+    is_gemini_3_openrouter = (
+        provider == "OpenRouter" and model_name and _is_gemini_3_model(model_name)
+    )
+    is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
+
+    # Single media_resolution dropdown: visible for Google provider but NOT Gemini 3
+    media_resolution_visible = provider == "Google" and not is_gemini_3
+    media_resolution_update = gr.update(visible=media_resolution_visible)
+
+    # Gemini 3 specific dropdowns: visible only for Gemini 3 models
+    media_resolution_bubbles_visible = is_gemini_3
+    media_resolution_bubbles_update = gr.update(
+        visible=media_resolution_bubbles_visible
+    )
+
+    media_resolution_context_visible = is_gemini_3
+    media_resolution_context_update = gr.update(
+        visible=media_resolution_context_visible
+    )
+
     # Determine max_tokens based on reasoning capability
     is_reasoning = _is_reasoning_model(provider, model_name)
     max_tokens_value = 16384 if is_reasoning else 4096
@@ -524,6 +573,9 @@ def update_params_for_model(
         enable_thinking_update,
         thinking_level_update,
         enable_grounding_update,
+        media_resolution_update,
+        media_resolution_bubbles_update,
+        media_resolution_context_update,
         reasoning_effort_update,
     )
 
