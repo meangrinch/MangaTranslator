@@ -1,6 +1,7 @@
 import re
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import skia
 import uharfbuzz as hb
 
@@ -185,7 +186,6 @@ def check_fit(
         # Respect explicit newlines as hard line breaks (e.g., for vertical stacking)
         if "\n" in text:
             explicit_lines = text.split("\n")
-            # Measure each explicit line without further wrapping
             current_max_line_width = 0.0
             lines_data_at_size = []
             for line_text in explicit_lines:
@@ -219,7 +219,6 @@ def check_fit(
         if hyphenate_before_scaling:
             for token_text, is_styled in tokens:
                 if not is_styled:
-                    # Only hyphenate words that are long enough and exceed width
                     match = re.match(r"^(\W*)([\w\-]+)(\W*)$", token_text)
                     if match:
                         core_word_length = len(match.group(2))
@@ -348,6 +347,55 @@ def check_fit(
         return None
 
 
+def _check_collision(
+    lines_data: List[Dict],
+    box_top_left: Tuple[int, int],
+    cleaned_mask: np.ndarray,
+    line_height: float,
+    render_size: Tuple[float, float],
+) -> bool:
+    """
+    Check if any text pixel overlaps with background (0) in mask.
+
+    Args:
+        lines_data: List of dictionaries containing line width and text.
+        box_top_left: (x, y) coordinates of the bounding box top-left corner.
+        cleaned_mask: Binary mask of the bubble (0=background, 255=bubble).
+        line_height: Height of a single line of text.
+        render_size: (width, height) of the render box.
+
+    Returns:
+        True if collision detected, False otherwise.
+    """
+    box_x, box_y = box_top_left
+    mask_h, mask_w = cleaned_mask.shape
+    max_w, max_h = render_size
+
+    total_text_height = len(lines_data) * line_height
+    start_y = box_y + (max_h - total_text_height) / 2
+
+    current_y = start_y
+    for line in lines_data:
+        line_w = line["width"]
+        line_x = box_x + (max_w - line_w) / 2
+
+        y1, y2 = int(current_y), int(current_y + line_height)
+        x1, x2 = int(line_x), int(line_x + line_w)
+
+        points_to_check = [(x1, y1), (x2, y1), (x1, y2), (x2, y2)]
+
+        for px, py in points_to_check:
+            px = max(0, min(px, mask_w - 1))
+            py = max(0, min(py, mask_h - 1))
+
+            if cleaned_mask[py, px] == 0:
+                return True
+
+        current_y += line_height
+
+    return False
+
+
 def find_optimal_layout(
     text: str,
     max_render_width: float,
@@ -365,6 +413,8 @@ def find_optimal_layout(
     badness_exponent: float = 3.0,
     verbose: bool = False,
     bubble_id: Optional[str] = None,
+    cleaned_mask: Optional[np.ndarray] = None,
+    box_top_left: Optional[Tuple[int, int]] = None,
 ) -> Dict:
     """Find the optimal font size and layout for text within given dimensions.
 
@@ -387,6 +437,8 @@ def find_optimal_layout(
         badness_exponent: Exponent for line breaking badness calculation
         verbose: Whether to print detailed logs
         bubble_id: Optional identifier for the bubble (for logging purposes)
+        cleaned_mask: Optional binary mask of the bubble for collision detection
+        box_top_left: Optional (x, y) coordinates of the bounding box top-left corner
 
     Returns:
         Dictionary containing layout data (font_size, lines, metrics, etc.)
@@ -421,30 +473,69 @@ def find_optimal_layout(
 
         log_message(f"Testing size {mid}", verbose=verbose)
 
-        fit_data = check_fit(
-            mid,
-            clean_text,
-            max_render_width,
-            max_render_height,
-            regular_hb_face,
-            regular_typeface,
-            loaded_hb_faces,
-            features_to_enable,
-            line_spacing_mult,
-            hyphenate_before_scaling,
-            hyphen_penalty,
-            hyphenation_min_word_length,
-            badness_exponent,
-            word_width_cache,
-            verbose,
-        )
+        succeeded_at_current_size = False
+        current_width_attempt = max_render_width
+        max_squeezes = 3 if cleaned_mask is not None else 1
 
-        if fit_data is not None:
-            best_fit_size = mid
-            best_fit_lines_data = fit_data["lines"]
-            best_fit_metrics = fit_data["metrics"]
-            best_fit_max_line_width = fit_data["max_line_width"]
-            best_fit_line_height = fit_data["line_height"]
+        for _ in range(max_squeezes):
+            fit_data = check_fit(
+                mid,
+                clean_text,
+                current_width_attempt,
+                max_render_height,
+                regular_hb_face,
+                regular_typeface,
+                loaded_hb_faces,
+                features_to_enable,
+                line_spacing_mult,
+                hyphenate_before_scaling,
+                hyphen_penalty,
+                hyphenation_min_word_length,
+                badness_exponent,
+                word_width_cache,
+                verbose,
+            )
+
+            if fit_data is None:
+                # Squeezing narrower won't help (only makes it taller)
+                break
+
+            if cleaned_mask is not None and box_top_left is not None:
+                has_collision = _check_collision(
+                    fit_data["lines"],
+                    box_top_left,
+                    cleaned_mask,
+                    fit_data["line_height"],
+                    (current_width_attempt, max_render_height),
+                )
+
+                if not has_collision:
+                    best_fit_size = mid
+                    best_fit_lines_data = fit_data["lines"]
+                    best_fit_metrics = fit_data["metrics"]
+                    best_fit_max_line_width = fit_data["max_line_width"]
+                    best_fit_line_height = fit_data["line_height"]
+
+                    succeeded_at_current_size = True
+                    break
+                else:
+                    if verbose:
+                        log_message(
+                            f"Collision at size {mid} width {current_width_attempt:.0f}, squeezing...",
+                            verbose=verbose,
+                        )
+                    current_width_attempt *= 0.90
+                    continue
+            else:
+                best_fit_size = mid
+                best_fit_lines_data = fit_data["lines"]
+                best_fit_metrics = fit_data["metrics"]
+                best_fit_max_line_width = fit_data["max_line_width"]
+                best_fit_line_height = fit_data["line_height"]
+                succeeded_at_current_size = True
+                break
+
+        if succeeded_at_current_size:
             low = mid + 1
         else:
             high = mid - 1
@@ -458,7 +549,6 @@ def find_optimal_layout(
             f"Text too large for bubble at minimum font size {min_font_size}"
         )
 
-    # Log when text is shrunk to fit
     if best_fit_size < max_font_size:
         bubble_desc = f"bubble {bubble_id}" if bubble_id else "bubble"
         log_message(

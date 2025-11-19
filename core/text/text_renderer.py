@@ -116,6 +116,7 @@ def render_text_skia(
     if config is None:
         config = RenderingConfig()
 
+    layout_box_top_left = None
     safe_area_result = None
     if cleaned_mask is not None:
         try:
@@ -133,6 +134,7 @@ def render_text_skia(
     if safe_area_result is not None:
         guaranteed_box, _ = safe_area_result
         box_x, box_y, box_w, box_h = guaranteed_box
+        layout_box_top_left = (box_x, box_y)
         max_render_width = float(box_w)
         max_render_height = float(box_h)
         target_center_x = box_x + box_w / 2.0
@@ -207,6 +209,8 @@ def render_text_skia(
             config.badness_exponent,
             verbose,
             bubble_id,
+            cleaned_mask,
+            layout_box_top_left,
         )
     except RenderingError as e:
         raise RenderingError(f"Layout optimization failed: {e}") from e
