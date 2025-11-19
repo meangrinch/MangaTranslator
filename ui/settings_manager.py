@@ -14,6 +14,7 @@ CONFIG_FILE = (
 
 PROVIDER_MODELS: Dict[str, List[str]] = {
     "Google": [
+        "gemini-3-pro-preview",
         "gemini-2.5-pro",
         "gemini-2.5-flash-preview-09-2025",
         "gemini-2.5-flash",
@@ -118,6 +119,7 @@ DEFAULT_SETTINGS = {
     "cleaning_only": False,
     "test_mode": False,
     "enable_thinking": True,  # Gemini 2.5 Flash & Claude reasoning models
+    "thinking_level": "high",  # Gemini 3 models (low or high)
     "reasoning_effort": "medium",  # OpenAI reasoning models; gpt-5 also supports 'minimal'
     "enable_grounding": False,  # Enable Google Search grounding for Gemini models
     "send_full_page_context": True,

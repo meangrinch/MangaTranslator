@@ -286,7 +286,7 @@ def create_layout(
                             type="filepath",
                         )
                         input_zip = gr.File(
-                            label="Upload ZIP Archive",
+                            label="Upload ZIP Archive (preserves directory structure)",
                             file_count="single",
                             file_types=[".zip"],
                             type="filepath",
@@ -624,6 +624,33 @@ def create_layout(
                                 elem_id="enable_thinking_checkbox",
                             )
 
+                            # Compute initial visibility for thinking_level (Gemini 3 models)
+                            _initial_thinking_level_visible = False
+                            try:
+                                if (
+                                    config_initial_provider == "Google"
+                                    and config_initial_model_name
+                                    and "gemini-3" in config_initial_model_name.lower()
+                                ):
+                                    _initial_thinking_level_visible = True
+                                elif (
+                                    config_initial_provider == "OpenRouter"
+                                    and config_initial_model_name
+                                    and "gemini-3" in config_initial_model_name.lower()
+                                ):
+                                    _initial_thinking_level_visible = True
+                            except Exception:
+                                _initial_thinking_level_visible = False
+
+                            thinking_level_dropdown = gr.Dropdown(
+                                label="Thinking Level",
+                                choices=["high", "low"],
+                                value=saved_settings.get("thinking_level", "high"),
+                                info="Reasoning effort for Gemini 3 models.",
+                                visible=_initial_thinking_level_visible,
+                                elem_id="thinking_level_dropdown",
+                            )
+
                             _initial_enable_grounding_visible = False
                             try:
                                 if config_initial_provider == "Google":
@@ -670,7 +697,7 @@ def create_layout(
                                 _initial_reasoning_effort_visible = False
 
                             reasoning_effort_dropdown = gr.Dropdown(
-                                choices=["low", "medium", "high"],
+                                choices=["high", "medium", "low"],
                                 label="Reasoning Effort (OpenAI/OpenRouter)",
                                 value=saved_settings.get("reasoning_effort", "medium"),
                                 info=(
@@ -1176,6 +1203,7 @@ def create_layout(
             batch_output_language,
             batch_font_dropdown,
             enable_thinking_checkbox,
+            thinking_level_dropdown,
             enable_grounding_checkbox,
             reasoning_effort_dropdown,
             send_full_page_context,
@@ -1248,6 +1276,7 @@ def create_layout(
             batch_output_language,
             batch_font_dropdown,
             enable_thinking_checkbox,
+            thinking_level_dropdown,
             enable_grounding_checkbox,
             reasoning_effort_dropdown,
             config_status,
@@ -1312,6 +1341,7 @@ def create_layout(
             cleaning_only_toggle,
             test_mode_toggle,
             enable_thinking_checkbox,
+            thinking_level_dropdown,
             enable_grounding_checkbox,
             reasoning_effort_dropdown,
             send_full_page_context,
@@ -1386,6 +1416,7 @@ def create_layout(
             cleaning_only_toggle,
             test_mode_toggle,
             enable_thinking_checkbox,
+            thinking_level_dropdown,
             enable_grounding_checkbox,
             reasoning_effort_dropdown,
             send_full_page_context,
@@ -1503,6 +1534,7 @@ def create_layout(
                 top_k,
                 max_tokens,
                 enable_thinking_checkbox,
+                thinking_level_dropdown,
                 enable_grounding_checkbox,
                 reasoning_effort_dropdown,
             ],
@@ -1534,6 +1566,7 @@ def create_layout(
                 top_k,
                 max_tokens,
                 enable_thinking_checkbox,
+                thinking_level_dropdown,
                 enable_grounding_checkbox,
                 reasoning_effort_dropdown,
             ],

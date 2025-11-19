@@ -874,6 +874,7 @@ def call_openrouter_endpoint(
 
     # Handle OpenRouter reasoning parameters
     reasoning_config = {}
+    is_gemini_3 = "gemini-3" in model_name.lower()
 
     # Check for reasoning effort (OpenAI models)
     if is_openai_model and generation_config.get("reasoning_effort"):
@@ -881,12 +882,18 @@ def call_openrouter_endpoint(
         if effort in ["low", "medium", "high", "minimal"]:
             reasoning_config["effort"] = effort
 
-    # Check for enable thinking (Google/Anthropic/xAI models)
+    # Check for thinking_level (Gemini 3 models)
+    elif is_gemini_3 and generation_config.get("thinking_level"):
+        thinking_level = generation_config.get("thinking_level")
+        if thinking_level in ["low", "high"]:
+            reasoning_config["effort"] = thinking_level
+
+    # Check for enable thinking (Google/Anthropic/xAI models, excluding Gemini 3)
     # Exclude :thinking variants as they are already thinking-only models
     elif (
         (
             is_anthropic_model
-            or "gemini" in model_name.lower()
+            or ("gemini" in model_name.lower() and not is_gemini_3)
             or (is_grok_model and "fast" in model_name.lower())
         )
         and ":thinking" not in model_name.lower()
@@ -1054,6 +1061,9 @@ def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
         pass
 
     lm = model_name.lower()
+    # Explicit check for Gemini 3 models (they are reasoning-capable)
+    if "gemini-3" in lm:
+        return True
     # Exclude models that are instruction-tuned (contain 'instruct' in the model id)
     if "instruct" in lm:
         return False

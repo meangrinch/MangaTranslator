@@ -1163,6 +1163,13 @@ def main():
         ),
     )
     parser.add_argument(
+        "--thinking-level",
+        type=str,
+        default="high",
+        choices=["low", "high"],
+        help=("Thinking level for Gemini 3 models"),
+    )
+    parser.add_argument(
         "--enable-grounding",
         action="store_true",
         help=(
@@ -1445,6 +1452,7 @@ def main():
             reading_direction=args.reading_direction,
             translation_mode=args.translation_mode,
             enable_thinking=args.enable_thinking,
+            thinking_level=args.thinking_level,
             enable_grounding=args.enable_grounding,
             reasoning_effort=args.reasoning_effort,
             send_full_page_context=args.send_full_page_context,

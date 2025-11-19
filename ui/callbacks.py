@@ -86,6 +86,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         cleaning_only_toggle,
         test_mode_toggle,
         enable_thinking_checkbox_val,
+        thinking_level_val,
         enable_grounding_val,
         reasoning_effort_val,
         send_full_page_context_val,
@@ -206,6 +207,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             cleaning_only=cleaning_only_toggle,
             test_mode=test_mode_toggle,
             enable_thinking=enable_thinking_checkbox_val,
+            thinking_level=thinking_level_val,
             enable_grounding=enable_grounding_val,
             reasoning_effort=reasoning_effort_val,
         ),
@@ -282,11 +284,20 @@ def _format_single_success_message(
     provider = backend_config.translation.provider
     model_name = backend_config.translation.model_name
     thinking_status_str = ""
-    if provider == "Google" and model_name and "gemini-2.5-flash" in model_name:
+    if provider == "Google" and model_name:
+        if "gemini-3" in model_name.lower():
+            thinking_status_str = (
+                f" (thinking: {backend_config.translation.thinking_level})"
+            )
+        elif "gemini-2.5-flash" in model_name:
+            thinking_status_str = (
+                " (thinking)"
+                if backend_config.translation.enable_thinking
+                else " (no thinking)"
+            )
+    elif provider == "OpenRouter" and model_name and "gemini-3" in model_name.lower():
         thinking_status_str = (
-            " (thinking)"
-            if backend_config.translation.enable_thinking
-            else " (no thinking)"
+            f" (thinking: {backend_config.translation.thinking_level})"
         )
     elif provider == "Anthropic" and model_name:
         lm = model_name.lower()
@@ -847,6 +858,7 @@ def handle_save_config_click(*args: Any) -> str:
         b_out_lang,
         b_font,
         enable_thinking_val,
+        thinking_level_val,
         enable_grounding_val,
         reasoning_effort_val,
         send_full_page_context_val,
@@ -955,6 +967,7 @@ def handle_save_config_click(*args: Any) -> str:
             cleaning_only=cleaning_only_val,
             test_mode=test_mode_val,
             enable_thinking=enable_thinking_val,
+            thinking_level=thinking_level_val,
             enable_grounding=enable_grounding_val,
             reasoning_effort=reasoning_effort_val,
         ),
@@ -1017,6 +1030,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         top_k_update,
         _,  # max_tokens_update - unused (using saved default instead)
         enable_thinking_update,
+        thinking_level_update,
         enable_grounding_update,
         reasoning_effort_update,
     ) = utils.update_params_for_model(
@@ -1028,6 +1042,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
     max_tokens_val = default_ui_state.llm_settings.max_tokens
     enable_thinking_visible = enable_thinking_update.get("visible", False)
+    thinking_level_visible = thinking_level_update.get("visible", False)
     enable_grounding_visible = enable_grounding_update.get("visible", False)
     reasoning_visible = reasoning_effort_update.get("visible", False)
 
@@ -1093,6 +1108,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(
             value=default_ui_state.general.enable_thinking,
             visible=enable_thinking_visible,
+        ),
+        gr.update(
+            value=default_ui_state.general.thinking_level,
+            visible=thinking_level_visible,
         ),
         gr.update(
             value=default_ui_state.general.enable_grounding,

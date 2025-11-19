@@ -212,7 +212,8 @@ def _is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return False
 
     if provider == "Google":
-        return "gemini-2.5" in (model_name or "").lower()
+        name = (model_name or "").lower()
+        return "gemini-2.5" in name or "gemini-3" in name
     elif provider == "OpenAI":
         lm = (model_name or "").lower()
         return (
@@ -305,6 +306,26 @@ def update_translation_ui(provider: str, current_temp: float):
     )
     enable_thinking_update = gr.update(visible=enable_thinking_visible)
 
+    # Determine visibility for thinking_level dropdown (Gemini 3 models)
+    def _is_gemini_3_model(name: Optional[str]) -> bool:
+        if not name:
+            return False
+        return "gemini-3" in name.lower()
+
+    is_gemini_3_google = (
+        provider == "Google"
+        and remembered_model
+        and _is_gemini_3_model(remembered_model)
+    )
+    is_gemini_3_openrouter = (
+        provider == "OpenRouter"
+        and remembered_model
+        and _is_gemini_3_model(remembered_model)
+    )
+    thinking_level_update = gr.update(
+        visible=is_gemini_3_google or is_gemini_3_openrouter
+    )
+
     # Grounding checkbox is visible for Google provider and OpenRouter with Gemini models
     enable_grounding_visible = provider == "Google" or (
         provider == "OpenRouter"
@@ -337,6 +358,7 @@ def update_translation_ui(provider: str, current_temp: float):
         top_k_update,
         max_tokens_update,
         enable_thinking_update,
+        thinking_level_update,
         enable_grounding_update,
         reasoning_effort_visible_update,
     )
@@ -374,6 +396,11 @@ def update_params_for_model(
     temp_update = gr.update(maximum=temp_max, value=new_temp_value)
 
     top_k_update = gr.update(interactive=top_k_interactive)
+
+    def _is_gemini_3_model(name: Optional[str]) -> bool:
+        if not name:
+            return False
+        return "gemini-3" in name.lower()
 
     # Determine visibility for the enable_thinking checkbox
     is_flash_model = (
@@ -419,9 +446,20 @@ def update_params_for_model(
         or is_openrouter_thinking_model
     )
 
+    # Determine visibility for thinking_level dropdown (Gemini 3 models)
+    is_gemini_3_google = (
+        provider == "Google" and model_name and _is_gemini_3_model(model_name)
+    )
+    is_gemini_3_openrouter = (
+        provider == "OpenRouter" and model_name and _is_gemini_3_model(model_name)
+    )
+    thinking_level_update = gr.update(
+        visible=is_gemini_3_google or is_gemini_3_openrouter
+    )
+
     # Determine reasoning-effort dropdown visibility and choices
     reasoning_visible = False
-    reasoning_choices = ["low", "medium", "high"]
+    reasoning_choices = ["high", "medium", "low"]
 
     def _is_openai_reasoning_model(name: Optional[str]) -> bool:
         if not name:
@@ -443,9 +481,9 @@ def update_params_for_model(
         )
         reasoning_visible = is_reasoning_capable
         if is_gpt5:
-            reasoning_choices = ["minimal", "low", "medium", "high"]
+            reasoning_choices = ["high", "medium", "low", "minimal"]
         else:
-            reasoning_choices = ["low", "medium", "high"]
+            reasoning_choices = ["high", "medium", "low"]
     elif (
         provider == "OpenRouter"
         and model_name
@@ -453,7 +491,7 @@ def update_params_for_model(
     ):
         lm = model_name.lower()
         reasoning_visible = True
-        reasoning_choices = ["low", "medium", "high"]
+        reasoning_choices = ["high", "medium", "low"]
 
     # Pick a safe value if saved value not allowed in current choices
     saved = get_saved_settings()
@@ -461,7 +499,7 @@ def update_params_for_model(
     if current_val in reasoning_choices:
         value = current_val
     else:
-        value = "low" if "low" in reasoning_choices else reasoning_choices[0]
+        value = "medium" if "medium" in reasoning_choices else reasoning_choices[0]
 
     reasoning_effort_update = gr.update(
         visible=reasoning_visible, choices=reasoning_choices, value=value
@@ -484,6 +522,7 @@ def update_params_for_model(
         top_k_update,
         max_tokens_update,
         enable_thinking_update,
+        thinking_level_update,
         enable_grounding_update,
         reasoning_effort_update,
     )

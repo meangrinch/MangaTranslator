@@ -175,8 +175,11 @@ You must use the following markdown-style markers to convey emphasis:
 
 def _is_reasoning_model_google(model_name: str) -> bool:
     """Check if a Google model is reasoning-capable."""
-    return (model_name or "").startswith("gemini-2.5") or "gemini-2.5" in (
-        model_name or ""
+    name = model_name or ""
+    return (
+        name.startswith("gemini-2.5")
+        or "gemini-2.5" in name
+        or "gemini-3" in name.lower()
     )
 
 
@@ -270,8 +273,17 @@ def _build_generation_config(
             "topK": top_k,
             "maxOutputTokens": max_tokens_value,
         }
+        # Handle thinking config for Gemini 3 models
+        if "gemini-3" in model_name.lower():
+            generation_config["thinkingConfig"] = {
+                "thinkingLevel": config.thinking_level
+            }
+            log_message(
+                f"Using thinking level '{config.thinking_level}' for {model_name}",
+                verbose=debug,
+            )
         # Handle thinking config for Gemini 2.5 Flash
-        if "gemini-2.5-flash" in model_name:
+        elif "gemini-2.5-flash" in model_name:
             if config.enable_thinking:
                 log_message(f"Using thinking mode for {model_name}", verbose=debug)
             else:
@@ -319,6 +331,7 @@ def _build_generation_config(
         )
         is_grok_model = "grok" in model_lower
         is_gemini_model = "gemini" in model_lower
+        is_gemini_3 = "gemini-3" in model_lower
 
         generation_config = {
             "temperature": temperature,
@@ -330,6 +343,8 @@ def _build_generation_config(
         # Add reasoning parameters based on underlying model
         if is_openai_model and config.reasoning_effort:
             generation_config["reasoning_effort"] = config.reasoning_effort
+        elif is_gemini_3:
+            generation_config["thinking_level"] = config.thinking_level
         elif (
             is_anthropic_model
             or is_gemini_model

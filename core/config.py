@@ -46,6 +46,7 @@ class TranslationConfig:
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
     enable_thinking: bool = True  # Gemini 2.5 Flash & Claude reasoning models
+    thinking_level: str = "high"  # Gemini 3 models (low or high)
     reasoning_effort: Optional[str] = (
         "medium"  # OpenAI reasoning models (o1/o3/o4-mini/gpt-5*)
     )

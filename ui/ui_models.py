@@ -116,6 +116,7 @@ class UIGeneralSettings:
     cleaning_only: bool = False
     test_mode: bool = False
     enable_thinking: bool = True
+    thinking_level: str = "high"
     enable_grounding: bool = False
     reasoning_effort: str = "medium"
 
@@ -210,6 +211,7 @@ class UIConfigState:
             "cleaning_only": self.general.cleaning_only,
             "test_mode": self.general.test_mode,
             "enable_thinking": self.general.enable_thinking,
+            "thinking_level": self.general.thinking_level,
             "enable_grounding": self.general.enable_grounding,
             "reasoning_effort": self.general.reasoning_effort,
             "input_language": self.input_language,
@@ -363,6 +365,9 @@ class UIConfigState:
                 enable_thinking=data.get(
                     "enable_thinking", defaults.get("enable_thinking", True)
                 ),
+                thinking_level=data.get(
+                    "thinking_level", defaults.get("thinking_level", "high")
+                ),
                 enable_grounding=data.get(
                     "enable_grounding", defaults.get("enable_grounding", False)
                 ),
@@ -428,6 +433,7 @@ def map_ui_to_backend_config(
         reading_direction=ui_state.llm_settings.reading_direction,
         translation_mode=ui_state.llm_settings.translation_mode,
         enable_thinking=ui_state.general.enable_thinking,
+        thinking_level=ui_state.general.thinking_level,
         send_full_page_context=ui_state.llm_settings.send_full_page_context,
         upscale_method=ui_state.llm_settings.upscale_method,
         bubble_min_side_pixels=ui_state.llm_settings.bubble_min_side_pixels,
