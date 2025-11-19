@@ -413,7 +413,9 @@ def create_layout(
                                 info="Enhances bubble segmentation quality, especially for oddly shaped bubbles.",
                             )
                             enable_conjoined_detection_checkbox = gr.Checkbox(
-                                value=saved_settings.get("enable_conjoined_detection", True),
+                                value=saved_settings.get(
+                                    "enable_conjoined_detection", True
+                                ),
                                 label="Enable Conjoined Bubble Detection",
                                 info=(
                                     "Uses a secondary YOLO model to detect and split "
@@ -689,7 +691,8 @@ def create_layout(
                                 if config_initial_provider == "Google":
                                     if (
                                         config_initial_model_name
-                                        and "gemini-3" in config_initial_model_name.lower()
+                                        and "gemini-3"
+                                        in config_initial_model_name.lower()
                                     ):
                                         _initial_media_resolution_visible = False
                                     else:
@@ -1195,6 +1198,15 @@ def create_layout(
                                 info="Factor for the selected upscaling mode.",
                                 interactive=image_upscale_mode_default != "off",
                             )
+                            enable_auto_scale = gr.Checkbox(
+                                value=saved_settings.get("enable_auto_scale", False),
+                                label="Enable Auto-Scale",
+                                info=(
+                                    "Automatically scale pipeline parameters (fonts, kernels, etc.) "
+                                    "based on image size relative to 1MP. Ensures consistent behavior "
+                                    "across different image resolutions."
+                                ),
+                            )
                         setting_groups.append(group_output)
 
                         # --- Other Settings ---
@@ -1311,6 +1323,7 @@ def create_layout(
             outside_text_easyocr_min_size,
             image_upscale_mode,
             image_upscale_factor,
+            enable_auto_scale,
         ]
 
         reset_outputs = [
@@ -1382,6 +1395,7 @@ def create_layout(
             outside_text_easyocr_min_size,
             image_upscale_mode,
             image_upscale_factor,
+            enable_auto_scale,
         ]
 
         translate_inputs = [
@@ -1455,6 +1469,7 @@ def create_layout(
             outside_text_easyocr_min_size,
             image_upscale_mode,
             image_upscale_factor,
+            enable_auto_scale,
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
@@ -1534,6 +1549,7 @@ def create_layout(
             outside_text_easyocr_min_size,
             image_upscale_mode,
             image_upscale_factor,
+            enable_auto_scale,
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,

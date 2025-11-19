@@ -119,6 +119,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_easyocr_min_size_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
+        enable_auto_scale_val,
         batch_input_language,
         batch_output_language,
         batch_font_dropdown,
@@ -219,6 +220,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             media_resolution_bubbles=media_resolution_bubbles_val,
             media_resolution_context=media_resolution_context_val,
             reasoning_effort=reasoning_effort_val,
+            enable_auto_scale=enable_auto_scale_val,
         ),
         input_language=final_input_language,
         output_language=final_output_language,
@@ -902,6 +904,7 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_easyocr_min_size_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
+        enable_auto_scale_val,
     ) = args
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
@@ -990,6 +993,7 @@ def handle_save_config_click(*args: Any) -> str:
             media_resolution_bubbles=media_resolution_bubbles_val,
             media_resolution_context=media_resolution_context_val,
             reasoning_effort=reasoning_effort_val,
+            enable_auto_scale=enable_auto_scale_val,
         ),
         input_language=s_in_lang,
         output_language=s_out_lang,
@@ -1188,6 +1192,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
             value=default_ui_state.output.image_upscale_factor,
             interactive=default_ui_state.output.image_upscale_mode != "off",
         ),
+        default_ui_state.general.enable_auto_scale,
     ]
 
 

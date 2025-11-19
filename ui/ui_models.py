@@ -127,6 +127,7 @@ class UIGeneralSettings:
         "auto"  # Media resolution for context images (Gemini 3 only)
     )
     reasoning_effort: str = "medium"
+    enable_auto_scale: bool = False
 
 
 @dataclass
@@ -226,6 +227,7 @@ class UIConfigState:
             "media_resolution_bubbles": self.general.media_resolution_bubbles,
             "media_resolution_context": self.general.media_resolution_context,
             "reasoning_effort": self.general.reasoning_effort,
+            "enable_auto_scale": self.general.enable_auto_scale,
             "input_language": self.input_language,
             "output_language": self.output_language,
             "batch_input_language": self.batch_input_language,
@@ -402,6 +404,9 @@ class UIConfigState:
                 reasoning_effort=data.get(
                     "reasoning_effort", defaults.get("reasoning_effort", "medium")
                 ),
+                enable_auto_scale=data.get(
+                    "enable_auto_scale", defaults.get("enable_auto_scale", False)
+                ),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
             output_language=data.get("output_language", defaults["output_language"]),
@@ -531,6 +536,7 @@ def map_ui_to_backend_config(
     preprocessing_cfg = PreprocessingConfig(
         enabled=upscale_mode == "initial",
         factor=upscale_factor,
+        enable_auto_scale=ui_state.general.enable_auto_scale,
     )
 
     backend_config = MangaTranslatorConfig(

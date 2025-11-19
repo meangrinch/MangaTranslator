@@ -170,3 +170,4 @@ class PreprocessingConfig:
 
     enabled: bool = False
     factor: float = 2.0
+    enable_auto_scale: bool = False

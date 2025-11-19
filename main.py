@@ -319,6 +319,14 @@ def main():
         default=2.0,
         help="Factor for the selected upscaling mode (1.0-8.0).",
     )
+    parser.add_argument(
+        "--enable-auto-scale",
+        action="store_true",
+        help=(
+            "Enable automatic scaling of pipeline parameters (fonts, kernels, etc.) "
+            "based on image size relative to 1MP. Ensures consistent behavior across different image resolutions."
+        ),
+    )
     # General args
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--cpu", action="store_true", help="Force CPU usage")
@@ -716,6 +724,7 @@ def main():
         preprocessing=PreprocessingConfig(
             enabled=args.image_upscale_mode == "initial",
             factor=args.image_upscale_factor,
+            enable_auto_scale=args.enable_auto_scale,
         ),
         test_mode=args.test_mode,
     )

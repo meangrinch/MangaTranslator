@@ -126,6 +126,7 @@ DEFAULT_SETTINGS = {
     "media_resolution": "auto",  # Media resolution for Gemini models (auto/high/medium/low)
     "media_resolution_bubbles": "auto",  # Media resolution for bubble images (Gemini 3 only)
     "media_resolution_context": "auto",  # Media resolution for context images (Gemini 3 only)
+    "enable_auto_scale": False,
     "send_full_page_context": True,
     "special_instructions": "",
     "upscale_method": "model",  # "model", "lanczos", or "none"

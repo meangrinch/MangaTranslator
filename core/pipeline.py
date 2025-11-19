@@ -1,4 +1,5 @@
 import base64
+import math
 import os
 import time
 from pathlib import Path
@@ -127,9 +128,17 @@ def translate_and_render(
     pil_image_processed = convert_image_to_target_mode(
         pil_original, target_mode, verbose
     )
-    pil_image_processed, processing_scale = _apply_pre_upscale_if_needed(
+    pil_image_processed, _ = _apply_pre_upscale_if_needed(
         pil_image_processed, config, verbose
     )
+
+    # Calculate dynamic processing scale based on image area relative to 1MP (if enabled)
+    if config.preprocessing.enable_auto_scale:
+        width, height = pil_image_processed.size
+        processing_scale = math.sqrt((width * height) / 1_000_000)
+        log_message(f"Dynamic processing scale: {processing_scale:.2f}x", verbose=verbose)
+    else:
+        processing_scale = 1.0
 
     get_cache().set_current_image(pil_image_processed, verbose)
 

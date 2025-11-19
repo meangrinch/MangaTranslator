@@ -170,8 +170,9 @@ python main.py --help
 - **Uncleaned text remaining:** Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
 - **Outlines get eaten during cleaning:** Increase "Shrink Threshold ROI" (e.g., 6–8)
 - **Incoherent translations/API refusals:** Try "two-step" translation mode for less-capable LLMs **or** Disable "Send Full Page to LLM" in Config → Translation
-- **Inconsistent translations:** Adjust LLM parameters (e.g., "Temperature") for more creative/deterministic output
+- **Inconsistent translation style between pages:** Adjust LLM parameters (e.g., "Temperature") for more creative/deterministic output
 - **Text too large/small:** Adjust "Max Font Size" and "Min Font Size" ranges
+- **Inconsistent behavior across different image sizes:** Enable "Enable Auto-Scale" in Config → Output Settings. This automatically scales pipeline parameters (fonts, detection kernels, etc.) based on image size relative to 1MP, ensuring consistent behavior for both small and large images.
 - **OSB text not inpainted/cleaned:** Ensure "Outside Speech Bubble" is enabled, install Nunchaku (see Installation step 4), and set your Hugging Face token (`hf_token`).
 
 ## Updating
