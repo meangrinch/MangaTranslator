@@ -405,7 +405,7 @@ def find_optimal_layout(
     loaded_hb_faces: Dict[str, Optional[hb.Face]],
     features_to_enable: Dict[str, bool],
     min_font_size: int = 8,
-    max_font_size: int = 14,
+    max_font_size: int = 15,
     line_spacing_mult: float = 1.0,
     hyphenate_before_scaling: bool = True,
     hyphen_penalty: float = 1000.0,

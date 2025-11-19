@@ -221,7 +221,7 @@ def main():
     parser.add_argument(
         "--max-font-size",
         type=int,
-        default=14,
+        default=15,
         help="Max font size for rendering text (px)",
     )
     parser.add_argument(

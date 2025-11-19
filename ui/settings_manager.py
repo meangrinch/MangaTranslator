@@ -99,7 +99,7 @@ DEFAULT_SETTINGS = {
     "top_p": 0.95,
     "top_k": 64,
     "max_tokens": 4096,
-    "max_font_size": 14,
+    "max_font_size": 15,
     "min_font_size": 8,
     "line_spacing": 1.0,
     "use_subpixel_rendering": True,

@@ -23,7 +23,7 @@ class RenderingConfig:
     """Configuration for text rendering parameters."""
 
     min_font_size: int = 8
-    max_font_size: int = 14
+    max_font_size: int = 15
     line_spacing_mult: float = 1.0
     use_subpixel_rendering: bool = False
     font_hinting: str = "none"

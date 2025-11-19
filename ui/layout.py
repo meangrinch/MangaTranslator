@@ -887,7 +887,7 @@ def create_layout(
                             max_font_size = gr.Slider(
                                 5,
                                 50,
-                                value=saved_settings.get("max_font_size", 14),
+                                value=saved_settings.get("max_font_size", 15),
                                 step=1,
                                 label="Max Font Size (px)",
                                 info="The largest font size the renderer will attempt to use.",

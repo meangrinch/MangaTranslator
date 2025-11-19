@@ -65,7 +65,7 @@ class UITranslationLLMSettings:
 class UIRenderingSettings:
     """UI state for rendering settings."""
 
-    max_font_size: int = 14
+    max_font_size: int = 15
     min_font_size: int = 8
     line_spacing: float = 1.0
     use_subpixel_rendering: bool = True
