@@ -91,6 +91,7 @@ DEFAULT_SETTINGS = {
     "translation_mode": "one-step",
     "confidence": 0.35,
     "use_sam2": True,
+    "enable_conjoined_detection": True,
     "use_otsu_threshold": False,
     "thresholding_value": 190,
     "roi_shrink_px": 4,

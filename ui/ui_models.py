@@ -16,6 +16,7 @@ class UIDetectionSettings:
 
     confidence: float = 0.35
     use_sam2: bool = True
+    enable_conjoined_detection: bool = True
 
 
 @dataclass
@@ -159,6 +160,7 @@ class UIConfigState:
         data = {
             "confidence": self.detection.confidence,
             "use_sam2": self.detection.use_sam2,
+            "enable_conjoined_detection": self.detection.enable_conjoined_detection,
             "reading_direction": self.llm_settings.reading_direction,
             "thresholding_value": self.cleaning.thresholding_value,
             "use_otsu_threshold": self.cleaning.use_otsu_threshold,
@@ -247,6 +249,10 @@ class UIConfigState:
             detection=UIDetectionSettings(
                 confidence=data.get("confidence", defaults["confidence"]),
                 use_sam2=data.get("use_sam2", defaults.get("use_sam2", True)),
+                enable_conjoined_detection=data.get(
+                    "enable_conjoined_detection",
+                    defaults.get("enable_conjoined_detection", True),
+                ),
             ),
             cleaning=UICleaningSettings(
                 thresholding_value=data.get(
@@ -429,6 +435,9 @@ def map_ui_to_backend_config(
 
     detection_cfg = DetectionConfig(confidence=ui_state.detection.confidence)
     detection_cfg.use_sam2 = ui_state.detection.use_sam2
+    detection_cfg.enable_conjoined_detection = (
+        ui_state.detection.enable_conjoined_detection
+    )
 
     cleaning_cfg = CleaningConfig(
         thresholding_value=ui_state.cleaning.thresholding_value,

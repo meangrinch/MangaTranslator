@@ -217,6 +217,7 @@ def translate_and_render(
             verbose=verbose,
             device=device,
             use_sam2=config.detection.use_sam2,
+            enable_conjoined_detection=config.detection.enable_conjoined_detection,
             image_override=pil_image_processed,
         )
     except Exception as e:

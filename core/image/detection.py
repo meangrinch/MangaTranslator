@@ -174,6 +174,7 @@ def detect_speech_bubbles(
     verbose=False,
     device=None,
     use_sam2: bool = True,
+    enable_conjoined_detection: bool = True,
     image_override: Optional[Image.Image] = None,
 ):
     """Detect speech bubbles using dual YOLO models and SAM2.
@@ -188,6 +189,7 @@ def detect_speech_bubbles(
         verbose (bool): Whether to show detailed processing information
         device (torch.device, optional): The device to run the model on. Autodetects if None.
         use_sam2 (bool): Whether to use SAM2.1 for enhanced segmentation
+        enable_conjoined_detection (bool): Whether to enable conjoined bubble detection using secondary YOLO model
 
     Returns:
         list: List of dictionaries containing detection information (bbox, class, confidence, sam_mask)
@@ -257,7 +259,7 @@ def detect_speech_bubbles(
     )
 
     secondary_boxes = torch.tensor([])
-    if use_sam2:
+    if use_sam2 and enable_conjoined_detection:
         try:
             secondary_model = model_manager.load_yolo_conjoined_bubble()
             log_message(
@@ -305,7 +307,9 @@ def detect_speech_bubbles(
 
     try:
         log_message("Applying SAM2.1 segmentation refinement", verbose=verbose)
-        sam_cache_key = cache.get_sam_cache_key(image_pil, primary_boxes, use_sam2)
+        sam_cache_key = cache.get_sam_cache_key(
+            image_pil, primary_boxes, use_sam2, enable_conjoined_detection
+        )
         cached_sam = cache.get_sam_masks(sam_cache_key)
 
         if cached_sam is not None:

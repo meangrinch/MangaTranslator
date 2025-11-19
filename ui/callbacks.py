@@ -52,6 +52,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
     (
         confidence,
         use_sam2_checkbox_val,
+        enable_conjoined_detection_checkbox_val,
         thresholding_value,
         use_otsu_threshold,
         roi_shrink_px,
@@ -135,7 +136,9 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
 
     return UIConfigState(
         detection=UIDetectionSettings(
-            confidence=confidence, use_sam2=use_sam2_checkbox_val
+            confidence=confidence,
+            use_sam2=use_sam2_checkbox_val,
+            enable_conjoined_detection=enable_conjoined_detection_checkbox_val,
         ),
         cleaning=UICleaningSettings(
             thresholding_value=thresholding_value,
@@ -827,6 +830,7 @@ def handle_save_config_click(*args: Any) -> str:
     (
         conf,
         use_sam2,
+        enable_conjoined_detection,
         rd,
         thresholding_val,
         otsu,
@@ -902,7 +906,11 @@ def handle_save_config_click(*args: Any) -> str:
     """Callback for the 'Save Config' button."""
     # Build UI State Dataclass from inputs
     ui_state = UIConfigState(
-        detection=UIDetectionSettings(confidence=conf, use_sam2=use_sam2),
+        detection=UIDetectionSettings(
+            confidence=conf,
+            use_sam2=use_sam2,
+            enable_conjoined_detection=enable_conjoined_detection,
+        ),
         cleaning=UICleaningSettings(
             thresholding_value=thresholding_val,
             use_otsu_threshold=otsu,
@@ -1071,6 +1079,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     return [
         default_ui_state.detection.confidence,
         default_ui_state.detection.use_sam2,
+        default_ui_state.detection.enable_conjoined_detection,
         default_ui_state.llm_settings.reading_direction,
         default_ui_state.cleaning.thresholding_value,
         default_ui_state.cleaning.use_otsu_threshold,
@@ -1279,3 +1288,12 @@ def handle_cleaning_only_change(cleaning_only: bool):
 def handle_test_mode_change(test_mode: bool):
     """Handles changes in the test mode checkbox to disable cleaning-only if enabled."""
     return gr.update(interactive=not test_mode, value=False if test_mode else None)
+
+
+def handle_conjoined_detection_change(_enable_conjoined_detection: bool):
+    """Handles changes in the conjoined detection checkbox to clear SAM cache."""
+    from core.caching import get_cache
+
+    cache = get_cache()
+    cache.clear_sam_cache()
+    return None

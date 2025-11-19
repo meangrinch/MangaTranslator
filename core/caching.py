@@ -205,6 +205,7 @@ class UnifiedCache:
         image: Image.Image,
         yolo_boxes: Any,
         use_sam2: bool = True,
+        enable_conjoined_detection: bool = True,
     ) -> str:
         """Compute cache key for SAM segmentation.
 
@@ -212,6 +213,7 @@ class UnifiedCache:
             image: Input image
             yolo_boxes: YOLO detection boxes (tensor or list)
             use_sam2: Whether SAM2 is enabled
+            enable_conjoined_detection: Whether conjoined detection is enabled
 
         Returns:
             str: Cache key
@@ -226,7 +228,10 @@ class UnifiedCache:
 
         sam_model_id = "facebook/sam2.1-hiera-large"
         model_hash = hashlib.sha256(sam_model_id.encode()).hexdigest()[:8]
-        key_string = f"sam_{image_hash}_{boxes_hash}_{model_hash}_sam2{int(use_sam2)}"
+        key_string = (
+            f"sam_{image_hash}_{boxes_hash}_{model_hash}_sam2{int(use_sam2)}"
+            f"_conjoined{int(enable_conjoined_detection)}"
+        )
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     def get_sam_masks(self, cache_key: str) -> Optional[Any]:

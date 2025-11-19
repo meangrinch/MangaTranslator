@@ -135,6 +135,13 @@ def main():
     )
     parser.set_defaults(use_sam2=True)
     parser.add_argument(
+        "--no-conjoined-detection",
+        dest="enable_conjoined_detection",
+        action="store_false",
+        help="Disable conjoined bubble detection using secondary YOLO model",
+    )
+    parser.set_defaults(enable_conjoined_detection=True)
+    parser.add_argument(
         "--reading-direction",
         type=str,
         default="rtl",
@@ -603,7 +610,11 @@ def main():
         verbose=args.verbose,
         device=target_device,
         cleaning_only=args.cleaning_only,
-        detection=DetectionConfig(confidence=args.conf, use_sam2=args.use_sam2),
+        detection=DetectionConfig(
+            confidence=args.conf,
+            use_sam2=args.use_sam2,
+            enable_conjoined_detection=args.enable_conjoined_detection,
+        ),
         cleaning=CleaningConfig(
             thresholding_value=args.thresholding_value,
             use_otsu_threshold=use_otsu_config_val,

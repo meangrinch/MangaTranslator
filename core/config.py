@@ -10,6 +10,7 @@ class DetectionConfig:
 
     confidence: float = 0.35
     use_sam2: bool = True
+    enable_conjoined_detection: bool = True
 
 
 @dataclass
