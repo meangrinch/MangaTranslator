@@ -55,6 +55,8 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "claude-3-5-haiku-latest",
     ],
     "xAI": [
+        "grok-4-1-fast-reasoning",
+        "grok-4-1-fast-non-reasoning",
         "grok-4-fast-reasoning",
         "grok-4-fast-non-reasoning",
         "grok-4-0709",
