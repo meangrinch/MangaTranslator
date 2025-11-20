@@ -209,7 +209,11 @@ def _is_reasoning_model_anthropic(model_name: str) -> bool:
 def _is_reasoning_model_xai(model_name: str) -> bool:
     """Check if an xAI model is reasoning-capable."""
     lm = (model_name or "").lower()
-    return "reasoning" in lm or lm.startswith("grok-4-fast-reasoning")
+    if not lm:
+        return False
+    if "non-reasoning" in lm:
+        return False
+    return "reasoning" in lm
 
 
 def _is_reasoning_model_openai_compatible(model_name: str) -> bool:

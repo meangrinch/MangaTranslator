@@ -233,7 +233,11 @@ def _is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return any(lm.startswith(p) for p in reasoning_prefixes)
     elif provider == "xAI":
         lm = (model_name or "").lower()
-        return "reasoning" in lm or lm.startswith("grok-4-fast-reasoning")
+        if not lm:
+            return False
+        if "non-reasoning" in lm:
+            return False
+        return "reasoning" in lm
     elif provider == "OpenRouter":
         try:
             return openrouter_is_reasoning_model(model_name, debug=False)
