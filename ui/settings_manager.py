@@ -476,15 +476,35 @@ def reset_to_defaults() -> Dict[str, Any]:
             "anthropic_api_key",
             "openrouter_api_key",
             "openai_compatible_api_key",
+            "outside_text_huggingface_token",
         ]
         for key in preserved_keys:
             if key in current_saved:
                 settings[key] = current_saved[key]
 
-    settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
-    default_provider = DEFAULT_SETTINGS["provider"]
-    settings["provider"] = default_provider
-    settings["model_name"] = settings["provider_models"].get(default_provider)
+        # Preserve font pack selections if they exist
+        if "font_pack" in current_saved:
+            settings["font_pack"] = current_saved["font_pack"]
+        if "batch_font_pack" in current_saved:
+            settings["batch_font_pack"] = current_saved["batch_font_pack"]
+        if "outside_text_osb_font_pack" in current_saved:
+            settings["outside_text_osb_font_pack"] = current_saved["outside_text_osb_font_pack"]
+
+        # Preserve provider and model selection if they exist
+        if "provider" in current_saved:
+            settings["provider"] = current_saved["provider"]
+        if "provider_models" in current_saved and isinstance(current_saved["provider_models"], dict):
+            settings["provider_models"] = current_saved["provider_models"].copy()
+        else:
+            settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
+
+    # If provider_models wasn't preserved, use defaults
+    if "provider_models" not in settings:
+        settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
+
+    # Determine model_name from preserved provider_models
+    preserved_provider = settings.get("provider", DEFAULT_SETTINGS["provider"])
+    settings["model_name"] = settings["provider_models"].get(preserved_provider)
     settings["cleaning_only"] = DEFAULT_SETTINGS["cleaning_only"]
     settings["translation_mode"] = DEFAULT_SETTINGS["translation_mode"]
 

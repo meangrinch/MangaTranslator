@@ -1031,10 +1031,14 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     default_ui_state.batch_font_pack = batch_reset_font
 
     default_provider = default_ui_state.provider_settings.provider
-    default_model_name = settings_manager.DEFAULT_SETTINGS["provider_models"].get(
-        default_provider
-    )
-    default_ui_state.llm_settings.model_name = default_model_name
+    # Use preserved model from provider_models (already preserved in reset_to_defaults)
+    default_model_name = default_ui_state.llm_settings.model_name
+    if not default_model_name:
+        # Fall back to default if no preserved model
+        default_model_name = settings_manager.DEFAULT_SETTINGS["provider_models"].get(
+            default_provider
+        )
+        default_ui_state.llm_settings.model_name = default_model_name
 
     if default_provider == "OpenRouter" or default_provider == "OpenAI-Compatible":
         default_models_choices = [default_model_name] if default_model_name else []
