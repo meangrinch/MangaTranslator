@@ -833,15 +833,15 @@ def create_layout(
                             )
                             upscale_method = gr.Radio(
                                 choices=[
-                                    ("Model", "model"),
+                                    ("Upscale Model", "model"),
                                     ("LANCZOS", "lanczos"),
                                     ("None", "none"),
                                 ],
                                 value=saved_settings.get("upscale_method", "model"),
-                                label="Bubble/Context Upscaling Method",
+                                label="Bubble/Context Resizing Method",
                                 info=(
-                                    "Determines how to upscale cropped bubble images/full page before sending to LLM. "
-                                    "Improves OCR; does not affect output image quality."
+                                    "Determines how to resize cropped bubble images/full page before sending to LLM. "
+                                    "Default values strike a good balance between OCR quality and token usage."
                                 ),
                             )
                             initial_upscale_method = saved_settings.get(
