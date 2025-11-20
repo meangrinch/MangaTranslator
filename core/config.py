@@ -58,7 +58,7 @@ class TranslationConfig:
     media_resolution_bubbles: str = "auto"  # Media resolution for bubble images (Gemini 3 only)
     media_resolution_context: str = "auto"  # Media resolution for context images (Gemini 3 only)
     bubble_min_side_pixels: int = 128
-    context_image_max_side_pixels: int = 1536
+    context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
     special_instructions: Optional[str] = None
 

@@ -862,7 +862,7 @@ def create_layout(
                                 512,
                                 2560,
                                 value=saved_settings.get(
-                                    "context_image_max_side_pixels", 1536
+                                    "context_image_max_side_pixels", 1024
                                 ),
                                 step=128,
                                 label="Context Image Max Side Pixels",

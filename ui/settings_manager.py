@@ -131,7 +131,7 @@ DEFAULT_SETTINGS = {
     "special_instructions": "",
     "upscale_method": "model",  # "model", "lanczos", or "none"
     "bubble_min_side_pixels": 128,
-    "context_image_max_side_pixels": 1536,
+    "context_image_max_side_pixels": 1024,
     "osb_min_side_pixels": 128,
     # Outside text removal settings
     "outside_text_enabled": False,

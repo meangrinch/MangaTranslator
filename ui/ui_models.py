@@ -56,7 +56,7 @@ class UITranslationLLMSettings:
     send_full_page_context: bool = True
     upscale_method: str = "model"
     bubble_min_side_pixels: int = 128
-    context_image_max_side_pixels: int = 1536
+    context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
     special_instructions: Optional[str] = None
 
@@ -330,7 +330,7 @@ class UIConfigState:
                 ),
                 bubble_min_side_pixels=data.get("bubble_min_side_pixels", 128),
                 context_image_max_side_pixels=data.get(
-                    "context_image_max_side_pixels", 1536
+                    "context_image_max_side_pixels", 1024
                 ),
                 osb_min_side_pixels=data.get("osb_min_side_pixels", 128),
                 special_instructions=data.get("special_instructions") or None,

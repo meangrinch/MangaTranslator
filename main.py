@@ -516,7 +516,7 @@ def main():
     parser.add_argument(
         "--context-image-max-side-pixels",
         type=int,
-        default=1536,
+        default=1024,
         help="Target maximum side length for full page image",
     )
     parser.add_argument(
