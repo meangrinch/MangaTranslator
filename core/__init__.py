@@ -18,8 +18,8 @@ from .services.translation import (call_translation_api_batch,
                                    sort_bubbles_by_reading_order)
 from .text.text_renderer import render_text_skia
 
-__version__ = "1.4.0"
-__version_info__ = (1, 4, 0)
+__version__ = "1.4.1"
+__version_info__ = (1, 4, 1)
 __author__ = "grinnch"
 __copyright__ = "Copyright 2025-present grinnch"
 __license__ = "Apache-2.0"
