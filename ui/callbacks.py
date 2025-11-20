@@ -1067,7 +1067,9 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     temp_max = temp_update.get("maximum", 2.0)
     top_k_interactive = top_k_update.get("interactive", True)
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
-    max_tokens_val = default_ui_state.llm_settings.max_tokens
+    # Determine max_tokens based on reasoning capability
+    is_reasoning = utils._is_reasoning_model(default_provider, default_model_name)
+    max_tokens_val = 16384 if is_reasoning else 4096
     enable_thinking_visible = enable_thinking_update.get("visible", False)
     thinking_level_visible = thinking_level_update.get("visible", False)
     enable_grounding_visible = enable_grounding_update.get("visible", False)
@@ -1170,6 +1172,9 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         "Settings reset to defaults (API keys preserved).",
         gr.update(value=default_ui_state.llm_settings.send_full_page_context),
         gr.update(value=default_ui_state.llm_settings.upscale_method),
+        default_ui_state.llm_settings.bubble_min_side_pixels,
+        default_ui_state.llm_settings.context_image_max_side_pixels,
+        default_ui_state.llm_settings.osb_min_side_pixels,
         gr.update(value=default_ui_state.rendering.hyphenate_before_scaling),
         default_ui_state.llm_settings.special_instructions or "",
         default_ui_state.batch_special_instructions or "",
