@@ -6,7 +6,6 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
-from skimage.exposure import match_histograms
 
 from core.caching import get_cache
 from core.ml.model_manager import get_model_manager
@@ -277,7 +276,9 @@ def calculate_centroid_expansion_box(
         min_width_dist = min(dist_to_left_edge, dist_to_right_edge)
         min_height_dist = min(dist_to_top_edge, dist_to_bottom_edge)
         safe_width_base = min_width_dist - 1 if min_width_dist > 1 else min_width_dist
-        safe_height_base = min_height_dist - 1 if min_height_dist > 1 else min_height_dist
+        safe_height_base = (
+            min_height_dist - 1 if min_height_dist > 1 else min_height_dist
+        )
         max_safe_width = 2 * max(0, safe_width_base)
         max_safe_height = 2 * max(0, safe_height_base)
 
@@ -496,40 +497,6 @@ def resize_to_min_side(
     return image.resize((new_width, new_height), Image.LANCZOS)
 
 
-def _hist_match(source: np.ndarray, reference: np.ndarray) -> np.ndarray:
-    """
-    Performs channel-wise histogram matching using scikit-image.
-    Assumes the last axis is the channel axis.
-    """
-    return match_histograms(source, reference, channel_axis=-1)
-
-
-def _mkl_transfer(source: np.ndarray, reference: np.ndarray) -> np.ndarray:
-    """Transfers color using Monge-Kantorovich Linearization (MKL)."""
-    src_pixels, ref_pixels = source.reshape(-1, 3).T, reference.reshape(-1, 3).T
-    mu_s, cov_s = src_pixels.mean(axis=1, keepdims=True), np.cov(src_pixels)
-    mu_r, cov_r = ref_pixels.mean(axis=1, keepdims=True), np.cov(ref_pixels)
-
-    # Add small epsilon to prevent division by zero warnings
-    epsilon = 1e-10
-
-    eig_val_s, eig_vec_s = np.linalg.eigh(cov_s)
-    eig_val_s[eig_val_s < 0] = 0
-    eig_val_s = eig_val_s + epsilon
-    cov_s_sqrt = eig_vec_s @ np.diag(np.sqrt(eig_val_s)) @ eig_vec_s.T
-    inv_eig_val_s = 1.0 / np.sqrt(eig_val_s)
-    cov_s_inv_sqrt = eig_vec_s @ np.diag(inv_eig_val_s) @ eig_vec_s.T
-
-    middle_term = cov_s_sqrt @ cov_r @ cov_s_sqrt
-    eig_val_m, eig_vec_m = np.linalg.eigh(middle_term)
-    eig_val_m[eig_val_m < 0] = 0
-    middle_term_sqrt = eig_vec_m @ np.diag(np.sqrt(eig_val_m)) @ eig_vec_m.T
-
-    transfer_matrix = cov_s_inv_sqrt @ middle_term_sqrt @ cov_s_inv_sqrt
-    transformed_pixels = transfer_matrix @ (src_pixels - mu_s) + mu_r
-    return transformed_pixels.T.reshape(source.shape)
-
-
 def convert_image_to_target_mode(
     pil_image: Image.Image, target_mode: str, verbose: bool = False
 ) -> Image.Image:
@@ -619,13 +586,12 @@ def process_bubble_image_cached(
     verbose: bool = False,
 ) -> Image.Image:
     """
-    Process a bubble image with upscaling and color matching, using cache for the complete pipeline.
+    Process a bubble image with upscaling, using cache for the complete pipeline.
 
     This function handles the complete bubble processing pipeline:
     1. Upscales the bubble to meet minimum size requirements
     2. Resizes to exact minimum side length
-    3. Applies color histogram matching
-    4. Caches the final result
+    3. Caches the final result
 
     Args:
         bubble_image_pil: The bubble image to process
@@ -658,49 +624,5 @@ def process_bubble_image_cached(
 
     resized_bubble = resize_to_min_side(upscaled_bubble, target_min_side, verbose)
 
-    final_bubble_pil = match_color_histogram_mkl(
-        resized_bubble, bubble_image_pil, verbose
-    )
-
-    cache.set_upscaled_image(cache_key, final_bubble_pil, verbose)
-    return final_bubble_pil
-
-
-def match_color_histogram_mkl(
-    processed_image: Image.Image, reference_image: Image.Image, verbose: bool = False
-) -> Image.Image:
-    """Matches the color of a processed image to a reference using the hm-mkl-hm algorithm.
-
-    This function implements a three-step color matching process:
-    1. Histogram Matching (HM): Aligns the histogram distribution of the processed image
-       to match the reference image's histogram
-    2. Monge-Kantorovich Linearization (MKL): Transfers color characteristics using
-       optimal transport theory to preserve color relationships
-    3. Histogram Matching (HM): Final histogram matching to ensure color consistency
-
-    The algorithm is particularly effective for maintaining color harmony when
-    processing images that need to match a specific color palette or style.
-
-    Args:
-        processed_image: The image whose colors need to be matched
-        reference_image: The target image whose colors should be replicated
-        verbose: Whether to print detailed processing information
-
-    Returns:
-        Image.Image: The processed image with colors matched to the reference
-
-    Raises:
-        ValueError: If either image is invalid or cannot be processed
-    """
-    log_message("Applying hm-mkl-hm color matching...", verbose=verbose)
-    if processed_image.mode != "RGB":
-        processed_image = processed_image.convert("RGB")
-    if reference_image.mode != "RGB":
-        reference_image = reference_image.convert("RGB")
-    src_np = np.array(processed_image, dtype=np.float32)
-    ref_np = np.array(reference_image, dtype=np.float32)
-    res1 = _hist_match(src_np, ref_np)
-    res2 = _mkl_transfer(res1, ref_np)
-    res3 = _hist_match(res2, ref_np)
-    final_np = np.clip(res3, 0, 255).astype(np.uint8)
-    return Image.fromarray(final_np)
+    cache.set_upscaled_image(cache_key, resized_bubble, verbose)
+    return resized_bubble
