@@ -22,8 +22,8 @@ Web application for automating the translation of manga/comic page images using 
 
 ### Windows portable
 Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases)
-- Normal package: Run the `setup.bat` file before first launch to install dependencies, and `update-standalone.bat` to update to the latest version. Installs `PyTorch v2.7.1+cu128`.
-- Pre-downloaded package: No setup required, and no included update script. Uses `PyTorch v2.6.0+cu126`.
+- Default package: Download once, run `setup.bat` before first launch to install dependencies, and `update-standalone.bat` to update to the latest version. Installs `PyTorch v2.7.1+cu128`.
+- Pre-downloaded package: Download per version, no setup required, and no included update script. Contains `PyTorch v2.6.0+cu126`.
 - Both include the Komika (for normal text) and Cookies (for OSB text) font packs
 
 ### Manual install
@@ -64,7 +64,7 @@ pip install -r requirements.txt
 
 ### Fonts
 - Put font packs as subfolders in `fonts/` with `.otf`/`.ttf` files
-- Prefer filenames that include `italic`/`bold` or `italic-bold` so variants are detected
+- Prefer filenames that include `italic`/`bold` or both so variants are detected
 - Example structure:
 ```text
 fonts/
@@ -187,7 +187,9 @@ python main.py --help
   - Set your Hugging Face access token (see Post-Install Setup)
 
 ## Updating
-- Windows portable: run `update-standalone.bat`
+- Windows portable:
+  - Default Package: Run `update-standalone.bat`
+  - Pre-downloaded Package: Download the latest version from the releases page
 - Manual install: from the repo root:
 ```bash
 git pull
