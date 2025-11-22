@@ -542,10 +542,7 @@ def get_reasoning_effort_config(
             return False, [], None
 
     elif provider == "OpenAI-Compatible":
-        is_reasoning = _is_openai_compatible_reasoning_model(model_name)
-        if not is_reasoning:
-            return False, [], None
-        return True, ["high", "medium", "low", "none"], "medium"
+        return False, [], None
 
     return False, [], None
 
