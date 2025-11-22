@@ -323,7 +323,7 @@ def main():
         help="Factor for the selected upscaling mode (1.0-8.0).",
     )
     parser.add_argument(
-        "--enable-auto-scale",
+        "--auto-scale",
         action="store_true",
         help=(
             "Enable automatic scaling of pipeline parameters (fonts, kernels, etc.) "
@@ -709,7 +709,7 @@ def main():
         preprocessing=PreprocessingConfig(
             enabled=args.image_upscale_mode == "initial",
             factor=args.image_upscale_factor,
-            enable_auto_scale=args.enable_auto_scale,
+            auto_scale=args.auto_scale,
         ),
         test_mode=args.test_mode,
     )

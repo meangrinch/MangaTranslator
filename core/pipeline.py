@@ -133,7 +133,7 @@ def translate_and_render(
     )
 
     # Calculate dynamic processing scale based on image area relative to 1MP (if enabled)
-    if config.preprocessing.enable_auto_scale:
+    if config.preprocessing.auto_scale:
         width, height = pil_image_processed.size
         processing_scale = math.sqrt((width * height) / 1_000_000)
         log_message(f"Dynamic processing scale: {processing_scale:.2f}x", verbose=verbose)

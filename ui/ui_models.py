@@ -125,7 +125,7 @@ class UIGeneralSettings:
     media_resolution_bubbles: str = "auto"  # Gemini 3 models
     media_resolution_context: str = "auto"  # Gemini 3 models
     reasoning_effort: Optional[str] = None
-    enable_auto_scale: bool = False
+    auto_scale: bool = False
 
 
 @dataclass
@@ -223,7 +223,7 @@ class UIConfigState:
             "media_resolution_bubbles": self.general.media_resolution_bubbles,
             "media_resolution_context": self.general.media_resolution_context,
             "reasoning_effort": self.general.reasoning_effort,
-            "enable_auto_scale": self.general.enable_auto_scale,
+            "auto_scale": self.general.auto_scale,
             "input_language": self.input_language,
             "output_language": self.output_language,
             "batch_input_language": self.batch_input_language,
@@ -394,8 +394,8 @@ class UIConfigState:
                 reasoning_effort=data.get(
                     "reasoning_effort", defaults.get("reasoning_effort")
                 ),
-                enable_auto_scale=data.get(
-                    "enable_auto_scale", defaults.get("enable_auto_scale", False)
+                auto_scale=data.get(
+                    "auto_scale", defaults.get("auto_scale", False)
                 ),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
@@ -525,7 +525,7 @@ def map_ui_to_backend_config(
     preprocessing_cfg = PreprocessingConfig(
         enabled=upscale_mode == "initial",
         factor=upscale_factor,
-        enable_auto_scale=ui_state.general.enable_auto_scale,
+        auto_scale=ui_state.general.auto_scale,
     )
 
     backend_config = MangaTranslatorConfig(

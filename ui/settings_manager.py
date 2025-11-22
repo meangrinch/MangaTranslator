@@ -125,7 +125,7 @@ DEFAULT_SETTINGS = {
     "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
     "media_resolution_bubbles": "auto",  # Gemini 3 models
     "media_resolution_context": "auto",  # Gemini 3 models
-    "enable_auto_scale": False,
+    "auto_scale": False,
     "send_full_page_context": True,
     "special_instructions": "",
     "upscale_method": "model",  # "model", "lanczos", or "none"
