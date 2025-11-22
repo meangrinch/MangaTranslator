@@ -116,17 +116,15 @@ class UIGeneralSettings:
     verbose: bool = False
     cleaning_only: bool = False
     test_mode: bool = False
-    enable_thinking: bool = True
-    thinking_level: str = "high"
-    enable_grounding: bool = False
-    media_resolution: str = "auto"
-    media_resolution_bubbles: str = (
-        "auto"  # Media resolution for bubble images (Gemini 3 only)
+    enable_grounding: bool = (
+        False  # Enable Gemini's built-in Google Search; only available via Google provider
     )
-    media_resolution_context: str = (
-        "auto"  # Media resolution for context images (Gemini 3 only)
+    media_resolution: str = (
+        "auto"  # Only available via Google provider (auto/high/medium/low)
     )
-    reasoning_effort: str = "medium"
+    media_resolution_bubbles: str = "auto"  # Gemini 3 models
+    media_resolution_context: str = "auto"  # Gemini 3 models
+    reasoning_effort: Optional[str] = None
     enable_auto_scale: bool = False
 
 
@@ -220,8 +218,6 @@ class UIConfigState:
             "verbose": self.general.verbose,
             "cleaning_only": self.general.cleaning_only,
             "test_mode": self.general.test_mode,
-            "enable_thinking": self.general.enable_thinking,
-            "thinking_level": self.general.thinking_level,
             "enable_grounding": self.general.enable_grounding,
             "media_resolution": self.general.media_resolution,
             "media_resolution_bubbles": self.general.media_resolution_bubbles,
@@ -380,12 +376,6 @@ class UIConfigState:
                 verbose=data.get("verbose", defaults["verbose"]),
                 cleaning_only=data.get("cleaning_only", defaults["cleaning_only"]),
                 test_mode=data.get("test_mode", defaults.get("test_mode", False)),
-                enable_thinking=data.get(
-                    "enable_thinking", defaults.get("enable_thinking", True)
-                ),
-                thinking_level=data.get(
-                    "thinking_level", defaults.get("thinking_level", "high")
-                ),
                 enable_grounding=data.get(
                     "enable_grounding", defaults.get("enable_grounding", False)
                 ),
@@ -402,7 +392,7 @@ class UIConfigState:
                     defaults.get("media_resolution_context", "auto"),
                 ),
                 reasoning_effort=data.get(
-                    "reasoning_effort", defaults.get("reasoning_effort", "medium")
+                    "reasoning_effort", defaults.get("reasoning_effort")
                 ),
                 enable_auto_scale=data.get(
                     "enable_auto_scale", defaults.get("enable_auto_scale", False)
@@ -468,8 +458,6 @@ def map_ui_to_backend_config(
         output_language=output_lang,
         reading_direction=ui_state.llm_settings.reading_direction,
         translation_mode=ui_state.llm_settings.translation_mode,
-        enable_thinking=ui_state.general.enable_thinking,
-        thinking_level=ui_state.general.thinking_level,
         enable_grounding=ui_state.general.enable_grounding,
         media_resolution=ui_state.general.media_resolution,
         media_resolution_bubbles=ui_state.general.media_resolution_bubbles,
@@ -480,6 +468,7 @@ def map_ui_to_backend_config(
         context_image_max_side_pixels=ui_state.llm_settings.context_image_max_side_pixels,
         osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
         special_instructions=ui_state.llm_settings.special_instructions,
+        reasoning_effort=ui_state.general.reasoning_effort,
     )
 
     rendering_cfg = RenderingConfig(

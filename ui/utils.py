@@ -88,9 +88,8 @@ def validate_image(image: Any) -> tuple[bool, str]:
             if not filepath.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
                 return False, "Unsupported image format. Please use JPEG, PNG or WEBP."
         elif isinstance(image, Image.Image):
-            img = image  # Already a PIL image
+            img = image
         else:
-            # Assume filepath or PIL
             return False, f"Unexpected image type: {type(image)}"
 
         width, height = img.size
@@ -206,38 +205,35 @@ def refresh_models_and_fonts(fonts_base_dir: Path):
         )
 
 
-def _is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
+def _is_google_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if a Google model is reasoning-capable."""
+    if not model_name:
+        return False
+    name = (model_name or "").lower()
+    return "gemini-2.5" in name or "gemini-3" in name
+
+
+def _is_openai_compatible_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if an OpenAI-Compatible model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = (model_name or "").lower()
+    return "thinking" in lm or "reasoning" in lm
+
+
+def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
     """Check if a model is reasoning-capable based on provider and model name."""
     if not model_name:
         return False
 
     if provider == "Google":
-        name = (model_name or "").lower()
-        return "gemini-2.5" in name or "gemini-3" in name
+        return _is_google_reasoning_model(model_name)
     elif provider == "OpenAI":
-        lm = (model_name or "").lower()
-        return (
-            lm.startswith("gpt-5")
-            or lm.startswith("o1")
-            or lm.startswith("o3")
-            or lm.startswith("o4-mini")
-        )
+        return _is_openai_reasoning_model(model_name)
     elif provider == "Anthropic":
-        lm = (model_name or "").lower()
-        reasoning_prefixes = [
-            "claude-opus-4-1",
-            "claude-opus-4",
-            "claude-sonnet-4",
-            "claude-3-7-sonnet",
-        ]
-        return any(lm.startswith(p) for p in reasoning_prefixes)
+        return _is_anthropic_reasoning_model(model_name, provider="Anthropic")
     elif provider == "xAI":
-        lm = (model_name or "").lower()
-        if not lm:
-            return False
-        if "non-reasoning" in lm:
-            return False
-        return "reasoning" in lm
+        return _is_xai_reasoning_model(model_name)
     elif provider == "OpenRouter":
         try:
             return openrouter_is_reasoning_model(model_name, debug=False)
@@ -245,10 +241,307 @@ def _is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
             # Fallback to False if detection fails
             return False
     elif provider == "OpenAI-Compatible":
-        lm = (model_name or "").lower()
-        return "thinking" in lm or "reasoning" in lm
+        return _is_openai_compatible_reasoning_model(model_name)
     else:
         return False
+
+
+def get_enable_grounding_label_and_info(provider: str) -> Tuple[str, str]:
+    """
+    Returns the label and info text for the enable_grounding checkbox based on provider.
+
+    Args:
+        provider: The provider name ("Google" or "OpenRouter")
+
+    Returns:
+        Tuple of (label, info) strings
+    """
+    if provider == "OpenRouter":
+        return (
+            "Enable Web Search",
+            "Use OpenRouter's native web search (Exa) for up-to-date information. "
+            "Might improve translation quality.",
+        )
+    else:  # Google
+        return (
+            "Enable Grounding",
+            "Use Gemini's built-in web search (Google Search) for up-to-date information. "
+            "Might improve translation quality.",
+        )
+
+
+def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) -> str:
+    """
+    Returns the label for the reasoning_effort dropdown based on provider/model.
+
+    Args:
+        provider: The provider name
+        model_name: The model name (optional)
+
+    Returns:
+        Label string:
+        - "Thinking Level" for Gemini 3 models
+        - "Thinking Budget" for Google reasoning models (non-Gemini 3)
+        - "Extended Thinking" for Anthropic reasoning models
+        - "Reasoning Effort" otherwise
+    """
+    if not model_name:
+        return "Reasoning Effort"
+
+    lm = model_name.lower()
+    is_gemini_3 = "gemini-3" in lm
+
+    if (provider == "Google" or provider == "OpenRouter") and is_gemini_3:
+        return "Thinking Level"
+    elif (
+        provider == "Google"
+        and is_reasoning_model(provider, model_name)
+        and not is_gemini_3
+    ):
+        return "Thinking Budget"
+    elif provider == "OpenRouter":
+        is_google_model = "google/" in lm or "gemini" in lm
+        if (
+            is_google_model
+            and is_reasoning_model(provider, model_name)
+            and not is_gemini_3
+        ):
+            return "Thinking Budget"
+        elif _is_anthropic_reasoning_model(model_name, "OpenRouter"):
+            return "Extended Thinking"
+    elif provider == "Anthropic" and _is_anthropic_reasoning_model(
+        model_name, provider
+    ):
+        return "Extended Thinking"
+    else:
+        return "Reasoning Effort"
+
+
+def get_reasoning_effort_info_text(
+    provider: str, model_name: Optional[str] = None, choices: Optional[List[str]] = None
+) -> str:
+    """Get provider-specific info text for reasoning effort dropdown."""
+    if choices is None:
+        choices = []
+
+    # Determine base description text based on provider/model
+    if provider == "Google":
+        if model_name and "gemini-3" in model_name.lower():
+            return "Controls model's internal reasoning effort."
+        base_text = "Controls reasoning token allocation relative to 'max_tokens'"
+    elif provider == "OpenAI":
+        return "Controls model's internal reasoning effort."
+    elif provider == "xAI":
+        return "Controls model's internal reasoning effort."
+    elif provider == "OpenRouter" and model_name:
+        lm = model_name.lower()
+        is_openai_reasoning = (
+            "gpt-5" in lm or "o1" in lm or "o3" in lm or "o4-mini" in lm
+        )
+        is_grok_reasoning = "grok-4" in lm
+        is_google_model = "google/" in lm or "gemini" in lm
+        is_gemini_3 = "gemini-3" in lm
+        if is_openai_reasoning or is_grok_reasoning:
+            return "Controls model's internal reasoning effort."
+        elif is_google_model and is_gemini_3:
+            return "Controls model's internal reasoning effort."
+        elif is_google_model and not is_gemini_3:
+            base_text = "Controls reasoning token allocation relative to 'max_tokens'"
+        else:
+            base_text = (
+                "Controls reasoning token budget allocation relative to 'max_tokens'"
+            )
+    else:
+        base_text = "Controls reasoning token budget allocation relative to max_tokens"
+
+    options = []
+    if "auto" in choices:
+        options.append("auto=model decides")
+    if "high" in choices:
+        options.append("high=80%")
+    if "medium" in choices:
+        options.append("medium=50%")
+    if "low" in choices:
+        options.append("low=20%")
+    if "minimal" in choices:
+        options.append("minimal=minimal")
+    if "none" in choices:
+        options.append("none=disabled")
+
+    if options:
+        return f"{base_text} ({', '.join(options)})."
+    else:
+        return base_text + "."
+
+
+def _is_openai_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if an OpenAI model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return (
+        lm.startswith("gpt-5")
+        or lm.startswith("o1")
+        or lm.startswith("o3")
+        or lm.startswith("o4-mini")
+    )
+
+
+def _is_anthropic_reasoning_model(
+    model_name: Optional[str], provider: str = "Anthropic"
+) -> bool:
+    """Check if an Anthropic model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    if provider == "OpenRouter":
+        # OpenRouter uses dots (4.5) not hyphens (4-5)
+        return (
+            "claude-opus-4" in lm
+            or "claude-sonnet-4" in lm
+            or "claude-haiku-4.5" in lm
+            or "claude-3.7-sonnet" in lm
+        )
+    else:
+        return (
+            lm.startswith("claude-opus-4")
+            or lm.startswith("claude-sonnet-4")
+            or lm.startswith("claude-haiku-4-5")
+            or lm.startswith("claude-3-7-sonnet")
+        )
+
+
+def _is_grok_reasoning_model(model_name: Optional[str], provider: str = "xAI") -> bool:
+    """Check if a Grok model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    if "non-reasoning" in lm:
+        return False
+    if provider == "OpenRouter":
+        return "grok-4" in lm
+    else:
+        return "grok-4" in lm and "reasoning" in lm
+
+
+def _is_xai_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if an xAI model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    if "non-reasoning" in lm:
+        return False
+    return "reasoning" in lm or "grok-4-0709" in lm
+
+
+def get_reasoning_effort_config(
+    provider: str, model_name: Optional[str]
+) -> Tuple[bool, List[str], str]:
+    """
+    Get reasoning effort configuration for a provider/model combination.
+
+    Returns:
+        Tuple of (visible, choices, default_value)
+    """
+    if not model_name:
+        return False, [], "medium"
+
+    lm = model_name.lower()
+
+    if provider == "Google":
+        is_reasoning = is_reasoning_model(provider, model_name)
+        if not is_reasoning:
+            return False, [], "medium"
+
+        is_gemini_3 = "gemini-3" in lm
+        if is_gemini_3:
+            return True, ["high", "low"], "high"
+
+        is_flash = "gemini-2.5-flash" in lm
+        if is_flash:
+            return True, ["auto", "high", "medium", "low", "none"], "auto"
+        else:
+            return True, ["auto", "high", "medium", "low"], "auto"
+
+    elif provider == "OpenAI":
+        is_reasoning = _is_openai_reasoning_model(model_name)
+        if not is_reasoning:
+            return False, [], "medium"
+
+        is_gpt5 = lm.startswith("gpt-5")
+        if is_gpt5:
+            return True, ["high", "medium", "low", "minimal", "none"], "medium"
+        else:
+            return True, ["high", "medium", "low", "none"], "medium"
+
+    elif provider == "Anthropic":
+        is_reasoning = _is_anthropic_reasoning_model(model_name, provider)
+        if not is_reasoning:
+            return False, [], "medium"
+        return True, ["high", "medium", "low", "none"], "none"
+
+    elif provider == "xAI":
+        is_reasoning = _is_xai_reasoning_model(model_name)
+        if not is_reasoning:
+            return False, [], "medium"
+        return True, ["high", "low"], "high"
+
+    elif provider == "OpenRouter":
+        is_openai_reasoning = _is_openai_reasoning_model(model_name)
+        is_anthropic_reasoning = _is_anthropic_reasoning_model(model_name, "OpenRouter")
+        is_grok_reasoning = _is_grok_reasoning_model(model_name, "OpenRouter")
+        is_google_model = "google/" in lm or "gemini" in lm
+
+        if is_google_model:
+            is_gemini_3 = "gemini-3" in lm
+            if is_gemini_3:
+                return True, ["high", "low"], "high"
+
+            is_reasoning = is_reasoning_model(provider, model_name)
+            if not is_reasoning:
+                return False, [], "medium"
+
+            is_flash = "gemini-2.5-flash" in lm
+            if is_flash:
+                return True, ["auto", "high", "medium", "low", "none"], "auto"
+            else:
+                return True, ["auto", "high", "medium", "low"], "auto"
+
+        is_claude_37_sonnet = "claude-3.7-sonnet" in lm
+        is_claude_37_sonnet_thinking = is_claude_37_sonnet and ":thinking" in lm
+
+        if is_claude_37_sonnet:
+            if is_claude_37_sonnet_thinking:
+                return True, ["high", "medium", "low", "none"], "none"
+            else:
+                return False, [], "medium"
+
+        if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
+            if is_openai_reasoning:
+                is_gpt5 = "gpt-5" in lm
+                if is_gpt5:
+                    return True, ["high", "medium", "low", "minimal", "none"], "medium"
+                else:
+                    return True, ["high", "medium", "low", "none"], "medium"
+            elif is_anthropic_reasoning:
+                return True, ["high", "medium", "low", "none"], "none"
+            elif is_grok_reasoning:
+                return True, ["high", "low"], "high"
+
+        try:
+            is_reasoning = openrouter_is_reasoning_model(model_name, debug=False)
+            if is_reasoning:
+                return True, ["high", "medium", "low"], "medium"
+        except Exception:
+            pass
+
+        is_anthropic_model = "anthropic/" in lm or lm.startswith("claude-")
+        if is_anthropic_model:
+            return False, [], "none"
+        else:
+            return False, [], "medium"
+
+    return False, [], "medium"
 
 
 def update_translation_ui(provider: str, current_temp: float):
@@ -293,24 +586,13 @@ def update_translation_ui(provider: str, current_temp: float):
     top_k_interactive = provider != "OpenAI" and provider != "xAI"
     top_k_update = gr.update(interactive=top_k_interactive)
 
-    # Determine max_tokens based on reasoning capability
     if remembered_model:
-        is_reasoning = _is_reasoning_model(provider, remembered_model)
+        is_reasoning = is_reasoning_model(provider, remembered_model)
         max_tokens_value = 16384 if is_reasoning else 4096
     else:
-        # Default to non-reasoning value if no model selected
         max_tokens_value = 4096
     max_tokens_update = gr.update(value=max_tokens_value)
 
-    enable_thinking_visible = (
-        provider == "Google"
-        or provider == "Anthropic"
-        or provider == "xAI"
-        or provider == "OpenRouter"
-    )
-    enable_thinking_update = gr.update(visible=enable_thinking_visible)
-
-    # Determine visibility for thinking_level dropdown (Gemini 3 models)
     def _is_gemini_3_model(name: Optional[str]) -> bool:
         if not name:
             return False
@@ -326,46 +608,55 @@ def update_translation_ui(provider: str, current_temp: float):
         and remembered_model
         and _is_gemini_3_model(remembered_model)
     )
-    thinking_level_update = gr.update(
-        visible=is_gemini_3_google or is_gemini_3_openrouter
+
+    enable_grounding_visible = provider == "Google" or provider == "OpenRouter"
+    enable_grounding_label, enable_grounding_info = get_enable_grounding_label_and_info(
+        provider
     )
 
-    # Grounding checkbox is visible for Google provider and OpenRouter with Gemini models
-    enable_grounding_visible = provider == "Google" or (
-        provider == "OpenRouter"
-        and remembered_model
-        and "gemini" in remembered_model.lower()
+    enable_grounding_update = gr.update(
+        visible=enable_grounding_visible,
+        label=enable_grounding_label,
+        info=enable_grounding_info,
     )
-    enable_grounding_update = gr.update(visible=enable_grounding_visible)
 
-    # Media resolution dropdowns visibility logic for Gemini 3 models
     is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
-
-    # Single media_resolution dropdown: visible for Google provider but NOT Gemini 3
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
-    # Gemini 3 specific dropdowns: visible only for Gemini 3 models
-    media_resolution_bubbles_visible = is_gemini_3
+    # Gemini 3 specific dropdowns: visible only for Google provider Gemini 3 models
+    media_resolution_bubbles_visible = is_gemini_3_google
     media_resolution_bubbles_update = gr.update(
         visible=media_resolution_bubbles_visible
     )
 
-    media_resolution_context_visible = is_gemini_3
+    media_resolution_context_visible = is_gemini_3_google
     media_resolution_context_update = gr.update(
         visible=media_resolution_context_visible
     )
 
-    reasoning_effort_visible = False
-    if provider == "OpenAI":
-        reasoning_effort_visible = True
-    elif provider == "OpenRouter" and remembered_model:
-        lm = remembered_model.lower()
-        is_reasoning_capable = (
-            "gpt-5" in lm or "o1" in lm or "o3" in lm or "o4-mini" in lm
+    reasoning_effort_visible, reasoning_choices, reasoning_default_value = (
+        get_reasoning_effort_config(provider, remembered_model)
+    )
+
+    reasoning_info_text = get_reasoning_effort_info_text(
+        provider, remembered_model, reasoning_choices
+    )
+
+    if reasoning_choices and reasoning_default_value not in reasoning_choices:
+        reasoning_default_value = (
+            reasoning_choices[0] if reasoning_choices else "medium"
         )
-        reasoning_effort_visible = is_reasoning_capable
-    reasoning_effort_visible_update = gr.update(visible=reasoning_effort_visible)
+
+    reasoning_effort_label = get_reasoning_effort_label(provider, remembered_model)
+
+    reasoning_effort_visible_update = gr.update(
+        visible=reasoning_effort_visible,
+        choices=reasoning_choices,
+        value=reasoning_default_value,
+        label=reasoning_effort_label,
+        info=reasoning_info_text,
+    )
 
     return (
         google_visible_update,
@@ -379,8 +670,6 @@ def update_translation_ui(provider: str, current_temp: float):
         temp_update,
         top_k_update,
         max_tokens_update,
-        enable_thinking_update,
-        thinking_level_update,
         enable_grounding_update,
         media_resolution_update,
         media_resolution_bubbles_update,
@@ -393,7 +682,7 @@ def update_params_for_model(
     provider: str, model_name: Optional[str], current_temp: float
 ):
     """Adjusts temp/top_k sliders and visibility toggles based on selected provider/model."""
-    if not provider:  # Should not happen, but safeguard
+    if not provider:
         return gr.update(), gr.update()
 
     temp_max = 2.0
@@ -427,121 +716,48 @@ def update_params_for_model(
             return False
         return "gemini-3" in name.lower()
 
-    # Determine visibility for the enable_thinking checkbox
-    is_flash_model = (
-        provider == "Google" and model_name and "gemini-2.5-flash" in model_name
-    )
-    # Anthropic reasoning-capable models for thinking toggle
-
-    def _is_anthropic_reasoning_model(name: Optional[str]) -> bool:
-        if not name:
-            return False
-        lower = name.lower()
-        return (
-            lower.startswith("claude-opus-4-1")
-            or lower.startswith("claude-opus-4")
-            or lower.startswith("claude-sonnet-4")
-            or lower.startswith("claude-3-7-sonnet")
-        )
-
-    def _is_openrouter_thinking_model(name: Optional[str]) -> bool:
-        if not name:
-            return False
-        lower = name.lower()
-
-        is_gemini_reasoning = "gemini-2.5-flash" in lower
-        is_anthropic_reasoning = (
-            "claude-opus-4.1" in lower
-            or "claude-opus-4" in lower
-            or "claude-sonnet-4" in lower
-        )
-        is_grok_reasoning = "grok" in lower and "fast" in lower
-
-        return is_gemini_reasoning or is_anthropic_reasoning or is_grok_reasoning
-
-    is_anthropic_thinking_model = (
-        provider == "Anthropic" and _is_anthropic_reasoning_model(model_name)
-    )
-    is_openrouter_thinking_model = (
-        provider == "OpenRouter" and _is_openrouter_thinking_model(model_name)
-    )
-    enable_thinking_update = gr.update(
-        visible=is_flash_model
-        or is_anthropic_thinking_model
-        or is_openrouter_thinking_model
-    )
-
-    # Determine visibility for thinking_level dropdown (Gemini 3 models)
     is_gemini_3_google = (
         provider == "Google" and model_name and _is_gemini_3_model(model_name)
     )
     is_gemini_3_openrouter = (
         provider == "OpenRouter" and model_name and _is_gemini_3_model(model_name)
     )
-    thinking_level_update = gr.update(
-        visible=is_gemini_3_google or is_gemini_3_openrouter
+
+    reasoning_visible, reasoning_choices, default_val = get_reasoning_effort_config(
+        provider, model_name
     )
 
-    # Determine reasoning-effort dropdown visibility and choices
-    reasoning_visible = False
-    reasoning_choices = ["high", "medium", "low"]
-
-    def _is_openai_reasoning_model(name: Optional[str]) -> bool:
-        if not name:
-            return False
-        lm = name.lower()
-        is_reasoning_capable = (
-            "gpt-5" in lm or "o1" in lm or "o3" in lm or "o4-mini" in lm
-        )
-        return is_reasoning_capable
-
-    if provider == "OpenAI" and model_name:
-        lm = model_name.lower()
-        is_gpt5 = lm.startswith("gpt-5")
-        is_reasoning_capable = (
-            is_gpt5
-            or lm.startswith("o1")
-            or lm.startswith("o3")
-            or lm.startswith("o4-mini")
-        )
-        reasoning_visible = is_reasoning_capable
-        if is_gpt5:
-            reasoning_choices = ["high", "medium", "low", "minimal"]
-        else:
-            reasoning_choices = ["high", "medium", "low"]
-    elif (
-        provider == "OpenRouter"
-        and model_name
-        and _is_openai_reasoning_model(model_name)
-    ):
-        lm = model_name.lower()
-        reasoning_visible = True
-        is_gpt5 = "gpt-5" in lm
-        if is_gpt5:
-            reasoning_choices = ["high", "medium", "low", "minimal"]
-        else:
-            reasoning_choices = ["high", "medium", "low"]
-
-    # Pick a safe value if saved value not allowed in current choices
-    saved = get_saved_settings()
-    current_val = saved.get("reasoning_effort", "medium")
-    if current_val in reasoning_choices:
-        value = current_val
+    if default_val in reasoning_choices:
+        value = default_val
+    elif reasoning_choices:
+        value = reasoning_choices[0]
     else:
-        value = "medium" if "medium" in reasoning_choices else reasoning_choices[0]
+        value = "medium"
+
+    info_text = get_reasoning_effort_info_text(provider, model_name, reasoning_choices)
+    reasoning_effort_label = get_reasoning_effort_label(provider, model_name)
 
     reasoning_effort_update = gr.update(
-        visible=reasoning_visible, choices=reasoning_choices, value=value
+        visible=reasoning_visible,
+        choices=reasoning_choices,
+        value=value,
+        label=reasoning_effort_label,
+        info=info_text,
     )
 
-    # Grounding checkbox is visible for Google provider and OpenRouter with Gemini models
-    is_gemini_model = model_name and "gemini" in model_name.lower()
-    enable_grounding_visible = provider == "Google" or (
-        provider == "OpenRouter" and is_gemini_model
-    )
-    enable_grounding_update = gr.update(visible=enable_grounding_visible)
+    # Grounding checkbox is visible for Google provider and all OpenRouter models
+    enable_grounding_visible = provider == "Google" or provider == "OpenRouter"
 
-    # Media resolution dropdowns visibility logic for Gemini 3 models
+    enable_grounding_label, enable_grounding_info = get_enable_grounding_label_and_info(
+        provider
+    )
+
+    enable_grounding_update = gr.update(
+        visible=enable_grounding_visible,
+        label=enable_grounding_label,
+        info=enable_grounding_info,
+    )
+
     is_gemini_3_google = (
         provider == "Google" and model_name and _is_gemini_3_model(model_name)
     )
@@ -549,24 +765,21 @@ def update_params_for_model(
         provider == "OpenRouter" and model_name and _is_gemini_3_model(model_name)
     )
     is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
-
-    # Single media_resolution dropdown: visible for Google provider but NOT Gemini 3
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
-    # Gemini 3 specific dropdowns: visible only for Gemini 3 models
-    media_resolution_bubbles_visible = is_gemini_3
+    # Gemini 3 specific dropdowns: visible only for Google provider Gemini 3 models
+    media_resolution_bubbles_visible = is_gemini_3_google
     media_resolution_bubbles_update = gr.update(
         visible=media_resolution_bubbles_visible
     )
 
-    media_resolution_context_visible = is_gemini_3
+    media_resolution_context_visible = is_gemini_3_google
     media_resolution_context_update = gr.update(
         visible=media_resolution_context_visible
     )
 
-    # Determine max_tokens based on reasoning capability
-    is_reasoning = _is_reasoning_model(provider, model_name)
+    is_reasoning = is_reasoning_model(provider, model_name)
     max_tokens_value = 16384 if is_reasoning else 4096
     max_tokens_update = gr.update(value=max_tokens_value)
 
@@ -574,8 +787,6 @@ def update_params_for_model(
         temp_update,
         top_k_update,
         max_tokens_update,
-        enable_thinking_update,
-        thinking_level_update,
         enable_grounding_update,
         media_resolution_update,
         media_resolution_bubbles_update,
@@ -607,7 +818,6 @@ def fetch_and_update_openrouter_models():
     """Fetches vision-capable models from OpenRouter API and updates dropdown."""
     global OPENROUTER_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
-    # Check if cache is already populated for this session
     if OPENROUTER_MODEL_CACHE["models"] is not None:
         log_message("Using cached OpenRouter models", verbose=verbose)
         cached_models = OPENROUTER_MODEL_CACHE["models"]
@@ -623,7 +833,6 @@ def fetch_and_update_openrouter_models():
         )
         return gr.update(choices=cached_models, value=selected_or_model)
 
-    # If not cached, proceed with fetching
     log_message("Fetching OpenRouter models", verbose=verbose)
     try:
         response = requests.get("https://openrouter.ai/api/v1/models", timeout=15)
@@ -690,7 +899,7 @@ def fetch_and_update_openrouter_models():
 
     except requests.exceptions.RequestException as e:
         gr.Warning(f"Failed to fetch OpenRouter models: {e}")
-        return gr.update(choices=[])  # Return empty choices on error
+        return gr.update(choices=[])
     except Exception as e:  # Catch other potential errors like JSON parsing
         gr.Warning(f"Unexpected error fetching OpenRouter models: {e}")
         return gr.update(choices=[])
@@ -706,7 +915,6 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
         )
         return gr.update(choices=[], value=None)
 
-    # Check if cache is already populated for this URL in this session
     if (
         COMPATIBLE_MODEL_CACHE.get("url") == url
         and COMPATIBLE_MODEL_CACHE.get("models") is not None
@@ -725,7 +933,6 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
         )
         return gr.update(choices=cached_models, value=selected_comp_model)
 
-    # If not cached, proceed with fetching
     log_message(f"Fetching models from {url}", verbose=verbose)
     try:
         headers = {}
@@ -799,3 +1006,53 @@ def initial_dynamic_fetch(provider: str, url: str, key: Optional[str]):
     elif provider == "OpenAI-Compatible":
         return fetch_and_update_compatible_models(url, key)
     return gr.update()
+
+
+def format_thinking_status(
+    provider: str,
+    model_name: Optional[str],
+    reasoning_effort: Optional[str],
+) -> str:
+    """
+    Format the thinking status string for success messages.
+
+    Args:
+        provider: The provider name (e.g., "Google", "Anthropic", "OpenRouter")
+        model_name: The model name
+        reasoning_effort: The reasoning effort level (e.g., "high", "medium", "low", "auto", "none")
+
+    Returns:
+        str: Formatted thinking status string (e.g., " (thinking: high)" or " (no thinking)")
+    """
+    if not model_name:
+        return ""
+
+    thinking_status_str = ""
+    if provider == "Google" and model_name:
+        if "gemini-3" in model_name.lower():
+            effort = reasoning_effort or "high"
+            thinking_status_str = f" (thinking: {effort})"
+        elif "gemini-2.5-flash" in model_name:
+            effort = reasoning_effort or "auto"
+            if effort == "none":
+                thinking_status_str = " (no thinking)"
+            else:
+                thinking_status_str = f" (thinking: {effort})"
+    elif provider == "OpenRouter" and model_name and "gemini-3" in model_name.lower():
+        effort = reasoning_effort or "high"
+        thinking_status_str = f" (thinking: {effort})"
+    elif provider == "Anthropic" and model_name:
+        lm = model_name.lower()
+        if (
+            lm.startswith("claude-opus-4")
+            or lm.startswith("claude-sonnet-4")
+            or lm.startswith("claude-haiku-4-5")
+            or lm.startswith("claude-3-7-sonnet")
+        ):
+            effort = reasoning_effort or "none"
+            if effort == "none":
+                thinking_status_str = " (no thinking)"
+            else:
+                thinking_status_str = f" (thinking: {effort})"
+
+    return thinking_status_str

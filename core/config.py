@@ -46,17 +46,19 @@ class TranslationConfig:
     output_language: str = "English"
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
-    enable_thinking: bool = True  # Gemini 2.5 Flash & Claude reasoning models
-    thinking_level: str = "high"  # Gemini 3 models (low or high)
     reasoning_effort: Optional[str] = (
-        "medium"  # OpenAI reasoning models (o1/o3/o4-mini/gpt-5*)
+        None  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
     )
     send_full_page_context: bool = True
     upscale_method: str = "model"  # "model", "lanczos", or "none"
-    enable_grounding: bool = False  # Enable Google Search grounding for Gemini models
-    media_resolution: str = "auto"  # Media resolution for Gemini models (auto/high/medium/low)
-    media_resolution_bubbles: str = "auto"  # Media resolution for bubble images (Gemini 3 only)
-    media_resolution_context: str = "auto"  # Media resolution for context images (Gemini 3 only)
+    enable_grounding: bool = (
+        False  # Enable Gemini's built-in Google Search; only available via Google provider
+    )
+    media_resolution: str = (
+        "auto"  # Only available via Google provider (auto/high/medium/low)
+    )
+    media_resolution_bubbles: str = "auto"  # Gemini 3 models
+    media_resolution_context: str = "auto"  # Gemini 3 models
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
@@ -171,3 +173,29 @@ class PreprocessingConfig:
     enabled: bool = False
     factor: float = 2.0
     enable_auto_scale: bool = False
+
+
+def calculate_reasoning_budget(total_tokens: int, effort_level: str) -> int:
+    """
+    Calculate reasoning token budget based on effort level.
+
+    Args:
+        total_tokens: Total available tokens (typically max_tokens)
+        effort_level: Reasoning effort level ("high", "medium", "low", "auto", or "none")
+
+    Returns:
+        int: Calculated budget in tokens
+        - "high": 80% of total_tokens
+        - "medium": 50% of total_tokens
+        - "low": 20% of total_tokens
+        - "auto" or "none": Returns 0 (caller should handle these cases separately)
+    """
+    if effort_level == "high":
+        return int(total_tokens * 0.8)
+    elif effort_level == "medium":
+        return int(total_tokens * 0.5)
+    elif effort_level == "low":
+        return int(total_tokens * 0.2)
+    else:
+        # "auto" or "none" - return 0, caller should handle these cases
+        return 0

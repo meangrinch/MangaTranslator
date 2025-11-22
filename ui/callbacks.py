@@ -86,8 +86,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         verbose,
         cleaning_only_toggle,
         test_mode_toggle,
-        enable_thinking_checkbox_val,
-        thinking_level_val,
         enable_grounding_val,
         media_resolution_val,
         media_resolution_bubbles_val,
@@ -213,8 +211,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             verbose=verbose,
             cleaning_only=cleaning_only_toggle,
             test_mode=test_mode_toggle,
-            enable_thinking=enable_thinking_checkbox_val,
-            thinking_level=thinking_level_val,
             enable_grounding=enable_grounding_val,
             media_resolution=media_resolution_val,
             media_resolution_bubbles=media_resolution_bubbles_val,
@@ -294,35 +290,11 @@ def _format_single_success_message(
     width, height = result_image.size
     provider = backend_config.translation.provider
     model_name = backend_config.translation.model_name
-    thinking_status_str = ""
-    if provider == "Google" and model_name:
-        if "gemini-3" in model_name.lower():
-            thinking_status_str = (
-                f" (thinking: {backend_config.translation.thinking_level})"
-            )
-        elif "gemini-2.5-flash" in model_name:
-            thinking_status_str = (
-                " (thinking)"
-                if backend_config.translation.enable_thinking
-                else " (no thinking)"
-            )
-    elif provider == "OpenRouter" and model_name and "gemini-3" in model_name.lower():
-        thinking_status_str = (
-            f" (thinking: {backend_config.translation.thinking_level})"
-        )
-    elif provider == "Anthropic" and model_name:
-        lm = model_name.lower()
-        if (
-            lm.startswith("claude-opus-4-1")
-            or lm.startswith("claude-opus-4")
-            or lm.startswith("claude-sonnet-4")
-            or lm.startswith("claude-3-7-sonnet")
-        ):
-            thinking_status_str = (
-                " (thinking)"
-                if backend_config.translation.enable_thinking
-                else " (no thinking)"
-            )
+    thinking_status_str = utils.format_thinking_status(
+        provider,
+        model_name,
+        backend_config.translation.reasoning_effort,
+    )
     temp_val = backend_config.translation.temperature
     top_p_val = backend_config.translation.top_p
     top_k_val = backend_config.translation.top_k
@@ -459,26 +431,11 @@ def _format_batch_success_message(
 
     provider = backend_config.translation.provider
     model_name = backend_config.translation.model_name
-    thinking_status_str = ""
-    if provider == "Google" and model_name and "gemini-2.5-flash" in model_name:
-        thinking_status_str = (
-            " (thinking)"
-            if backend_config.translation.enable_thinking
-            else " (no thinking)"
-        )
-    elif provider == "Anthropic" and model_name:
-        lm = model_name.lower()
-        if (
-            lm.startswith("claude-opus-4-1")
-            or lm.startswith("claude-opus-4")
-            or lm.startswith("claude-sonnet-4")
-            or lm.startswith("claude-3-7-sonnet")
-        ):
-            thinking_status_str = (
-                " (thinking)"
-                if backend_config.translation.enable_thinking
-                else " (no thinking)"
-            )
+    thinking_status_str = utils.format_thinking_status(
+        provider,
+        model_name,
+        backend_config.translation.reasoning_effort,
+    )
     temp_val = backend_config.translation.temperature
     top_p_val = backend_config.translation.top_p
     top_k_val = backend_config.translation.top_k
@@ -869,8 +826,6 @@ def handle_save_config_click(*args: Any) -> str:
         b_in_lang,
         b_out_lang,
         b_font,
-        enable_thinking_val,
-        thinking_level_val,
         enable_grounding_val,
         media_resolution_val,
         media_resolution_bubbles_val,
@@ -986,8 +941,6 @@ def handle_save_config_click(*args: Any) -> str:
             verbose=verb,
             cleaning_only=cleaning_only_val,
             test_mode=test_mode_val,
-            enable_thinking=enable_thinking_val,
-            thinking_level=thinking_level_val,
             enable_grounding=enable_grounding_val,
             media_resolution=media_resolution_val,
             media_resolution_bubbles=media_resolution_bubbles_val,
@@ -1057,8 +1010,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         temp_update,
         top_k_update,
         _,  # max_tokens_update - unused (using saved default instead)
-        enable_thinking_update,
-        thinking_level_update,
         enable_grounding_update,
         media_resolution_update,
         media_resolution_bubbles_update,
@@ -1071,11 +1022,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     temp_max = temp_update.get("maximum", 2.0)
     top_k_interactive = top_k_update.get("interactive", True)
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
-    # Determine max_tokens based on reasoning capability
-    is_reasoning = utils._is_reasoning_model(default_provider, default_model_name)
+    is_reasoning = utils.is_reasoning_model(default_provider, default_model_name)
     max_tokens_val = 16384 if is_reasoning else 4096
-    enable_thinking_visible = enable_thinking_update.get("visible", False)
-    thinking_level_visible = thinking_level_update.get("visible", False)
     enable_grounding_visible = enable_grounding_update.get("visible", False)
     media_resolution_visible = media_resolution_update.get("visible", False)
     media_resolution_bubbles_visible = media_resolution_bubbles_update.get(
@@ -1085,6 +1033,9 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         "visible", False
     )
     reasoning_visible = reasoning_effort_update.get("visible", False)
+    reasoning_effort_val = reasoning_effort_update.get(
+        "value", default_ui_state.general.reasoning_effort
+    )
 
     return [
         default_ui_state.detection.confidence,
@@ -1147,14 +1098,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.batch_output_language,
         gr.update(value=default_ui_state.batch_font_pack),
         gr.update(
-            value=default_ui_state.general.enable_thinking,
-            visible=enable_thinking_visible,
-        ),
-        gr.update(
-            value=default_ui_state.general.thinking_level,
-            visible=thinking_level_visible,
-        ),
-        gr.update(
             value=default_ui_state.general.enable_grounding,
             visible=enable_grounding_visible,
         ),
@@ -1170,9 +1113,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
             value=default_ui_state.general.media_resolution_context,
             visible=media_resolution_context_visible,
         ),
-        gr.update(
-            value=default_ui_state.general.reasoning_effort, visible=reasoning_visible
-        ),
+        gr.update(value=reasoning_effort_val, visible=reasoning_visible),
         "Settings reset to defaults (API keys preserved).",
         gr.update(value=default_ui_state.llm_settings.send_full_page_context),
         gr.update(value=default_ui_state.llm_settings.upscale_method),

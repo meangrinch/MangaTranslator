@@ -213,7 +213,7 @@ def create_layout(
         if saved_max_tokens is not None:
             initial_max_tokens = saved_max_tokens
         else:
-            is_reasoning = utils._is_reasoning_model(
+            is_reasoning = utils.is_reasoning_model(
                 initial_provider, initial_model_name
             )
             initial_max_tokens = 16384 if is_reasoning else 4096
@@ -481,7 +481,7 @@ def create_layout(
                                     ],
                                 ),
                                 info=(
-                                    "Determines whether to run OCR and Translation in one step or two. "
+                                    "Determines whether to run OCR and Translation together or separately. "
                                     "'two-step' might improve translation quality for less-capable LLMs."
                                 ),
                                 elem_id="config_translation_mode",
@@ -583,104 +583,78 @@ def create_layout(
                                 elem_id="config_model_name",
                                 allow_custom_value=True,
                             )
-                            # Compute initial visibility for enable thinking (Google, Anthropic, OpenRouter)
-                            _initial_enable_thinking_visible = False
-                            try:
-                                if (
-                                    config_initial_provider == "Google"
-                                    and config_initial_model_name
-                                ):
-                                    _initial_enable_thinking_visible = (
-                                        "gemini-2.5-flash" in config_initial_model_name
-                                    )
-                                elif (
-                                    config_initial_provider == "Anthropic"
-                                    and config_initial_model_name
-                                ):
-                                    lm = config_initial_model_name.lower()
-                                    _initial_enable_thinking_visible = (
-                                        lm.startswith("claude-opus-4-1")
-                                        or lm.startswith("claude-opus-4")
-                                        or lm.startswith("claude-sonnet-4")
-                                        or lm.startswith("claude-3-7-sonnet")
-                                    )
-                                elif (
-                                    config_initial_provider == "OpenRouter"
-                                    and config_initial_model_name
-                                ):
-                                    lm = config_initial_model_name.lower()
-                                    is_gemini_reasoning = "gemini-2.5-flash" in lm
-                                    is_anthropic_reasoning = (
-                                        "claude-opus-4.1" in lm
-                                        or "claude-opus-4" in lm
-                                        or "claude-sonnet-4" in lm
-                                    )
-                                    is_grok_reasoning = "grok" in lm and "fast" in lm
-                                    _initial_enable_thinking_visible = (
-                                        is_gemini_reasoning
-                                        or is_anthropic_reasoning
-                                        or is_grok_reasoning
-                                    )
-                            except Exception:
-                                _initial_enable_thinking_visible = False
-
-                            enable_thinking_checkbox = gr.Checkbox(
-                                label="Enable Thinking",
-                                value=saved_settings.get("enable_thinking", True),
-                                info=(
-                                    "Enable reasoning for Gemini 2.5 Flash, Claude, or Grok (via OpenRouter)."
-                                ),
-                                visible=_initial_enable_thinking_visible,
-                                elem_id="enable_thinking_checkbox",
+                            (
+                                _initial_reasoning_effort_visible,
+                                _initial_reasoning_effort_choices,
+                                _initial_reasoning_effort_default,
+                            ) = utils.get_reasoning_effort_config(
+                                config_initial_provider, config_initial_model_name
                             )
 
-                            # Compute initial visibility for thinking_level (Gemini 3 models)
-                            _initial_thinking_level_visible = False
-                            try:
-                                if (
-                                    config_initial_provider == "Google"
-                                    and config_initial_model_name
-                                    and "gemini-3" in config_initial_model_name.lower()
-                                ):
-                                    _initial_thinking_level_visible = True
-                                elif (
-                                    config_initial_provider == "OpenRouter"
-                                    and config_initial_model_name
-                                    and "gemini-3" in config_initial_model_name.lower()
-                                ):
-                                    _initial_thinking_level_visible = True
-                            except Exception:
-                                _initial_thinking_level_visible = False
+                            _initial_reasoning_effort_value = saved_settings.get(
+                                "reasoning_effort"
+                            )
+                            if _initial_reasoning_effort_value is None:
+                                _initial_reasoning_effort_value = (
+                                    _initial_reasoning_effort_default
+                                )
+                            elif (
+                                _initial_reasoning_effort_value
+                                not in _initial_reasoning_effort_choices
+                            ):
+                                _initial_reasoning_effort_value = (
+                                    _initial_reasoning_effort_default
+                                )
 
-                            thinking_level_dropdown = gr.Radio(
-                                label="Thinking Level",
-                                choices=["high", "low"],
-                                value=saved_settings.get("thinking_level", "high"),
-                                info="Reasoning effort for Gemini 3 models.",
-                                visible=_initial_thinking_level_visible,
-                                elem_id="thinking_level_dropdown",
+                            _initial_reasoning_effort_info = (
+                                utils.get_reasoning_effort_info_text(
+                                    config_initial_provider,
+                                    config_initial_model_name,
+                                    _initial_reasoning_effort_choices,
+                                )
+                            )
+
+                            _initial_reasoning_effort_label = (
+                                utils.get_reasoning_effort_label(
+                                    config_initial_provider,
+                                    config_initial_model_name,
+                                )
+                            )
+
+                            reasoning_effort_dropdown = gr.Radio(
+                                choices=_initial_reasoning_effort_choices,
+                                label=_initial_reasoning_effort_label,
+                                value=_initial_reasoning_effort_value,
+                                info=_initial_reasoning_effort_info,
+                                visible=_initial_reasoning_effort_visible,
+                                elem_id="reasoning_effort_dropdown",
                             )
 
                             _initial_enable_grounding_visible = False
+                            # Default to Google values (will be updated if provider is OpenRouter)
+                            (
+                                _initial_enable_grounding_label,
+                                _initial_enable_grounding_info,
+                            ) = utils.get_enable_grounding_label_and_info("Google")
                             try:
-                                if config_initial_provider == "Google":
-                                    _initial_enable_grounding_visible = True
-                                elif (
-                                    config_initial_provider == "OpenRouter"
-                                    and config_initial_model_name
-                                    and "gemini" in config_initial_model_name.lower()
+                                if (
+                                    config_initial_provider == "Google"
+                                    or config_initial_provider == "OpenRouter"
                                 ):
                                     _initial_enable_grounding_visible = True
+                                    (
+                                        _initial_enable_grounding_label,
+                                        _initial_enable_grounding_info,
+                                    ) = utils.get_enable_grounding_label_and_info(
+                                        config_initial_provider
+                                    )
                             except Exception:
                                 _initial_enable_grounding_visible = False
 
                             enable_grounding_checkbox = gr.Checkbox(
-                                label="Enable Grounding",
+                                label=_initial_enable_grounding_label,
                                 value=saved_settings.get("enable_grounding", False),
-                                info=(
-                                    "Allow Gemini to use Google Search for up-to-date info. "
-                                    "Might improve translation quality."
-                                ),
+                                info=_initial_enable_grounding_info,
                                 visible=_initial_enable_grounding_visible,
                                 elem_id="enable_grounding_checkbox",
                             )
@@ -750,39 +724,6 @@ def create_layout(
                                 elem_id="media_resolution_context_dropdown",
                             )
 
-                            # Compute initial visibility for reasoning effort (OpenAI and OpenRouter OpenAI models)
-                            _initial_reasoning_effort_visible = False
-                            try:
-                                if config_initial_provider == "OpenAI":
-                                    _initial_reasoning_effort_visible = True
-                                elif (
-                                    config_initial_provider == "OpenRouter"
-                                    and config_initial_model_name
-                                ):
-                                    lm = config_initial_model_name.lower()
-                                    is_reasoning_capable = (
-                                        "gpt-5" in lm
-                                        or "o1" in lm
-                                        or "o3" in lm
-                                        or "o4-mini" in lm
-                                    )
-                                    _initial_reasoning_effort_visible = (
-                                        is_reasoning_capable
-                                    )
-                            except Exception:
-                                _initial_reasoning_effort_visible = False
-
-                            reasoning_effort_dropdown = gr.Radio(
-                                choices=["high", "medium", "low"],
-                                label="Reasoning Effort (OpenAI/OpenRouter)",
-                                value=saved_settings.get("reasoning_effort", "medium"),
-                                info=(
-                                    "Controls internal effort for OpenAI reasoning and "
-                                    "OpenRouter OpenAI models."
-                                ),
-                                visible=_initial_reasoning_effort_visible,
-                                elem_id="reasoning_effort_dropdown",
-                            )
                             temperature = gr.Slider(
                                 0,
                                 2.0,
@@ -1288,8 +1229,6 @@ def create_layout(
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
-            enable_thinking_checkbox,
-            thinking_level_dropdown,
             enable_grounding_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
@@ -1366,8 +1305,6 @@ def create_layout(
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
-            enable_thinking_checkbox,
-            thinking_level_dropdown,
             enable_grounding_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
@@ -1439,8 +1376,6 @@ def create_layout(
             verbose,
             cleaning_only_toggle,
             test_mode_toggle,
-            enable_thinking_checkbox,
-            thinking_level_dropdown,
             enable_grounding_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
@@ -1519,8 +1454,6 @@ def create_layout(
             verbose,
             cleaning_only_toggle,
             test_mode_toggle,
-            enable_thinking_checkbox,
-            thinking_level_dropdown,
             enable_grounding_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
@@ -1641,8 +1574,6 @@ def create_layout(
                 temperature,
                 top_k,
                 max_tokens,
-                enable_thinking_checkbox,
-                thinking_level_dropdown,
                 enable_grounding_checkbox,
                 media_resolution_dropdown,
                 media_resolution_bubbles_dropdown,
@@ -1676,8 +1607,6 @@ def create_layout(
                 temperature,
                 top_k,
                 max_tokens,
-                enable_thinking_checkbox,
-                thinking_level_dropdown,
                 enable_grounding_checkbox,
                 media_resolution_dropdown,
                 media_resolution_bubbles_dropdown,

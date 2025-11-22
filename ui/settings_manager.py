@@ -41,6 +41,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "o4-mini-2025-04-16",
         "o3-2025-04-16",
         "o1-2024-12-17",
+        "gpt-5-pro-2025-10-06",
         "o3-pro-2025-06-10",
         "o1-pro-2025-03-19",
     ],
@@ -50,9 +51,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "claude-opus-4-1-20250805",
         "claude-opus-4-20250514",
         "claude-sonnet-4-20250514",
-        "claude-3-7-sonnet-latest",
-        "claude-3-5-sonnet-latest",
-        "claude-3-5-haiku-latest",
+        "claude-3-7-sonnet-20250219",
     ],
     "xAI": [
         "grok-4-1-fast-reasoning",
@@ -121,13 +120,11 @@ DEFAULT_SETTINGS = {
     "image_upscale_factor": 2.0,
     "cleaning_only": False,
     "test_mode": False,
-    "enable_thinking": True,  # Gemini 2.5 Flash & Claude reasoning models
-    "thinking_level": "high",  # Gemini 3 models (low or high)
-    "reasoning_effort": "medium",  # OpenAI reasoning models; gpt-5 also supports 'minimal'
-    "enable_grounding": False,  # Enable Google Search grounding for Gemini models
-    "media_resolution": "auto",  # Media resolution for Gemini models (auto/high/medium/low)
-    "media_resolution_bubbles": "auto",  # Media resolution for bubble images (Gemini 3 only)
-    "media_resolution_context": "auto",  # Media resolution for context images (Gemini 3 only)
+    "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
+    "enable_grounding": False,  # Enable Gemini's built-in Google Search; only available via Google provider
+    "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
+    "media_resolution_bubbles": "auto",  # Gemini 3 models
+    "media_resolution_context": "auto",  # Gemini 3 models
     "enable_auto_scale": False,
     "send_full_page_context": True,
     "special_instructions": "",
@@ -181,7 +178,6 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "top_k",
     "max_tokens",
     "send_full_page_context",
-    "enable_thinking",
     "reasoning_effort",
     "enable_grounding",
     "special_instructions",
@@ -490,12 +486,16 @@ def reset_to_defaults() -> Dict[str, Any]:
         if "batch_font_pack" in current_saved:
             settings["batch_font_pack"] = current_saved["batch_font_pack"]
         if "outside_text_osb_font_pack" in current_saved:
-            settings["outside_text_osb_font_pack"] = current_saved["outside_text_osb_font_pack"]
+            settings["outside_text_osb_font_pack"] = current_saved[
+                "outside_text_osb_font_pack"
+            ]
 
         # Preserve provider and model selection if they exist
         if "provider" in current_saved:
             settings["provider"] = current_saved["provider"]
-        if "provider_models" in current_saved and isinstance(current_saved["provider_models"], dict):
+        if "provider_models" in current_saved and isinstance(
+            current_saved["provider_models"], dict
+        ):
             settings["provider_models"] = current_saved["provider_models"].copy()
         else:
             settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()

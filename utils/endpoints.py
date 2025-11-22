@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from core.config import calculate_reasoning_budget
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 
@@ -203,7 +204,6 @@ def call_openai_endpoint(
     url = "https://api.openai.com/v1/responses"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-    # Build Responses API input content
     input_content = []
     for part in image_parts:
         if (
@@ -213,7 +213,6 @@ def call_openai_endpoint(
         ):
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            # Responses API image input
             input_content.append(
                 {
                     "type": "input_image",
@@ -237,7 +236,6 @@ def call_openai_endpoint(
         payload["instructions"] = system_prompt
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    # Conditionally include OpenAI reasoning and verbosity controls
     try:
         lower_model = (model_name or "").lower()
         is_gpt5_series = lower_model.startswith("gpt-5")
@@ -250,7 +248,7 @@ def call_openai_endpoint(
 
         if is_reasoning_capable:
             effort = generation_config.get("reasoning_effort")
-            if effort:
+            if effort and effort != "none":
                 if effort == "minimal" and not is_gpt5_series:
                     effort_to_send = "low"
                 else:
@@ -450,10 +448,18 @@ def call_anthropic_endpoint(
         "top_k": generation_config.get("top_k"),
         "max_tokens": generation_config.get("max_tokens", 4096),
     }
-    # Include Anthropic thinking parameter for supported models when requested
     try:
-        if generation_config.get("anthropic_thinking"):
-            payload["thinking"] = {"type": "enabled", "budget_tokens": 16384}
+        reasoning_effort = generation_config.get("reasoning_effort")
+        if reasoning_effort and reasoning_effort != "none":
+            max_tokens_value = generation_config.get("max_tokens", 4096)
+            budget_tokens = calculate_reasoning_budget(
+                max_tokens_value, reasoning_effort
+            )
+            payload["thinking"] = {"type": "enabled", "budget_tokens": budget_tokens}
+            beta_header_value = generation_config.get("anthropic_beta") or "thinking-v1"
+            headers["anthropic-beta"] = beta_header_value
+        elif reasoning_effort == "none":
+            payload["thinking"] = {"type": "enabled", "budget_tokens": 0}
             beta_header_value = generation_config.get("anthropic_beta") or "thinking-v1"
             headers["anthropic-beta"] = beta_header_value
     except Exception:
@@ -619,13 +625,11 @@ def call_xai_endpoint(
         "Content-Type": "application/json",
     }
 
-    # Build input array for xAI Responses API
     input_messages = []
     if system_prompt:
         input_messages.append({"role": "system", "content": system_prompt})
 
     if image_parts:
-        # Use array format when images are present
         user_content = []
         for part in image_parts:
             if (
@@ -635,7 +639,6 @@ def call_xai_endpoint(
             ):
                 mime_type = part["inline_data"]["mime_type"]
                 base64_image = part["inline_data"]["data"]
-                # xAI Responses API image format
                 user_content.append(
                     {
                         "type": "input_image",
@@ -648,7 +651,6 @@ def call_xai_endpoint(
         user_content.append({"type": "text", "text": text_part["text"]})
         input_messages.append({"role": "user", "content": user_content})
     else:
-        # Use simple string format when no images
         input_messages.append({"role": "user", "content": text_part["text"]})
 
     payload = {
@@ -664,8 +666,12 @@ def call_xai_endpoint(
     )
 
     if is_reasoning_model:
-        payload["reasoning_tokens"] = generation_config.get("reasoning_tokens", 16384)
-        payload["max_output_tokens"] = generation_config.get("max_tokens", 4096)
+        max_tokens_value = generation_config.get("max_tokens", 4096)
+        reasoning_effort = generation_config.get("reasoning_effort", "high")
+        # Mimics OpenAI's functionality
+        if reasoning_effort and reasoning_effort in ["high", "low"]:
+            payload["reasoning_effort"] = reasoning_effort
+        payload["max_output_tokens"] = max_tokens_value
     else:
         payload["max_output_tokens"] = generation_config.get("max_tokens", 4096)
 
@@ -688,7 +694,6 @@ def call_xai_endpoint(
             try:
                 result = response.json()
 
-                # xAI Responses API returns content in output array
                 if "output" in result and isinstance(result["output"], list):
                     for output_item in result["output"]:
                         if isinstance(output_item, dict) and "content" in output_item:
@@ -819,7 +824,6 @@ def call_openrouter_endpoint(
         "X-Title": "MangaTranslator",
     }
 
-    # Transform parts to OpenAI messages format
     messages = []
     user_content = []
     if system_prompt:
@@ -843,22 +847,21 @@ def call_openrouter_endpoint(
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
-    # Map generation config with provider-specific restrictions
-    # Reasoning-aware max tokens: allow higher limit if indicated by caller
     payload = {
         "model": model_name,
         "messages": messages,
         "max_tokens": generation_config.get("max_tokens", 4096),
     }
 
-    # Handle grounding for Gemini models via :online suffix
     if enable_grounding and "gemini" in model_name.lower():
         if not model_name.endswith(":online"):
             payload["model"] = f"{model_name}:online"
 
-    is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")
-    is_anthropic_model = "anthropic/" in model_name or model_name.startswith("claude-")
-    is_grok_model = "grok" in model_name.lower()
+    metadata = generation_config.get("_metadata", {})
+    is_openai_model = metadata.get("is_openai_model", False)
+    is_anthropic_model = metadata.get("is_anthropic_model", False)
+    is_gemini_3 = metadata.get("is_gemini_3", False)
+    is_google_model = metadata.get("is_google_model", False)
 
     temp = generation_config.get("temperature")
     if temp is not None:
@@ -875,46 +878,49 @@ def call_openrouter_endpoint(
     if top_k is not None and not is_openai_model and not is_anthropic_model:
         payload["top_k"] = top_k
 
-    # Handle OpenRouter reasoning parameters
     reasoning_config = {}
-    is_gemini_3 = "gemini-3" in model_name.lower()
-
-    # Check for reasoning effort (OpenAI models)
-    if is_openai_model and generation_config.get("reasoning_effort"):
-        effort = generation_config.get("reasoning_effort")
-        if effort in ["low", "medium", "high", "minimal"]:
-            reasoning_config["effort"] = effort
-
-    # Check for thinking_level (Gemini 3 models)
-    elif is_gemini_3 and generation_config.get("thinking_level"):
-        thinking_level = generation_config.get("thinking_level")
-        if thinking_level in ["low", "high"]:
-            reasoning_config["effort"] = thinking_level
-
-    # Check for enable thinking (Google/Anthropic/xAI models, excluding Gemini 3)
-    # Exclude :thinking variants as they are already thinking-only models
-    elif (
-        (
-            is_anthropic_model
-            or ("gemini" in model_name.lower() and not is_gemini_3)
-            or (is_grok_model and "fast" in model_name.lower())
-        )
-        and ":thinking" not in model_name.lower()
-        and generation_config.get("enable_thinking")
-    ):
-        reasoning_config["max_tokens"] = 16384
-
-    # Check for Grok 4 Fast
-    if (
-        is_grok_model
-        and "fast" in model_name.lower()
-        and generation_config.get("enable_thinking")
-    ):
+    # For reasoning-capable Google models (excluding Gemini 3), "auto" should route to reasoning={"enabled": true}
+    reasoning_effort = generation_config.get("reasoning_effort")
+    if reasoning_effort == "auto" and is_google_model and not is_gemini_3:
         reasoning_config["enabled"] = True
 
-    # Always exclude reasoning tokens from response for all models
+    # Skip if we already set enabled=True for Google auto case
+    if reasoning_effort and not (
+        reasoning_effort == "auto" and is_google_model and not is_gemini_3
+    ):
+        is_openai_reasoning = metadata.get("is_openai_reasoning", False)
+        is_anthropic_reasoning = metadata.get("is_anthropic_reasoning", False)
+        is_grok_reasoning = metadata.get("is_grok_reasoning", False)
+
+        if reasoning_effort and reasoning_effort != "none":
+            if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
+                # OpenAI models support "minimal" in addition to high/medium/low
+                if is_openai_reasoning and reasoning_effort in [
+                    "low",
+                    "medium",
+                    "high",
+                    "minimal",
+                ]:
+                    reasoning_config["effort"] = reasoning_effort
+                elif is_anthropic_reasoning and reasoning_effort in [
+                    "low",
+                    "medium",
+                    "high",
+                ]:
+                    reasoning_config["effort"] = reasoning_effort
+                elif is_grok_reasoning and reasoning_effort in ["high", "low"]:
+                    reasoning_config["effort"] = reasoning_effort
+
+    if is_gemini_3 and generation_config.get("reasoning_effort"):
+        reasoning_effort_gemini3 = generation_config.get("reasoning_effort")
+        if reasoning_effort_gemini3 in ["low", "high"]:
+            reasoning_config["effort"] = reasoning_effort_gemini3
+
+    # Exception: Google models with auto (enabled=True) don't need exclude set
     if reasoning_config:
-        reasoning_config["exclude"] = True
+        # Only set exclude if we're using effort-based reasoning, not enabled-based
+        if reasoning_config.get("enabled") is not True:
+            reasoning_config["exclude"] = True
         payload["reasoning"] = reasoning_config
 
     payload = {k: v for k, v in payload.items() if v is not None}
@@ -985,13 +991,11 @@ def call_openrouter_endpoint(
                         f"Rate limited after {max_retries + 1} attempts: {error_text}"
                     )
                 elif status_code == 400:
-                    error_reason += (
-                        " (Check model name and payload)"  # Potential 400 reason
-                    )
+                    error_reason += " (Check model name and payload)"
                 elif status_code == 401:
-                    error_reason += " (Check API key)"  # Potential 401 reason
+                    error_reason += " (Check API key)"
                 elif status_code == 403:
-                    error_reason += " (Permission denied, check API key/plan)"  # Potential 403 reason
+                    error_reason += " (Permission denied, check API key/plan)"
 
                 log_message(
                     f"OpenRouter API HTTP Error: {error_reason}", always_print=True
@@ -1064,9 +1068,6 @@ def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
         pass
 
     lm = model_name.lower()
-    # Explicit check for Gemini 3 models (they are reasoning-capable)
-    if "gemini-3" in lm:
-        return True
     # Exclude models that are instruction-tuned (contain 'instruct' in the model id)
     if "instruct" in lm:
         return False
@@ -1141,7 +1142,6 @@ def call_openai_compatible_endpoint(
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    # Transform parts to OpenAI messages format
     messages = []
     user_content = []
     if system_prompt:

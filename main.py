@@ -211,10 +211,13 @@ def main():
         "--reasoning-effort",
         type=str,
         default="medium",
-        choices=["high", "medium", "low", "minimal"],
+        choices=["high", "medium", "low", "minimal", "none"],
         help=(
-            "Controls internal reasoning effort for OpenAI/OpenRouter OpenAI reasoning models "
-            "(o1/o3/o4-mini/gpt-5*). Note: 'minimal' is only supported by gpt-5 series."
+            "OpenAI/Gemini 3: Controls internal reasoning effort. "
+            "`minimal` is only supported by GPT-5 series. "
+            "Other providers: Controls reasoning token budget allocation relative to "
+            "`max_tokens` (high=80%, medium=50%, low=20%). "
+            "Use 'none' to disable thinking for certain models."
         ),
     )
     # Rendering args
@@ -341,21 +344,6 @@ def main():
         help="Skip translation and render placeholder text (lorem ipsum)",
     )
     parser.add_argument(
-        "--enable-thinking",
-        action="store_true",
-        help=(
-            "Enables 'thinking' capabilities for Gemini 2.5 Flash (Lite), Claude reasoning models, "
-            "and OpenRouter Gemini/Anthropic/Grok models"
-        ),
-    )
-    parser.add_argument(
-        "--thinking-level",
-        type=str,
-        default="high",
-        choices=["high", "low"],
-        help=("Reasoning effort for Gemini 3 models"),
-    )
-    parser.add_argument(
         "--enable-grounding",
         action="store_true",
         help=(
@@ -374,7 +362,7 @@ def main():
         type=str,
         choices=["auto", "high", "medium", "low"],
         default="auto",
-        help="Media resolution for bubble images (Gemini 3 only)",
+        help="Media resolution for bubble images (Gemini 3 models)",
     )
     parser.add_argument(
         "--media-resolution-context",
@@ -531,7 +519,6 @@ def main():
         verbose=False,
         cpu=False,
         cleaning_only=False,
-        enable_thinking=False,
         enable_grounding=False,
     )
 
@@ -668,8 +655,6 @@ def main():
             output_language=args.output_language,
             reading_direction=args.reading_direction,
             translation_mode=args.translation_mode,
-            enable_thinking=args.enable_thinking,
-            thinking_level=args.thinking_level,
             enable_grounding=args.enable_grounding,
             media_resolution=args.media_resolution,
             media_resolution_bubbles=args.media_resolution_bubbles,

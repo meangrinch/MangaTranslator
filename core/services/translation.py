@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 
 from core.caching import get_cache
-from core.config import TranslationConfig
+from core.config import TranslationConfig, calculate_reasoning_budget
 from core.image.image_utils import (cv2_to_pil, pil_to_cv2,
                                     process_bubble_image_cached)
 from utils.endpoints import (call_anthropic_endpoint, call_gemini_endpoint,
@@ -68,7 +68,6 @@ Your sole purpose is to accurately transcribe the original text from a series of
 def _build_system_prompt_translation(
     output_language: str, mode: str, num_speech_bubbles: int = 0, num_osb_text: int = 0
 ) -> str:
-    # --- Shared Components ---
     shared_components = f"""
 ## ROLE
 You are a professional manga localization translator and editor.
@@ -92,9 +91,7 @@ You must use the following markdown-style markers to convey emphasis:
 - **Edge Cases:** If an input line is `[OCR FAILED]` or `[NO TEXT]`, you must output it unchanged.
 """  # noqa
 
-    # --- Mode-Specific Output Schemas ---
     if mode == "one-step":
-        # Build the numbering instruction
         numbering_instruction = (
             "Use S-prefixed numbering for speech bubbles (S1, S2, S3...)"
         )
@@ -104,7 +101,6 @@ You must use the following markdown-style markers to convey emphasis:
             )
         numbering_instruction += "."
 
-        # Build the sections list
         sections_list = [
             "- `## SPEECH BUBBLES TRANSCRIPTION`",
             "- `## SPEECH BUBBLES TRANSLATION`",
@@ -129,14 +125,12 @@ You must use the following markdown-style markers to convey emphasis:
 - Do not include any other text, explanations, or formatting outside of these sections.
 """
     elif mode == "two-step":
-        # Build conditional sections
         sections = ["`## SPEECH BUBBLES`"]
         if num_osb_text > 0:
             sections.append("`## NON-DIALOGUE TEXT`")
 
         sections_text = " and ".join(sections) if len(sections) > 1 else sections[0]
 
-        # Build the numbering instruction
         numbering_instruction = (
             "Use S-prefixed numbering for speech bubbles (S1, S2, S3...)"
         )
@@ -146,7 +140,6 @@ You must use the following markdown-style markers to convey emphasis:
             )
         numbering_instruction += "."
 
-        # Build the format instruction
         format_instruction = (
             f"`Si: <translated {output_language} text>` for speech bubbles"
         )
@@ -198,9 +191,9 @@ def _is_reasoning_model_anthropic(model_name: str) -> bool:
     """Check if an Anthropic model is reasoning-capable."""
     lm = (model_name or "").lower()
     reasoning_prefixes = [
-        "claude-opus-4-1",
         "claude-opus-4",
         "claude-sonnet-4",
+        "claude-haiku-4-5",
         "claude-3-7-sonnet",
     ]
     return any(lm.startswith(p) for p in reasoning_prefixes)
@@ -213,7 +206,7 @@ def _is_reasoning_model_xai(model_name: str) -> bool:
         return False
     if "non-reasoning" in lm:
         return False
-    return "reasoning" in lm
+    return "reasoning" in lm or "grok-4-0709" in lm
 
 
 def _is_reasoning_model_openai_compatible(model_name: str) -> bool:
@@ -316,7 +309,6 @@ def _build_generation_config(
         # For Gemini 3, media_resolution can be set per-part
         # For other Gemini models, media_resolution is set globally in generation_config
         if not is_gemini_3:
-            # Convert UI format to backend format for API
             media_resolution_mapping = {
                 "auto": "MEDIA_RESOLUTION_UNSPECIFIED",
                 "high": "MEDIA_RESOLUTION_HIGH",
@@ -327,22 +319,42 @@ def _build_generation_config(
                 config.media_resolution.lower(), "MEDIA_RESOLUTION_UNSPECIFIED"
             )
             generation_config["media_resolution"] = backend_media_resolution
-        # Handle thinking config for Gemini 3 models
         if is_gemini_3:
+            reasoning_effort = config.reasoning_effort or "high"
             generation_config["thinkingConfig"] = {
-                "thinkingLevel": config.thinking_level
+                "thinkingLevel": reasoning_effort
             }
             log_message(
-                f"Using thinking level '{config.thinking_level}' for {model_name}",
+                f"Using reasoning effort '{reasoning_effort}' for {model_name}",
                 verbose=debug,
             )
-        # Handle thinking config for Gemini 2.5 Flash
-        elif "gemini-2.5-flash" in model_name:
-            if config.enable_thinking:
-                log_message(f"Using thinking mode for {model_name}", verbose=debug)
+        elif _is_reasoning_model_google(model_name) and not is_gemini_3:
+            reasoning_effort = config.reasoning_effort or "auto"
+            is_flash = "gemini-2.5-flash" in model_name.lower()
+            if reasoning_effort == "none":
+                if is_flash:
+                    generation_config["thinkingConfig"] = {"thinkingBudget": 0}
+                    log_message(f"Disabled reasoning for {model_name}", verbose=debug)
+                else:
+                    log_message(
+                        f"Warning: 'none' not supported for {model_name}, using 'auto'",
+                        verbose=debug,
+                    )
+            elif reasoning_effort == "auto":
+                log_message(
+                    f"Using auto reasoning allocation for {model_name}", verbose=debug
+                )
             else:
-                generation_config["thinkingConfig"] = {"thinkingBudget": 0}
-                log_message(f"Disabled thinking mode for {model_name}", verbose=debug)
+                thinking_budget = calculate_reasoning_budget(
+                    max_tokens_value, reasoning_effort
+                )
+                generation_config["thinkingConfig"] = {
+                    "thinkingBudget": thinking_budget
+                }
+                log_message(
+                    f"Using reasoning effort '{reasoning_effort}' (budget: {thinking_budget} tokens) for {model_name}",
+                    verbose=debug,
+                )
         return generation_config
 
     elif provider == "OpenAI":
@@ -351,20 +363,23 @@ def _build_generation_config(
             "top_p": top_p,
             "max_output_tokens": max_tokens_value,
         }  # top_k not supported by OpenAI
-        if config.reasoning_effort:
+        if config.reasoning_effort and config.reasoning_effort != "none":
             generation_config["reasoning_effort"] = config.reasoning_effort
         return generation_config
 
     elif provider == "Anthropic":
         is_reasoning = _is_reasoning_model_anthropic(model_name)
         clamped_temp = min(temperature, 1.0)  # Anthropic caps at 1.0
-        return {
+        generation_config = {
             "temperature": clamped_temp,
             "top_p": top_p,
             "top_k": top_k,
             "max_tokens": max_tokens_value,
-            "anthropic_thinking": bool(config.enable_thinking and is_reasoning),
         }
+        if is_reasoning:
+            # Use reasoning_effort if provided, otherwise default to "none" (disabled)
+            generation_config["reasoning_effort"] = config.reasoning_effort or "none"
+        return generation_config
 
     elif provider == "xAI":
         is_reasoning = _is_reasoning_model_xai(model_name)
@@ -374,7 +389,8 @@ def _build_generation_config(
             "max_tokens": max_tokens_value,
         }
         if is_reasoning:
-            generation_config["reasoning_tokens"] = max(16384, max_tokens_value)
+            # Use reasoning_effort if provided, otherwise default to "high"
+            generation_config["reasoning_effort"] = config.reasoning_effort or "high"
         return generation_config
 
     elif provider == "OpenRouter":
@@ -383,8 +399,7 @@ def _build_generation_config(
         is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith(
             "claude-"
         )
-        is_grok_model = "grok" in model_lower
-        is_gemini_model = "gemini" in model_lower
+        is_grok_model = "grok-4" in model_lower
         is_gemini_3 = "gemini-3" in model_lower
 
         generation_config = {
@@ -394,17 +409,52 @@ def _build_generation_config(
             "max_tokens": max_tokens_value,
         }
 
-        # Add reasoning parameters based on underlying model
-        if is_openai_model and config.reasoning_effort:
-            generation_config["reasoning_effort"] = config.reasoning_effort
-        elif is_gemini_3:
-            generation_config["thinking_level"] = config.thinking_level
-        elif (
+        is_openai_reasoning = is_openai_model and (
+            "gpt-5" in model_lower
+            or model_lower.startswith("o1")
+            or model_lower.startswith("o3")
+            or model_lower.startswith("o4-mini")
+        )
+        # For OpenRouter, Anthropic models use dots (4.5) not hyphens (4-5)
+        # Claude 3.7 Sonnet :thinking variant is reasoning-capable, non-thinking is not
+        is_claude_37_sonnet_thinking = (
             is_anthropic_model
-            or is_gemini_model
-            or (is_grok_model and "fast" in model_lower)
-        ) and config.enable_thinking:
-            generation_config["enable_thinking"] = config.enable_thinking
+            and "claude-3.7-sonnet" in model_lower
+            and ":thinking" in model_lower
+        )
+        is_anthropic_reasoning = is_anthropic_model and (
+            "claude-opus-4" in model_lower
+            or "claude-sonnet-4" in model_lower
+            or "claude-haiku-4.5" in model_lower
+            or is_claude_37_sonnet_thinking
+        )
+        # For OpenRouter, Grok models don't have "reasoning" in the name (e.g., "grok-4.1-fast")
+        is_grok_reasoning = is_grok_model and "non-reasoning" not in model_lower
+
+        # Add metadata flags for OpenRouter endpoint to avoid re-parsing model names
+        generation_config["_metadata"] = {
+            "is_openai_model": is_openai_model,
+            "is_anthropic_model": is_anthropic_model,
+            "is_grok_model": is_grok_model,
+            "is_gemini_3": is_gemini_3,
+            "is_google_model": "google/" in model_lower or "gemini" in model_lower,
+            "is_openai_reasoning": is_openai_reasoning,
+            "is_anthropic_reasoning": is_anthropic_reasoning,
+            "is_grok_reasoning": is_grok_reasoning,
+            "is_claude_37_sonnet_thinking": is_claude_37_sonnet_thinking,
+        }
+
+        if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
+            # For Anthropic models, default to "none" if not provided
+            if is_anthropic_reasoning:
+                reasoning_effort = config.reasoning_effort or "none"
+                generation_config["reasoning_effort"] = reasoning_effort
+            # For OpenAI and Grok models, only set if provided and not "none"
+            elif config.reasoning_effort and config.reasoning_effort != "none":
+                generation_config["reasoning_effort"] = config.reasoning_effort
+        elif is_gemini_3:
+            reasoning_effort = config.reasoning_effort or "high"
+            generation_config["reasoning_effort"] = reasoning_effort
 
         return generation_config
 
@@ -551,7 +601,6 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl"):
                 col["x_min"] = min(col["x_min"], x1)
                 col["x_max"] = max(col["x_max"], x2)
 
-        # Sort columns by horizontal position according to reading direction
         if rtl:
             columns.sort(key=lambda c: -((c["x_min"] + c["x_max"]) / 2.0))
         else:
@@ -706,7 +755,7 @@ def _parse_llm_response_with_sections(
 
         # Parse S-prefixed items (speech bubbles)
         speech_bubble_pattern = re.compile(
-            r'^\s*S(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*S\d+\s*:|\s*$)',
+            r'^\s*[*_]*S(\d+)[*_]*\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*[*_]*S\d+[*_]*\s*:|\s*$)',
             re.MULTILINE | re.DOTALL,
         )
         speech_matches = speech_bubble_pattern.findall(response_text)
@@ -723,7 +772,7 @@ def _parse_llm_response_with_sections(
 
         # Parse N-prefixed items (OSB text)
         osb_pattern = re.compile(
-            r'^\s*N(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*N\d+\s*:|\s*$)',
+            r'^\s*[*_]*N(\d+)[*_]*\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*[*_]*N\d+[*_]*\s*:|\s*$)',
             re.MULTILINE | re.DOTALL,
         )
         osb_matches = osb_pattern.findall(response_text)
@@ -742,7 +791,6 @@ def _parse_llm_response_with_sections(
         final_list = []
         for i in range(len(speech_bubble_indices) + len(osb_text_indices)):
             if i in speech_bubble_indices:
-                # This is a speech bubble
                 speech_idx = speech_bubble_indices.index(i) + 1
                 final_list.append(
                     speech_dict.get(
@@ -750,7 +798,6 @@ def _parse_llm_response_with_sections(
                     )
                 )
             else:
-                # This is OSB text
                 osb_idx = osb_text_indices.index(i) + 1
                 final_list.append(
                     osb_dict.get(osb_idx, f"[{provider}: Missing OSB text {osb_idx}]")
@@ -865,7 +912,6 @@ def call_translation_api_batch(
     try:
         if translation_mode == "two-step":
             # --- Step 1: OCR ---
-            # Build separate sections for speech bubbles and OSB text
             speech_bubble_section = ""
             osb_text_section = ""
             osb_text_context = ""
@@ -942,7 +988,6 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
             # --- Step 2: Translation & Styling ---
             log_message("Starting translation step", verbose=debug)
 
-            # Separate speech bubble and OSB text transcriptions
             speech_bubble_texts = []
             osb_texts = []
             ocr_failed_indices = set()
@@ -966,7 +1011,6 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
                     else:
                         osb_texts.append(f"N{osb_text_indices.index(i) + 1}: {text}")
 
-            # Build separate input sections
             speech_bubble_section = ""
             osb_text_section = ""
             osb_text_context = ""
@@ -1079,14 +1123,12 @@ The target language is {output_language}. Use the appropriate translation approa
         elif translation_mode == "one-step":
             # --- One-Step Logic ---
             log_message("Starting one-step translation", verbose=debug)
-            # Build context-aware prompt pieces
             full_page_context = (
                 "A full-page image is also provided for visual and narrative context."
                 if config.send_full_page_context
                 else ""
             )
 
-            # Build separate sections for speech bubbles and OSB text
             speech_bubble_section = ""
             osb_text_section = ""
             osb_text_context = ""
@@ -1230,7 +1272,6 @@ def prepare_bubble_images_for_translation(
         List of bubble dicts with added 'image_b64' and 'mime_type' keys
         (immutable approach - returns new list without mutating input)
     """
-    # Determine CV2 extension from MIME type
     cv2_ext = ".png" if mime_type == "image/png" else ".jpg"
 
     prepared_bubbles = []
@@ -1259,7 +1300,6 @@ def prepare_bubble_images_for_translation(
         bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
         bubble_image_pil = cv2_to_pil(bubble_image_cv)
 
-        # Apply upscaling based on method
         if upscale_method == "model":
             final_bubble_pil = process_bubble_image_cached(
                 bubble_image_pil,
@@ -1285,14 +1325,16 @@ def prepare_bubble_images_for_translation(
 
         final_bubble_cv = pil_to_cv2(final_bubble_pil)
 
-        # Encode as base64 for API transmission
         try:
             is_success, buffer = cv2.imencode(cv2_ext, final_bubble_cv)
             if is_success:
                 image_b64 = base64.b64encode(buffer).decode("utf-8")
                 prepared_bubble["image_b64"] = image_b64
                 prepared_bubble["mime_type"] = mime_type
-                log_message(f"Bubble {x1},{y1} ({x2 - x1}x{y2 - y1})", verbose=verbose)
+                log_message(
+                    f"Bubble {x1},{y1} ({final_bubble_pil.size[0]}x{final_bubble_pil.size[1]})",
+                    verbose=verbose,
+                )
             else:
                 log_message(
                     f"Failed to encode bubble {bubble['bbox']}", verbose=verbose
