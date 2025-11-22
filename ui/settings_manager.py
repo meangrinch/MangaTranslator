@@ -71,7 +71,7 @@ DEFAULT_SETTINGS = {
     "anthropic_api_key": "",
     "xai_api_key": "",
     "openrouter_api_key": "",
-    "openai_compatible_url": "http://localhost:11434/v1",
+    "openai_compatible_url": "http://localhost:1234/v1",
     "openai_compatible_api_key": "",
     "model_name": (
         PROVIDER_MODELS["Google"][0] if PROVIDER_MODELS["Google"] else None

@@ -546,7 +546,7 @@ def create_layout(
                             )
                             openai_compatible_url_input = gr.Textbox(
                                 label="OpenAI-Compatible URL",
-                                placeholder="Enter Base URL (e.g., http://localhost:11434/v1)",
+                                placeholder="Enter Base URL (e.g., http://localhost:1234/v1)",
                                 type="text",
                                 value=saved_settings.get(
                                     "openai_compatible_url",

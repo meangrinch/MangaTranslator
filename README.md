@@ -114,11 +114,11 @@ Examples:
 python main.py --input <image_path> \
   --provider Google --google-api-key <AI...>
 
-# Batch folder, custom languages (OpenAI-Compatible, e.g., Ollama)
+# Batch folder, custom languages (OpenAI-Compatible, e.g., LM Studio)
 python main.py --input <folder_path> --batch \
   --font-dir "fonts/Komika" \
   --input-language <src_lang> --output-language <tgt_lang> \
-  --provider OpenAI-Compatible --openai-compatible-url http://localhost:11434/v1 \
+  --provider OpenAI-Compatible --openai-compatible-url http://localhost:1234/v1 \
   --output ./output
 
 # Single Image, Japanese → English (Google), OSB text detection, custom OSB font

@@ -38,7 +38,7 @@ class UITranslationProviderSettings:
     anthropic_api_key: Optional[str] = ""
     xai_api_key: Optional[str] = ""
     openrouter_api_key: Optional[str] = ""
-    openai_compatible_url: str = "http://localhost:11434/v1"
+    openai_compatible_url: str = "http://localhost:1234/v1"
     openai_compatible_api_key: Optional[str] = ""
 
 

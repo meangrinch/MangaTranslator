@@ -1104,7 +1104,7 @@ def call_openai_compatible_endpoint(
     Calls a generic OpenAI-Compatible Chat Completions API endpoint and handles retries.
 
     Args:
-        base_url (str): The base URL of the compatible endpoint (e.g., "http://localhost:11434/v1").
+        base_url (str): The base URL of the compatible endpoint (e.g., "http://localhost:1234/v1").
         api_key (Optional[str]): The API key, if required by the endpoint.
         model_name (str): The model ID to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
