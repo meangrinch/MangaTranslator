@@ -436,7 +436,7 @@ def _is_xai_reasoning_model(model_name: Optional[str]) -> bool:
 
 def get_reasoning_effort_config(
     provider: str, model_name: Optional[str]
-) -> Tuple[bool, List[str], str]:
+) -> Tuple[bool, List[str], Optional[str]]:
     """
     Get reasoning effort configuration for a provider/model combination.
 
@@ -444,14 +444,14 @@ def get_reasoning_effort_config(
         Tuple of (visible, choices, default_value)
     """
     if not model_name:
-        return False, [], "medium"
+        return False, [], None
 
     lm = model_name.lower()
 
     if provider == "Google":
         is_reasoning = is_reasoning_model(provider, model_name)
         if not is_reasoning:
-            return False, [], "medium"
+            return False, [], None
 
         is_gemini_3 = "gemini-3" in lm
         if is_gemini_3:
@@ -466,7 +466,7 @@ def get_reasoning_effort_config(
     elif provider == "OpenAI":
         is_reasoning = _is_openai_reasoning_model(model_name)
         if not is_reasoning:
-            return False, [], "medium"
+            return False, [], None
 
         is_gpt5 = lm.startswith("gpt-5")
         if is_gpt5:
@@ -477,13 +477,13 @@ def get_reasoning_effort_config(
     elif provider == "Anthropic":
         is_reasoning = _is_anthropic_reasoning_model(model_name, provider)
         if not is_reasoning:
-            return False, [], "medium"
+            return False, [], None
         return True, ["high", "medium", "low", "none"], "none"
 
     elif provider == "xAI":
         is_reasoning = _is_xai_reasoning_model(model_name)
         if not is_reasoning:
-            return False, [], "medium"
+            return False, [], None
         return True, ["high", "low"], "high"
 
     elif provider == "OpenRouter":
@@ -499,7 +499,7 @@ def get_reasoning_effort_config(
 
             is_reasoning = is_reasoning_model(provider, model_name)
             if not is_reasoning:
-                return False, [], "medium"
+                return False, [], None
 
             is_flash = "gemini-2.5-flash" in lm
             if is_flash:
@@ -514,7 +514,7 @@ def get_reasoning_effort_config(
             if is_claude_37_sonnet_thinking:
                 return True, ["high", "medium", "low", "none"], "none"
             else:
-                return False, [], "medium"
+                return False, [], None
 
         if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
             if is_openai_reasoning:
@@ -539,9 +539,15 @@ def get_reasoning_effort_config(
         if is_anthropic_model:
             return False, [], "none"
         else:
-            return False, [], "medium"
+            return False, [], None
 
-    return False, [], "medium"
+    elif provider == "OpenAI-Compatible":
+        is_reasoning = _is_openai_compatible_reasoning_model(model_name)
+        if not is_reasoning:
+            return False, [], None
+        return True, ["high", "medium", "low", "none"], "medium"
+
+    return False, [], None
 
 
 def update_translation_ui(provider: str, current_temp: float):
@@ -644,9 +650,9 @@ def update_translation_ui(provider: str, current_temp: float):
     )
 
     if reasoning_choices and reasoning_default_value not in reasoning_choices:
-        reasoning_default_value = (
-            reasoning_choices[0] if reasoning_choices else "medium"
-        )
+        reasoning_default_value = reasoning_choices[0] if reasoning_choices else None
+    elif not reasoning_choices:
+        reasoning_default_value = None
 
     reasoning_effort_label = get_reasoning_effort_label(provider, remembered_model)
 
@@ -732,7 +738,7 @@ def update_params_for_model(
     elif reasoning_choices:
         value = reasoning_choices[0]
     else:
-        value = "medium"
+        value = None
 
     info_text = get_reasoning_effort_info_text(provider, model_name, reasoning_choices)
     reasoning_effort_label = get_reasoning_effort_label(provider, model_name)

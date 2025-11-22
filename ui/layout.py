@@ -599,12 +599,15 @@ def create_layout(
                                     _initial_reasoning_effort_default
                                 )
                             elif (
-                                _initial_reasoning_effort_value
+                                _initial_reasoning_effort_choices
+                                and _initial_reasoning_effort_value
                                 not in _initial_reasoning_effort_choices
                             ):
                                 _initial_reasoning_effort_value = (
                                     _initial_reasoning_effort_default
                                 )
+                            elif not _initial_reasoning_effort_choices:
+                                _initial_reasoning_effort_value = None
 
                             _initial_reasoning_effort_info = (
                                 utils.get_reasoning_effort_info_text(
