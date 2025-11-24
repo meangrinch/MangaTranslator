@@ -46,6 +46,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "o1-pro-2025-03-19",
     ],
     "Anthropic": [
+        "claude-opus-4-5-20251101",
         "claude-sonnet-4-5-20250929",
         "claude-haiku-4-5-20251001",
         "claude-opus-4-1-20250805",
