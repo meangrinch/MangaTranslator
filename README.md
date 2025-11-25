@@ -182,9 +182,13 @@ python main.py --help
 - **Inconsistent behavior across different image sizes:**
   - Enable "Auto-Scale": Settings must be tuned for 1MP sized images for proper scaling (default values should suffice)
 - **OSB text not inpainted/cleaned:**
-  - Ensure "Outside Speech Bubble" is enabled
+  - Ensure "Enable OSB Detection" is enabled
   - Install Nunchaku (see Installation step 4)
   - Set your Hugging Face access token (see Post-Install Setup)
+- **High LLM token usage:**
+  - Disable "Send Full Page to LLM"
+  - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes
+  - Lower "Media Resolution" (if using Gemini models)
 
 ## Updating
 - Windows portable:
