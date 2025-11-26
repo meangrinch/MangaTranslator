@@ -48,7 +48,7 @@ pip install torch==2.9.1+cu128 torchvision==0.24.1+cu128 --extra-index-url https
 pip install torch
 ```
 4) Install Nunchaku (optional, for inpainting outside-bubble text.)
-- Nunchaku wheels are not on PyPI. Install directly from the v1.0.1 GitHub release URL, matching your OS and Python version.
+- Nunchaku wheels are not on PyPI. Install directly from the v1.0.2 GitHub release URL, matching your OS and Python version.
 ```bash
 # Example (Windows, Python 3.13, PyTorch 2.9.1)
 pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.2/nunchaku-1.0.2+torch2.9-cp313-cp313-win_amd64.whl
