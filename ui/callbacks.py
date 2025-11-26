@@ -69,7 +69,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         max_tokens,
         config_reading_direction,
         config_translation_mode,
-        ocr_type_val,
+        ocr_method_val,
         input_language,
         output_language,
         font_dropdown,
@@ -178,7 +178,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             max_tokens=max_tokens,
             reading_direction=config_reading_direction,
             translation_mode=config_translation_mode,
-            ocr_type=ocr_type_val,
+            ocr_method=ocr_method_val,
             send_full_page_context=send_full_page_context_val,
             upscale_method=upscale_method_val,
             bubble_min_side_pixels=bubble_min_side_pixels_val,
@@ -787,7 +787,7 @@ def handle_save_config_click(*args: Any) -> str:
         tk,
         max_tokens,
         trans_mode,
-        ocr_type_val,
+        ocr_method_val,
         max_fs,
         min_fs,
         ls,
@@ -888,7 +888,7 @@ def handle_save_config_click(*args: Any) -> str:
             max_tokens=max_tokens,
             reading_direction=rd,
             translation_mode=trans_mode,
-            ocr_type=ocr_type_val,
+            ocr_method=ocr_method_val,
             send_full_page_context=send_full_page_context_val,
             upscale_method=upscale_method_val,
             bubble_min_side_pixels=bubble_min_side_pixels_val,
@@ -1055,7 +1055,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(value=top_k_val, interactive=top_k_interactive),
         gr.update(value=max_tokens_val),
         gr.update(value=default_ui_state.llm_settings.translation_mode),
-        gr.update(value=default_ui_state.llm_settings.ocr_type),
+        gr.update(value=default_ui_state.llm_settings.ocr_method),
         default_ui_state.rendering.max_font_size,
         default_ui_state.rendering.min_font_size,
         default_ui_state.rendering.line_spacing,
@@ -1229,8 +1229,8 @@ def handle_conjoined_detection_change(_enable_conjoined_detection: bool):
     return None
 
 
-def handle_ocr_type_change(
-    ocr_type: str,
+def handle_ocr_method_change(
+    ocr_method: str,
     input_language: str,
     original_language_state: str,
     batch_input_language: str,
@@ -1239,14 +1239,14 @@ def handle_ocr_type_change(
     openai_compatible_url: str,
     openai_compatible_api_key: Optional[str],
 ):
-    """Handles changes in OCR type selection."""
+    """Handles changes in OCR method selection."""
     import gradio as gr
 
     from . import layout, utils
 
     updates = []
 
-    if ocr_type == "manga-ocr":
+    if ocr_method == "manga-ocr":
         if input_language != "Japanese":
             saved_language = input_language
         else:
@@ -1270,7 +1270,7 @@ def handle_ocr_type_change(
         # Trigger model list refresh for OpenRouter (to show text-only models)
         if provider == "OpenRouter":
             model_update = utils.fetch_and_update_openrouter_models(
-                ocr_type="manga-ocr"
+                ocr_method="manga-ocr"
             )
             updates.append(model_update)
         elif provider == "OpenAI-Compatible":
@@ -1309,7 +1309,7 @@ def handle_ocr_type_change(
 
         # Trigger model list refresh for OpenRouter (to show vision models)
         if provider == "OpenRouter":
-            model_update = utils.fetch_and_update_openrouter_models(ocr_type="LLM")
+            model_update = utils.fetch_and_update_openrouter_models(ocr_method="LLM")
             updates.append(model_update)
         elif provider == "OpenAI-Compatible":
             model_update = utils.fetch_and_update_compatible_models(
@@ -1322,12 +1322,12 @@ def handle_ocr_type_change(
     return updates
 
 
-def handle_translation_mode_change(translation_mode: str, current_ocr_type: str):
-    """Handles changes in translation mode to enable/disable OCR type selection."""
+def handle_translation_mode_change(translation_mode: str, current_ocr_method: str):
+    """Handles changes in translation mode to enable/disable OCR method selection."""
     import gradio as gr
 
     if translation_mode == "one-step":
-        if current_ocr_type == "manga-ocr":
+        if current_ocr_method == "manga-ocr":
             return gr.update(value="LLM", interactive=False)
         else:
             return gr.update(interactive=False)

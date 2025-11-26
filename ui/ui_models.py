@@ -59,7 +59,7 @@ class UITranslationLLMSettings:
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
     special_instructions: Optional[str] = None
-    ocr_type: str = "LLM"  # "LLM" or "manga-ocr"
+    ocr_method: str = "LLM"  # "LLM" or "manga-ocr"
 
 
 @dataclass
@@ -179,7 +179,7 @@ class UIConfigState:
             "top_k": self.llm_settings.top_k,
             "max_tokens": self.llm_settings.max_tokens,
             "translation_mode": self.llm_settings.translation_mode,
-            "ocr_type": self.llm_settings.ocr_type,
+            "ocr_method": self.llm_settings.ocr_method,
             "send_full_page_context": self.llm_settings.send_full_page_context,
             "upscale_method": self.llm_settings.upscale_method,
             "bubble_min_side_pixels": self.llm_settings.bubble_min_side_pixels,
@@ -319,7 +319,7 @@ class UIConfigState:
                 translation_mode=data.get(
                     "translation_mode", defaults["translation_mode"]
                 ),
-                ocr_type=data.get("ocr_type", defaults.get("ocr_type", "LLM")),
+                ocr_method=data.get("ocr_method", defaults.get("ocr_method", "LLM")),
                 reading_direction=data.get(
                     "reading_direction", defaults["reading_direction"]
                 ),
@@ -459,7 +459,7 @@ def map_ui_to_backend_config(
         output_language=output_lang,
         reading_direction=ui_state.llm_settings.reading_direction,
         translation_mode=ui_state.llm_settings.translation_mode,
-        ocr_type=ui_state.llm_settings.ocr_type,
+        ocr_method=ui_state.llm_settings.ocr_method,
         enable_web_search=ui_state.general.enable_web_search,
         media_resolution=ui_state.general.media_resolution,
         media_resolution_bubbles=ui_state.general.media_resolution_bubbles,

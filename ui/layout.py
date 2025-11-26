@@ -496,21 +496,21 @@ def create_layout(
                                 ),
                                 elem_id="config_translation_mode",
                             )
-                            ocr_type_radio = gr.Radio(
+                            ocr_method_radio = gr.Radio(
                                 choices=["LLM", "manga-ocr"],
-                                label="OCR Type",
+                                label="OCR Method",
                                 value=saved_settings.get(
-                                    "ocr_type",
+                                    "ocr_method",
                                     settings_manager.DEFAULT_SETTINGS.get(
-                                        "ocr_type", "LLM"
+                                        "ocr_method", "LLM"
                                     ),
                                 ),
                                 info=(
                                     "Determines whether to use a vision-capable LLM or a local OCR model for OCR. "
                                     "'manga-ocr' only supports Japanese, enables text-only LLMs for translation, "
-                                    "and must be used in `two-step` translation mode."
+                                    "and must be used in 'two-step' translation mode."
                                 ),
-                                elem_id="ocr_type_radio",
+                                elem_id="ocr_method_radio",
                                 interactive=saved_settings.get(
                                     "translation_mode",
                                     settings_manager.DEFAULT_SETTINGS[
@@ -1248,6 +1248,7 @@ def create_layout(
             top_k,
             max_tokens,
             config_translation_mode,
+            ocr_method_radio,
             max_font_size,
             min_font_size,
             line_spacing,
@@ -1324,7 +1325,7 @@ def create_layout(
             top_k,
             max_tokens,
             config_translation_mode,
-            ocr_type_radio,
+            ocr_method_radio,
             max_font_size,
             min_font_size,
             line_spacing,
@@ -1399,7 +1400,7 @@ def create_layout(
             max_tokens,
             config_reading_direction,
             config_translation_mode,
-            ocr_type_radio,
+            ocr_method_radio,
             input_language,
             output_language,
             font_dropdown,
@@ -1478,7 +1479,7 @@ def create_layout(
             max_tokens,
             config_reading_direction,
             config_translation_mode,
-            ocr_type_radio,
+            ocr_method_radio,
             input_language,
             output_language,
             font_dropdown,
@@ -1622,11 +1623,11 @@ def create_layout(
             ],
             queue=False,
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.
-            fn=lambda prov, url, key, ocr_type: (
+            fn=lambda prov, url, key, ocr_method: (
                 utils.fetch_and_update_compatible_models(url, key)
                 if prov == "OpenAI-Compatible"
                 else (
-                    utils.fetch_and_update_openrouter_models(ocr_type=ocr_type)
+                    utils.fetch_and_update_openrouter_models(ocr_method=ocr_method)
                     if prov == "OpenRouter"
                     else gr.update()
                 )
@@ -1635,7 +1636,7 @@ def create_layout(
                 provider_selector,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,
-                ocr_type_radio,
+                ocr_method_radio,
             ],
             outputs=[config_model_name],
             queue=True,  # Allow fetching to happen in the background
@@ -1707,16 +1708,16 @@ def create_layout(
         # Translation mode change handler - disable OCR selection when one-step
         config_translation_mode.change(
             fn=callbacks.handle_translation_mode_change,
-            inputs=[config_translation_mode, ocr_type_radio],
-            outputs=ocr_type_radio,
+            inputs=[config_translation_mode, ocr_method_radio],
+            outputs=ocr_method_radio,
             queue=False,
         )
 
-        # OCR type change handler
-        ocr_type_radio.change(
-            fn=callbacks.handle_ocr_type_change,
+        # OCR method change handler
+        ocr_method_radio.change(
+            fn=callbacks.handle_ocr_method_change,
             inputs=[
-                ocr_type_radio,
+                ocr_method_radio,
                 input_language,
                 original_language_state,
                 batch_input_language,

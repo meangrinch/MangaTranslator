@@ -837,11 +837,11 @@ def switch_settings_view(
     return updates
 
 
-def fetch_and_update_openrouter_models(ocr_type: str = "LLM"):
+def fetch_and_update_openrouter_models(ocr_method: str = "LLM"):
     """Fetches models from OpenRouter API and updates dropdown.
 
     Args:
-        ocr_type: "LLM" for vision-capable models, "manga-ocr" for text-only models
+        ocr_method: "LLM" for vision-capable models, "manga-ocr" for text-only models
     """
     global OPENROUTER_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
@@ -867,11 +867,11 @@ def fetch_and_update_openrouter_models(ocr_type: str = "LLM"):
             return gr.update(choices=[])
     else:
         log_message(
-            f"Using cached OpenRouter models (filtering for OCR type: {ocr_type})",
+            f"Using cached OpenRouter models (filtering for OCR method: {ocr_method})",
             verbose=verbose,
         )
 
-    # Filter models in-memory based on OCR type
+    # Filter models in-memory based on OCR method
     filtered_models = []
     for model in raw_models:
         arch = model.get("architecture", {}) or {}
@@ -885,8 +885,7 @@ def fetch_and_update_openrouter_models(ocr_type: str = "LLM"):
             output_modalities = []
         output_modalities_lc = [str(m).lower() for m in output_modalities]
 
-        # Filter based on OCR type
-        if ocr_type == "manga-ocr":
+        if ocr_method == "manga-ocr":
             # For manga-ocr: require text input and text output
             if "text" in input_modalities_lc and "text" in output_modalities_lc:
                 filtered_models.append(model["id"])
@@ -898,7 +897,7 @@ def fetch_and_update_openrouter_models(ocr_type: str = "LLM"):
     filtered_models.sort()
 
     log_message(
-        f"Filtered to {len(filtered_models)} OpenRouter models (OCR type: {ocr_type})",
+        f"Filtered to {len(filtered_models)} OpenRouter models (OCR method: {ocr_method})",
         verbose=verbose,
     )
 

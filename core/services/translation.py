@@ -1202,7 +1202,7 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
 
             log_message("Starting OCR step", verbose=debug)
 
-            if config.ocr_type == "manga-ocr":
+            if config.ocr_method == "manga-ocr":
                 extracted_texts = _perform_manga_ocr(
                     images_b64,
                     speech_bubble_indices,
@@ -1288,7 +1288,7 @@ The target language is {output_language}. Use the appropriate translation approa
 
             translation_parts = []
             if (
-                config.ocr_type != "manga-ocr"
+                config.ocr_method != "manga-ocr"
                 and config.send_full_page_context
                 and full_image_b64
             ):

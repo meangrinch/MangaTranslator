@@ -220,6 +220,17 @@ def main():
             "Use 'none' to disable thinking for certain models."
         ),
     )
+    parser.add_argument(
+        "--ocr-method",
+        type=str,
+        default="LLM",
+        choices=["LLM", "manga-ocr"],
+        help=(
+            "Determines whether to use a vision-capable LLM or a local OCR model for OCR. "
+            "'manga-ocr' only supports Japanese, enables text-only LLMs for translation, "
+            "and must be used in 'two-step' translation mode."
+        ),
+    )
     # Rendering args
     parser.add_argument(
         "--max-font-size",
@@ -666,6 +677,7 @@ def main():
             context_image_max_side_pixels=args.context_image_max_side_pixels,
             osb_min_side_pixels=args.osb_min_side_pixels,
             special_instructions=args.special_instructions,
+            ocr_method=args.ocr_method,
         ),
         rendering=RenderingConfig(
             font_dir=args.font_dir,
