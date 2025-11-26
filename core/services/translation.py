@@ -1008,6 +1008,8 @@ def _perform_manga_ocr(
             log_sections.append("## SPEECH BUBBLES")
             log_sections.extend(speech_bubble_texts)
         if osb_texts:
+            if log_sections:
+                log_sections.append("")
             log_sections.append("## NON-DIALOGUE TEXT")
             log_sections.extend(osb_texts)
 
