@@ -971,6 +971,8 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
             if isinstance(model, dict) and (model.get("id") or model.get("name"))
         ]
         fetched_models = [m for m in fetched_models if m]
+        # Filter out embedding models (case-insensitive)
+        fetched_models = [m for m in fetched_models if "embedding" not in m.lower()]
         fetched_models.sort()
 
         COMPATIBLE_MODEL_CACHE["url"] = url
