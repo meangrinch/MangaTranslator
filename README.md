@@ -79,10 +79,10 @@ fonts/
 ```
 
 ### LLM setup
-- Providers: Google, OpenAI, Anthropic, xAI, OpenRouter, OpenAI-Compatible
+- Providers: Google, OpenAI, Anthropic, xAI, DeepSeek, OpenRouter, OpenAI-Compatible
 - Web UI: configure provider/model/key in the Config tab (stored locally)
 - CLI: pass keys/URLs as flags or via env vars
-- Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
+- Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
 - OpenAI-compatible default URL: `http://localhost:1234/v1`
 
 ### OSB text setup (optional)
@@ -110,11 +110,11 @@ First launch can take ~1–2 minutes.
 ### CLI
 Examples:
 ```bash
-# Single image, Japanese → English (Google)
+# Single image, Japanese → English, Google provider
 python main.py --input <image_path> \
-  --provider Google --google-api-key <AI...>
+  --font-dir "fonts/Komika" --provider Google --google-api-key <AI...>
 
-# Batch folder, custom languages (OpenAI-Compatible, e.g., LM Studio)
+# Batch folder, custom source/target languages, OpenAI-Compatible provider (LM Studio)
 python main.py --input <folder_path> --batch \
   --font-dir "fonts/Komika" \
   --input-language <src_lang> --output-language <tgt_lang> \
@@ -123,10 +123,10 @@ python main.py --input <folder_path> --batch \
 
 # Single Image, Japanese → English (Google), OSB text detection, custom OSB font
 python main.py --input <image_path> \
-  --provider Google --google-api-key <AI...> \
+  --font-dir "fonts/Komika" --provider Google --google-api-key <AI...> \
   --osb-enable --osb-font-name "fonts/fast_action"
 
-# Cleaning-only mode (no translation/rendering)
+# Cleaning-only mode (no translation/text rendering)
 python main.py --input <image_path> --cleaning-only
 
 # Test mode (no translation; render placeholder text)
