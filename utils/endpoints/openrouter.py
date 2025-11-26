@@ -7,7 +7,7 @@ import requests
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 
-# --- OpenRouter model metadata cache & reasoning detection ---
+# OpenRouter model metadata cache & reasoning detection
 _OPENROUTER_MODELS_META: Dict[str, Dict[str, Any]] = {}
 
 
@@ -36,10 +36,10 @@ def _ensure_openrouter_models_meta_loaded(debug: bool = False) -> None:
 
 
 def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
-    """Heuristically detects whether an OpenRouter model is a reasoning model.
+    """Detects whether an OpenRouter model is a reasoning model.
 
-    Uses keywords on model id and description, similar to how vision-capable models are detected.
-    Keywords include: reasoning, reason, thinking, think, cot, chain-of-thought.
+    Returns True if the model's 'supported_parameters' contains 'include_reasoning'.
+    Returns False if model_name is empty, metadata is not found, or the check fails.
     """
     if not model_name:
         return False
@@ -49,24 +49,19 @@ def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
         pass
 
     lm = model_name.lower()
-    # Exclude models that are instruction-tuned (contain 'instruct' in the model id)
-    if "instruct" in lm:
-        return False
-    description = ""
     meta = _OPENROUTER_MODELS_META.get(lm)
-    if meta:
-        description = str(meta.get("description", "")).lower()
-    keywords = [
-        "reasoning",
-        "reason",
-        "thinking",
-        "think",
-        "cot",
-        "chain-of-thought",
-        "chain_of_thought",
-    ]
-    text = lm + " " + description
-    return any(kw in text for kw in keywords)
+    if not meta:
+        return False
+
+    # Check if supported_parameters contains "include_reasoning"
+    supported_parameters = meta.get("supported_parameters", [])
+    if (
+        isinstance(supported_parameters, list)
+        and "include_reasoning" in supported_parameters
+    ):
+        return True
+
+    return False
 
 
 def call_openrouter_endpoint(

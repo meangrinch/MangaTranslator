@@ -863,42 +863,20 @@ def fetch_and_update_openrouter_models():
         data = response.json()
         all_models = data.get("data", [])
 
-        # Vision keywords for the model id
-        id_keywords = ["omni", "vision", "vl", "multimodal", "gemini", "claude"]
-        # Vision keywords for description checks
-        desc_keywords = ["omni", "vision", "vl", "multimodal"]
         filtered_models = []
         for model in all_models:
-            model_id = model.get("id", "").lower()
-            description = model.get("description", "").lower()
             arch = model.get("architecture", {}) or {}
-
-            # Determine multimodality from architecture fields
-            modality_field = str(arch.get("modality", "")).lower()
             input_modalities = arch.get("input_modalities", []) or []
             if not isinstance(input_modalities, list):
                 input_modalities = []
             input_modalities_lc = [str(m).lower() for m in input_modalities]
 
-            has_image_in_modality = (
-                any(k in modality_field for k in ["image", "vision", "multimodal"])
-                if modality_field
-                else False
-            )
-            has_image_input = any(
-                ("image" in m) or (m == "video") for m in input_modalities_lc
-            )
+            output_modalities = arch.get("output_modalities", []) or []
+            if not isinstance(output_modalities, list):
+                output_modalities = []
+            output_modalities_lc = [str(m).lower() for m in output_modalities]
 
-            # Check if model supports image input
-            supports_image_input = (
-                arch.get("instruct_type") == "multimodal"
-                or has_image_in_modality
-                or has_image_input
-                or any(keyword in model_id for keyword in id_keywords)
-                or any(keyword in description for keyword in desc_keywords)
-            )
-
-            if supports_image_input:
+            if "image" in input_modalities_lc and "text" in output_modalities_lc:
                 filtered_models.append(model["id"])
 
         filtered_models.sort()
