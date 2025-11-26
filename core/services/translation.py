@@ -12,7 +12,8 @@ from core.config import TranslationConfig, calculate_reasoning_budget
 from core.image.image_utils import (cv2_to_pil, pil_to_cv2,
                                     process_bubble_image_cached)
 from core.image.ocr_detection import extract_text_with_manga_ocr
-from utils.endpoints import (call_anthropic_endpoint, call_gemini_endpoint,
+from utils.endpoints import (call_anthropic_endpoint, call_deepseek_endpoint,
+                             call_gemini_endpoint,
                              call_openai_compatible_endpoint,
                              call_openai_endpoint, call_openrouter_endpoint,
                              call_xai_endpoint, openrouter_is_reasoning_model)
@@ -216,6 +217,12 @@ def _is_reasoning_model_openai_compatible(model_name: str) -> bool:
     return "thinking" in lm or "reasoning" in lm
 
 
+def _is_reasoning_model_deepseek(model_name: str) -> bool:
+    """Check if a DeepSeek model is reasoning-capable."""
+    lm = (model_name or "").lower()
+    return lm == "deepseek-reasoner"
+
+
 def _add_media_resolution_to_part(
     part: Dict[str, Any],
     media_resolution_ui: str,
@@ -294,6 +301,8 @@ def _build_generation_config(
             is_reasoning = openrouter_is_reasoning_model(model_name, debug)
         elif provider == "OpenAI-Compatible":
             is_reasoning = _is_reasoning_model_openai_compatible(model_name)
+        elif provider == "DeepSeek":
+            is_reasoning = _is_reasoning_model_deepseek(model_name)
         max_tokens_value = 16384 if is_reasoning else 4096
 
     if provider == "Google":
@@ -383,6 +392,15 @@ def _build_generation_config(
         }
         if is_reasoning:
             generation_config["reasoning_effort"] = config.reasoning_effort or "high"
+        return generation_config
+
+    elif provider == "DeepSeek":
+        is_reasoning = _is_reasoning_model_deepseek(model_name)
+        generation_config = {
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": max_tokens_value,
+        }
         return generation_config
 
     elif provider == "OpenRouter":
@@ -675,6 +693,21 @@ def _call_llm_endpoint(
                 system_prompt=system_prompt,
                 debug=debug,
                 enable_web_search=config.enable_web_search,
+            )
+        elif provider == "DeepSeek":
+            api_key = config.deepseek_api_key
+            if not api_key:
+                raise TranslationError("DeepSeek API key is missing.")
+            generation_config = _build_generation_config(
+                provider, model_name, config, debug
+            )
+            return call_deepseek_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                system_prompt=system_prompt,
+                debug=debug,
             )
         elif provider == "OpenRouter":
             api_key = config.openrouter_api_key

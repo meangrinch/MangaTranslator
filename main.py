@@ -79,6 +79,12 @@ def main():
         help="xAI API key (overrides XAI_API_KEY env var if --provider is xAI)",
     )
     parser.add_argument(
+        "--deepseek-api-key",
+        type=str,
+        default=None,
+        help="DeepSeek API key (overrides DEEPSEEK_API_KEY env var if --provider is DeepSeek)",
+    )
+    parser.add_argument(
         "--openrouter-api-key",
         type=str,
         default=None,
@@ -568,6 +574,11 @@ def main():
         api_key_arg_name = "--xai-api-key"
         api_key_env_var = "XAI_API_KEY"
         default_model = "grok-4-fast-reasoning"
+    elif provider == "DeepSeek":
+        api_key = args.deepseek_api_key or os.environ.get("DEEPSEEK_API_KEY")
+        api_key_arg_name = "--deepseek-api-key"
+        api_key_env_var = "DEEPSEEK_API_KEY"
+        default_model = "deepseek-chat"
     elif provider == "OpenRouter":
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
@@ -645,6 +656,11 @@ def main():
             ),
             xai_api_key=(
                 api_key if provider == "xAI" else os.environ.get("XAI_API_KEY", "")
+            ),
+            deepseek_api_key=(
+                api_key
+                if provider == "DeepSeek"
+                else os.environ.get("DEEPSEEK_API_KEY", "")
             ),
             openrouter_api_key=(
                 api_key

@@ -59,6 +59,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         openai_api_key,
         anthropic_api_key,
         xai_api_key,
+        deepseek_api_key,
         openrouter_api_key,
         openai_compatible_url_input,
         openai_compatible_api_key_input,
@@ -166,6 +167,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             openai_api_key=openai_api_key,
             anthropic_api_key=anthropic_api_key,
             xai_api_key=xai_api_key,
+            deepseek_api_key=deepseek_api_key,
             openrouter_api_key=openrouter_api_key,
             openai_compatible_url=openai_compatible_url_input,
             openai_compatible_api_key=openai_compatible_api_key_input,
@@ -245,6 +247,8 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
         api_key_to_validate = ui_state.provider_settings.anthropic_api_key
     elif provider_selector == "xAI":
         api_key_to_validate = ui_state.provider_settings.xai_api_key
+    elif provider_selector == "DeepSeek":
+        api_key_to_validate = ui_state.provider_settings.deepseek_api_key
     elif provider_selector == "OpenRouter":
         api_key_to_validate = ui_state.provider_settings.openrouter_api_key
     elif provider_selector == "OpenAI-Compatible":
@@ -778,6 +782,7 @@ def handle_save_config_click(*args: Any) -> str:
         oai_key,
         ant_key,
         xai_key,
+        deepseek_key,
         or_key,
         comp_url,
         comp_key,
@@ -876,6 +881,7 @@ def handle_save_config_click(*args: Any) -> str:
             openai_api_key=oai_key,
             anthropic_api_key=ant_key,
             xai_api_key=xai_key,
+            deepseek_api_key=deepseek_key,
             openrouter_api_key=or_key,
             openai_compatible_url=comp_url,
             openai_compatible_api_key=comp_key,
@@ -980,6 +986,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     openai_visible = default_provider == "OpenAI"
     anthropic_visible = default_provider == "Anthropic"
     xai_visible = default_provider == "xAI"
+    deepseek_visible = default_provider == "DeepSeek"
     openrouter_visible = default_provider == "OpenRouter"
     compatible_visible = default_provider == "OpenAI-Compatible"
     (
@@ -1036,6 +1043,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         ),
         gr.update(
             value=default_ui_state.provider_settings.xai_api_key, visible=xai_visible
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.deepseek_api_key,
+            visible=deepseek_visible,
         ),
         gr.update(
             value=default_ui_state.provider_settings.openrouter_api_key,
@@ -1245,6 +1256,18 @@ def handle_ocr_method_change(
     from . import layout, utils
 
     updates = []
+
+    # Filter provider selector based on OCR method
+    available_providers = utils.get_available_providers(ocr_method)
+    current_provider = (
+        provider
+        if provider in available_providers
+        else available_providers[0] if available_providers else "Google"
+    )
+    provider_selector_update = gr.update(
+        choices=available_providers, value=current_provider
+    )
+    updates.append(provider_selector_update)
 
     if ocr_method == "manga-ocr":
         if input_language != "Japanese":

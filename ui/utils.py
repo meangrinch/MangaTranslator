@@ -13,6 +13,18 @@ from utils.logging import log_message
 from .settings_manager import (DEFAULT_SETTINGS, PROVIDER_MODELS,
                                get_saved_settings)
 
+
+def get_available_providers(ocr_method: str) -> List[str]:
+    """Get list of available providers based on OCR method."""
+    all_providers = list(PROVIDER_MODELS.keys())
+
+    if ocr_method == "manga-ocr":
+        return all_providers
+    else:
+        # For LLM OCR, exclude DeepSeek (text-only provider)
+        return [p for p in all_providers if p != "DeepSeek"]
+
+
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
 
@@ -60,6 +72,8 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         api_key.startswith("sk-or-") and len(api_key) >= 48
     ):
         return False, "Invalid OpenRouter API key format (should start with 'sk-or-')"
+    if provider == "DeepSeek" and not api_key.startswith("sk-"):
+        return False, "Invalid DeepSeek API key format (should start with 'sk-')"
     # No specific format check for OpenAI-Compatible keys
 
     return True, f"{provider} API key format looks valid"
@@ -221,6 +235,14 @@ def _is_openai_compatible_reasoning_model(model_name: Optional[str]) -> bool:
     return "thinking" in lm or "reasoning" in lm
 
 
+def _is_deepseek_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if a DeepSeek model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return lm == "deepseek-reasoner"
+
+
 def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
     """Check if a model is reasoning-capable based on provider and model name."""
     if not model_name:
@@ -234,6 +256,8 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return _is_anthropic_reasoning_model(model_name, provider="Anthropic")
     elif provider == "xAI":
         return _is_xai_reasoning_model(model_name)
+    elif provider == "DeepSeek":
+        return _is_deepseek_reasoning_model(model_name)
     elif provider == "OpenRouter":
         try:
             return openrouter_is_reasoning_model(model_name, debug=False)
@@ -506,6 +530,12 @@ def get_reasoning_effort_config(
             return False, [], None
         return True, ["high", "low"], "high"
 
+    elif provider == "DeepSeek":
+        is_reasoning = _is_deepseek_reasoning_model(model_name)
+        if not is_reasoning:
+            return False, [], None
+        return True, ["high", "medium", "low"], "high"
+
     elif provider == "OpenRouter":
         is_openai_reasoning = _is_openai_reasoning_model(model_name)
         is_anthropic_reasoning = _is_anthropic_reasoning_model(model_name, "OpenRouter")
@@ -587,6 +617,7 @@ def update_translation_ui(provider: str, current_temp: float):
     openai_visible_update = gr.update(visible=(provider == "OpenAI"))
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
     xai_visible_update = gr.update(visible=(provider == "xAI"))
+    deepseek_visible_update = gr.update(visible=(provider == "DeepSeek"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
     openai_compatible_url_visible_update = gr.update(
         visible=(provider == "OpenAI-Compatible")
@@ -606,7 +637,7 @@ def update_translation_ui(provider: str, current_temp: float):
     new_temp_value = min(current_temp, temp_max)
     temp_update = gr.update(maximum=temp_max, value=new_temp_value)
 
-    top_k_interactive = provider != "OpenAI" and provider != "xAI"
+    top_k_interactive = provider not in ("OpenAI", "xAI", "DeepSeek")
     top_k_update = gr.update(interactive=top_k_interactive)
 
     if remembered_model:
@@ -632,7 +663,7 @@ def update_translation_ui(provider: str, current_temp: float):
         and _is_gemini_3_model(remembered_model)
     )
 
-    enable_web_search_visible = provider != "OpenAI-Compatible"
+    enable_web_search_visible = provider not in ("OpenAI-Compatible", "DeepSeek")
     enable_web_search_label, enable_web_search_info = (
         get_enable_web_search_label_and_info(provider)
     )
@@ -686,6 +717,7 @@ def update_translation_ui(provider: str, current_temp: float):
         openai_visible_update,
         anthropic_visible_update,
         xai_visible_update,
+        deepseek_visible_update,
         openrouter_visible_update,
         openai_compatible_url_visible_update,
         openai_compatible_key_visible_update,
@@ -713,7 +745,7 @@ def update_params_for_model(
 
     if provider == "Anthropic":
         temp_max = 1.0
-    elif provider == "OpenAI" or provider == "xAI":
+    elif provider == "OpenAI" or provider == "xAI" or provider == "DeepSeek":
         top_k_interactive = False
     elif provider == "OpenRouter":
         is_openai_model = model_name and (
@@ -769,7 +801,7 @@ def update_params_for_model(
     )
 
     # Web search checkbox is visible for Google, OpenRouter, OpenAI, Anthropic, and xAI providers
-    enable_web_search_visible = provider != "OpenAI-Compatible"
+    enable_web_search_visible = provider not in ("OpenAI-Compatible", "DeepSeek")
 
     enable_web_search_label, enable_web_search_info = (
         get_enable_web_search_label_and_info(provider)

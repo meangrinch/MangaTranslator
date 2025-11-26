@@ -37,6 +37,7 @@ class UITranslationProviderSettings:
     openai_api_key: Optional[str] = ""
     anthropic_api_key: Optional[str] = ""
     xai_api_key: Optional[str] = ""
+    deepseek_api_key: Optional[str] = ""
     openrouter_api_key: Optional[str] = ""
     openai_compatible_url: str = "http://localhost:1234/v1"
     openai_compatible_api_key: Optional[str] = ""
@@ -170,6 +171,7 @@ class UIConfigState:
             "openai_api_key": self.provider_settings.openai_api_key,
             "anthropic_api_key": self.provider_settings.anthropic_api_key,
             "xai_api_key": self.provider_settings.xai_api_key,
+            "deepseek_api_key": self.provider_settings.deepseek_api_key,
             "openrouter_api_key": self.provider_settings.openrouter_api_key,
             "openai_compatible_url": self.provider_settings.openai_compatible_url,
             "openai_compatible_api_key": self.provider_settings.openai_compatible_api_key,
@@ -300,6 +302,7 @@ class UIConfigState:
                     "anthropic_api_key", defaults["anthropic_api_key"]
                 ),
                 xai_api_key=data.get("xai_api_key", defaults["xai_api_key"]),
+                deepseek_api_key=data.get("deepseek_api_key", defaults.get("deepseek_api_key", "")),
                 openrouter_api_key=data.get(
                     "openrouter_api_key", defaults["openrouter_api_key"]
                 ),
@@ -447,6 +450,7 @@ def map_ui_to_backend_config(
         openai_api_key=ui_state.provider_settings.openai_api_key or "",
         anthropic_api_key=ui_state.provider_settings.anthropic_api_key or "",
         xai_api_key=ui_state.provider_settings.xai_api_key or "",
+        deepseek_api_key=ui_state.provider_settings.deepseek_api_key or "",
         openrouter_api_key=ui_state.provider_settings.openrouter_api_key or "",
         openai_compatible_url=ui_state.provider_settings.openai_compatible_url,
         openai_compatible_api_key=ui_state.provider_settings.openai_compatible_api_key,

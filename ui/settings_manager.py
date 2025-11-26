@@ -61,6 +61,10 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "grok-4-fast-non-reasoning",
         "grok-4-0709",
     ],
+    "DeepSeek": [
+        "deepseek-chat",
+        "deepseek-reasoner",
+    ],
     "OpenRouter": [],
     "OpenAI-Compatible": [],
 }
@@ -71,6 +75,7 @@ DEFAULT_SETTINGS = {
     "openai_api_key": "",
     "anthropic_api_key": "",
     "xai_api_key": "",
+    "deepseek_api_key": "",
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:1234/v1",
     "openai_compatible_api_key": "",
@@ -84,6 +89,9 @@ DEFAULT_SETTINGS = {
             PROVIDER_MODELS["Anthropic"][0] if PROVIDER_MODELS["Anthropic"] else None
         ),
         "xAI": PROVIDER_MODELS["xAI"][0] if PROVIDER_MODELS["xAI"] else None,
+        "DeepSeek": (
+            PROVIDER_MODELS["DeepSeek"][0] if PROVIDER_MODELS["DeepSeek"] else None
+        ),
         "OpenRouter": None,
         "OpenAI-Compatible": None,
     },
@@ -167,6 +175,8 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "google_api_key",
     "openai_api_key",
     "anthropic_api_key",
+    "xai_api_key",
+    "deepseek_api_key",
     "openrouter_api_key",
     "openai_compatible_url",
     "openai_compatible_api_key",
@@ -396,6 +406,7 @@ def get_saved_settings() -> Dict[str, Any]:
             if (
                 loaded_provider == "OpenRouter"
                 or loaded_provider == "OpenAI-Compatible"
+                or loaded_provider == "DeepSeek"
             ):
                 settings["model_name"] = saved_model_for_provider
             else:
@@ -435,7 +446,11 @@ def get_saved_settings() -> Dict[str, Any]:
             always_print=True,
         )
         default_provider = DEFAULT_SETTINGS["provider"]
-        if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
+        if (
+            default_provider != "OpenRouter"
+            and default_provider != "OpenAI-Compatible"
+            and default_provider != "DeepSeek"
+        ):
             valid_models = PROVIDER_MODELS.get(default_provider, [])
             settings["model_name"] = valid_models[0] if valid_models else None
         else:
@@ -446,7 +461,11 @@ def get_saved_settings() -> Dict[str, Any]:
             always_print=True,
         )
         default_provider = DEFAULT_SETTINGS["provider"]
-        if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
+        if (
+            default_provider != "OpenRouter"
+            and default_provider != "OpenAI-Compatible"
+            and default_provider != "DeepSeek"
+        ):
             valid_models = PROVIDER_MODELS.get(default_provider, [])
             settings["model_name"] = valid_models[0] if valid_models else None
         else:
@@ -474,6 +493,8 @@ def reset_to_defaults() -> Dict[str, Any]:
             "google_api_key",
             "openai_api_key",
             "anthropic_api_key",
+            "xai_api_key",
+            "deepseek_api_key",
             "openrouter_api_key",
             "openai_compatible_api_key",
             "outside_text_huggingface_token",

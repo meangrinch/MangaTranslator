@@ -496,15 +496,16 @@ def create_layout(
                                 ),
                                 elem_id="config_translation_mode",
                             )
+                            initial_ocr_method = saved_settings.get(
+                                "ocr_method",
+                                settings_manager.DEFAULT_SETTINGS.get(
+                                    "ocr_method", "LLM"
+                                ),
+                            )
                             ocr_method_radio = gr.Radio(
                                 choices=["LLM", "manga-ocr"],
                                 label="OCR Method",
-                                value=saved_settings.get(
-                                    "ocr_method",
-                                    settings_manager.DEFAULT_SETTINGS.get(
-                                        "ocr_method", "LLM"
-                                    ),
-                                ),
+                                value=initial_ocr_method,
                                 info=(
                                     "Determines whether to use a vision-capable LLM or a local OCR model for OCR. "
                                     "'manga-ocr' only supports Japanese, enables text-only LLMs for translation, "
@@ -521,10 +522,18 @@ def create_layout(
                             )
 
                             gr.Markdown("### LLM Settings")
+                            available_providers = utils.get_available_providers(initial_ocr_method)
+                            initial_provider_value = (
+                                config_initial_provider
+                                if config_initial_provider in available_providers
+                                else (available_providers[0] if available_providers else "Google")
+                            )
+                            if initial_provider_value != config_initial_provider:
+                                config_initial_provider = initial_provider_value
                             provider_selector = gr.Radio(
-                                choices=list(settings_manager.PROVIDER_MODELS.keys()),
+                                choices=available_providers,
                                 label="Translation Provider",
-                                value=config_initial_provider,
+                                value=initial_provider_value,
                                 elem_id="provider_selector",
                             )
                             google_api_key = gr.Textbox(
@@ -566,6 +575,16 @@ def create_layout(
                                 visible=(config_initial_provider == "xAI"),
                                 elem_id="xai_api_key",
                                 info="Stored locally. Or set via XAI_API_KEY env var.",
+                            )
+                            deepseek_api_key = gr.Textbox(
+                                label="DeepSeek API Key",
+                                placeholder="Enter DeepSeek API key (starts with sk-...)",
+                                type="password",
+                                value=saved_settings.get("deepseek_api_key", ""),
+                                show_copy_button=False,
+                                visible=(config_initial_provider == "DeepSeek"),
+                                elem_id="deepseek_api_key",
+                                info="Stored locally. Or set via DEEPSEEK_API_KEY env var.",
                             )
                             openrouter_api_key = gr.Textbox(
                                 label="OpenRouter API Key",
@@ -667,7 +686,7 @@ def create_layout(
                             )
 
                             _initial_enable_web_search_visible = (
-                                config_initial_provider != "OpenAI-Compatible"
+                                config_initial_provider not in ("OpenAI-Compatible", "DeepSeek")
                             )
                             (
                                 _initial_enable_web_search_label,
@@ -1239,6 +1258,7 @@ def create_layout(
             openai_api_key,
             anthropic_api_key,
             xai_api_key,
+            deepseek_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -1316,6 +1336,7 @@ def create_layout(
             openai_api_key,
             anthropic_api_key,
             xai_api_key,
+            deepseek_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -1390,6 +1411,7 @@ def create_layout(
             openai_api_key,
             anthropic_api_key,
             xai_api_key,
+            deepseek_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -1469,6 +1491,7 @@ def create_layout(
             openai_api_key,
             anthropic_api_key,
             xai_api_key,
+            deepseek_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -1608,6 +1631,7 @@ def create_layout(
                 openai_api_key,
                 anthropic_api_key,
                 xai_api_key,
+                deepseek_api_key,
                 openrouter_api_key,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,
@@ -1727,6 +1751,7 @@ def create_layout(
                 openai_compatible_api_key_input,
             ],
             outputs=[
+                provider_selector,
                 input_language,
                 original_language_state,
                 batch_input_language,

@@ -31,6 +31,7 @@ class TranslationConfig:
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     xai_api_key: str = ""
+    deepseek_api_key: str = ""
     openrouter_api_key: str = ""
     openai_compatible_url: str = "http://localhost:1234/v1"
     openai_compatible_api_key: Optional[str] = ""
@@ -150,6 +151,8 @@ class MangaTranslatorConfig:
             self.translation.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not self.translation.xai_api_key:
             self.translation.xai_api_key = os.environ.get("XAI_API_KEY", "")
+        if not self.translation.deepseek_api_key:
+            self.translation.deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY", "")
         if not self.translation.openrouter_api_key:
             self.translation.openrouter_api_key = os.environ.get(
                 "OPENROUTER_API_KEY", ""
