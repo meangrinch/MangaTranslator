@@ -19,6 +19,7 @@ def call_anthropic_endpoint(
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
+    enable_web_search: bool = False,
 ) -> Optional[str]:
     """
     Calls the Anthropic Messages API endpoint with the provided data and handles retries.
@@ -127,6 +128,8 @@ def call_anthropic_endpoint(
             headers["anthropic-beta"] = beta_header_value
     except Exception:
         pass
+    if enable_web_search:
+        payload["tools"] = [{"type": "web_search_20250305", "name": "web_search"}]
     payload = {k: v for k, v in payload.items() if v is not None}
 
     for attempt in range(max_retries + 1):

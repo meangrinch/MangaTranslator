@@ -344,10 +344,10 @@ def main():
         help="Skip translation and render placeholder text (lorem ipsum)",
     )
     parser.add_argument(
-        "--enable-grounding",
+        "--enable-web-search",
         action="store_true",
         help=(
-            "Enable Google Search grounding for Gemini models (Google and OpenRouter)"
+            "Enable model's built-in web search for up-to-date information. OpenRouter uses its own web search tool."
         ),
     )
     parser.add_argument(
@@ -519,7 +519,7 @@ def main():
         verbose=False,
         cpu=False,
         cleaning_only=False,
-        enable_grounding=False,
+        enable_web_search=False,
     )
 
     args = parser.parse_args()
@@ -655,7 +655,7 @@ def main():
             output_language=args.output_language,
             reading_direction=args.reading_direction,
             translation_mode=args.translation_mode,
-            enable_grounding=args.enable_grounding,
+            enable_web_search=args.enable_web_search,
             media_resolution=args.media_resolution,
             media_resolution_bubbles=args.media_resolution_bubbles,
             media_resolution_context=args.media_resolution_context,

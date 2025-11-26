@@ -481,7 +481,7 @@ def create_layout(
                                     ],
                                 ),
                                 info=(
-                                    "Determines whether to run OCR and Translation together or separately. "
+                                    "Determines whether to perform OCR and translation together or separately. "
                                     "'two-step' might improve translation quality for less-capable LLMs."
                                 ),
                                 elem_id="config_translation_mode",
@@ -633,33 +633,24 @@ def create_layout(
                                 elem_id="reasoning_effort_dropdown",
                             )
 
-                            _initial_enable_grounding_visible = False
-                            # Default to Google values (will be updated if provider is OpenRouter)
+                            _initial_enable_web_search_visible = (
+                                config_initial_provider != "OpenAI-Compatible"
+                            )
                             (
-                                _initial_enable_grounding_label,
-                                _initial_enable_grounding_info,
-                            ) = utils.get_enable_grounding_label_and_info("Google")
-                            try:
-                                if (
-                                    config_initial_provider == "Google"
-                                    or config_initial_provider == "OpenRouter"
-                                ):
-                                    _initial_enable_grounding_visible = True
-                                    (
-                                        _initial_enable_grounding_label,
-                                        _initial_enable_grounding_info,
-                                    ) = utils.get_enable_grounding_label_and_info(
-                                        config_initial_provider
-                                    )
-                            except Exception:
-                                _initial_enable_grounding_visible = False
+                                _initial_enable_web_search_label,
+                                _initial_enable_web_search_info,
+                            ) = utils.get_enable_web_search_label_and_info(
+                                config_initial_provider
+                                if _initial_enable_web_search_visible
+                                else "Google"
+                            )
 
-                            enable_grounding_checkbox = gr.Checkbox(
-                                label=_initial_enable_grounding_label,
-                                value=saved_settings.get("enable_grounding", False),
-                                info=_initial_enable_grounding_info,
-                                visible=_initial_enable_grounding_visible,
-                                elem_id="enable_grounding_checkbox",
+                            enable_web_search_checkbox = gr.Checkbox(
+                                label=_initial_enable_web_search_label,
+                                value=saved_settings.get("enable_web_search", False),
+                                info=_initial_enable_web_search_info,
+                                visible=_initial_enable_web_search_visible,
+                                elem_id="enable_web_search_checkbox",
                             )
 
                             # Compute initial visibility for media_resolution (Google provider only, but NOT Gemini 3)
@@ -772,7 +763,8 @@ def create_layout(
                                 ),
                                 label="Send Full Page to LLM",
                                 info=(
-                                    "Include full page image as context. Disable if refusals/using less-capable models."
+                                    "Include full page image as context. Might improve translation quality. "
+                                    "Disable if refusals/using less-capable models or to reduce token usage."
                                 ),
                             )
                             upscale_method = gr.Radio(
@@ -785,7 +777,7 @@ def create_layout(
                                 label="Bubble/Context Resizing Method",
                                 info=(
                                     "Determines how to resize cropped bubble images/full page before sending to LLM. "
-                                    "Default values strike a good balance between OCR quality and token usage."
+                                    "Use model for best quality, use LANCZOS for faster processing."
                                 ),
                             )
                             initial_upscale_method = saved_settings.get(
@@ -798,7 +790,10 @@ def create_layout(
                                 value=saved_settings.get("bubble_min_side_pixels", 128),
                                 step=16,
                                 label="Bubble Min Side Pixels",
-                                info="Target minimum side length for speech bubble upscaling",
+                                info=(
+                                    "Target minimum side length for speech bubble resizing. "
+                                    "Default value provides good balance between OCR quality and token usage."
+                                ),
                                 elem_id="config_bubble_min_side_pixels",
                                 interactive=sliders_interactive,
                             )
@@ -810,7 +805,10 @@ def create_layout(
                                 ),
                                 step=128,
                                 label="Context Image Max Side Pixels",
-                                info="Target maximum side length for full page image",
+                                info=(
+                                    "Target maximum side length for full page image resizing. "
+                                    "Default value provides good balance between OCR quality and token usage."
+                                ),
                                 elem_id="config_context_image_max_side_pixels",
                                 interactive=sliders_interactive,
                             )
@@ -820,7 +818,10 @@ def create_layout(
                                 value=saved_settings.get("osb_min_side_pixels", 128),
                                 step=16,
                                 label="OSB Text Min Side Pixels",
-                                info="Target minimum side length for outside speech bubble upscaling",
+                                info=(
+                                    "Target minimum side length for outside speech bubble resizing. "
+                                    "Default value provides good balance between OCR quality and token usage."
+                                ),
                                 elem_id="config_osb_min_side_pixels",
                                 interactive=sliders_interactive,
                             )
@@ -1232,7 +1233,7 @@ def create_layout(
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
-            enable_grounding_checkbox,
+            enable_web_search_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -1308,7 +1309,7 @@ def create_layout(
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
-            enable_grounding_checkbox,
+            enable_web_search_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -1379,7 +1380,7 @@ def create_layout(
             verbose,
             cleaning_only_toggle,
             test_mode_toggle,
-            enable_grounding_checkbox,
+            enable_web_search_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -1457,7 +1458,7 @@ def create_layout(
             verbose,
             cleaning_only_toggle,
             test_mode_toggle,
-            enable_grounding_checkbox,
+            enable_web_search_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -1577,7 +1578,7 @@ def create_layout(
                 temperature,
                 top_k,
                 max_tokens,
-                enable_grounding_checkbox,
+                enable_web_search_checkbox,
                 media_resolution_dropdown,
                 media_resolution_bubbles_dropdown,
                 media_resolution_context_dropdown,
@@ -1610,7 +1611,7 @@ def create_layout(
                 temperature,
                 top_k,
                 max_tokens,
-                enable_grounding_checkbox,
+                enable_web_search_checkbox,
                 media_resolution_dropdown,
                 media_resolution_bubbles_dropdown,
                 media_resolution_context_dropdown,

@@ -86,7 +86,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         verbose,
         cleaning_only_toggle,
         test_mode_toggle,
-        enable_grounding_val,
+        enable_web_search_val,
         media_resolution_val,
         media_resolution_bubbles_val,
         media_resolution_context_val,
@@ -211,7 +211,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             verbose=verbose,
             cleaning_only=cleaning_only_toggle,
             test_mode=test_mode_toggle,
-            enable_grounding=enable_grounding_val,
+            enable_web_search=enable_web_search_val,
             media_resolution=media_resolution_val,
             media_resolution_bubbles=media_resolution_bubbles_val,
             media_resolution_context=media_resolution_context_val,
@@ -826,7 +826,7 @@ def handle_save_config_click(*args: Any) -> str:
         b_in_lang,
         b_out_lang,
         b_font,
-        enable_grounding_val,
+        enable_web_search_val,
         media_resolution_val,
         media_resolution_bubbles_val,
         media_resolution_context_val,
@@ -941,7 +941,7 @@ def handle_save_config_click(*args: Any) -> str:
             verbose=verb,
             cleaning_only=cleaning_only_val,
             test_mode=test_mode_val,
-            enable_grounding=enable_grounding_val,
+            enable_web_search=enable_web_search_val,
             media_resolution=media_resolution_val,
             media_resolution_bubbles=media_resolution_bubbles_val,
             media_resolution_context=media_resolution_context_val,
@@ -1010,7 +1010,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         temp_update,
         top_k_update,
         _,  # max_tokens_update - unused (using saved default instead)
-        enable_grounding_update,
+        enable_web_search_update,
         media_resolution_update,
         media_resolution_bubbles_update,
         media_resolution_context_update,
@@ -1024,7 +1024,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
     is_reasoning = utils.is_reasoning_model(default_provider, default_model_name)
     max_tokens_val = 16384 if is_reasoning else 4096
-    enable_grounding_visible = enable_grounding_update.get("visible", False)
+    enable_web_search_visible = enable_web_search_update.get("visible", False)
     media_resolution_visible = media_resolution_update.get("visible", False)
     media_resolution_bubbles_visible = media_resolution_bubbles_update.get(
         "visible", False
@@ -1098,8 +1098,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.batch_output_language,
         gr.update(value=default_ui_state.batch_font_pack),
         gr.update(
-            value=default_ui_state.general.enable_grounding,
-            visible=enable_grounding_visible,
+            value=default_ui_state.general.enable_web_search,
+            visible=enable_web_search_visible,
         ),
         gr.update(
             value=default_ui_state.general.media_resolution,

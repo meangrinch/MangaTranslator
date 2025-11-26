@@ -79,7 +79,7 @@ def call_openrouter_endpoint(
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
-    enable_grounding: bool = False,
+    enable_web_search: bool = False,
 ) -> Optional[str]:
     """
     Calls the OpenRouter Chat Completions API endpoint (OpenAI compatible) and handles retries.
@@ -96,6 +96,7 @@ def call_openrouter_endpoint(
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
         base_delay (float): Initial delay for retries in seconds.
+        enable_web_search (bool): Enable web search for up-to-date information (Gemini models via :online suffix).
 
     Returns:
         Optional[str]: The raw text content from the API response if successful,
@@ -152,7 +153,7 @@ def call_openrouter_endpoint(
         "max_tokens": generation_config.get("max_tokens", 4096),
     }
 
-    if enable_grounding and "gemini" in model_name.lower():
+    if enable_web_search:
         if not model_name.endswith(":online"):
             payload["model"] = f"{model_name}:online"
 

@@ -116,8 +116,8 @@ class UIGeneralSettings:
     verbose: bool = False
     cleaning_only: bool = False
     test_mode: bool = False
-    enable_grounding: bool = (
-        False  # Enable Gemini's built-in Google Search; only available via Google provider
+    enable_web_search: bool = (
+        False  # Enable model's built-in web search for up-to-date information.
     )
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)
@@ -218,7 +218,7 @@ class UIConfigState:
             "verbose": self.general.verbose,
             "cleaning_only": self.general.cleaning_only,
             "test_mode": self.general.test_mode,
-            "enable_grounding": self.general.enable_grounding,
+            "enable_web_search": self.general.enable_web_search,
             "media_resolution": self.general.media_resolution,
             "media_resolution_bubbles": self.general.media_resolution_bubbles,
             "media_resolution_context": self.general.media_resolution_context,
@@ -376,8 +376,8 @@ class UIConfigState:
                 verbose=data.get("verbose", defaults["verbose"]),
                 cleaning_only=data.get("cleaning_only", defaults["cleaning_only"]),
                 test_mode=data.get("test_mode", defaults.get("test_mode", False)),
-                enable_grounding=data.get(
-                    "enable_grounding", defaults.get("enable_grounding", False)
+                enable_web_search=data.get(
+                    "enable_web_search", defaults.get("enable_web_search", False)
                 ),
                 media_resolution=data.get(
                     "media_resolution",
@@ -394,9 +394,7 @@ class UIConfigState:
                 reasoning_effort=data.get(
                     "reasoning_effort", defaults.get("reasoning_effort")
                 ),
-                auto_scale=data.get(
-                    "auto_scale", defaults.get("auto_scale", False)
-                ),
+                auto_scale=data.get("auto_scale", defaults.get("auto_scale", False)),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
             output_language=data.get("output_language", defaults["output_language"]),
@@ -458,7 +456,7 @@ def map_ui_to_backend_config(
         output_language=output_lang,
         reading_direction=ui_state.llm_settings.reading_direction,
         translation_mode=ui_state.llm_settings.translation_mode,
-        enable_grounding=ui_state.general.enable_grounding,
+        enable_web_search=ui_state.general.enable_web_search,
         media_resolution=ui_state.general.media_resolution,
         media_resolution_bubbles=ui_state.general.media_resolution_bubbles,
         media_resolution_context=ui_state.general.media_resolution_context,

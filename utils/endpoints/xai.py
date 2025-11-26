@@ -18,6 +18,7 @@ def call_xai_endpoint(
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
+    enable_web_search: bool = False,
 ) -> Optional[str]:
     """
     Calls the xAI Responses API endpoint with the provided data and handles retries.
@@ -106,6 +107,8 @@ def call_xai_endpoint(
     else:
         payload["max_output_tokens"] = generation_config.get("max_tokens", 4096)
 
+    if enable_web_search:
+        payload["tools"] = [{"type": "web_search"}]
     payload = {k: v for k, v in payload.items() if v is not None}
 
     for attempt in range(max_retries + 1):

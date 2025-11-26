@@ -18,7 +18,7 @@ def call_gemini_endpoint(
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
-    enable_grounding: bool = False,
+    enable_web_search: bool = False,
 ) -> Optional[str]:
     """
     Calls the Google API endpoint with the provided data and handles retries.
@@ -32,6 +32,7 @@ def call_gemini_endpoint(
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
         base_delay (float): Initial delay for retries in seconds.
+        enable_web_search (bool): Enable web search (Google Search) for up-to-date information.
 
     Returns:
         Optional[str]: The raw text content from the API response if successful,
@@ -65,7 +66,7 @@ def call_gemini_endpoint(
     if system_prompt:
         payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
 
-    if enable_grounding:
+    if enable_web_search:
         payload["tools"] = [{"googleSearch": {}}]
 
     for attempt in range(max_retries + 1):

@@ -640,7 +640,7 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 system_prompt=system_prompt,
                 debug=debug,
-                enable_grounding=config.enable_grounding,
+                enable_web_search=config.enable_web_search,
             )
         elif provider == "OpenAI":
             api_key = config.openai_api_key
@@ -656,6 +656,7 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 system_prompt=system_prompt,
                 debug=debug,
+                enable_web_search=config.enable_web_search,
             )
         elif provider == "Anthropic":
             api_key = config.anthropic_api_key
@@ -671,6 +672,7 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 system_prompt=system_prompt,
                 debug=debug,
+                enable_web_search=config.enable_web_search,
             )
         elif provider == "xAI":
             api_key = config.xai_api_key
@@ -686,6 +688,7 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 system_prompt=system_prompt,
                 debug=debug,
+                enable_web_search=config.enable_web_search,
             )
         elif provider == "OpenRouter":
             api_key = config.openrouter_api_key
@@ -701,7 +704,7 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 system_prompt=system_prompt,
                 debug=debug,
-                enable_grounding=config.enable_grounding,
+                enable_web_search=config.enable_web_search,
             )
         elif provider == "OpenAI-Compatible":
             base_url = config.openai_compatible_url

@@ -122,7 +122,7 @@ DEFAULT_SETTINGS = {
     "cleaning_only": False,
     "test_mode": False,
     "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
-    "enable_grounding": False,  # Enable Gemini's built-in Google Search; only available via Google provider
+    "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
     "media_resolution_bubbles": "auto",  # Gemini 3 models
     "media_resolution_context": "auto",  # Gemini 3 models
@@ -180,7 +180,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "max_tokens",
     "send_full_page_context",
     "reasoning_effort",
-    "enable_grounding",
+    "enable_web_search",
     "special_instructions",
     "batch_special_instructions",
     # Rendering

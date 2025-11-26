@@ -18,6 +18,7 @@ def call_openai_endpoint(
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
+    enable_web_search: bool = False,
 ) -> Optional[str]:
     """
     Calls the OpenAI Responses API endpoint with the provided data and handles retries.
@@ -85,6 +86,8 @@ def call_openai_endpoint(
     }
     if system_prompt:
         payload["instructions"] = system_prompt
+    if enable_web_search:
+        payload["tools"] = [{"type": "web_search"}]
     payload = {k: v for k, v in payload.items() if v is not None}
 
     try:

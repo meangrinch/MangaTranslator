@@ -51,8 +51,8 @@ class TranslationConfig:
     )
     send_full_page_context: bool = True
     upscale_method: str = "model"  # "model", "lanczos", or "none"
-    enable_grounding: bool = (
-        False  # Enable Gemini's built-in Google Search; only available via Google provider
+    enable_web_search: bool = (
+        False  # Enable model's built-in web search for up-to-date information. OpenRouter uses its own web search tool.
     )
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)

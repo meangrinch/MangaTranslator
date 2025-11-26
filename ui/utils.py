@@ -246,28 +246,48 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return False
 
 
-def get_enable_grounding_label_and_info(provider: str) -> Tuple[str, str]:
+def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
     """
-    Returns the label and info text for the enable_grounding checkbox based on provider.
+    Returns the label and info text for the enable_web_search checkbox based on provider.
 
     Args:
-        provider: The provider name ("Google" or "OpenRouter")
+        provider: The provider name
 
     Returns:
         Tuple of (label, info) strings
     """
-    if provider == "OpenRouter":
-        return (
-            "Enable Web Search",
-            "Use OpenRouter's native web search (Exa) for up-to-date information. "
-            "Might improve translation quality.",
-        )
-    else:  # Google
-        return (
-            "Enable Grounding",
-            "Use Gemini's built-in web search (Google Search) for up-to-date information. "
-            "Might improve translation quality.",
-        )
+    # All providers use the same label
+    label = "Enable Web Search"
+
+    # Provider-specific info text
+    info_map = {
+        "Google": (
+            "Use Gemini's web search for up-to-date information. "
+            "Might improve translation quality."
+        ),
+        "OpenRouter": (
+            "Use OpenRouter's web search (Exa) for up-to-date information. "
+            "Might improve translation quality."
+        ),
+        "OpenAI": (
+            "Use OpenAI's web search tool for up-to-date information. "
+            "Might improve translation quality."
+        ),
+        "Anthropic": (
+            "Use Anthropic's web search tool for up-to-date information. "
+            "Might improve translation quality."
+        ),
+        "xAI": (
+            "Use xAI's web search tool for up-to-date information. "
+            "Might improve translation quality."
+        ),
+    }
+
+    info = info_map.get(
+        provider,
+        "Enable web search for up-to-date information. Might improve translation quality.",
+    )
+    return (label, info)
 
 
 def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) -> str:
@@ -612,15 +632,15 @@ def update_translation_ui(provider: str, current_temp: float):
         and _is_gemini_3_model(remembered_model)
     )
 
-    enable_grounding_visible = provider == "Google" or provider == "OpenRouter"
-    enable_grounding_label, enable_grounding_info = get_enable_grounding_label_and_info(
-        provider
+    enable_web_search_visible = provider != "OpenAI-Compatible"
+    enable_web_search_label, enable_web_search_info = (
+        get_enable_web_search_label_and_info(provider)
     )
 
-    enable_grounding_update = gr.update(
-        visible=enable_grounding_visible,
-        label=enable_grounding_label,
-        info=enable_grounding_info,
+    enable_web_search_update = gr.update(
+        visible=enable_web_search_visible,
+        label=enable_web_search_label,
+        info=enable_web_search_info,
     )
 
     is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
@@ -673,7 +693,7 @@ def update_translation_ui(provider: str, current_temp: float):
         temp_update,
         top_k_update,
         max_tokens_update,
-        enable_grounding_update,
+        enable_web_search_update,
         media_resolution_update,
         media_resolution_bubbles_update,
         media_resolution_context_update,
@@ -748,17 +768,17 @@ def update_params_for_model(
         info=info_text,
     )
 
-    # Grounding checkbox is visible for Google provider and all OpenRouter models
-    enable_grounding_visible = provider == "Google" or provider == "OpenRouter"
+    # Web search checkbox is visible for Google, OpenRouter, OpenAI, Anthropic, and xAI providers
+    enable_web_search_visible = provider != "OpenAI-Compatible"
 
-    enable_grounding_label, enable_grounding_info = get_enable_grounding_label_and_info(
-        provider
+    enable_web_search_label, enable_web_search_info = (
+        get_enable_web_search_label_and_info(provider)
     )
 
-    enable_grounding_update = gr.update(
-        visible=enable_grounding_visible,
-        label=enable_grounding_label,
-        info=enable_grounding_info,
+    enable_web_search_update = gr.update(
+        visible=enable_web_search_visible,
+        label=enable_web_search_label,
+        info=enable_web_search_info,
     )
 
     is_gemini_3_google = (
@@ -790,7 +810,7 @@ def update_params_for_model(
         temp_update,
         top_k_update,
         max_tokens_update,
-        enable_grounding_update,
+        enable_web_search_update,
         media_resolution_update,
         media_resolution_bubbles_update,
         media_resolution_context_update,
