@@ -197,6 +197,10 @@ def create_layout(
             else (initial_default_font if initial_default_font else None)
         )
 
+        saved_osb_font_pack = saved_settings.get("outside_text_osb_font_pack", "")
+        if saved_osb_font_pack not in ([""] + font_choices):
+            saved_osb_font_pack = ""
+
         initial_provider = saved_settings.get(
             "provider", settings_manager.DEFAULT_SETTINGS["provider"]
         )
@@ -1059,9 +1063,7 @@ def create_layout(
 
                                 gr.Markdown("### Font Rendering")
                                 outside_text_osb_font_pack = gr.Dropdown(
-                                    value=saved_settings.get(
-                                        "outside_text_osb_font_pack", ""
-                                    ),
+                                    value=saved_osb_font_pack,
                                     choices=[""] + font_choices,
                                     label="Text Font",
                                     info="Font for rendering OSB text translations (leave empty to use main font)",
