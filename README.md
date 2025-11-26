@@ -45,7 +45,7 @@ source venv/bin/activate
 # Example (CUDA 12.8)
 pip install torch==2.9.1+cu128 torchvision==0.24.1+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
 # Example (CPU)
-pip install torch
+pip install torch torchvision
 ```
 4) Install Nunchaku (optional, for inpainting outside-bubble text.)
 - Nunchaku wheels are not on PyPI. Install directly from the v1.0.2 GitHub release URL, matching your OS and Python version.
