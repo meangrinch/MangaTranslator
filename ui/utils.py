@@ -6,6 +6,7 @@ import gradio as gr
 import requests
 from PIL import Image
 
+from core.llm_defaults import get_provider_sampling_defaults
 from utils.endpoints import openrouter_is_reasoning_model
 from utils.exceptions import ValidationError
 from utils.logging import log_message
@@ -597,7 +598,7 @@ def get_reasoning_effort_config(
     return False, [], None
 
 
-def update_translation_ui(provider: str, current_temp: float):
+def update_translation_ui(provider: str, _current_temp: float):
     """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity."""
     saved_settings = get_saved_settings()
     provider_models_dict = saved_settings.get(
@@ -633,12 +634,19 @@ def update_translation_ui(provider: str, current_temp: float):
     else:
         model_update = gr.update(choices=models, value=selected_model)
 
+    sampling_defaults = get_provider_sampling_defaults(provider)
+    default_temp = float(sampling_defaults["temperature"])
+    default_top_p = float(sampling_defaults["top_p"])
+    default_top_k = int(sampling_defaults["top_k"])
+
     temp_max = 1.0 if provider == "Anthropic" else 2.0
-    new_temp_value = min(current_temp, temp_max)
+    new_temp_value = min(default_temp, temp_max)
     temp_update = gr.update(maximum=temp_max, value=new_temp_value)
 
     top_k_interactive = provider not in ("OpenAI", "xAI", "DeepSeek")
-    top_k_update = gr.update(interactive=top_k_interactive)
+    top_k_update = gr.update(interactive=top_k_interactive, value=default_top_k)
+
+    top_p_update = gr.update(value=default_top_p)
 
     if remembered_model:
         is_reasoning = is_reasoning_model(provider, remembered_model)
@@ -723,6 +731,7 @@ def update_translation_ui(provider: str, current_temp: float):
         openai_compatible_key_visible_update,
         model_update,
         temp_update,
+        top_p_update,
         top_k_update,
         max_tokens_update,
         enable_web_search_update,

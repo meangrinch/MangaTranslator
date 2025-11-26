@@ -3,6 +3,9 @@ from typing import Optional
 
 import torch
 
+from core.llm_defaults import (DEFAULT_LLM_PROVIDER,
+                               get_provider_sampling_defaults)
+
 
 @dataclass
 class DetectionConfig:
@@ -22,11 +25,15 @@ class CleaningConfig:
     roi_shrink_px: int = 4
 
 
+_DEFAULT_TRANSLATION_PROVIDER = DEFAULT_LLM_PROVIDER
+_DEFAULT_SAMPLING = get_provider_sampling_defaults(_DEFAULT_TRANSLATION_PROVIDER)
+
+
 @dataclass
 class TranslationConfig:
     """Configuration for text translation."""
 
-    provider: str = "Google"
+    provider: str = _DEFAULT_TRANSLATION_PROVIDER
     google_api_key: str = ""
     openai_api_key: str = ""
     anthropic_api_key: str = ""
@@ -37,9 +44,9 @@ class TranslationConfig:
     openai_compatible_api_key: Optional[str] = ""
     model_name: str = "gemini-2.5-flash"
     provider_models: dict[str, Optional[str]] = field(default_factory=dict)
-    temperature: float = 0.1
-    top_p: float = 0.95
-    top_k: int = 64
+    temperature: float = float(_DEFAULT_SAMPLING["temperature"])
+    top_p: float = float(_DEFAULT_SAMPLING["top_p"])
+    top_k: int = int(_DEFAULT_SAMPLING["top_k"])
     max_tokens: Optional[int] = (
         None  # None = use default logic (16384 for reasoning, 4096 otherwise)
     )

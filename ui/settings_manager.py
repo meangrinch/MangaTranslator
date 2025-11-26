@@ -4,6 +4,8 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List
 
+from core.llm_defaults import (DEFAULT_LLM_PROVIDER,
+                               get_provider_sampling_defaults)
 from utils.logging import log_message
 
 CONFIG_FILE = (
@@ -69,8 +71,11 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
     "OpenAI-Compatible": [],
 }
 
+DEFAULT_PROVIDER = DEFAULT_LLM_PROVIDER
+DEFAULT_PROVIDER_SAMPLING = get_provider_sampling_defaults(DEFAULT_PROVIDER)
+
 DEFAULT_SETTINGS = {
-    "provider": "Google",
+    "provider": DEFAULT_PROVIDER,
     "google_api_key": "",
     "openai_api_key": "",
     "anthropic_api_key": "",
@@ -80,7 +85,9 @@ DEFAULT_SETTINGS = {
     "openai_compatible_url": "http://localhost:1234/v1",
     "openai_compatible_api_key": "",
     "model_name": (
-        PROVIDER_MODELS["Google"][0] if PROVIDER_MODELS["Google"] else None
+        PROVIDER_MODELS[DEFAULT_PROVIDER][0]
+        if PROVIDER_MODELS[DEFAULT_PROVIDER]
+        else None
     ),  # Default active model
     "provider_models": {
         "Google": PROVIDER_MODELS["Google"][0] if PROVIDER_MODELS["Google"] else None,
@@ -106,9 +113,9 @@ DEFAULT_SETTINGS = {
     "use_otsu_threshold": False,
     "thresholding_value": 190,
     "roi_shrink_px": 4,
-    "temperature": 0.1,
-    "top_p": 0.95,
-    "top_k": 64,
+    "temperature": DEFAULT_PROVIDER_SAMPLING["temperature"],
+    "top_p": DEFAULT_PROVIDER_SAMPLING["top_p"],
+    "top_k": DEFAULT_PROVIDER_SAMPLING["top_k"],
     "max_tokens": 4096,
     "max_font_size": 15,
     "min_font_size": 8,
@@ -164,6 +171,13 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_font_pack": None,
     "batch_special_instructions": "",
 }
+
+
+def _apply_provider_sampling_defaults(settings: Dict[str, Any], provider: str):
+    sampling = get_provider_sampling_defaults(provider)
+    settings["temperature"] = sampling["temperature"]
+    settings["top_p"] = sampling["top_p"]
+    settings["top_k"] = sampling["top_k"]
 
 
 # Canonical save order for config.json (unknown keys appended alphabetically at the end)
@@ -530,6 +544,7 @@ def reset_to_defaults() -> Dict[str, Any]:
     # Determine model_name from preserved provider_models
     preserved_provider = settings.get("provider", DEFAULT_SETTINGS["provider"])
     settings["model_name"] = settings["provider_models"].get(preserved_provider)
+    _apply_provider_sampling_defaults(settings, preserved_provider)
     settings["cleaning_only"] = DEFAULT_SETTINGS["cleaning_only"]
     settings["translation_mode"] = DEFAULT_SETTINGS["translation_mode"]
 

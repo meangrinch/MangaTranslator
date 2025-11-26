@@ -68,7 +68,7 @@ Your sole purpose is to accurately transcribe the original text from a series of
 
 
 def _build_system_prompt_translation(
-    output_language: str, mode: str, num_speech_bubbles: int = 0, num_osb_text: int = 0
+    output_language: str, mode: str, num_osb_text: int = 0
 ) -> str:
     shared_components = f"""
 ## ROLE
@@ -1340,7 +1340,6 @@ The target language is {output_language}. Use the appropriate translation approa
             translation_system = _build_system_prompt_translation(
                 output_language,
                 mode="two-step",
-                num_speech_bubbles=num_speech_bubbles,
                 num_osb_text=num_osb_text,
             )
             translation_response_text = _call_llm_endpoint(
@@ -1454,7 +1453,6 @@ N2: <{output_language} translation for non-dialogue text 2>
             one_step_system = _build_system_prompt_translation(
                 output_language,
                 mode="one-step",
-                num_speech_bubbles=num_speech_bubbles,
                 num_osb_text=num_osb_text,
             )
             response_text = _call_llm_endpoint(
