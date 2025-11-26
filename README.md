@@ -22,9 +22,9 @@ Web application for automating the translation of manga/comic page images using 
 
 ### Windows portable
 Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases)
-- Default package: Download once, run `setup.bat` before first launch to install dependencies, and `update-standalone.bat` to update to the latest version. Installs `PyTorch v2.7.1+cu128`.
-- Pre-downloaded package: Download per version, no setup required, and no included update script. Contains `PyTorch v2.6.0+cu126`.
-- Both include the Komika (for normal text) and Cookies (for OSB text) font packs
+- Default package: Download once, run `setup.bat` before first launch to install dependencies, and `update-standalone.bat` to update to the latest version. Installs `PyTorch v2.9.1+cu128`.
+- Pre-downloaded package: Download per version, no setup required, and no included update script. Contains `PyTorch v2.9.1+cu128`.
+- Both include the Komika (for normal text), Cookies (for OSB text), and Comicka (for either) font packs
 
 ### Manual install
 1) Clone and enter the repo
@@ -43,15 +43,15 @@ source venv/bin/activate
 3) Install PyTorch (see: [PyTorch Install](https://pytorch.org/get-started/locally/))
 ```bash
 # Example (CUDA 12.8)
-pip install torch==2.7.1+cu128 torchvision==0.22.1+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
+pip install torch==2.9.1+cu128 torchvision==0.24.1+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
 # Example (CPU)
 pip install torch
 ```
 4) Install Nunchaku (optional, for inpainting outside-bubble text.)
 - Nunchaku wheels are not on PyPI. Install directly from the v1.0.1 GitHub release URL, matching your OS and Python version.
 ```bash
-# Example (Windows, Python 3.13, PyTorch 2.7.1)
-pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.1/nunchaku-1.0.1+torch2.7-cp313-cp313-win_amd64.whl
+# Example (Windows, Python 3.13, PyTorch 2.9.1)
+pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.0.2/nunchaku-1.0.2+torch2.9-cp313-cp313-win_amd64.whl
 ```
 5) Install dependencies
 ```bash
@@ -175,7 +175,8 @@ python main.py --help
   - Increase "Shrink Threshold ROI" (e.g., 6–8)
 - **Incoherent translations/API refusals:**
   - Try "two-step" translation mode for less-capable LLMs
-  - Disable "Send Full Page to LLM"
+  - Try disabling "Send Full Page to LLM"
+  - Try using "manga-ocr" OCR method, particularly for less-capable LLMs (Japanese sources only)
   - Increase "max_tokens" and/or use a higher "reasoning_effort" (e.g., "high")
 - **Text too large/small:**
   - Adjust "Max Font Size" and "Min Font Size" ranges
