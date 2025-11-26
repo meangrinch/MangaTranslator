@@ -16,7 +16,7 @@ Web application for automating the translation of manga/comic page images using 
 - PyTorch (CPU or CUDA)
 - YOLO model (`.pt`) for speech bubble detection; auto-downloaded
 - Font pack with `.ttf`/`.otf`
-- Vision-capable LLM (API or local)
+- Any LLM for Japanese source text; vision-capable LLM for other languages (API or local)
 
 ## Install
 
