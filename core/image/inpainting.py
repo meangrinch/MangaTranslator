@@ -15,8 +15,8 @@ from utils.logging import log_message
 BLUR_SCALE_FACTOR = (
     0.1  # Multiplier for bounding box dimensions to calculate blur radius
 )
-MIN_BLUR_RADIUS = 10  # Minimum blur radius in pixels
-MAX_BLUR_RADIUS = 40  # Maximum blur radius in pixels
+MIN_BLUR_RADIUS = 1  # Minimum blur radius in pixels
+MAX_BLUR_RADIUS = 10  # Maximum blur radius in pixels
 
 # Inpainting Parameters
 FLUX_GUIDANCE_SCALE = 2.5  # Flux Kontext guidance scale
