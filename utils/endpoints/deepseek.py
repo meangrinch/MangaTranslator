@@ -25,7 +25,7 @@ def call_deepseek_endpoint(
 
     Args:
         api_key (str): DeepSeek API key.
-        model_name (str): DeepSeek model to use (e.g., "deepseek-chat", "deepseek-reasoner").
+        model_name (str): DeepSeek model to use.
         parts (List[Dict[str, Any]]): List of content parts (text only, images are ignored).
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens).
         system_prompt (Optional[str]): System prompt for the conversation.

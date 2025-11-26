@@ -844,7 +844,7 @@ def create_layout(
                                 label="Bubble Min Side Pixels",
                                 info=(
                                     "Target minimum side length for speech bubble resizing. "
-                                    "Default value provides good balance between OCR quality and token usage."
+                                    "Increase for better OCR quality, but may increase token usage."
                                 ),
                                 elem_id="config_bubble_min_side_pixels",
                                 interactive=sliders_interactive,
@@ -859,7 +859,7 @@ def create_layout(
                                 label="Context Image Max Side Pixels",
                                 info=(
                                     "Target maximum side length for full page image resizing. "
-                                    "Default value provides good balance between OCR quality and token usage."
+                                    "Increase for better OCR quality, but may increase token usage."
                                 ),
                                 elem_id="config_context_image_max_side_pixels",
                                 interactive=sliders_interactive,
@@ -872,7 +872,7 @@ def create_layout(
                                 label="OSB Text Min Side Pixels",
                                 info=(
                                     "Target minimum side length for outside speech bubble resizing. "
-                                    "Default value provides good balance between OCR quality and token usage."
+                                    "Increase for better OCR quality, but may increase token usage."
                                 ),
                                 elem_id="config_osb_min_side_pixels",
                                 interactive=sliders_interactive,
@@ -1637,6 +1637,7 @@ def create_layout(
                 openai_compatible_api_key_input,
                 config_model_name,
                 temperature,
+                top_p,
                 top_k,
                 max_tokens,
                 enable_web_search_checkbox,

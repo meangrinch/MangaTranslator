@@ -26,7 +26,7 @@ def call_anthropic_endpoint(
 
     Args:
         api_key (str): Anthropic API key.
-        model_name (str): Anthropic model to use (e.g., "claude-3-opus-20240229").
+        model_name (str): Anthropic model to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
                                       # Assumes the first part is the system/main prompt, subsequent are images.
         generation_config (Dict[str, Any]): Configuration for generation (temp <= 1.0, top_p, top_k, max_tokens).

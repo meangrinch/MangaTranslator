@@ -25,7 +25,7 @@ def call_xai_endpoint(
 
     Args:
         api_key (str): xAI API key.
-        model_name (str): xAI model to use (e.g., "grok-4-fast-reasoning").
+        model_name (str): xAI model to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens, reasoning_tokens).
         system_prompt (Optional[str]): System prompt for the model.

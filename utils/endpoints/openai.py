@@ -25,7 +25,7 @@ def call_openai_endpoint(
 
     Args:
         api_key (str): OpenAI API key.
-        model_name (str): OpenAI model to use (e.g., "gpt-4o").
+        model_name (str): OpenAI model to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
                                       # Assumes the first part is the text prompt, subsequent are images.
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens).
