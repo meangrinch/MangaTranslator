@@ -483,7 +483,7 @@ def create_layout(
                             gr.Markdown("### OCR & Translation")
                             config_translation_mode = gr.Radio(
                                 choices=["one-step", "two-step"],
-                                label="LLM Translation Mode",
+                                label="Translation Mode",
                                 value=saved_settings.get(
                                     "translation_mode",
                                     settings_manager.DEFAULT_SETTINGS[
