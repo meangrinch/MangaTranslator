@@ -10,10 +10,11 @@ from typing import Optional
 import easyocr
 import torch
 from diffusers import FluxKontextPipeline
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, snapshot_download
 from nunchaku.caching.diffusers_adapters import apply_cache_on_pipe
 from nunchaku.models.text_encoders.t5_encoder import NunchakuT5EncoderModel
-from nunchaku.models.transformers.transformer_flux import NunchakuFluxTransformer2dModel
+from nunchaku.models.transformers.transformer_flux import \
+    NunchakuFluxTransformer2dModel
 from nunchaku.utils import get_precision
 from spandrel import ModelLoader
 from transformers import Sam2Model, Sam2Processor
@@ -31,6 +32,7 @@ class ModelType(Enum):
     YOLO_CONJOINED_BUBBLE = "yolo_conjoined_bubble"
     EASYOCR = "easyocr"
     SAM2 = "sam2"
+    MANGA_OCR = "manga_ocr"
     FLUX_TRANSFORMER = "flux_transformer"
     FLUX_TEXT_ENCODER = "flux_text_encoder"
     FLUX_PIPELINE = "flux_pipeline"
@@ -92,6 +94,7 @@ class ModelManager:
             ModelType.YOLO_CONJOINED_BUBBLE: (
                 model_dir / "yolo" / "comic-speech-bubble-detector-yolov8m.pt"
             ),
+            ModelType.MANGA_OCR: (model_dir / "manga-ocr-base"),
         }
 
     def _init_model_urls(self):
@@ -134,6 +137,9 @@ class ModelManager:
         repos[ModelType.FLUX_TEXT_ENCODER] = {
             "repo_id": "nunchaku-tech/nunchaku-t5",
             "filename": "awq-int4-flux.1-t5xxl.safetensors",
+        }
+        repos[ModelType.MANGA_OCR] = {
+            "repo_id": "kha-white/manga-ocr-base",
         }
 
         return repos
@@ -202,6 +208,62 @@ class ModelManager:
                     pass
         log_message(f"Downloaded {target.name} successfully.", verbose=verbose)
         return target
+
+    def _ensure_hf_repo(
+        self,
+        repo_id: str,
+        target_dir: Path,
+        token: Optional[str] = None,
+        verbose: bool = False,
+    ) -> Path:
+        """Download entire repository from Hugging Face if it doesn't exist.
+
+        Args:
+            repo_id: Hugging Face repository ID
+            target_dir: Directory where repository should be saved
+            token: Optional Hugging Face token
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Path to the downloaded repository directory
+        """
+        # Check for larger model file to ensure download is complete
+        critical_file = target_dir / "pytorch_model.bin"
+        if target_dir.exists() and critical_file.exists():
+            return target_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        log_message(
+            f"Downloading repository {repo_id} from Hugging Face...",
+            verbose=verbose,
+        )
+        try:
+            snapshot_download(
+                repo_id=repo_id,
+                local_dir=str(target_dir),
+                token=token,
+            )
+            log_message(
+                f"Downloaded repository {repo_id} successfully.", verbose=verbose
+            )
+        except Exception as e:
+            if target_dir.exists():
+                models_dir = Path("./models").resolve()
+                target_resolved = target_dir.resolve()
+                try:
+                    target_resolved.relative_to(models_dir)
+                    # Safe to delete
+                    try:
+                        shutil.rmtree(target_dir)
+                    except Exception:
+                        pass
+                except ValueError:
+                    # target_dir is not within models/, skip deletion for safety
+                    log_message(
+                        f"Warning: Skipping deletion of {target_dir} as it is outside models/ directory",
+                        always_print=True,
+                    )
+            raise ModelError(f"Failed to download repository {repo_id}: {e}") from e
+        return target_dir
 
     def is_loaded(self, model_type: ModelType) -> bool:
         """Check if a model is currently loaded."""
@@ -329,6 +391,45 @@ class ModelManager:
             log_message("EasyOCR reader loaded.", verbose=verbose)
             return reader
 
+    def load_manga_ocr(self, verbose: bool = False) -> Path:
+        """Ensure manga-ocr model repository is downloaded.
+
+        Args:
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Path to the downloaded manga-ocr model directory
+        """
+        with self._lock:
+            model_path = self.model_paths[ModelType.MANGA_OCR]
+            hf_info = self.model_hf_repos[ModelType.MANGA_OCR]
+            self._ensure_hf_repo(hf_info["repo_id"], model_path, verbose=verbose)
+            log_message("manga-ocr model repository ready.", verbose=verbose)
+            return model_path
+
+    def get_manga_ocr(self, verbose: bool = False):
+        """Get manga-ocr instance, loading it if necessary.
+
+        Args:
+            verbose: Whether to print verbose logging
+
+        Returns:
+            MangaOcr instance
+        """
+        with self._lock:
+            if self.is_loaded(ModelType.MANGA_OCR):
+                return self.models[ModelType.MANGA_OCR]
+
+            log_message("Initializing manga-ocr...", verbose=verbose)
+            from manga_ocr import MangaOcr
+
+            # Ensure model is downloaded
+            model_path = self.load_manga_ocr(verbose=verbose)
+            manga_ocr_instance = MangaOcr(pretrained_model_name_or_path=str(model_path))
+            self.models[ModelType.MANGA_OCR] = manga_ocr_instance
+            log_message("manga-ocr initialized", verbose=verbose)
+            return manga_ocr_instance
+
     def load_sam2(self, verbose: bool = False):
         """Load SAM 2.1 model and processor.
 
@@ -343,7 +444,9 @@ class ModelManager:
             hf_info = self.model_hf_repos[ModelType.SAM2]
             cache_dir = "models/sam"
 
-            processor = Sam2Processor.from_pretrained(hf_info["repo_id"], cache_dir=cache_dir)
+            processor = Sam2Processor.from_pretrained(
+                hf_info["repo_id"], cache_dir=cache_dir
+            )
             model = Sam2Model.from_pretrained(
                 hf_info["repo_id"], torch_dtype=self.dtype, cache_dir=cache_dir
             ).to(self.device)
@@ -473,7 +576,7 @@ class ModelManager:
         log_message("Upscale model unloaded.", verbose=verbose)
 
     def unload_ocr_models(self, verbose: bool = False):
-        """Unload OCR-related models (YOLO, SAM2, and EasyOCR)."""
+        """Unload OCR-related models (YOLO, SAM2, EasyOCR, and manga-ocr)."""
         models_unloaded = []
         if self.is_loaded(ModelType.YOLO_SPEECH_BUBBLE):
             models_unloaded.append("yolo_speech_bubble")
@@ -483,13 +586,16 @@ class ModelManager:
             models_unloaded.append("sam2")
         if self.is_loaded(ModelType.EASYOCR):
             models_unloaded.append("easyocr")
+        if self.is_loaded(ModelType.MANGA_OCR):
+            models_unloaded.append("manga_ocr")
 
         self.unload_model(ModelType.YOLO_SPEECH_BUBBLE, force_gc=False, verbose=verbose)
         self.unload_model(
             ModelType.YOLO_CONJOINED_BUBBLE, force_gc=False, verbose=verbose
         )
         self.unload_model(ModelType.SAM2, force_gc=False, verbose=verbose)
-        self.unload_model(ModelType.EASYOCR, force_gc=True, verbose=verbose)
+        self.unload_model(ModelType.EASYOCR, force_gc=False, verbose=verbose)
+        self.unload_model(ModelType.MANGA_OCR, force_gc=True, verbose=verbose)
 
         if models_unloaded:
             log_message("OCR models unloaded.", verbose=verbose)

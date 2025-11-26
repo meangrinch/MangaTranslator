@@ -237,6 +237,10 @@ def create_layout(
                             filterable=False,
                         )
                         with gr.Accordion("Translation Settings", open=True):
+                            # Hidden state to store original language selection before manga-ocr forces Japanese
+                            original_language_state = gr.State(
+                                value=saved_settings.get("input_language", "Japanese")
+                            )
                             input_language = gr.Dropdown(
                                 SOURCE_LANGUAGES,
                                 label="Source Language",
@@ -298,6 +302,12 @@ def create_layout(
                             filterable=False,
                         )
                         with gr.Accordion("Translation Settings", open=True):
+                            # Hidden state to store original language selection before manga-ocr forces Japanese
+                            batch_original_language_state = gr.State(
+                                value=saved_settings.get(
+                                    "batch_input_language", "Japanese"
+                                )
+                            )
                             batch_input_language = gr.Dropdown(
                                 SOURCE_LANGUAGES,
                                 label="Source Language",
@@ -485,6 +495,29 @@ def create_layout(
                                     "'two-step' might improve translation quality for less-capable LLMs."
                                 ),
                                 elem_id="config_translation_mode",
+                            )
+                            ocr_type_radio = gr.Radio(
+                                choices=["LLM", "manga-ocr"],
+                                label="OCR Type",
+                                value=saved_settings.get(
+                                    "ocr_type",
+                                    settings_manager.DEFAULT_SETTINGS.get(
+                                        "ocr_type", "LLM"
+                                    ),
+                                ),
+                                info=(
+                                    "Determines whether to use a vision-capable LLM or a local OCR model for OCR. "
+                                    "'manga-ocr' only supports Japanese, enables text-only LLMs for translation, "
+                                    "and must be used in `two-step` translation mode."
+                                ),
+                                elem_id="ocr_type_radio",
+                                interactive=saved_settings.get(
+                                    "translation_mode",
+                                    settings_manager.DEFAULT_SETTINGS[
+                                        "translation_mode"
+                                    ],
+                                )
+                                != "one-step",
                             )
 
                             gr.Markdown("### LLM Settings")
@@ -1291,6 +1324,7 @@ def create_layout(
             top_k,
             max_tokens,
             config_translation_mode,
+            ocr_type_radio,
             max_font_size,
             min_font_size,
             line_spacing,
@@ -1365,6 +1399,7 @@ def create_layout(
             max_tokens,
             config_reading_direction,
             config_translation_mode,
+            ocr_type_radio,
             input_language,
             output_language,
             font_dropdown,
@@ -1443,6 +1478,7 @@ def create_layout(
             max_tokens,
             config_reading_direction,
             config_translation_mode,
+            ocr_type_radio,
             input_language,
             output_language,
             font_dropdown,
@@ -1586,11 +1622,11 @@ def create_layout(
             ],
             queue=False,
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.
-            fn=lambda prov, url, key: (
+            fn=lambda prov, url, key, ocr_type: (
                 utils.fetch_and_update_compatible_models(url, key)
                 if prov == "OpenAI-Compatible"
                 else (
-                    utils.fetch_and_update_openrouter_models()
+                    utils.fetch_and_update_openrouter_models(ocr_type=ocr_type)
                     if prov == "OpenRouter"
                     else gr.update()
                 )
@@ -1599,6 +1635,7 @@ def create_layout(
                 provider_selector,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,
+                ocr_type_radio,
             ],
             outputs=[config_model_name],
             queue=True,  # Allow fetching to happen in the background
@@ -1664,6 +1701,37 @@ def create_layout(
             fn=callbacks.handle_conjoined_detection_change,
             inputs=enable_conjoined_detection_checkbox,
             outputs=None,
+            queue=False,
+        )
+
+        # Translation mode change handler - disable OCR selection when one-step
+        config_translation_mode.change(
+            fn=callbacks.handle_translation_mode_change,
+            inputs=[config_translation_mode, ocr_type_radio],
+            outputs=ocr_type_radio,
+            queue=False,
+        )
+
+        # OCR type change handler
+        ocr_type_radio.change(
+            fn=callbacks.handle_ocr_type_change,
+            inputs=[
+                ocr_type_radio,
+                input_language,
+                original_language_state,
+                batch_input_language,
+                batch_original_language_state,
+                provider_selector,
+                openai_compatible_url_input,
+                openai_compatible_api_key_input,
+            ],
+            outputs=[
+                input_language,
+                original_language_state,
+                batch_input_language,
+                batch_original_language_state,
+                config_model_name,
+            ],
             queue=False,
         )
 

@@ -624,3 +624,57 @@ class OutsideTextDetector:
         distance = np.sqrt((cx1 - cx2) ** 2 + (cy1 - cy2) ** 2)
 
         return distance <= threshold
+
+
+def extract_text_with_manga_ocr(
+    images: List[Image.Image], verbose: bool = False
+) -> List[str]:
+    """Extract text from images using manga-ocr library.
+
+    Args:
+        images: List of PIL Images to process
+        verbose: Whether to print verbose output
+
+    Returns:
+        List of extracted text strings (one per image). Returns [OCR FAILED] on errors.
+    """
+    if not images:
+        return []
+
+    try:
+        # Get manga-ocr instance from model manager
+        model_manager = get_model_manager()
+        manga_ocr_instance = model_manager.get_manga_ocr(verbose=verbose)
+
+        extracted_texts = []
+        for i, img in enumerate(images):
+            try:
+                # Handle None images (decode failures)
+                if img is None:
+                    log_message(
+                        f"Image {i + 1} is None (decode failure), skipping",
+                        always_print=True,
+                    )
+                    extracted_texts.append("[OCR FAILED]")
+                    continue
+
+                log_message(
+                    f"Processing image {i + 1}/{len(images)} with manga-ocr",
+                    verbose=verbose,
+                )
+                text = manga_ocr_instance(img)
+
+                # Return empty string if no text detected, otherwise return extracted text
+                extracted_texts.append(text.strip() if text else "")
+
+            except Exception as e:
+                log_message(
+                    f"manga-ocr failed for image {i + 1}: {e}", always_print=True
+                )
+                extracted_texts.append("[OCR FAILED]")
+
+        return extracted_texts
+
+    except Exception as e:
+        log_message(f"Error with manga-ocr: {e}", always_print=True)
+        return ["[OCR FAILED]"] * len(images)

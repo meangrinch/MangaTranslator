@@ -17,7 +17,7 @@ ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
 
 # Global caches for API models (Session-based)
-OPENROUTER_MODEL_CACHE = {"models": None}
+OPENROUTER_MODEL_CACHE = {}
 COMPATIBLE_MODEL_CACHE = {"url": None, "models": None}
 
 
@@ -837,73 +837,82 @@ def switch_settings_view(
     return updates
 
 
-def fetch_and_update_openrouter_models():
-    """Fetches vision-capable models from OpenRouter API and updates dropdown."""
+def fetch_and_update_openrouter_models(ocr_type: str = "LLM"):
+    """Fetches models from OpenRouter API and updates dropdown.
+
+    Args:
+        ocr_type: "LLM" for vision-capable models, "manga-ocr" for text-only models
+    """
     global OPENROUTER_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
-    if OPENROUTER_MODEL_CACHE["models"] is not None:
-        log_message("Using cached OpenRouter models", verbose=verbose)
-        cached_models = OPENROUTER_MODEL_CACHE["models"]
-        saved_settings = get_saved_settings()
-        provider_models_dict = saved_settings.get(
-            "provider_models", DEFAULT_SETTINGS["provider_models"]
+
+    # Check if we have cached raw response
+    raw_models = OPENROUTER_MODEL_CACHE.get("raw_response")
+    if raw_models is None:
+        log_message("Fetching OpenRouter models from API...", verbose=verbose)
+        try:
+            response = requests.get("https://openrouter.ai/api/v1/models", timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            raw_models = data.get("data", [])
+            OPENROUTER_MODEL_CACHE["raw_response"] = raw_models
+            log_message(
+                f"Fetched {len(raw_models)} models from OpenRouter API", verbose=verbose
+            )
+        except requests.exceptions.RequestException as e:
+            gr.Warning(f"Failed to fetch OpenRouter models: {e}")
+            return gr.update(choices=[])
+        except Exception as e:  # Catch other potential errors like JSON parsing
+            gr.Warning(f"Unexpected error fetching OpenRouter models: {e}")
+            return gr.update(choices=[])
+    else:
+        log_message(
+            f"Using cached OpenRouter models (filtering for OCR type: {ocr_type})",
+            verbose=verbose,
         )
-        remembered_or_model = provider_models_dict.get("OpenRouter")
-        selected_or_model = (
-            remembered_or_model
-            if remembered_or_model in cached_models
-            else (cached_models[0] if cached_models else None)
-        )
-        return gr.update(choices=cached_models, value=selected_or_model)
 
-    log_message("Fetching OpenRouter models", verbose=verbose)
-    try:
-        response = requests.get("https://openrouter.ai/api/v1/models", timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        all_models = data.get("data", [])
+    # Filter models in-memory based on OCR type
+    filtered_models = []
+    for model in raw_models:
+        arch = model.get("architecture", {}) or {}
+        input_modalities = arch.get("input_modalities", []) or []
+        if not isinstance(input_modalities, list):
+            input_modalities = []
+        input_modalities_lc = [str(m).lower() for m in input_modalities]
 
-        filtered_models = []
-        for model in all_models:
-            arch = model.get("architecture", {}) or {}
-            input_modalities = arch.get("input_modalities", []) or []
-            if not isinstance(input_modalities, list):
-                input_modalities = []
-            input_modalities_lc = [str(m).lower() for m in input_modalities]
+        output_modalities = arch.get("output_modalities", []) or []
+        if not isinstance(output_modalities, list):
+            output_modalities = []
+        output_modalities_lc = [str(m).lower() for m in output_modalities]
 
-            output_modalities = arch.get("output_modalities", []) or []
-            if not isinstance(output_modalities, list):
-                output_modalities = []
-            output_modalities_lc = [str(m).lower() for m in output_modalities]
-
+        # Filter based on OCR type
+        if ocr_type == "manga-ocr":
+            # For manga-ocr: require text input and text output
+            if "text" in input_modalities_lc and "text" in output_modalities_lc:
+                filtered_models.append(model["id"])
+        else:
+            # For LLM OCR: require vision capability (image input + text output)
             if "image" in input_modalities_lc and "text" in output_modalities_lc:
                 filtered_models.append(model["id"])
 
-        filtered_models.sort()
+    filtered_models.sort()
 
-        OPENROUTER_MODEL_CACHE["models"] = filtered_models
-        log_message(
-            f"Fetched {len(filtered_models)} OpenRouter models", verbose=verbose
-        )
+    log_message(
+        f"Filtered to {len(filtered_models)} OpenRouter models (OCR type: {ocr_type})",
+        verbose=verbose,
+    )
 
-        saved_settings = get_saved_settings()
-        provider_models_dict = saved_settings.get(
-            "provider_models", DEFAULT_SETTINGS["provider_models"]
-        )
-        remembered_or_model = provider_models_dict.get("OpenRouter")
-        selected_or_model = (
-            remembered_or_model
-            if remembered_or_model in filtered_models
-            else (filtered_models[0] if filtered_models else None)
-        )
-        return gr.update(choices=filtered_models, value=selected_or_model)
-
-    except requests.exceptions.RequestException as e:
-        gr.Warning(f"Failed to fetch OpenRouter models: {e}")
-        return gr.update(choices=[])
-    except Exception as e:  # Catch other potential errors like JSON parsing
-        gr.Warning(f"Unexpected error fetching OpenRouter models: {e}")
-        return gr.update(choices=[])
+    saved_settings = get_saved_settings()
+    provider_models_dict = saved_settings.get(
+        "provider_models", DEFAULT_SETTINGS["provider_models"]
+    )
+    remembered_or_model = provider_models_dict.get("OpenRouter")
+    selected_or_model = (
+        remembered_or_model
+        if remembered_or_model in filtered_models
+        else (filtered_models[0] if filtered_models else None)
+    )
+    return gr.update(choices=filtered_models, value=selected_or_model)
 
 
 def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):

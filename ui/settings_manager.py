@@ -91,6 +91,7 @@ DEFAULT_SETTINGS = {
     "output_language": "English",
     "reading_direction": "rtl",
     "translation_mode": "one-step",
+    "ocr_type": "LLM",
     "confidence": 0.35,
     "use_sam2": True,
     "enable_conjoined_detection": True,

@@ -35,13 +35,11 @@ def _clean_error_message(message: Any) -> str:
     except Exception:
         text = ""
 
-    # Strip surrounding quotes if present
     if (len(text) >= 2) and (
         (text[0] == text[-1] == "'") or (text[0] == text[-1] == '"')
     ):
         text = text[1:-1].strip()
 
-    # Remove any existing ERROR_PREFIX occurrences to avoid duplication
     if text.startswith(ERROR_PREFIX):
         return text
     return f"{ERROR_PREFIX}{text}"
@@ -71,6 +69,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         max_tokens,
         config_reading_direction,
         config_translation_mode,
+        ocr_type_val,
         input_language,
         output_language,
         font_dropdown,
@@ -125,7 +124,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_special_instructions_val,
     ) = args
 
-    # Select appropriate values based on batch mode
     final_input_language = batch_input_language if is_batch else input_language
     final_output_language = batch_output_language if is_batch else output_language
     final_font_pack = batch_font_dropdown if is_batch else font_dropdown
@@ -180,6 +178,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             max_tokens=max_tokens,
             reading_direction=config_reading_direction,
             translation_mode=config_translation_mode,
+            ocr_type=ocr_type_val,
             send_full_page_context=send_full_page_context_val,
             upscale_method=upscale_method_val,
             bubble_min_side_pixels=bubble_min_side_pixels_val,
@@ -229,7 +228,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
 
 def _validate_ui_state(ui_state: UIConfigState) -> None:
     """Validate UI state including modes and API keys. Raises gr.Error on validation failure."""
-    # --- Validate mutually exclusive modes ---
     try:
         validate_mutually_exclusive_modes(
             ui_state.general.cleaning_only, ui_state.general.test_mode
@@ -237,7 +235,6 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
     except ValidationError as e:
         raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
 
-    # --- API Key Validation ---
     api_key_to_validate = ""
     provider_selector = ui_state.provider_settings.provider
     if provider_selector == "Google":
@@ -259,7 +256,6 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
     ):
         raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
 
-    # --- OpenAI-Compatible URL Validation ---
     if provider_selector == "OpenAI-Compatible":
         if not ui_state.provider_settings.openai_compatible_url:
             raise gr.Error(f"{ERROR_PREFIX}OpenAI-Compatible URL is required.")
@@ -270,7 +266,6 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
                 f"{ERROR_PREFIX}Invalid OpenAI-Compatible URL format. Must start with http:// or https://",
             )
 
-    # --- HuggingFace Token Validation ---
     if ui_state.outside_text.enabled and ui_state.outside_text.huggingface_token:
         hf_valid, hf_msg = utils.validate_huggingface_token(
             ui_state.outside_text.huggingface_token
@@ -389,7 +384,7 @@ def _format_single_success_message(
     elif backend_config.output.output_format == "jpeg":
         msg_parts.append("• Output Format: jpeg\n")
         msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
-    else:  # Auto
+    else:
         try:
             ext = save_path.suffix.lower()
         except Exception:
@@ -542,14 +537,12 @@ def _format_batch_success_message(
     elif backend_config.output.output_format == "jpeg":
         msg_parts.append("• Output Format: jpeg\n")
         msg_parts.append(f"• JPEG Quality: {backend_config.output.jpeg_quality}\n")
-    else:  # Auto
-        # Derive which compression/quality setting to display based on batch output files
+    else:
         msg_parts.append("• Output Format: auto\n")
         try:
             out_dir = Path(output_path)
             if out_dir.exists() and out_dir.is_dir():
                 exts = {p.suffix.lower() for p in out_dir.glob("*.*") if p.is_file()}
-                # Normalize jpeg extensions
                 only_jpeg = exts and all(e in {".jpg", ".jpeg"} for e in exts)
                 only_png = exts == {".png"}
                 if only_png:
@@ -586,18 +579,14 @@ def handle_translate_click(
     global CANCELLATION_MANAGER
     CANCELLATION_MANAGER = CancellationManager()
     try:
-        # --- UI Validation ---
         img_valid, img_msg = utils.validate_image(input_image_path)
         if not img_valid:
             raise gr.Error(f"{ERROR_PREFIX}{img_msg}")
 
-        # --- Build UI State Dataclass ---
         ui_state = _build_ui_state_from_args(args[1:], is_batch=False)
 
-        # --- Validate UI State ---
         _validate_ui_state(ui_state)
 
-        # --- Map UI State to Backend Config ---
         backend_config = map_ui_to_backend_config(
             ui_state=ui_state,
             fonts_base_dir=fonts_base_dir,
@@ -606,7 +595,6 @@ def handle_translate_click(
         )
         selected_font_pack_name = ui_state.font_pack
 
-        # --- Call Logic ---
         result_image, save_path = logic.translate_manga_logic(
             image=input_image_path,
             config=backend_config,
@@ -616,7 +604,6 @@ def handle_translate_click(
             cancellation_manager=CANCELLATION_MANAGER,
         )
 
-        # --- Format Success Output ---
         # Re-get font path for success message (logic already validated it)
         font_dir_path = (
             fonts_base_dir / selected_font_pack_name
@@ -636,19 +623,16 @@ def handle_translate_click(
         return result_image.copy(), status_msg
 
     except gr.Error as e:
-        # UI validation errors (e.g., please upload an image)
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
         return gr.update(), cleaned
     except CancellationError:
         return gr.update(), "Translation cancelled by user."
     except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
-        # Backend/validation errors (e.g., missing YOLO model)
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
         return gr.update(), cleaned
     except Exception as e:
-        # Catch unexpected errors
         import traceback
 
         traceback.print_exc()
@@ -700,13 +684,10 @@ def handle_batch_click(
         else:
             input_to_process = input_files
 
-        # --- Build UI State Dataclass ---
         ui_state = _build_ui_state_from_args(args[2:], is_batch=True)
 
-        # --- Validate UI State ---
         _validate_ui_state(ui_state)
 
-        # --- Map UI State to Backend Config ---
         backend_config = map_ui_to_backend_config(
             ui_state=ui_state,
             fonts_base_dir=fonts_base_dir,
@@ -715,7 +696,6 @@ def handle_batch_click(
         )
         selected_font_pack_name = ui_state.batch_font_pack
 
-        # --- Call Logic ---
         results = logic.process_batch_logic(
             input_dir_or_files=input_to_process,
             config=backend_config,
@@ -726,7 +706,6 @@ def handle_batch_click(
             cancellation_manager=CANCELLATION_MANAGER,
         )
 
-        # --- Format Success Output ---
         output_path = results["output_path"]
         gallery_images = []
         if output_path.exists():
@@ -808,6 +787,7 @@ def handle_save_config_click(*args: Any) -> str:
         tk,
         max_tokens,
         trans_mode,
+        ocr_type_val,
         max_fs,
         min_fs,
         ls,
@@ -861,8 +841,6 @@ def handle_save_config_click(*args: Any) -> str:
         image_upscale_factor_val,
         auto_scale_val,
     ) = args
-    """Callback for the 'Save Config' button."""
-    # Build UI State Dataclass from inputs
     ui_state = UIConfigState(
         detection=UIDetectionSettings(
             confidence=conf,
@@ -910,6 +888,7 @@ def handle_save_config_click(*args: Any) -> str:
             max_tokens=max_tokens,
             reading_direction=rd,
             translation_mode=trans_mode,
+            ocr_type=ocr_type_val,
             send_full_page_context=send_full_page_context_val,
             upscale_method=upscale_method_val,
             bubble_min_side_pixels=bubble_min_side_pixels_val,
@@ -971,7 +950,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     default_settings_dict = settings_manager.reset_to_defaults()
     default_ui_state = UIConfigState.from_dict(default_settings_dict)
 
-    # --- Handle dynamic choices based on defaults ---
     available_fonts, _ = utils.get_available_font_packs(fonts_base_dir)
     reset_single_font = default_ui_state.font_pack
     if reset_single_font not in available_fonts:
@@ -984,10 +962,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     default_ui_state.batch_font_pack = batch_reset_font
 
     default_provider = default_ui_state.provider_settings.provider
-    # Use preserved model from provider_models (already preserved in reset_to_defaults)
     default_model_name = default_ui_state.llm_settings.model_name
     if not default_model_name:
-        # Fall back to default if no preserved model
         default_model_name = settings_manager.DEFAULT_SETTINGS["provider_models"].get(
             default_provider
         )
@@ -1079,6 +1055,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(value=top_k_val, interactive=top_k_interactive),
         gr.update(value=max_tokens_val),
         gr.update(value=default_ui_state.llm_settings.translation_mode),
+        gr.update(value=default_ui_state.llm_settings.ocr_type),
         default_ui_state.rendering.max_font_size,
         default_ui_state.rendering.min_font_size,
         default_ui_state.rendering.line_spacing,
@@ -1146,7 +1123,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     ]
 
 
-# --- UI Element Update Callbacks ---
 def handle_provider_change(provider: str, current_temp: float):
     """Handles changes in the provider selector."""
     return utils.update_translation_ui(provider, current_temp)
@@ -1192,7 +1168,6 @@ def handle_app_load(provider: str, url: str, key: Optional[str]):
     return utils.initial_dynamic_fetch(provider, url, key)
 
 
-# --- Button/Status Update Callbacks ---
 def update_process_buttons(
     processing: bool, button_text_processing: str, button_text_idle: str
 ):
@@ -1252,3 +1227,109 @@ def handle_conjoined_detection_change(_enable_conjoined_detection: bool):
     cache = get_cache()
     cache.clear_sam_cache()
     return None
+
+
+def handle_ocr_type_change(
+    ocr_type: str,
+    input_language: str,
+    original_language_state: str,
+    batch_input_language: str,
+    batch_original_language_state: str,
+    provider: str,
+    openai_compatible_url: str,
+    openai_compatible_api_key: Optional[str],
+):
+    """Handles changes in OCR type selection."""
+    import gradio as gr
+
+    from . import layout, utils
+
+    updates = []
+
+    if ocr_type == "manga-ocr":
+        if input_language != "Japanese":
+            saved_language = input_language
+        else:
+            saved_language = original_language_state
+
+        updates.append(
+            gr.update(value="Japanese", choices=["Japanese"], interactive=False)
+        )
+        updates.append(saved_language)
+
+        if batch_input_language != "Japanese":
+            batch_saved_language = batch_input_language
+        else:
+            batch_saved_language = batch_original_language_state
+
+        updates.append(
+            gr.update(value="Japanese", choices=["Japanese"], interactive=False)
+        )
+        updates.append(batch_saved_language)
+
+        # Trigger model list refresh for OpenRouter (to show text-only models)
+        if provider == "OpenRouter":
+            model_update = utils.fetch_and_update_openrouter_models(
+                ocr_type="manga-ocr"
+            )
+            updates.append(model_update)
+        elif provider == "OpenAI-Compatible":
+            model_update = utils.fetch_and_update_compatible_models(
+                openai_compatible_url, openai_compatible_api_key
+            )
+            updates.append(model_update)
+        else:
+            updates.append(gr.update())
+    else:
+        restored_language = (
+            original_language_state if original_language_state else input_language
+        )
+        updates.append(
+            gr.update(
+                value=restored_language,
+                choices=layout.SOURCE_LANGUAGES,
+                interactive=True,
+            )
+        )
+        updates.append(original_language_state)
+
+        batch_restored_language = (
+            batch_original_language_state
+            if batch_original_language_state
+            else batch_input_language
+        )
+        updates.append(
+            gr.update(
+                value=batch_restored_language,
+                choices=layout.SOURCE_LANGUAGES,
+                interactive=True,
+            )
+        )
+        updates.append(batch_original_language_state)
+
+        # Trigger model list refresh for OpenRouter (to show vision models)
+        if provider == "OpenRouter":
+            model_update = utils.fetch_and_update_openrouter_models(ocr_type="LLM")
+            updates.append(model_update)
+        elif provider == "OpenAI-Compatible":
+            model_update = utils.fetch_and_update_compatible_models(
+                openai_compatible_url, openai_compatible_api_key
+            )
+            updates.append(model_update)
+        else:
+            updates.append(gr.update())
+
+    return updates
+
+
+def handle_translation_mode_change(translation_mode: str, current_ocr_type: str):
+    """Handles changes in translation mode to enable/disable OCR type selection."""
+    import gradio as gr
+
+    if translation_mode == "one-step":
+        if current_ocr_type == "manga-ocr":
+            return gr.update(value="LLM", interactive=False)
+        else:
+            return gr.update(interactive=False)
+    else:
+        return gr.update(interactive=True)

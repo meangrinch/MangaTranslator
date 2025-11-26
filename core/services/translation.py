@@ -1,5 +1,6 @@
 import base64
 import re
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
 import cv2
@@ -10,6 +11,7 @@ from core.caching import get_cache
 from core.config import TranslationConfig, calculate_reasoning_budget
 from core.image.image_utils import (cv2_to_pil, pil_to_cv2,
                                     process_bubble_image_cached)
+from core.image.ocr_detection import extract_text_with_manga_ocr
 from utils.endpoints import (call_anthropic_endpoint, call_gemini_endpoint,
                              call_openai_compatible_endpoint,
                              call_openai_endpoint, call_openrouter_endpoint,
@@ -17,7 +19,6 @@ from utils.endpoints import (call_anthropic_endpoint, call_gemini_endpoint,
 from utils.exceptions import TranslationError
 from utils.logging import log_message
 
-# Regex to find numbered lines in LLM responses
 TRANSLATION_PATTERN = re.compile(
     r'^\s*(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*:|\s*$)',
     re.MULTILINE | re.DOTALL,
@@ -244,7 +245,6 @@ def _add_media_resolution_to_part(
         media_resolution_ui.lower(), "MEDIA_RESOLUTION_UNSPECIFIED"
     )
 
-    # Create a copy to avoid mutating the original
     result = part.copy()
     result["media_resolution"] = {"level": backend_media_resolution}
     return result
@@ -278,11 +278,9 @@ def _build_generation_config(
     top_p = config.top_p
     top_k = config.top_k
 
-    # Determine max_tokens: use config value if provided, otherwise use default logic
     if config.max_tokens is not None:
         max_tokens_value = config.max_tokens
     else:
-        # Default logic: 16384 for reasoning models, 4096 otherwise
         is_reasoning = False
         if provider == "Google":
             is_reasoning = _is_reasoning_model_google(model_name)
@@ -306,8 +304,6 @@ def _build_generation_config(
             "topK": top_k,
             "maxOutputTokens": max_tokens_value,
         }
-        # For Gemini 3, media_resolution can be set per-part
-        # For other Gemini models, media_resolution is set globally in generation_config
         if not is_gemini_3:
             media_resolution_mapping = {
                 "auto": "MEDIA_RESOLUTION_UNSPECIFIED",
@@ -321,9 +317,7 @@ def _build_generation_config(
             generation_config["media_resolution"] = backend_media_resolution
         if is_gemini_3:
             reasoning_effort = config.reasoning_effort or "high"
-            generation_config["thinkingConfig"] = {
-                "thinkingLevel": reasoning_effort
-            }
+            generation_config["thinkingConfig"] = {"thinkingLevel": reasoning_effort}
             log_message(
                 f"Using reasoning effort '{reasoning_effort}' for {model_name}",
                 verbose=debug,
@@ -377,7 +371,6 @@ def _build_generation_config(
             "max_tokens": max_tokens_value,
         }
         if is_reasoning:
-            # Use reasoning_effort if provided, otherwise default to "none" (disabled)
             generation_config["reasoning_effort"] = config.reasoning_effort or "none"
         return generation_config
 
@@ -389,7 +382,6 @@ def _build_generation_config(
             "max_tokens": max_tokens_value,
         }
         if is_reasoning:
-            # Use reasoning_effort if provided, otherwise default to "high"
             generation_config["reasoning_effort"] = config.reasoning_effort or "high"
         return generation_config
 
@@ -445,11 +437,9 @@ def _build_generation_config(
         }
 
         if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
-            # For Anthropic models, default to "none" if not provided
             if is_anthropic_reasoning:
                 reasoning_effort = config.reasoning_effort or "none"
                 generation_config["reasoning_effort"] = reasoning_effort
-            # For OpenAI and Grok models, only set if provided and not "none"
             elif config.reasoning_effort and config.reasoning_effort != "none":
                 generation_config["reasoning_effort"] = config.reasoning_effort
         elif is_gemini_3:
@@ -503,7 +493,6 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl"):
         cy = (y1 + y2) / 2.0
         return x1, y1, x2, y2, w, h, cx, cy
 
-    # Heuristics for grouping bubbles into rows and columns
     y_overlap_ratio_threshold = 0.3
     y_center_band_factor = 0.35
     x_overlap_ratio_threshold = 0.3
@@ -511,7 +500,6 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl"):
 
     rtl = (reading_direction or "rtl").lower() == "rtl"
 
-    # Deterministic row-banding approach to ensure transitive ordering
     enriched = []
     for d in detections:
         x1, y1, x2, y2, w, h, cx, cy = _features(d)
@@ -549,7 +537,6 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl"):
                 center_delta_y <= y_center_band_factor * min(h, band_h)
             )
             if same_row:
-                # Prefer the band with greater overlap
                 score = overlap_ratio - (center_delta_y / (h + band_h)) * 0.1
                 if score > best_score:
                     best_score = score
@@ -565,7 +552,6 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl"):
 
     bands.sort(key=lambda b: b["y_min"])
 
-    # Sort items within each band using column clustering, then vertical order inside columns
     ordered_enriched = []
     for band in bands:
         items = band["items"]
@@ -756,7 +742,6 @@ def _parse_llm_response_with_sections(
         )
         log_message(f"Raw response:\n---\n{response_text}\n---", verbose=debug)
 
-        # Parse S-prefixed items (speech bubbles)
         speech_bubble_pattern = re.compile(
             r'^\s*[*_]*S(\d+)[*_]*\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*[*_]*S\d+[*_]*\s*:|\s*$)',
             re.MULTILINE | re.DOTALL,
@@ -773,7 +758,6 @@ def _parse_llm_response_with_sections(
                     f"Invalid speech bubble number format: '{num_str}'", verbose=debug
                 )
 
-        # Parse N-prefixed items (OSB text)
         osb_pattern = re.compile(
             r'^\s*[*_]*N(\d+)[*_]*\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*[*_]*N\d+[*_]*\s*:|\s*$)',
             re.MULTILINE | re.DOTALL,
@@ -790,21 +774,28 @@ def _parse_llm_response_with_sections(
                     f"Invalid OSB text number format: '{num_str}'", verbose=debug
                 )
 
-        # Merge results in original order
+        speech_bubble_map = {idx: pos for pos, idx in enumerate(speech_bubble_indices)}
+        osb_text_map = {idx: pos for pos, idx in enumerate(osb_text_indices)}
+
         final_list = []
         for i in range(len(speech_bubble_indices) + len(osb_text_indices)):
-            if i in speech_bubble_indices:
-                speech_idx = speech_bubble_indices.index(i) + 1
+            speech_pos = speech_bubble_map.get(i, -1)
+            if speech_pos >= 0:
+                speech_idx = speech_pos + 1
                 final_list.append(
                     speech_dict.get(
                         speech_idx, f"[{provider}: Missing speech bubble {speech_idx}]"
                     )
                 )
             else:
-                osb_idx = osb_text_indices.index(i) + 1
-                final_list.append(
-                    osb_dict.get(osb_idx, f"[{provider}: Missing OSB text {osb_idx}]")
-                )
+                osb_pos = osb_text_map.get(i, -1)
+                if osb_pos >= 0:
+                    osb_idx = osb_pos + 1
+                    final_list.append(
+                        osb_dict.get(
+                            osb_idx, f"[{provider}: Missing OSB text {osb_idx}]"
+                        )
+                    )
 
         log_message(
             f"Parsed {len(speech_matches)} speech bubbles and {len(osb_matches)} OSB texts",
@@ -819,6 +810,275 @@ def _parse_llm_response_with_sections(
         )
         total_count = len(speech_bubble_indices) + len(osb_text_indices)
         return [f"[{provider}: Parse error]"] * total_count
+
+
+def _prepare_images_for_ocr(
+    images_b64: List[str], verbose: bool = False
+) -> List[Optional[Image.Image]]:
+    """Prepare base64-encoded images for OCR by decoding and converting to RGB.
+
+    Args:
+        images_b64: List of base64-encoded image strings
+        verbose: Whether to print verbose logging
+
+    Returns:
+        List of PIL Images (or None for decode failures), all in RGB mode
+    """
+    pil_images = []
+    for img_b64 in images_b64:
+        try:
+            image_data = base64.b64decode(img_b64)
+            pil_img = Image.open(BytesIO(image_data))
+            if pil_img.mode != "RGB":
+                pil_img = pil_img.convert("RGB")
+            pil_images.append(pil_img)
+        except Exception as e:
+            log_message(
+                f"Failed to decode image for manga-ocr: {e}",
+                always_print=True,
+            )
+            pil_images.append(None)
+    return pil_images
+
+
+def _format_ocr_results(
+    extracted_texts: List[str],
+    speech_bubble_indices: List[int],
+    osb_text_indices: List[int],
+    verbose: bool = False,
+) -> tuple[List[str], List[str], set, bool]:
+    """Format OCR results with S/N prefixes and track failed indices.
+
+    Args:
+        extracted_texts: List of extracted text strings
+        speech_bubble_indices: List of indices that are speech bubbles
+        osb_text_indices: List of indices that are outside speech bubble text
+        verbose: Whether to print verbose logging
+
+    Returns:
+        Tuple of (speech_bubble_texts, osb_texts, ocr_failed_indices, all_failed)
+    """
+    speech_bubble_map = {idx: pos for pos, idx in enumerate(speech_bubble_indices)}
+    osb_text_map = {idx: pos for pos, idx in enumerate(osb_text_indices)}
+
+    speech_bubble_texts = []
+    osb_texts = []
+    ocr_failed_indices = set()
+    all_failed = True
+
+    for i, text in enumerate(extracted_texts):
+        if text == "[OCR FAILED]" or not text:
+            ocr_failed_indices.add(i)
+            speech_pos = speech_bubble_map.get(i, -1)
+            if speech_pos >= 0:
+                speech_bubble_texts.append(f"S{speech_pos + 1}: [OCR FAILED]")
+            else:
+                osb_pos = osb_text_map.get(i, -1)
+                if osb_pos >= 0:
+                    osb_texts.append(f"N{osb_pos + 1}: [OCR FAILED]")
+        else:
+            all_failed = False
+            speech_pos = speech_bubble_map.get(i, -1)
+            if speech_pos >= 0:
+                speech_bubble_texts.append(f"S{speech_pos + 1}: {text}")
+            else:
+                osb_pos = osb_text_map.get(i, -1)
+                if osb_pos >= 0:
+                    osb_texts.append(f"N{osb_pos + 1}: {text}")
+
+    return speech_bubble_texts, osb_texts, ocr_failed_indices, all_failed
+
+
+def _check_ocr_failure(texts: List[str], provider: Optional[str] = None) -> bool:
+    """Check if all OCR results indicate failure.
+
+    Args:
+        texts: List of extracted text strings
+        provider: Optional provider name for LLM OCR failure detection
+
+    Returns:
+        True if all texts indicate failure, False otherwise
+    """
+    if not texts:
+        return True
+
+    if provider:
+        for text in texts:
+            if f"[{provider}-OCR:" not in text:
+                return False
+        return True
+    else:
+        return all(text == "[OCR FAILED]" for text in texts)
+
+
+def _format_special_instructions(config: TranslationConfig) -> str:
+    """Format special instructions section for prompts.
+
+    Args:
+        config: TranslationConfig with special_instructions
+
+    Returns:
+        Formatted special instructions string (empty if none)
+    """
+    if config.special_instructions and config.special_instructions.strip():
+        return f"""
+
+## SPECIAL INSTRUCTIONS
+{config.special_instructions.strip()}
+"""
+    return ""
+
+
+def _perform_manga_ocr(
+    images_b64: List[str],
+    speech_bubble_indices: List[int],
+    osb_text_indices: List[int],
+    total_elements: int,
+    debug: bool = False,
+) -> List[str]:
+    """Perform OCR using manga-ocr model.
+
+    Args:
+        images_b64: List of base64-encoded images
+        speech_bubble_indices: List of indices that are speech bubbles
+        osb_text_indices: List of indices that are outside speech bubble text
+        total_elements: Total number of text elements
+        debug: Whether to print verbose logging
+
+    Returns:
+        List of extracted text strings, or early return with failure list
+    """
+    log_message("Using manga-ocr for text extraction", verbose=debug)
+
+    pil_images = _prepare_images_for_ocr(images_b64, verbose=debug)
+    extracted_texts = extract_text_with_manga_ocr(pil_images, verbose=debug)
+
+    formatted_texts = []
+    for i, text in enumerate(extracted_texts):
+        if text == "[OCR FAILED]" or not text:
+            formatted_texts.append(text if text else "[OCR FAILED]")
+        else:
+            formatted_texts.append(text)
+
+    extracted_texts = formatted_texts
+
+    if debug:
+        speech_bubble_texts, osb_texts, _, _ = _format_ocr_results(
+            extracted_texts,
+            speech_bubble_indices,
+            osb_text_indices,
+            verbose=debug,
+        )
+
+        log_sections = []
+        if speech_bubble_texts:
+            log_sections.append("## SPEECH BUBBLES")
+            log_sections.extend(speech_bubble_texts)
+        if osb_texts:
+            log_sections.append("## NON-DIALOGUE TEXT")
+            log_sections.extend(osb_texts)
+
+        if log_sections:
+            log_message(
+                f"Raw manga-ocr output:\n---\n{chr(10).join(log_sections)}\n---",
+                verbose=debug,
+            )
+
+    if len(extracted_texts) != total_elements:
+        msg = (
+            f"Warning: extracted_texts length ({len(extracted_texts)}) "
+            f"doesn't match total_elements ({total_elements})"
+        )
+        log_message(msg, always_print=True)
+        while len(extracted_texts) < total_elements:
+            extracted_texts.append("[OCR FAILED]")
+        extracted_texts = extracted_texts[:total_elements]
+
+    if not extracted_texts:
+        log_message("manga-ocr returned empty results", verbose=debug)
+        return ["[OCR FAILED]"] * total_elements
+
+    if _check_ocr_failure(extracted_texts):
+        log_message("manga-ocr returned only failures", verbose=debug)
+        return extracted_texts
+
+    return extracted_texts
+
+
+def _perform_llm_ocr(
+    config: TranslationConfig,
+    images_b64: List[str],
+    mime_types: List[str],
+    ocr_prompt: str,
+    speech_bubble_indices: List[int],
+    osb_text_indices: List[int],
+    is_gemini_3: bool,
+    provider: str,
+    total_elements: int,
+    input_language: Optional[str],
+    reading_direction: str,
+    num_speech_bubbles: int,
+    num_osb_text: int,
+    debug: bool = False,
+) -> List[str]:
+    """Perform OCR using vision LLM.
+
+    Args:
+        config: TranslationConfig
+        images_b64: List of base64-encoded images
+        mime_types: List of MIME types for each image
+        ocr_prompt: OCR prompt text
+        speech_bubble_indices: List of indices that are speech bubbles
+        osb_text_indices: List of indices that are outside speech bubble text
+        is_gemini_3: Whether model is Gemini 3
+        provider: Provider name
+        total_elements: Total number of text elements
+        input_language: Input language
+        reading_direction: Reading direction
+        num_speech_bubbles: Number of speech bubbles
+        num_osb_text: Number of OSB text elements
+        debug: Whether to print verbose logging
+
+    Returns:
+        List of extracted text strings, or early return with failure list
+    """
+    ocr_parts = []
+    for i, img_b64 in enumerate(images_b64):
+        mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
+        bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
+        if is_gemini_3:
+            bubble_part = _add_media_resolution_to_part(
+                bubble_part, config.media_resolution_bubbles, is_gemini_3
+            )
+        ocr_parts.append(bubble_part)
+
+    ocr_system = _build_system_prompt_ocr(
+        input_language, reading_direction, num_speech_bubbles, num_osb_text
+    )
+    ocr_response_text = _call_llm_endpoint(
+        config,
+        ocr_parts,
+        ocr_prompt,
+        debug,
+        system_prompt=ocr_system,
+    )
+    extracted_texts = _parse_llm_response_with_sections(
+        ocr_response_text,
+        speech_bubble_indices,
+        osb_text_indices,
+        provider + "-OCR",
+        debug,
+    )
+
+    if extracted_texts is None:
+        log_message("OCR API call failed", always_print=True)
+        return [f"[{provider}: OCR failed]"] * total_elements
+
+    if _check_ocr_failure(extracted_texts, provider):
+        log_message("OCR returned only placeholders", verbose=debug)
+        return extracted_texts
+
+    return extracted_texts
 
 
 def call_translation_api_batch(
@@ -859,7 +1119,6 @@ def call_translation_api_batch(
     reading_direction = config.reading_direction
     translation_mode = config.translation_mode
 
-    # Separate speech bubbles from OSB text
     speech_bubble_indices = []
     osb_text_indices = []
     for i, metadata in enumerate(bubble_metadata):
@@ -878,7 +1137,6 @@ def call_translation_api_batch(
         else "left-to-right, top-to-bottom"
     )
 
-    # Check translation cache first (if deterministic)
     cache = get_cache()
     cache_key = cache.get_translation_cache_key(images_b64, full_image_b64, config)
     cached_translation = cache.get_translation(cache_key)
@@ -886,7 +1144,6 @@ def call_translation_api_batch(
         log_message("  - Using cached translation", verbose=debug)
         return cached_translation
 
-    # Check if model is Gemini 3 for per-part media_resolution
     model_name = config.model_name
     is_gemini_3 = provider == "Google" and "gemini-3" in model_name.lower()
 
@@ -914,7 +1171,6 @@ def call_translation_api_batch(
 
     try:
         if translation_mode == "two-step":
-            # --- Step 1: OCR ---
             speech_bubble_section = ""
             osb_text_section = ""
             osb_text_context = ""
@@ -931,13 +1187,7 @@ You have been provided with {num_osb_text} non-dialogue text images.
 These contain text outside speech bubbles such as sound effects, environmental text, or narrative elements."""
                 osb_text_context = f" and {num_osb_text} non-dialogue text images,"
 
-            special_instructions_section = ""
-            if config.special_instructions and config.special_instructions.strip():
-                special_instructions_section = f"""
-
-## SPECIAL INSTRUCTIONS
-{config.special_instructions.strip()}
-"""
+            special_instructions_section = _format_special_instructions(config)
 
             ocr_prompt = f"""
 ## CONTEXT
@@ -951,68 +1201,50 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
 """  # noqa
 
             log_message("Starting OCR step", verbose=debug)
-            ocr_parts = []
-            for i, img_b64 in enumerate(images_b64):
-                mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
-                bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
-                if is_gemini_3:
-                    bubble_part = _add_media_resolution_to_part(
-                        bubble_part, config.media_resolution_bubbles, is_gemini_3
-                    )
-                ocr_parts.append(bubble_part)
 
-            ocr_system = _build_system_prompt_ocr(
-                input_language, reading_direction, num_speech_bubbles, num_osb_text
-            )
-            ocr_response_text = _call_llm_endpoint(
-                config,
-                ocr_parts,
-                ocr_prompt,
-                debug,
-                system_prompt=ocr_system,
-            )
-            extracted_texts = _parse_llm_response_with_sections(
-                ocr_response_text,
-                speech_bubble_indices,
-                osb_text_indices,
-                provider + "-OCR",
-                debug,
-            )
+            if config.ocr_type == "manga-ocr":
+                extracted_texts = _perform_manga_ocr(
+                    images_b64,
+                    speech_bubble_indices,
+                    osb_text_indices,
+                    total_elements,
+                    debug,
+                )
+            else:
+                extracted_texts = _perform_llm_ocr(
+                    config,
+                    images_b64,
+                    mime_types,
+                    ocr_prompt,
+                    speech_bubble_indices,
+                    osb_text_indices,
+                    is_gemini_3,
+                    provider,
+                    total_elements,
+                    input_language,
+                    reading_direction,
+                    num_speech_bubbles,
+                    num_osb_text,
+                    debug,
+                )
 
-            if extracted_texts is None:
-                log_message("OCR API call failed", always_print=True)
-                return [f"[{provider}: OCR failed]"] * total_elements
-
-            is_ocr_failed = all(f"[{provider}-OCR:" in text for text in extracted_texts)
-            if is_ocr_failed:
-                log_message("OCR returned only placeholders", verbose=debug)
-                return extracted_texts
-
-            # --- Step 2: Translation & Styling ---
             log_message("Starting translation step", verbose=debug)
 
-            speech_bubble_texts = []
-            osb_texts = []
-            ocr_failed_indices = set()
-
-            for i, text in enumerate(extracted_texts):
+            formatted_texts = []
+            for text in extracted_texts:
                 if f"[{provider}-OCR:" in text:
-                    ocr_failed_indices.add(i)
-                    if i in speech_bubble_indices:
-                        speech_bubble_texts.append(
-                            f"S{speech_bubble_indices.index(i) + 1}: [OCR FAILED]"
-                        )
-                    else:
-                        osb_texts.append(
-                            f"N{osb_text_indices.index(i) + 1}: [OCR FAILED]"
-                        )
+                    formatted_texts.append("[OCR FAILED]")
                 else:
-                    if i in speech_bubble_indices:
-                        speech_bubble_texts.append(
-                            f"S{speech_bubble_indices.index(i) + 1}: {text}"
-                        )
-                    else:
-                        osb_texts.append(f"N{osb_text_indices.index(i) + 1}: {text}")
+                    formatted_texts.append(text)
+
+            speech_bubble_texts, osb_texts, ocr_failed_indices, all_failed = (
+                _format_ocr_results(
+                    formatted_texts,
+                    speech_bubble_indices,
+                    osb_text_indices,
+                    verbose=debug,
+                )
+            )
 
             speech_bubble_section = ""
             osb_text_section = ""
@@ -1022,14 +1254,14 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
                 speech_bubble_section = f"""
 ### Speech Bubbles
 ---
-{chr(10).join(speech_bubble_texts)}
+{"\n".join(speech_bubble_texts)}
 ---"""
 
             if osb_texts:
                 osb_text_section = f"""
 ### Non-Dialogue Text
 ---
-{chr(10).join(osb_texts)}
+{"\n".join(osb_texts)}
 ---"""
                 osb_text_context = f" and {num_osb_text} transcribed non-dialogue texts"
 
@@ -1039,13 +1271,7 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
                 else ""
             )
 
-            special_instructions_section = ""
-            if config.special_instructions and config.special_instructions.strip():
-                special_instructions_section = f"""
-
-## SPECIAL INSTRUCTIONS
-{config.special_instructions.strip()}
-"""
+            special_instructions_section = _format_special_instructions(config)
 
             translation_prompt = f"""
 ## CONTEXT
@@ -1061,7 +1287,11 @@ The target language is {output_language}. Use the appropriate translation approa
 """  # noqa
 
             translation_parts = []
-            if config.send_full_page_context and full_image_b64:
+            if (
+                config.ocr_type != "manga-ocr"
+                and config.send_full_page_context
+                and full_image_b64
+            ):
                 context_part = {
                     "inline_data": {
                         "mime_type": full_image_mime_type,
@@ -1119,13 +1349,12 @@ The target language is {output_language}. Use the appropriate translation approa
                 else:
                     combined_results.append(final_translations[i])
 
-            # Cache the result if deterministic
             cache.set_translation(cache_key, combined_results)
             return combined_results
 
         elif translation_mode == "one-step":
-            # --- One-Step Logic ---
             log_message("Starting one-step translation", verbose=debug)
+
             full_page_context = (
                 "A full-page image is also provided for visual and narrative context."
                 if config.send_full_page_context
@@ -1148,13 +1377,7 @@ You have been provided with {num_osb_text} non-dialogue text images.
 These contain text outside speech bubbles such as sound effects, environmental text, or narrative elements."""
                 osb_text_context = f" and {num_osb_text} transcribed non-dialogue texts"
 
-            special_instructions_section = ""
-            if config.special_instructions and config.special_instructions.strip():
-                special_instructions_section = f"""
-
-## SPECIAL INSTRUCTIONS
-{config.special_instructions.strip()}
-"""
+            special_instructions_section = _format_special_instructions(config)
 
             one_step_prompt = f"""
 ## CONTEXT
@@ -1208,7 +1431,6 @@ N2: <{output_language} translation for non-dialogue text 2>
                 debug,
                 system_prompt=one_step_system,
             )
-            # Prefer parsing only the TRANSLATION section if present
             translation_block = None
             try:
                 section_pattern = re.compile(
@@ -1231,7 +1453,6 @@ N2: <{output_language} translation for non-dialogue text 2>
                 log_message("One-step API call failed", always_print=True)
                 return [f"[{provider}: API failed]"] * total_elements
             else:
-                # Cache the result if deterministic
                 cache.set_translation(cache_key, translations)
                 return translations
         else:
@@ -1296,7 +1517,6 @@ def prepare_bubble_images_for_translation(
         )
 
     for bubble in bubble_data:
-        # Create a copy of the bubble dict to avoid mutating the original
         prepared_bubble = bubble.copy()
         x1, y1, x2, y2 = bubble["bbox"]
 

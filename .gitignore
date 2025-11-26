@@ -15,6 +15,7 @@ __pycache__/
 /models/sam/
 /models/upscale/
 /models/yolo/
+/models/manga-ocr-base/
 /output/
 .DS_Store
 Thumbs.db
