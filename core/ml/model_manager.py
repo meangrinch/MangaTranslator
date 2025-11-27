@@ -9,13 +9,7 @@ from typing import Optional
 
 import easyocr
 import torch
-from diffusers import FluxKontextPipeline
 from huggingface_hub import hf_hub_download, snapshot_download
-from nunchaku.caching.diffusers_adapters import apply_cache_on_pipe
-from nunchaku.models.text_encoders.t5_encoder import NunchakuT5EncoderModel
-from nunchaku.models.transformers.transformer_flux import \
-    NunchakuFluxTransformer2dModel
-from nunchaku.utils import get_precision
 from spandrel import ModelLoader
 from transformers import Sam2Model, Sam2Processor
 from ultralytics import YOLO
@@ -132,7 +126,7 @@ class ModelManager:
 
         repos[ModelType.FLUX_TRANSFORMER] = {
             "repo_id": "nunchaku-tech/nunchaku-flux.1-kontext-dev",
-            "filename": f"svdq-{get_precision()}_r32-flux.1-kontext-dev.safetensors",
+            "filename": None,  # Will be constructed dynamically in load_flux_models()
         }
         repos[ModelType.FLUX_TEXT_ENCODER] = {
             "repo_id": "nunchaku-tech/nunchaku-t5",
@@ -489,8 +483,21 @@ class ModelManager:
 
             log_message("Loading Flux Kontext inpainting models...", verbose=verbose)
             try:
-                # Load transformer
+                # Lazy imports for Nunchaku and diffusers
+                from diffusers import FluxKontextPipeline
+                from nunchaku.caching.diffusers_adapters import \
+                    apply_cache_on_pipe
+                from nunchaku.models.text_encoders.t5_encoder import \
+                    NunchakuT5EncoderModel
+                from nunchaku.models.transformers.transformer_flux import \
+                    NunchakuFluxTransformer2dModel
+                from nunchaku.utils import get_precision
+
                 hf_info = self.model_hf_repos[ModelType.FLUX_TRANSFORMER]
+                if hf_info["filename"] is None:
+                    hf_info["filename"] = (
+                        f"svdq-{get_precision()}_r32-flux.1-kontext-dev.safetensors"
+                    )
                 transformer_path = self._ensure_hf_file(
                     hf_info["repo_id"],
                     hf_info["filename"],
