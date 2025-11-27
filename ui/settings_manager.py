@@ -71,7 +71,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "glm-4.5",
         "glm-4.5v",
     ],
-    "Moonshot": [
+    "Moonshot AI": [
         "kimi-k2-thinking",
         "kimi-k2-0905-preview",
         "kimi-k2-0711-preview",
@@ -113,8 +113,8 @@ DEFAULT_SETTINGS = {
             PROVIDER_MODELS["DeepSeek"][0] if PROVIDER_MODELS["DeepSeek"] else None
         ),
         "Z.ai": PROVIDER_MODELS["Z.ai"][0] if PROVIDER_MODELS["Z.ai"] else None,
-        "Moonshot": (
-            PROVIDER_MODELS["Moonshot"][0] if PROVIDER_MODELS["Moonshot"] else None
+        "Moonshot AI": (
+            PROVIDER_MODELS["Moonshot AI"][0] if PROVIDER_MODELS["Moonshot AI"] else None
         ),
         "OpenRouter": None,
         "OpenAI-Compatible": None,

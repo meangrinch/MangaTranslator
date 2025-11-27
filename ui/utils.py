@@ -21,8 +21,8 @@ def get_available_providers(ocr_method: str) -> List[str]:
     if ocr_method == "manga-ocr":
         return all_providers
     else:
-        # For LLM OCR, exclude text-only providers (DeepSeek, Moonshot)
-        return [p for p in all_providers if p not in ("DeepSeek", "Moonshot")]
+        # For LLM OCR, exclude text-only providers (DeepSeek, Moonshot AI)
+        return [p for p in all_providers if p not in ("DeepSeek", "Moonshot AI")]
 
 
 ERROR_PREFIX = "❌ Error: "
@@ -74,8 +74,8 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         return False, "Invalid OpenRouter API key format (should start with 'sk-or-')"
     if provider == "DeepSeek" and not api_key.startswith("sk-"):
         return False, "Invalid DeepSeek API key format (should start with 'sk-')"
-    if provider == "Moonshot" and not api_key.startswith("sk-"):
-        return False, "Invalid Moonshot API key format (should start with 'sk-')"
+    if provider == "Moonshot AI" and not api_key.startswith("sk-"):
+        return False, "Invalid Moonshot AI API key format (should start with 'sk-')"
     # No specific format check for Z.ai or OpenAI-Compatible keys
 
     return True, f"{provider} API key format looks valid"
@@ -285,7 +285,7 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return _is_deepseek_reasoning_model(model_name)
     elif provider == "Z.ai":
         return _is_zai_reasoning_model(model_name)
-    elif provider == "Moonshot":
+    elif provider == "Moonshot AI":
         return _is_moonshot_reasoning_model(model_name)
     elif provider == "OpenRouter":
         try:
@@ -338,8 +338,8 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
             "Use Z.ai's web search tool for up-to-date information. "
             "Might improve translation quality."
         ),
-        "Moonshot": (
-            "Use Moonshot's web search tool for up-to-date information. "
+        "Moonshot AI": (
+            "Use Moonshot AI's web search tool for up-to-date information. "
             "Might improve translation quality."
         ),
     }
@@ -582,8 +582,8 @@ def get_reasoning_effort_config(
         # Z.ai supports enabled/disabled thinking, mapped to high/none
         return True, ["high", "none"], "high"
 
-    elif provider == "Moonshot":
-        # Moonshot reasoning models have always-on reasoning that cannot be controlled
+    elif provider == "Moonshot AI":
+        # Moonshot AI reasoning models have always-on reasoning that cannot be controlled
         return False, [], None
 
     elif provider == "OpenRouter":
@@ -705,7 +705,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
     xai_visible_update = gr.update(visible=(provider == "xAI"))
     deepseek_visible_update = gr.update(visible=(provider == "DeepSeek"))
     zai_visible_update = gr.update(visible=(provider == "Z.ai"))
-    moonshot_visible_update = gr.update(visible=(provider == "Moonshot"))
+    moonshot_visible_update = gr.update(visible=(provider == "Moonshot AI"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
     openai_compatible_url_visible_update = gr.update(
         visible=(provider == "OpenAI-Compatible")
@@ -784,8 +784,8 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         visible=media_resolution_context_visible
     )
 
-    # Moonshot reasoning models have always-on reasoning, so hide the dropdown
-    if provider == "Moonshot":
+    # Moonshot AI reasoning models have always-on reasoning, so hide the dropdown
+    if provider == "Moonshot AI":
         reasoning_effort_visible = False
         reasoning_choices = []
         reasoning_default_value = None

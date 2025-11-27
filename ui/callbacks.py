@@ -257,7 +257,7 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
         api_key_to_validate = ui_state.provider_settings.deepseek_api_key
     elif provider_selector == "Z.ai":
         api_key_to_validate = ui_state.provider_settings.zai_api_key
-    elif provider_selector == "Moonshot":
+    elif provider_selector == "Moonshot AI":
         api_key_to_validate = ui_state.provider_settings.moonshot_api_key
     elif provider_selector == "OpenRouter":
         api_key_to_validate = ui_state.provider_settings.openrouter_api_key
@@ -1004,7 +1004,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     xai_visible = default_provider == "xAI"
     deepseek_visible = default_provider == "DeepSeek"
     zai_visible = default_provider == "Z.ai"
-    moonshot_visible = default_provider == "Moonshot"
+    moonshot_visible = default_provider == "Moonshot AI"
     openrouter_visible = default_provider == "OpenRouter"
     compatible_visible = default_provider == "OpenAI-Compatible"
     (

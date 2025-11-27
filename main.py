@@ -50,7 +50,7 @@ def main():
             "xAI",
             "DeepSeek",
             "Z.ai",
-            "Moonshot",
+            "Moonshot AI",
             "OpenRouter",
             "OpenAI-Compatible",
         ],
@@ -609,7 +609,7 @@ def main():
         api_key_arg_name = "--zai-api-key"
         api_key_env_var = "ZAI_API_KEY"
         default_model = "glm-4.5v"
-    elif provider == "Moonshot":
+    elif provider == "Moonshot AI":
         api_key = args.moonshot_api_key or os.environ.get("MOONSHOT_API_KEY")
         api_key_arg_name = "--moonshot-api-key"
         api_key_env_var = "MOONSHOT_API_KEY"
@@ -702,7 +702,7 @@ def main():
             ),
             moonshot_api_key=(
                 api_key
-                if provider == "Moonshot"
+                if provider == "Moonshot AI"
                 else os.environ.get("MOONSHOT_API_KEY", "")
             ),
             openrouter_api_key=(

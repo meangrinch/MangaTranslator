@@ -608,11 +608,11 @@ def create_layout(
                             )
                             moonshot_api_key = gr.Textbox(
                                 label="Moonshot API Key",
-                                placeholder="Enter Moonshot API key",
+                                placeholder="Enter Moonshot API key (starts with sk-...)",
                                 type="password",
                                 value=saved_settings.get("moonshot_api_key", ""),
                                 show_copy_button=False,
-                                visible=(config_initial_provider == "Moonshot"),
+                                visible=(config_initial_provider == "Moonshot AI"),
                                 elem_id="moonshot_api_key",
                                 info="Stored locally. Or set via MOONSHOT_API_KEY env var.",
                             )

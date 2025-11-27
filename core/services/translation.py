@@ -438,8 +438,8 @@ def _build_generation_config(
             generation_config["thinking"] = {"type": thinking_type}
         return generation_config
 
-    elif provider == "Moonshot":
-        # Moonshot is text-only, reasoning models have always-on reasoning
+    elif provider == "Moonshot AI":
+        # Moonshot AI is text-only, reasoning models have always-on reasoning
         generation_config = {
             "temperature": min(temperature, 1.0),  # Moonshot caps at 1.0
             "top_p": top_p,
@@ -769,7 +769,7 @@ def _call_llm_endpoint(
                 debug=debug,
                 enable_web_search=config.enable_web_search,
             )
-        elif provider == "Moonshot":
+        elif provider == "Moonshot AI":
             api_key = config.moonshot_api_key
             if not api_key:
                 raise TranslationError("Moonshot API key is missing.")
