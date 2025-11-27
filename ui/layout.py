@@ -526,11 +526,17 @@ def create_layout(
                             )
 
                             gr.Markdown("### LLM Settings")
-                            available_providers = utils.get_available_providers(initial_ocr_method)
+                            available_providers = utils.get_available_providers(
+                                initial_ocr_method
+                            )
                             initial_provider_value = (
                                 config_initial_provider
                                 if config_initial_provider in available_providers
-                                else (available_providers[0] if available_providers else "Google")
+                                else (
+                                    available_providers[0]
+                                    if available_providers
+                                    else "Google"
+                                )
                             )
                             if initial_provider_value != config_initial_provider:
                                 config_initial_provider = initial_provider_value
@@ -689,8 +695,37 @@ def create_layout(
                                 elem_id="reasoning_effort_dropdown",
                             )
 
+                            # Effort dropdown (Claude Opus 4.5 only)
+                            (
+                                _initial_effort_visible,
+                                _initial_effort_choices,
+                                _initial_effort_default,
+                            ) = utils.get_effort_config(
+                                config_initial_provider, config_initial_model_name
+                            )
+                            _initial_effort_value = saved_settings.get("effort")
+                            if _initial_effort_value is None:
+                                _initial_effort_value = _initial_effort_default
+                            elif (
+                                _initial_effort_choices
+                                and _initial_effort_value not in _initial_effort_choices
+                            ):
+                                _initial_effort_value = _initial_effort_default
+                            elif not _initial_effort_choices:
+                                _initial_effort_value = None
+
+                            effort_dropdown = gr.Radio(
+                                choices=_initial_effort_choices,
+                                label="Effort",
+                                value=_initial_effort_value,
+                                info="Controls token spending eagerness. Claude Opus 4.5 only.",
+                                visible=_initial_effort_visible,
+                                elem_id="effort_dropdown",
+                            )
+
                             _initial_enable_web_search_visible = (
-                                config_initial_provider not in ("OpenAI-Compatible", "DeepSeek")
+                                config_initial_provider
+                                not in ("OpenAI-Compatible", "DeepSeek")
                             )
                             (
                                 _initial_enable_web_search_label,
@@ -1294,6 +1329,7 @@ def create_layout(
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
             reasoning_effort_dropdown,
+            effort_dropdown,
             send_full_page_context,
             upscale_method,
             bubble_min_side_pixels,
@@ -1372,6 +1408,7 @@ def create_layout(
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
             reasoning_effort_dropdown,
+            effort_dropdown,
             config_status,
             send_full_page_context,
             upscale_method,
@@ -1445,6 +1482,7 @@ def create_layout(
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
             reasoning_effort_dropdown,
+            effort_dropdown,
             send_full_page_context,
             upscale_method,
             bubble_min_side_pixels,
@@ -1525,6 +1563,7 @@ def create_layout(
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
             reasoning_effort_dropdown,
+            effort_dropdown,
             send_full_page_context,
             upscale_method,
             bubble_min_side_pixels,
@@ -1647,6 +1686,7 @@ def create_layout(
                 media_resolution_bubbles_dropdown,
                 media_resolution_context_dropdown,
                 reasoning_effort_dropdown,
+                effort_dropdown,
             ],
             queue=False,
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.
@@ -1681,6 +1721,7 @@ def create_layout(
                 media_resolution_bubbles_dropdown,
                 media_resolution_context_dropdown,
                 reasoning_effort_dropdown,
+                effort_dropdown,
             ],
             queue=False,
         )

@@ -227,6 +227,16 @@ def main():
         ),
     )
     parser.add_argument(
+        "--effort",
+        type=str,
+        default="medium",
+        choices=["high", "medium", "low"],
+        help=(
+            "Claude Opus 4.5 only: Controls token spending eagerness when responding. "
+            "Separate from 'max_tokens' and 'reasoning_effort'."
+        ),
+    )
+    parser.add_argument(
         "--ocr-method",
         type=str,
         default="LLM",
@@ -687,6 +697,7 @@ def main():
             media_resolution_bubbles=args.media_resolution_bubbles,
             media_resolution_context=args.media_resolution_context,
             reasoning_effort=args.reasoning_effort,
+            effort=args.effort,
             send_full_page_context=args.send_full_page_context,
             upscale_method=args.upscale_method,
             bubble_min_side_pixels=args.bubble_min_side_pixels,

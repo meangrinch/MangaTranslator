@@ -91,6 +91,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         media_resolution_bubbles_val,
         media_resolution_context_val,
         reasoning_effort_val,
+        effort_val,
         send_full_page_context_val,
         upscale_method_val,
         bubble_min_side_pixels_val,
@@ -217,6 +218,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             media_resolution_bubbles=media_resolution_bubbles_val,
             media_resolution_context=media_resolution_context_val,
             reasoning_effort=reasoning_effort_val,
+            effort=effort_val,
             auto_scale=auto_scale_val,
         ),
         input_language=final_input_language,
@@ -816,6 +818,7 @@ def handle_save_config_click(*args: Any) -> str:
         media_resolution_bubbles_val,
         media_resolution_context_val,
         reasoning_effort_val,
+        effort_val,
         send_full_page_context_val,
         upscale_method_val,
         bubble_min_side_pixels_val,
@@ -931,6 +934,7 @@ def handle_save_config_click(*args: Any) -> str:
             media_resolution_bubbles=media_resolution_bubbles_val,
             media_resolution_context=media_resolution_context_val,
             reasoning_effort=reasoning_effort_val,
+            effort=effort_val,
             auto_scale=auto_scale_val,
         ),
         input_language=s_in_lang,
@@ -998,6 +1002,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         media_resolution_bubbles_update,
         media_resolution_context_update,
         reasoning_effort_update,
+        effort_update,
     ) = utils.update_params_for_model(
         default_provider, default_model_name, default_ui_state.llm_settings.temperature
     )
@@ -1019,6 +1024,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     reasoning_effort_val = reasoning_effort_update.get(
         "value", default_ui_state.general.reasoning_effort
     )
+    effort_visible = effort_update.get("visible", False)
+    effort_val = effort_update.get("value", default_ui_state.general.effort)
 
     return [
         default_ui_state.detection.confidence,
@@ -1102,6 +1109,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
             visible=media_resolution_context_visible,
         ),
         gr.update(value=reasoning_effort_val, visible=reasoning_visible),
+        gr.update(value=effort_val, visible=effort_visible),
         "Settings reset to defaults (API keys preserved).",
         gr.update(value=default_ui_state.llm_settings.send_full_page_context),
         gr.update(value=default_ui_state.llm_settings.upscale_method),

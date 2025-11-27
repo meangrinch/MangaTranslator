@@ -138,6 +138,7 @@ DEFAULT_SETTINGS = {
     "cleaning_only": False,
     "test_mode": False,
     "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
+    "effort": "medium",  # Claude Opus 4.5 only: Controls token spending eagerness (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
     "media_resolution_bubbles": "auto",  # Gemini 3 models
@@ -205,6 +206,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "max_tokens",
     "send_full_page_context",
     "reasoning_effort",
+    "effort",
     "enable_web_search",
     "special_instructions",
     "batch_special_instructions",
@@ -320,9 +322,9 @@ def save_config(incoming_settings: Dict[str, Any]):
 
             changed = False
             if key in current_config_on_disk:
-                if current_value_on_disk != incoming_value:
+                if current_value_on_disk != value_to_write:
                     changed = True
-            elif incoming_value != default_value:
+            elif value_to_write != default_value:
                 changed = True
 
             if changed:

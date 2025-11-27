@@ -120,14 +120,20 @@ def call_anthropic_endpoint(
                 max_tokens_value, reasoning_effort
             )
             payload["thinking"] = {"type": "enabled", "budget_tokens": budget_tokens}
-            beta_header_value = generation_config.get("anthropic_beta") or "thinking-v1"
-            headers["anthropic-beta"] = beta_header_value
         elif reasoning_effort == "none":
             payload["thinking"] = {"type": "enabled", "budget_tokens": 0}
-            beta_header_value = generation_config.get("anthropic_beta") or "thinking-v1"
-            headers["anthropic-beta"] = beta_header_value
     except Exception:
         pass
+
+    # Claude Opus 4.5 effort parameter (controls token spending eagerness)
+    try:
+        effort = generation_config.get("effort")
+        if effort and effort in ("high", "medium", "low"):
+            payload["output_config"] = {"effort": effort}
+            headers["anthropic-beta"] = "effort-2025-11-24"
+    except Exception:
+        pass
+
     if enable_web_search:
         payload["tools"] = [{"type": "web_search_20250305", "name": "web_search"}]
     payload = {k: v for k, v in payload.items() if v is not None}

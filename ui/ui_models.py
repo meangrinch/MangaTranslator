@@ -127,6 +127,7 @@ class UIGeneralSettings:
     media_resolution_bubbles: str = "auto"  # Gemini 3 models
     media_resolution_context: str = "auto"  # Gemini 3 models
     reasoning_effort: Optional[str] = None
+    effort: Optional[str] = None  # Claude Opus 4.5 only: token spending eagerness
     auto_scale: bool = False
 
 
@@ -227,6 +228,7 @@ class UIConfigState:
             "media_resolution_bubbles": self.general.media_resolution_bubbles,
             "media_resolution_context": self.general.media_resolution_context,
             "reasoning_effort": self.general.reasoning_effort,
+            "effort": self.general.effort,
             "auto_scale": self.general.auto_scale,
             "input_language": self.input_language,
             "output_language": self.output_language,
@@ -400,6 +402,7 @@ class UIConfigState:
                 reasoning_effort=data.get(
                     "reasoning_effort", defaults.get("reasoning_effort")
                 ),
+                effort=data.get("effort", defaults.get("effort", "medium")),
                 auto_scale=data.get("auto_scale", defaults.get("auto_scale", False)),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
@@ -475,6 +478,7 @@ def map_ui_to_backend_config(
         osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
         special_instructions=ui_state.llm_settings.special_instructions,
         reasoning_effort=ui_state.general.reasoning_effort,
+        effort=ui_state.general.effort,
     )
 
     rendering_cfg = RenderingConfig(

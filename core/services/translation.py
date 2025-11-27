@@ -201,6 +201,12 @@ def _is_reasoning_model_anthropic(model_name: str) -> bool:
     return any(lm.startswith(p) for p in reasoning_prefixes)
 
 
+def _is_opus_45_model(model_name: str) -> bool:
+    """Check if an Anthropic model is Claude Opus 4.5 (supports effort parameter)."""
+    lm = (model_name or "").lower()
+    return lm.startswith("claude-opus-4-5")
+
+
 def _is_reasoning_model_xai(model_name: str) -> bool:
     """Check if an xAI model is reasoning-capable."""
     lm = (model_name or "").lower()
@@ -372,6 +378,7 @@ def _build_generation_config(
 
     elif provider == "Anthropic":
         is_reasoning = _is_reasoning_model_anthropic(model_name)
+        is_opus_45 = _is_opus_45_model(model_name)
         clamped_temp = min(temperature, 1.0)  # Anthropic caps at 1.0
         generation_config = {
             "temperature": clamped_temp,
@@ -381,6 +388,8 @@ def _build_generation_config(
         }
         if is_reasoning:
             generation_config["reasoning_effort"] = config.reasoning_effort or "none"
+        if is_opus_45 and config.effort:
+            generation_config["effort"] = config.effort
         return generation_config
 
     elif provider == "xAI":

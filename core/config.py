@@ -57,6 +57,9 @@ class TranslationConfig:
     reasoning_effort: Optional[str] = (
         None  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
     )
+    effort: Optional[str] = (
+        None  # Claude Opus 4.5 only: Controls token spending eagerness (high/medium/low)
+    )
     send_full_page_context: bool = True
     upscale_method: str = "model"  # "model", "lanczos", or "none"
     enable_web_search: bool = (

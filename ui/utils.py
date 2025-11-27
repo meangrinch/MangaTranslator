@@ -598,6 +598,32 @@ def get_reasoning_effort_config(
     return False, [], None
 
 
+def _is_opus_45_model(model_name: Optional[str]) -> bool:
+    """Check if an Anthropic model is Claude Opus 4.5 (supports effort parameter)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return lm.startswith("claude-opus-4-5")
+
+
+def get_effort_config(
+    provider: str, model_name: Optional[str]
+) -> Tuple[bool, List[str], Optional[str]]:
+    """
+    Get effort configuration for Claude Opus 4.5 models (Anthropic provider only).
+
+    Returns:
+        Tuple of (visible, choices, default_value)
+    """
+    if provider != "Anthropic":
+        return False, [], None
+
+    if not _is_opus_45_model(model_name):
+        return False, [], None
+
+    return True, ["high", "medium", "low"], "medium"
+
+
 def update_translation_ui(provider: str, _current_temp: float):
     """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity."""
     saved_settings = get_saved_settings()
@@ -720,6 +746,16 @@ def update_translation_ui(provider: str, _current_temp: float):
         info=reasoning_info_text,
     )
 
+    # Effort dropdown (Claude Opus 4.5 only)
+    effort_visible, effort_choices, effort_default_value = get_effort_config(
+        provider, remembered_model
+    )
+    effort_update = gr.update(
+        visible=effort_visible,
+        choices=effort_choices,
+        value=effort_default_value,
+    )
+
     return (
         google_visible_update,
         openai_visible_update,
@@ -739,6 +775,7 @@ def update_translation_ui(provider: str, _current_temp: float):
         media_resolution_bubbles_update,
         media_resolution_context_update,
         reasoning_effort_visible_update,
+        effort_update,
     )
 
 
@@ -847,6 +884,16 @@ def update_params_for_model(
     max_tokens_value = 16384 if is_reasoning else 4096
     max_tokens_update = gr.update(value=max_tokens_value)
 
+    # Effort dropdown (Claude Opus 4.5 only)
+    effort_visible, effort_choices, effort_default_value = get_effort_config(
+        provider, model_name
+    )
+    effort_update = gr.update(
+        visible=effort_visible,
+        choices=effort_choices,
+        value=effort_default_value,
+    )
+
     return (
         temp_update,
         top_k_update,
@@ -856,6 +903,7 @@ def update_params_for_model(
         media_resolution_bubbles_update,
         media_resolution_context_update,
         reasoning_effort_update,
+        effort_update,
     )
 
 
