@@ -67,6 +67,11 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "deepseek-chat",
         "deepseek-reasoner",
     ],
+    "Z.ai": [
+        "glm-4.6",
+        "glm-4.5",
+        "glm-4.5v",
+    ],
     "OpenRouter": [],
     "OpenAI-Compatible": [],
 }
@@ -81,6 +86,7 @@ DEFAULT_SETTINGS = {
     "anthropic_api_key": "",
     "xai_api_key": "",
     "deepseek_api_key": "",
+    "zai_api_key": "",
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:1234/v1",
     "openai_compatible_api_key": "",
@@ -99,6 +105,7 @@ DEFAULT_SETTINGS = {
         "DeepSeek": (
             PROVIDER_MODELS["DeepSeek"][0] if PROVIDER_MODELS["DeepSeek"] else None
         ),
+        "Z.ai": PROVIDER_MODELS["Z.ai"][0] if PROVIDER_MODELS["Z.ai"] else None,
         "OpenRouter": None,
         "OpenAI-Compatible": None,
     },
@@ -192,6 +199,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "anthropic_api_key",
     "xai_api_key",
     "deepseek_api_key",
+    "zai_api_key",
     "openrouter_api_key",
     "openai_compatible_url",
     "openai_compatible_api_key",
@@ -511,6 +519,7 @@ def reset_to_defaults() -> Dict[str, Any]:
             "anthropic_api_key",
             "xai_api_key",
             "deepseek_api_key",
+            "zai_api_key",
             "openrouter_api_key",
             "openai_compatible_api_key",
             "outside_text_huggingface_token",

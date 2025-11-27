@@ -75,7 +75,7 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         return False, "Invalid OpenRouter API key format (should start with 'sk-or-')"
     if provider == "DeepSeek" and not api_key.startswith("sk-"):
         return False, "Invalid DeepSeek API key format (should start with 'sk-')"
-    # No specific format check for OpenAI-Compatible keys
+    # No specific format check for Z.ai or OpenAI-Compatible keys
 
     return True, f"{provider} API key format looks valid"
 
@@ -244,6 +244,17 @@ def _is_deepseek_reasoning_model(model_name: Optional[str]) -> bool:
     return lm == "deepseek-reasoner"
 
 
+def _is_zai_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if a Z.ai model is reasoning-capable.
+
+    All Z.ai GLM-4.5+ models support thinking/reasoning.
+    """
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return lm.startswith("glm-4.")
+
+
 def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
     """Check if a model is reasoning-capable based on provider and model name."""
     if not model_name:
@@ -259,6 +270,8 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return _is_xai_reasoning_model(model_name)
     elif provider == "DeepSeek":
         return _is_deepseek_reasoning_model(model_name)
+    elif provider == "Z.ai":
+        return _is_zai_reasoning_model(model_name)
     elif provider == "OpenRouter":
         try:
             return openrouter_is_reasoning_model(model_name, debug=False)
@@ -304,6 +317,10 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
         ),
         "xAI": (
             "Use xAI's web search tool for up-to-date information. "
+            "Might improve translation quality."
+        ),
+        "Z.ai": (
+            "Use Z.ai's web search tool for up-to-date information. "
             "Might improve translation quality."
         ),
     }
@@ -378,6 +395,8 @@ def get_reasoning_effort_info_text(
         return "Controls model's internal reasoning effort."
     elif provider == "xAI":
         return "Controls model's internal reasoning effort."
+    elif provider == "Z.ai":
+        return "Enables or disables model thinking (high=enabled, none=disabled)."
     elif provider == "OpenRouter" and model_name:
         lm = model_name.lower()
         is_openai_reasoning = (
@@ -537,6 +556,13 @@ def get_reasoning_effort_config(
             return False, [], None
         return True, ["high", "medium", "low"], "high"
 
+    elif provider == "Z.ai":
+        is_reasoning = _is_zai_reasoning_model(model_name)
+        if not is_reasoning:
+            return False, [], None
+        # Z.ai supports enabled/disabled thinking, mapped to high/none
+        return True, ["high", "none"], "high"
+
     elif provider == "OpenRouter":
         is_openai_reasoning = _is_openai_reasoning_model(model_name)
         is_anthropic_reasoning = _is_anthropic_reasoning_model(model_name, "OpenRouter")
@@ -624,8 +650,14 @@ def get_effort_config(
     return True, ["high", "medium", "low"], "medium"
 
 
-def update_translation_ui(provider: str, _current_temp: float):
-    """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity."""
+def update_translation_ui(provider: str, _current_temp: float, ocr_method: str = "LLM"):
+    """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity.
+
+    Args:
+        provider: The selected translation provider
+        _current_temp: Current temperature value (unused but kept for compatibility)
+        ocr_method: OCR method ("LLM" or "manga-ocr"). Used to filter vision-only models.
+    """
     saved_settings = get_saved_settings()
     provider_models_dict = saved_settings.get(
         "provider_models", DEFAULT_SETTINGS["provider_models"]
@@ -633,6 +665,10 @@ def update_translation_ui(provider: str, _current_temp: float):
     remembered_model = provider_models_dict.get(provider)
 
     models = PROVIDER_MODELS.get(provider, [])
+
+    if provider == "Z.ai" and ocr_method == "LLM":
+        models = [m for m in models if m == "glm-4.5v"]
+
     selected_model = (
         remembered_model
         if remembered_model in models
@@ -645,6 +681,7 @@ def update_translation_ui(provider: str, _current_temp: float):
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
     xai_visible_update = gr.update(visible=(provider == "xAI"))
     deepseek_visible_update = gr.update(visible=(provider == "DeepSeek"))
+    zai_visible_update = gr.update(visible=(provider == "Z.ai"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
     openai_compatible_url_visible_update = gr.update(
         visible=(provider == "OpenAI-Compatible")
@@ -762,6 +799,7 @@ def update_translation_ui(provider: str, _current_temp: float):
         anthropic_visible_update,
         xai_visible_update,
         deepseek_visible_update,
+        zai_visible_update,
         openrouter_visible_update,
         openai_compatible_url_visible_update,
         openai_compatible_key_visible_update,

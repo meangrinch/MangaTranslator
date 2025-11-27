@@ -596,6 +596,16 @@ def create_layout(
                                 elem_id="deepseek_api_key",
                                 info="Stored locally. Or set via DEEPSEEK_API_KEY env var.",
                             )
+                            zai_api_key = gr.Textbox(
+                                label="Z.ai API Key",
+                                placeholder="Enter Z.ai API key",
+                                type="password",
+                                value=saved_settings.get("zai_api_key", ""),
+                                show_copy_button=False,
+                                visible=(config_initial_provider == "Z.ai"),
+                                elem_id="zai_api_key",
+                                info="Stored locally. Or set via ZAI_API_KEY env var.",
+                            )
                             openrouter_api_key = gr.Textbox(
                                 label="OpenRouter API Key",
                                 placeholder="Enter OpenRouter API key (starts with sk-or-...)",
@@ -1296,6 +1306,7 @@ def create_layout(
             anthropic_api_key,
             xai_api_key,
             deepseek_api_key,
+            zai_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -1375,6 +1386,7 @@ def create_layout(
             anthropic_api_key,
             xai_api_key,
             deepseek_api_key,
+            zai_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -1451,6 +1463,7 @@ def create_layout(
             anthropic_api_key,
             xai_api_key,
             deepseek_api_key,
+            zai_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -1532,6 +1545,7 @@ def create_layout(
             anthropic_api_key,
             xai_api_key,
             deepseek_api_key,
+            zai_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -1666,13 +1680,14 @@ def create_layout(
 
         provider_selector.change(
             fn=callbacks.handle_provider_change,
-            inputs=[provider_selector, temperature],
+            inputs=[provider_selector, temperature, ocr_method_radio],
             outputs=[
                 google_api_key,
                 openai_api_key,
                 anthropic_api_key,
                 xai_api_key,
                 deepseek_api_key,
+                zai_api_key,
                 openrouter_api_key,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,

@@ -60,6 +60,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         anthropic_api_key,
         xai_api_key,
         deepseek_api_key,
+        zai_api_key,
         openrouter_api_key,
         openai_compatible_url_input,
         openai_compatible_api_key_input,
@@ -169,6 +170,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             anthropic_api_key=anthropic_api_key,
             xai_api_key=xai_api_key,
             deepseek_api_key=deepseek_api_key,
+            zai_api_key=zai_api_key,
             openrouter_api_key=openrouter_api_key,
             openai_compatible_url=openai_compatible_url_input,
             openai_compatible_api_key=openai_compatible_api_key_input,
@@ -251,6 +253,8 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
         api_key_to_validate = ui_state.provider_settings.xai_api_key
     elif provider_selector == "DeepSeek":
         api_key_to_validate = ui_state.provider_settings.deepseek_api_key
+    elif provider_selector == "Z.ai":
+        api_key_to_validate = ui_state.provider_settings.zai_api_key
     elif provider_selector == "OpenRouter":
         api_key_to_validate = ui_state.provider_settings.openrouter_api_key
     elif provider_selector == "OpenAI-Compatible":
@@ -785,6 +789,7 @@ def handle_save_config_click(*args: Any) -> str:
         ant_key,
         xai_key,
         deepseek_key,
+        zai_key,
         or_key,
         comp_url,
         comp_key,
@@ -885,6 +890,7 @@ def handle_save_config_click(*args: Any) -> str:
             anthropic_api_key=ant_key,
             xai_api_key=xai_key,
             deepseek_api_key=deepseek_key,
+            zai_api_key=zai_key,
             openrouter_api_key=or_key,
             openai_compatible_url=comp_url,
             openai_compatible_api_key=comp_key,
@@ -991,6 +997,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     anthropic_visible = default_provider == "Anthropic"
     xai_visible = default_provider == "xAI"
     deepseek_visible = default_provider == "DeepSeek"
+    zai_visible = default_provider == "Z.ai"
     openrouter_visible = default_provider == "OpenRouter"
     compatible_visible = default_provider == "OpenAI-Compatible"
     (
@@ -1054,6 +1061,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(
             value=default_ui_state.provider_settings.deepseek_api_key,
             visible=deepseek_visible,
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.zai_api_key,
+            visible=zai_visible,
         ),
         gr.update(
             value=default_ui_state.provider_settings.openrouter_api_key,
@@ -1142,9 +1153,9 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     ]
 
 
-def handle_provider_change(provider: str, current_temp: float):
+def handle_provider_change(provider: str, current_temp: float, ocr_method: str = "LLM"):
     """Handles changes in the provider selector."""
-    return utils.update_translation_ui(provider, current_temp)
+    return utils.update_translation_ui(provider, current_temp, ocr_method)
 
 
 def handle_output_format_change(output_format_value: str):
@@ -1298,7 +1309,7 @@ def handle_ocr_method_change(
         )
         updates.append(batch_saved_language)
 
-        # Trigger model list refresh for OpenRouter (to show text-only models)
+        # Trigger model list refresh for providers with dynamic model lists
         if provider == "OpenRouter":
             model_update = utils.fetch_and_update_openrouter_models(
                 ocr_method="manga-ocr"
@@ -1309,6 +1320,20 @@ def handle_ocr_method_change(
                 openai_compatible_url, openai_compatible_api_key
             )
             updates.append(model_update)
+        elif provider == "Z.ai":
+            # For manga-ocr mode, show all Z.ai models (text-only models work)
+            models = settings_manager.PROVIDER_MODELS.get("Z.ai", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("Z.ai")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
         else:
             updates.append(gr.update())
     else:
@@ -1338,7 +1363,7 @@ def handle_ocr_method_change(
         )
         updates.append(batch_original_language_state)
 
-        # Trigger model list refresh for OpenRouter (to show vision models)
+        # Trigger model list refresh for providers with dynamic or filtered model lists
         if provider == "OpenRouter":
             model_update = utils.fetch_and_update_openrouter_models(ocr_method="LLM")
             updates.append(model_update)
@@ -1347,6 +1372,20 @@ def handle_ocr_method_change(
                 openai_compatible_url, openai_compatible_api_key
             )
             updates.append(model_update)
+        elif provider == "Z.ai":
+            # For LLM OCR mode, only show glm-4.5v (vision model)
+            models = ["glm-4.5v"]
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("Z.ai")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
         else:
             updates.append(gr.update())
 

@@ -39,6 +39,7 @@ class TranslationConfig:
     anthropic_api_key: str = ""
     xai_api_key: str = ""
     deepseek_api_key: str = ""
+    zai_api_key: str = ""
     openrouter_api_key: str = ""
     openai_compatible_url: str = "http://localhost:1234/v1"
     openai_compatible_api_key: Optional[str] = ""

@@ -16,7 +16,8 @@ from utils.endpoints import (call_anthropic_endpoint, call_deepseek_endpoint,
                              call_gemini_endpoint,
                              call_openai_compatible_endpoint,
                              call_openai_endpoint, call_openrouter_endpoint,
-                             call_xai_endpoint, openrouter_is_reasoning_model)
+                             call_xai_endpoint, call_zai_endpoint,
+                             openrouter_is_reasoning_model)
 from utils.exceptions import TranslationError
 from utils.logging import log_message
 
@@ -229,6 +230,13 @@ def _is_reasoning_model_deepseek(model_name: str) -> bool:
     return lm == "deepseek-reasoner"
 
 
+def _is_reasoning_model_zai(model_name: str) -> bool:
+    """Check if a Z.ai model is reasoning-capable."""
+    lm = (model_name or "").lower()
+    # All glm-4.* models support reasoning
+    return lm.startswith("glm-4.")
+
+
 def _add_media_resolution_to_part(
     part: Dict[str, Any],
     media_resolution_ui: str,
@@ -309,6 +317,8 @@ def _build_generation_config(
             is_reasoning = _is_reasoning_model_openai_compatible(model_name)
         elif provider == "DeepSeek":
             is_reasoning = _is_reasoning_model_deepseek(model_name)
+        elif provider == "Z.ai":
+            is_reasoning = _is_reasoning_model_zai(model_name)
         max_tokens_value = 16384 if is_reasoning else 4096
 
     if provider == "Google":
@@ -410,6 +420,22 @@ def _build_generation_config(
             "top_p": top_p,
             "max_tokens": max_tokens_value,
         }
+        return generation_config
+
+    elif provider == "Z.ai":
+        is_reasoning = _is_reasoning_model_zai(model_name)
+        generation_config = {
+            "temperature": temperature,
+            "top_p": top_p,
+            "top_k": top_k,
+            "max_tokens": max_tokens_value,
+        }
+        if is_reasoning:
+            # Z.ai uses thinking parameter with {"type": "enabled"} or {"type": "disabled"}
+            # Map reasoning_effort: "high" -> enabled, "none" -> disabled
+            reasoning_effort = config.reasoning_effort or "high"
+            thinking_type = "enabled" if reasoning_effort == "high" else "disabled"
+            generation_config["thinking"] = {"type": thinking_type}
         return generation_config
 
     elif provider == "OpenRouter":
@@ -717,6 +743,22 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 system_prompt=system_prompt,
                 debug=debug,
+            )
+        elif provider == "Z.ai":
+            api_key = config.zai_api_key
+            if not api_key:
+                raise TranslationError("Z.ai API key is missing.")
+            generation_config = _build_generation_config(
+                provider, model_name, config, debug
+            )
+            return call_zai_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                system_prompt=system_prompt,
+                debug=debug,
+                enable_web_search=config.enable_web_search,
             )
         elif provider == "OpenRouter":
             api_key = config.openrouter_api_key
