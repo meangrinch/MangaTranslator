@@ -4,8 +4,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List
 
-from core.llm_defaults import (DEFAULT_LLM_PROVIDER,
-                               get_provider_sampling_defaults)
+from core.llm_defaults import DEFAULT_LLM_PROVIDER, get_provider_sampling_defaults
 from utils.logging import log_message
 
 CONFIG_FILE = (
@@ -72,6 +71,13 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "glm-4.5",
         "glm-4.5v",
     ],
+    "Moonshot": [
+        "kimi-k2-thinking",
+        "kimi-k2-0905-preview",
+        "kimi-k2-0711-preview",
+        "kimi-k2-thinking-turbo",
+        "kimi-k2-turbo-preview",
+    ],
     "OpenRouter": [],
     "OpenAI-Compatible": [],
 }
@@ -87,6 +93,7 @@ DEFAULT_SETTINGS = {
     "xai_api_key": "",
     "deepseek_api_key": "",
     "zai_api_key": "",
+    "moonshot_api_key": "",
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:1234/v1",
     "openai_compatible_api_key": "",
@@ -106,6 +113,9 @@ DEFAULT_SETTINGS = {
             PROVIDER_MODELS["DeepSeek"][0] if PROVIDER_MODELS["DeepSeek"] else None
         ),
         "Z.ai": PROVIDER_MODELS["Z.ai"][0] if PROVIDER_MODELS["Z.ai"] else None,
+        "Moonshot": (
+            PROVIDER_MODELS["Moonshot"][0] if PROVIDER_MODELS["Moonshot"] else None
+        ),
         "OpenRouter": None,
         "OpenAI-Compatible": None,
     },
@@ -200,6 +210,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "xai_api_key",
     "deepseek_api_key",
     "zai_api_key",
+    "moonshot_api_key",
     "openrouter_api_key",
     "openai_compatible_url",
     "openai_compatible_api_key",
@@ -520,6 +531,7 @@ def reset_to_defaults() -> Dict[str, Any]:
             "xai_api_key",
             "deepseek_api_key",
             "zai_api_key",
+            "moonshot_api_key",
             "openrouter_api_key",
             "openai_compatible_api_key",
             "outside_text_huggingface_token",

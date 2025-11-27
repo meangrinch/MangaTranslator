@@ -61,6 +61,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         xai_api_key,
         deepseek_api_key,
         zai_api_key,
+        moonshot_api_key,
         openrouter_api_key,
         openai_compatible_url_input,
         openai_compatible_api_key_input,
@@ -171,6 +172,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             xai_api_key=xai_api_key,
             deepseek_api_key=deepseek_api_key,
             zai_api_key=zai_api_key,
+            moonshot_api_key=moonshot_api_key,
             openrouter_api_key=openrouter_api_key,
             openai_compatible_url=openai_compatible_url_input,
             openai_compatible_api_key=openai_compatible_api_key_input,
@@ -255,6 +257,8 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
         api_key_to_validate = ui_state.provider_settings.deepseek_api_key
     elif provider_selector == "Z.ai":
         api_key_to_validate = ui_state.provider_settings.zai_api_key
+    elif provider_selector == "Moonshot":
+        api_key_to_validate = ui_state.provider_settings.moonshot_api_key
     elif provider_selector == "OpenRouter":
         api_key_to_validate = ui_state.provider_settings.openrouter_api_key
     elif provider_selector == "OpenAI-Compatible":
@@ -790,6 +794,7 @@ def handle_save_config_click(*args: Any) -> str:
         xai_key,
         deepseek_key,
         zai_key,
+        moonshot_key,
         or_key,
         comp_url,
         comp_key,
@@ -891,6 +896,7 @@ def handle_save_config_click(*args: Any) -> str:
             xai_api_key=xai_key,
             deepseek_api_key=deepseek_key,
             zai_api_key=zai_key,
+            moonshot_api_key=moonshot_key,
             openrouter_api_key=or_key,
             openai_compatible_url=comp_url,
             openai_compatible_api_key=comp_key,
@@ -998,6 +1004,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     xai_visible = default_provider == "xAI"
     deepseek_visible = default_provider == "DeepSeek"
     zai_visible = default_provider == "Z.ai"
+    moonshot_visible = default_provider == "Moonshot"
     openrouter_visible = default_provider == "OpenRouter"
     compatible_visible = default_provider == "OpenAI-Compatible"
     (
@@ -1065,6 +1072,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(
             value=default_ui_state.provider_settings.zai_api_key,
             visible=zai_visible,
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.moonshot_api_key,
+            visible=moonshot_visible,
         ),
         gr.update(
             value=default_ui_state.provider_settings.openrouter_api_key,

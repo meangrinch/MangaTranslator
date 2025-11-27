@@ -48,6 +48,9 @@ def main():
             "OpenAI",
             "Anthropic",
             "xAI",
+            "DeepSeek",
+            "Z.ai",
+            "Moonshot",
             "OpenRouter",
             "OpenAI-Compatible",
         ],
@@ -83,6 +86,18 @@ def main():
         type=str,
         default=None,
         help="DeepSeek API key (overrides DEEPSEEK_API_KEY env var if --provider is DeepSeek)",
+    )
+    parser.add_argument(
+        "--zai-api-key",
+        type=str,
+        default=None,
+        help="Z.ai API key (overrides ZAI_API_KEY env var if --provider is Z.ai)",
+    )
+    parser.add_argument(
+        "--moonshot-api-key",
+        type=str,
+        default=None,
+        help="Moonshot API key (overrides MOONSHOT_API_KEY env var if --provider is Moonshot)",
     )
     parser.add_argument(
         "--openrouter-api-key",
@@ -589,6 +604,16 @@ def main():
         api_key_arg_name = "--deepseek-api-key"
         api_key_env_var = "DEEPSEEK_API_KEY"
         default_model = "deepseek-chat"
+    elif provider == "Z.ai":
+        api_key = args.zai_api_key or os.environ.get("ZAI_API_KEY")
+        api_key_arg_name = "--zai-api-key"
+        api_key_env_var = "ZAI_API_KEY"
+        default_model = "glm-4.5v"
+    elif provider == "Moonshot":
+        api_key = args.moonshot_api_key or os.environ.get("MOONSHOT_API_KEY")
+        api_key_arg_name = "--moonshot-api-key"
+        api_key_env_var = "MOONSHOT_API_KEY"
+        default_model = "kimi-k2-turbo-preview"
     elif provider == "OpenRouter":
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
@@ -671,6 +696,14 @@ def main():
                 api_key
                 if provider == "DeepSeek"
                 else os.environ.get("DEEPSEEK_API_KEY", "")
+            ),
+            zai_api_key=(
+                api_key if provider == "Z.ai" else os.environ.get("ZAI_API_KEY", "")
+            ),
+            moonshot_api_key=(
+                api_key
+                if provider == "Moonshot"
+                else os.environ.get("MOONSHOT_API_KEY", "")
             ),
             openrouter_api_key=(
                 api_key

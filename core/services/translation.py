@@ -13,7 +13,7 @@ from core.image.image_utils import (cv2_to_pil, pil_to_cv2,
                                     process_bubble_image_cached)
 from core.image.ocr_detection import extract_text_with_manga_ocr
 from utils.endpoints import (call_anthropic_endpoint, call_deepseek_endpoint,
-                             call_gemini_endpoint,
+                             call_gemini_endpoint, call_moonshot_endpoint,
                              call_openai_compatible_endpoint,
                              call_openai_endpoint, call_openrouter_endpoint,
                              call_xai_endpoint, call_zai_endpoint,
@@ -438,6 +438,15 @@ def _build_generation_config(
             generation_config["thinking"] = {"type": thinking_type}
         return generation_config
 
+    elif provider == "Moonshot":
+        # Moonshot is text-only, reasoning models have always-on reasoning
+        generation_config = {
+            "temperature": min(temperature, 1.0),  # Moonshot caps at 1.0
+            "top_p": top_p,
+            "max_tokens": max_tokens_value,
+        }
+        return generation_config
+
     elif provider == "OpenRouter":
         model_lower = (model_name or "").lower()
         is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
@@ -752,6 +761,22 @@ def _call_llm_endpoint(
                 provider, model_name, config, debug
             )
             return call_zai_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                system_prompt=system_prompt,
+                debug=debug,
+                enable_web_search=config.enable_web_search,
+            )
+        elif provider == "Moonshot":
+            api_key = config.moonshot_api_key
+            if not api_key:
+                raise TranslationError("Moonshot API key is missing.")
+            generation_config = _build_generation_config(
+                provider, model_name, config, debug
+            )
+            return call_moonshot_endpoint(
                 api_key=api_key,
                 model_name=model_name,
                 parts=api_parts,
