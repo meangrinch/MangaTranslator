@@ -214,7 +214,7 @@ python main.py --help
 - **Text too large/small:**
   - Adjust "Max Font Size" and "Min Font Size" ranges
 - **Inconsistent behavior across different image sizes:**
-  - Enable "Auto-Scale": Settings must be tuned for 1MP sized images for proper scaling (default values should suffice)
+  - Enable "Auto-Scale to Image Size": Settings must be tuned for 1MP sized images for proper scaling (default values should suffice)
 - **OSB text not inpainted/cleaned:**
   - Ensure "Enable OSB Detection" is enabled
   - Install Nunchaku (see Installation step 4)
