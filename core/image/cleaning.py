@@ -271,21 +271,26 @@ def clean_speech_bubbles(
 
             sam_mask = detection.get("sam_mask")
             if sam_mask is not None:
-                final_mask, fill_color_bgr = _process_single_bubble(
-                    sam_mask,
-                    img_gray,
-                    img_height,
-                    img_width,
-                    thresholding_value,
-                    use_otsu_threshold,
-                    effective_roi_shrink_px,
-                    verbose,
-                    detection.get("bbox"),
-                    is_sam=True,
-                    dilation_kernel=dilation_kernel,
-                    constraint_erosion_kernel=constraint_erosion_kernel,
-                    min_contour_area=min_contour_area,
-                )
+                try:
+                    final_mask, fill_color_bgr = _process_single_bubble(
+                        sam_mask,
+                        img_gray,
+                        img_height,
+                        img_width,
+                        thresholding_value,
+                        use_otsu_threshold,
+                        effective_roi_shrink_px,
+                        verbose,
+                        detection.get("bbox"),
+                        is_sam=True,
+                        dilation_kernel=dilation_kernel,
+                        constraint_erosion_kernel=constraint_erosion_kernel,
+                        min_contour_area=min_contour_area,
+                    )
+                except Exception as e:
+                    error_msg = f"Error processing SAM mask for detection {detection.get('bbox')}: {e}"
+                    log_message(error_msg, always_print=True)
+                    continue
             else:
                 if "mask_points" not in detection or not detection["mask_points"]:
                     log_message(
