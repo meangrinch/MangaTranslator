@@ -228,9 +228,33 @@ def calculate_centroid_expansion_box(
 
         # Find centroid of safe area
         moments = cv2.moments(safe_area_mask)
+
+        if moments["m00"] == 0:
+            raise ImageProcessingError("Safe area mask has no area")
+
         centroid_x = moments["m10"] / moments["m00"]
         centroid_y = moments["m01"] / moments["m00"]
-        centroid = (float(centroid_x), float(centroid_y))
+
+        # Check if centroid is in a constricted region (dual/conjoined bubbles)
+        _, max_val, _, max_loc = cv2.minMaxLoc(distance_map)
+
+        cx_int, cy_int = int(round(centroid_x)), int(round(centroid_y))
+        mask_h, mask_w = safe_area_mask.shape
+
+        cx_int = max(0, min(cx_int, mask_w - 1))
+        cy_int = max(0, min(cy_int, mask_h - 1))
+
+        dist_at_centroid = distance_map[cy_int, cx_int]
+
+        if dist_at_centroid < max_val * 0.70:
+            log_message(
+                f"Centroid in constricted region (dist={dist_at_centroid:.1f} vs max={max_val:.1f}). "
+                "Moving anchor to pole of inaccessibility.",
+                verbose=verbose,
+            )
+            centroid_x, centroid_y = float(max_loc[0]), float(max_loc[1])
+
+        centroid = (centroid_x, centroid_y)
 
         # Ray-cast from centroid to find maximum safe dimensions
         cx, cy = int(round(centroid_x)), int(round(centroid_y))
