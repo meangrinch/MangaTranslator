@@ -149,7 +149,7 @@ def _fallback_to_yolo_mask(primary_results, i, mask_type="points"):
             mask_tensor = masks.data[i]
             orig_h, orig_w = primary_results.orig_shape
             mask_resized = torch.nn.functional.interpolate(
-                mask_tensor.unsqueeze(0).unsqueeze(0),
+                mask_tensor.float().unsqueeze(0).unsqueeze(0),
                 size=(orig_h, orig_w),
                 mode="bilinear",
                 align_corners=False,
