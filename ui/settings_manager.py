@@ -114,7 +114,9 @@ DEFAULT_SETTINGS = {
         ),
         "Z.ai": PROVIDER_MODELS["Z.ai"][0] if PROVIDER_MODELS["Z.ai"] else None,
         "Moonshot AI": (
-            PROVIDER_MODELS["Moonshot AI"][0] if PROVIDER_MODELS["Moonshot AI"] else None
+            PROVIDER_MODELS["Moonshot AI"][0]
+            if PROVIDER_MODELS["Moonshot AI"]
+            else None
         ),
         "OpenRouter": None,
         "OpenAI-Compatible": None,
@@ -126,7 +128,7 @@ DEFAULT_SETTINGS = {
     "ocr_method": "LLM",
     "confidence": 0.35,
     "use_sam2": True,
-    "enable_conjoined_detection": True,
+    "conjoined_detection": True,
     "use_otsu_threshold": False,
     "thresholding_value": 190,
     "roi_shrink_px": 4,

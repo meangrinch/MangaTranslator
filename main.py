@@ -7,13 +7,21 @@ from pathlib import Path
 
 import torch
 
-from core.config import (CleaningConfig, DetectionConfig,
-                         MangaTranslatorConfig, OutputConfig,
-                         OutsideTextConfig, PreprocessingConfig,
-                         RenderingConfig, TranslationConfig)
+from core.config import (
+    CleaningConfig,
+    DetectionConfig,
+    MangaTranslatorConfig,
+    OutputConfig,
+    OutsideTextConfig,
+    PreprocessingConfig,
+    RenderingConfig,
+    TranslationConfig,
+)
 from core.pipeline import batch_translate_images, translate_and_render
-from core.validation import (autodetect_yolo_model_path,
-                             validate_mutually_exclusive_modes)
+from core.validation import (
+    autodetect_yolo_model_path,
+    validate_mutually_exclusive_modes,
+)
 from utils.logging import log_message
 
 
@@ -157,11 +165,11 @@ def main():
     parser.set_defaults(use_sam2=True)
     parser.add_argument(
         "--no-conjoined-detection",
-        dest="enable_conjoined_detection",
+        dest="conjoined_detection",
         action="store_false",
         help="Disable conjoined bubble detection using secondary YOLO model",
     )
-    parser.set_defaults(enable_conjoined_detection=True)
+    parser.set_defaults(conjoined_detection=True)
     parser.add_argument(
         "--reading-direction",
         type=str,
@@ -665,7 +673,7 @@ def main():
         detection=DetectionConfig(
             confidence=args.conf,
             use_sam2=args.use_sam2,
-            enable_conjoined_detection=args.enable_conjoined_detection,
+            conjoined_detection=args.conjoined_detection,
         ),
         cleaning=CleaningConfig(
             thresholding_value=args.thresholding_value,

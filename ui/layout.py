@@ -426,11 +426,9 @@ def create_layout(
                                 label="Use SAM 2.1 for Segmentation",
                                 info="Enhances bubble segmentation quality, especially for oddly shaped bubbles.",
                             )
-                            enable_conjoined_detection_checkbox = gr.Checkbox(
-                                value=saved_settings.get(
-                                    "enable_conjoined_detection", True
-                                ),
-                                label="Enable Conjoined Bubble Detection",
+                            conjoined_detection_checkbox = gr.Checkbox(
+                                value=saved_settings.get("conjoined_detection", True),
+                                label="Detect Conjoined Bubbles",
                                 info=(
                                     "Uses a secondary YOLO model to detect and split "
                                     "conjoined speech bubbles into separate bubbles."
@@ -1254,7 +1252,7 @@ def create_layout(
                             )
                             auto_scale = gr.Checkbox(
                                 value=saved_settings.get("auto_scale", False),
-                                label="Auto-Scale",
+                                label="Auto-Scale Parameters to Image Size",
                                 info=(
                                     "Automatically scale pipeline parameters (fonts, kernels, etc.) "
                                     "based on image size relative to 1MP. Ensures consistent behavior "
@@ -1305,7 +1303,7 @@ def create_layout(
         save_config_inputs = [
             confidence,
             use_sam2_checkbox,
-            enable_conjoined_detection_checkbox,
+            conjoined_detection_checkbox,
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
@@ -1386,7 +1384,7 @@ def create_layout(
         reset_outputs = [
             confidence,
             use_sam2_checkbox,
-            enable_conjoined_detection_checkbox,
+            conjoined_detection_checkbox,
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
@@ -1465,7 +1463,7 @@ def create_layout(
             input_image,
             confidence,
             use_sam2_checkbox,
-            enable_conjoined_detection_checkbox,
+            conjoined_detection_checkbox,
             thresholding_value,
             use_otsu_threshold,
             roi_shrink_px,
@@ -1548,7 +1546,7 @@ def create_layout(
             input_zip,
             confidence,
             use_sam2_checkbox,
-            enable_conjoined_detection_checkbox,
+            conjoined_detection_checkbox,
             thresholding_value,
             use_otsu_threshold,
             roi_shrink_px,
@@ -1796,9 +1794,9 @@ def create_layout(
         )
 
         # Conjoined detection change handler - clears SAM cache
-        enable_conjoined_detection_checkbox.change(
+        conjoined_detection_checkbox.change(
             fn=callbacks.handle_conjoined_detection_change,
-            inputs=enable_conjoined_detection_checkbox,
+            inputs=conjoined_detection_checkbox,
             outputs=None,
             queue=False,
         )

@@ -4,10 +4,16 @@ from typing import Any, Dict, Optional
 
 import torch
 
-from core.config import (CleaningConfig, DetectionConfig,
-                         MangaTranslatorConfig, OutputConfig,
-                         OutsideTextConfig, PreprocessingConfig,
-                         RenderingConfig, TranslationConfig)
+from core.config import (
+    CleaningConfig,
+    DetectionConfig,
+    MangaTranslatorConfig,
+    OutputConfig,
+    OutsideTextConfig,
+    PreprocessingConfig,
+    RenderingConfig,
+    TranslationConfig,
+)
 
 
 @dataclass
@@ -16,7 +22,7 @@ class UIDetectionSettings:
 
     confidence: float = 0.35
     use_sam2: bool = True
-    enable_conjoined_detection: bool = True
+    conjoined_detection: bool = True
 
 
 @dataclass
@@ -164,7 +170,7 @@ class UIConfigState:
         data = {
             "confidence": self.detection.confidence,
             "use_sam2": self.detection.use_sam2,
-            "enable_conjoined_detection": self.detection.enable_conjoined_detection,
+            "conjoined_detection": self.detection.conjoined_detection,
             "reading_direction": self.llm_settings.reading_direction,
             "thresholding_value": self.cleaning.thresholding_value,
             "use_otsu_threshold": self.cleaning.use_otsu_threshold,
@@ -247,8 +253,9 @@ class UIConfigState:
     def from_dict(data: Dict[str, Any]) -> "UIConfigState":
         """Creates a UIConfigState instance from a dictionary (e.g., loaded from config.json)."""
 
-        from . import \
-            settings_manager  # Local import to avoid circular dependency issues
+        from . import (
+            settings_manager,
+        )  # Local import to avoid circular dependency issues
 
         defaults = settings_manager.DEFAULT_SETTINGS.copy()
         defaults.update(settings_manager.DEFAULT_BATCH_SETTINGS)
@@ -257,9 +264,9 @@ class UIConfigState:
             detection=UIDetectionSettings(
                 confidence=data.get("confidence", defaults["confidence"]),
                 use_sam2=data.get("use_sam2", defaults.get("use_sam2", True)),
-                enable_conjoined_detection=data.get(
-                    "enable_conjoined_detection",
-                    defaults.get("enable_conjoined_detection", True),
+                conjoined_detection=data.get(
+                    "conjoined_detection",
+                    defaults.get("conjoined_detection", True),
                 ),
             ),
             cleaning=UICleaningSettings(
@@ -308,9 +315,13 @@ class UIConfigState:
                     "anthropic_api_key", defaults["anthropic_api_key"]
                 ),
                 xai_api_key=data.get("xai_api_key", defaults["xai_api_key"]),
-                deepseek_api_key=data.get("deepseek_api_key", defaults.get("deepseek_api_key", "")),
+                deepseek_api_key=data.get(
+                    "deepseek_api_key", defaults.get("deepseek_api_key", "")
+                ),
                 zai_api_key=data.get("zai_api_key", defaults.get("zai_api_key", "")),
-                moonshot_api_key=data.get("moonshot_api_key", defaults.get("moonshot_api_key", "")),
+                moonshot_api_key=data.get(
+                    "moonshot_api_key", defaults.get("moonshot_api_key", "")
+                ),
                 openrouter_api_key=data.get(
                     "openrouter_api_key", defaults["openrouter_api_key"]
                 ),
@@ -443,9 +454,7 @@ def map_ui_to_backend_config(
 
     detection_cfg = DetectionConfig(confidence=ui_state.detection.confidence)
     detection_cfg.use_sam2 = ui_state.detection.use_sam2
-    detection_cfg.enable_conjoined_detection = (
-        ui_state.detection.enable_conjoined_detection
-    )
+    detection_cfg.conjoined_detection = ui_state.detection.conjoined_detection
 
     cleaning_cfg = CleaningConfig(
         thresholding_value=ui_state.cleaning.thresholding_value,

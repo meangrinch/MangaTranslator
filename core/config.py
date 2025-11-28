@@ -3,8 +3,7 @@ from typing import Optional
 
 import torch
 
-from core.llm_defaults import (DEFAULT_LLM_PROVIDER,
-                               get_provider_sampling_defaults)
+from core.llm_defaults import DEFAULT_LLM_PROVIDER, get_provider_sampling_defaults
 
 
 @dataclass
@@ -13,7 +12,7 @@ class DetectionConfig:
 
     confidence: float = 0.35
     use_sam2: bool = True
-    enable_conjoined_detection: bool = True
+    conjoined_detection: bool = True
 
 
 @dataclass

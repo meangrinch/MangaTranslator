@@ -8,19 +8,27 @@ import torch
 from PIL import Image
 
 from core.config import MangaTranslatorConfig
-from core.validation import (normalize_zip_file_input,
-                             validate_mutually_exclusive_modes,
-                             validate_zip_file)
+from core.validation import (
+    normalize_zip_file_input,
+    validate_mutually_exclusive_modes,
+    validate_zip_file,
+)
 from utils.exceptions import CancellationError, ValidationError
 
 from . import logic, settings_manager, utils
 from .cancellation import CancellationManager
-from .ui_models import (UICleaningSettings, UIConfigState, UIDetectionSettings,
-                        UIGeneralSettings, UIOutputSettings,
-                        UIOutsideTextSettings, UIRenderingSettings,
-                        UITranslationLLMSettings,
-                        UITranslationProviderSettings,
-                        map_ui_to_backend_config)
+from .ui_models import (
+    UICleaningSettings,
+    UIConfigState,
+    UIDetectionSettings,
+    UIGeneralSettings,
+    UIOutputSettings,
+    UIOutsideTextSettings,
+    UIRenderingSettings,
+    UITranslationLLMSettings,
+    UITranslationProviderSettings,
+    map_ui_to_backend_config,
+)
 
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
@@ -50,7 +58,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
     (
         confidence,
         use_sam2_checkbox_val,
-        enable_conjoined_detection_checkbox_val,
+        conjoined_detection_checkbox_val,
         thresholding_value,
         use_otsu_threshold,
         roi_shrink_px,
@@ -139,7 +147,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         detection=UIDetectionSettings(
             confidence=confidence,
             use_sam2=use_sam2_checkbox_val,
-            enable_conjoined_detection=enable_conjoined_detection_checkbox_val,
+            conjoined_detection=conjoined_detection_checkbox_val,
         ),
         cleaning=UICleaningSettings(
             thresholding_value=thresholding_value,
@@ -782,7 +790,7 @@ def handle_save_config_click(*args: Any) -> str:
     (
         conf,
         use_sam2,
-        enable_conjoined_detection,
+        conjoined_detection,
         rd,
         thresholding_val,
         otsu,
@@ -863,7 +871,7 @@ def handle_save_config_click(*args: Any) -> str:
         detection=UIDetectionSettings(
             confidence=conf,
             use_sam2=use_sam2,
-            enable_conjoined_detection=enable_conjoined_detection,
+            conjoined_detection=conjoined_detection,
         ),
         cleaning=UICleaningSettings(
             thresholding_value=thresholding_val,
@@ -1044,7 +1052,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     return [
         default_ui_state.detection.confidence,
         default_ui_state.detection.use_sam2,
-        default_ui_state.detection.enable_conjoined_detection,
+        default_ui_state.detection.conjoined_detection,
         default_ui_state.llm_settings.reading_direction,
         default_ui_state.cleaning.thresholding_value,
         default_ui_state.cleaning.use_otsu_threshold,
@@ -1261,7 +1269,7 @@ def handle_test_mode_change(test_mode: bool):
     return gr.update(interactive=not test_mode, value=False if test_mode else None)
 
 
-def handle_conjoined_detection_change(_enable_conjoined_detection: bool):
+def handle_conjoined_detection_change(_conjoined_detection: bool):
     """Handles changes in the conjoined detection checkbox to clear SAM cache."""
     from core.caching import get_cache
 
