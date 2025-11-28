@@ -9,15 +9,20 @@ from PIL import Image
 
 from core.caching import get_cache
 from core.config import TranslationConfig, calculate_reasoning_budget
-from core.image.image_utils import (cv2_to_pil, pil_to_cv2,
-                                    process_bubble_image_cached)
+from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
 from core.image.ocr_detection import extract_text_with_manga_ocr
-from utils.endpoints import (call_anthropic_endpoint, call_deepseek_endpoint,
-                             call_gemini_endpoint, call_moonshot_endpoint,
-                             call_openai_compatible_endpoint,
-                             call_openai_endpoint, call_openrouter_endpoint,
-                             call_xai_endpoint, call_zai_endpoint,
-                             openrouter_is_reasoning_model)
+from utils.endpoints import (
+    call_anthropic_endpoint,
+    call_deepseek_endpoint,
+    call_gemini_endpoint,
+    call_moonshot_endpoint,
+    call_openai_compatible_endpoint,
+    call_openai_endpoint,
+    call_openrouter_endpoint,
+    call_xai_endpoint,
+    call_zai_endpoint,
+    openrouter_is_reasoning_model,
+)
 from utils.exceptions import TranslationError
 from utils.logging import log_message
 

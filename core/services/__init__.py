@@ -6,9 +6,11 @@ This subpackage contains modules for:
 - External service communication
 """
 
-from .translation import (call_translation_api_batch,
-                          prepare_bubble_images_for_translation,
-                          sort_bubbles_by_reading_order)
+from .translation import (
+    call_translation_api_batch,
+    prepare_bubble_images_for_translation,
+    sort_bubbles_by_reading_order,
+)
 
 __all__ = [
     "call_translation_api_batch",

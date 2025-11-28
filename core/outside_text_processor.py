@@ -9,8 +9,7 @@ from PIL import Image
 from sklearn.cluster import KMeans
 
 from core.config import MangaTranslatorConfig
-from core.image.image_utils import (cv2_to_pil, pil_to_cv2,
-                                    process_bubble_image_cached)
+from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
 from core.image.inpainting import FluxKontextInpainter
 from core.image.ocr_detection import OCR_LANGUAGE_MAP, OutsideTextDetector
 from core.ml.model_manager import get_model_manager

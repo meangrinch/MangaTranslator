@@ -8,14 +8,15 @@ It uses YOLO for speech bubble detection and LLMs for text translation.
 from .caching import UnifiedCache, get_cache
 from .image.cleaning import clean_speech_bubbles
 from .image.detection import detect_speech_bubbles
-from .image.image_utils import (cv2_to_pil, pil_to_cv2,
-                                save_image_with_compression)
+from .image.image_utils import cv2_to_pil, pil_to_cv2, save_image_with_compression
 from .image.inpainting import FluxKontextInpainter
 from .image.ocr_detection import OutsideTextDetector
 from .ml.model_manager import ModelManager, get_model_manager
 from .pipeline import batch_translate_images, translate_and_render
-from .services.translation import (call_translation_api_batch,
-                                   sort_bubbles_by_reading_order)
+from .services.translation import (
+    call_translation_api_batch,
+    sort_bubbles_by_reading_order,
+)
 from .text.text_renderer import render_text_skia
 
 __version__ = "1.6.2"

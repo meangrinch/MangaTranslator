@@ -11,22 +11,34 @@ from PIL import Image
 from core.caching import get_cache
 from core.config import MangaTranslatorConfig, PreprocessingConfig
 from core.scaling import scale_font_size, scale_length, scale_scalar
-from utils.exceptions import (CancellationError, CleaningError, FontError,
-                              ImageProcessingError, RenderingError,
-                              TranslationError)
+from utils.exceptions import (
+    CancellationError,
+    CleaningError,
+    FontError,
+    ImageProcessingError,
+    RenderingError,
+    TranslationError,
+)
 from utils.logging import log_message
 
 from .image.cleaning import clean_speech_bubbles
 from .image.detection import detect_speech_bubbles
-from .image.image_utils import (convert_image_to_target_mode, cv2_to_pil,
-                                pil_to_cv2, resize_to_max_side,
-                                save_image_with_compression, upscale_image,
-                                upscale_image_to_dimension)
+from .image.image_utils import (
+    convert_image_to_target_mode,
+    cv2_to_pil,
+    pil_to_cv2,
+    resize_to_max_side,
+    save_image_with_compression,
+    upscale_image,
+    upscale_image_to_dimension,
+)
 from .ml.model_manager import get_model_manager
 from .outside_text_processor import process_outside_text
-from .services.translation import (call_translation_api_batch,
-                                   prepare_bubble_images_for_translation,
-                                   sort_bubbles_by_reading_order)
+from .services.translation import (
+    call_translation_api_batch,
+    prepare_bubble_images_for_translation,
+    sort_bubbles_by_reading_order,
+)
 from .text.text_renderer import RenderingConfig, render_text_skia
 
 if TYPE_CHECKING:
@@ -136,7 +148,9 @@ def translate_and_render(
     if config.preprocessing.auto_scale:
         width, height = pil_image_processed.size
         processing_scale = math.sqrt((width * height) / 1_000_000)
-        log_message(f"Dynamic processing scale: {processing_scale:.2f}x", verbose=verbose)
+        log_message(
+            f"Dynamic processing scale: {processing_scale:.2f}x", verbose=verbose
+        )
     else:
         processing_scale = 1.0
 

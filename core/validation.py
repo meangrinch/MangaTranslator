@@ -1,8 +1,7 @@
 from pathlib import Path
 from typing import Any, Tuple, Union
 
-from core.config import (MangaTranslatorConfig, RenderingConfig,
-                         TranslationConfig)
+from core.config import MangaTranslatorConfig, RenderingConfig, TranslationConfig
 from utils.exceptions import ValidationError
 
 

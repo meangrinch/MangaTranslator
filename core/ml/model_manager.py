@@ -485,12 +485,13 @@ class ModelManager:
             try:
                 # Lazy imports for Nunchaku and diffusers
                 from diffusers import FluxKontextPipeline
-                from nunchaku.caching.diffusers_adapters import \
-                    apply_cache_on_pipe
-                from nunchaku.models.text_encoders.t5_encoder import \
-                    NunchakuT5EncoderModel
-                from nunchaku.models.transformers.transformer_flux import \
-                    NunchakuFluxTransformer2dModel
+                from nunchaku.caching.diffusers_adapters import apply_cache_on_pipe
+                from nunchaku.models.text_encoders.t5_encoder import (
+                    NunchakuT5EncoderModel,
+                )
+                from nunchaku.models.transformers.transformer_flux import (
+                    NunchakuFluxTransformer2dModel,
+                )
                 from nunchaku.utils import get_precision
 
                 hf_info = self.model_hf_repos[ModelType.FLUX_TRANSFORMER]

@@ -6,8 +6,7 @@ import numpy as np
 from PIL import Image
 
 from core.scaling import scale_area, scale_kernel, scale_scalar
-from utils.exceptions import (CleaningError, ImageProcessingError,
-                              ValidationError)
+from utils.exceptions import CleaningError, ImageProcessingError, ValidationError
 from utils.logging import log_message
 
 from .detection import detect_speech_bubbles

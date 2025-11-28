@@ -11,9 +11,15 @@ from PIL import Image
 from core.config import MangaTranslatorConfig, RenderingConfig
 from core.pipeline import batch_translate_images, translate_and_render
 from core.validation import validate_batch_input_path, validate_core_inputs
-from utils.exceptions import (CancellationError, CleaningError, FontError,
-                              ImageProcessingError, RenderingError,
-                              TranslationError, ValidationError)
+from utils.exceptions import (
+    CancellationError,
+    CleaningError,
+    FontError,
+    ImageProcessingError,
+    RenderingError,
+    TranslationError,
+    ValidationError,
+)
 from utils.logging import log_message
 
 if TYPE_CHECKING:
