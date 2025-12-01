@@ -53,7 +53,14 @@ def call_deepseek_endpoint(
             "Invalid 'parts' format for DeepSeek: No text prompt found."
         )
 
-    url = "https://api.deepseek.com/v1/chat/completions"
+    # Special handling for deepseek-reasoner-speciale
+    if model_name == "deepseek-reasoner-speciale":
+        url = "https://api.deepseek.com/v3.2_speciale_expires_on_20251215/chat/completions"
+        api_model_name = "deepseek-reasoner"
+    else:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        api_model_name = model_name
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -65,7 +72,7 @@ def call_deepseek_endpoint(
     messages.append({"role": "user", "content": text_part["text"]})
 
     payload = {
-        "model": model_name,
+        "model": api_model_name,
         "messages": messages,
         "max_tokens": generation_config.get("max_tokens", 4096),
     }

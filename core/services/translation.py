@@ -232,7 +232,7 @@ def _is_reasoning_model_openai_compatible(model_name: str) -> bool:
 def _is_reasoning_model_deepseek(model_name: str) -> bool:
     """Check if a DeepSeek model is reasoning-capable."""
     lm = (model_name or "").lower()
-    return lm == "deepseek-reasoner"
+    return lm == "deepseek-reasoner" or lm == "deepseek-reasoner-speciale"
 
 
 def _is_reasoning_model_zai(model_name: str) -> bool:

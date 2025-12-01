@@ -242,7 +242,7 @@ def _is_deepseek_reasoning_model(model_name: Optional[str]) -> bool:
     if not model_name:
         return False
     lm = model_name.lower()
-    return lm == "deepseek-reasoner"
+    return lm == "deepseek-reasoner" or lm == "deepseek-reasoner-speciale"
 
 
 def _is_zai_reasoning_model(model_name: Optional[str]) -> bool:
