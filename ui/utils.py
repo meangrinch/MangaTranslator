@@ -261,10 +261,13 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
     Get the maximum allowed max_tokens value for a specific provider/model combination.
 
     Returns:
-        - 16384 for OpenAI models with "chat" in the name (including via OpenRouter)
-        - 8192 for DeepSeek "deepseek-chat" model
-        - 16384 for Z.ai "glm-4.5v" model (including via OpenRouter)
-        - None for all other models (no cap, use existing 32768 max)
+        - 32768 for OpenAI GPT 4.1 models
+        - 16384 for OpenAI GPT 4o models and models with "chat" in the name
+        - 31744 for Anthropic Claude Opus 4/4.1 models
+        - 29696 for xAI Grok fast models
+        - 8192 for DeepSeek "deepseek-chat" model (not including via OpenRouter)
+        - 16384 for Z.ai "glm-4.5v" model
+        - None for all other models (no cap, use existing 63488 max)
     """
     if not model_name:
         return None
@@ -272,12 +275,37 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
     model_lower = model_name.lower()
 
     if provider == "OpenAI":
+        if "gpt-4.1" in model_lower:
+            return 32768
+        if "gpt-4o" in model_lower:
+            return 16384
         if "chat" in model_lower:
             return 16384
+    elif provider == "Anthropic":
+        if "claude-opus-4" in model_lower and "claude-opus-4-5" not in model_lower:
+            return 31744
+    elif provider == "xAI":
+        if "grok" in model_lower and "fast" in model_lower:
+            return 29696
     elif provider == "OpenRouter":
         is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
-        if is_openai_model and "chat" in model_lower:
-            return 16384
+        is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith(
+            "claude-"
+        )
+        is_grok_model = "grok" in model_lower
+
+        if is_openai_model:
+            if "gpt-4.1" in model_lower:
+                return 32768
+            if "gpt-4o" in model_lower:
+                return 16384
+            if "chat" in model_lower:
+                return 16384
+        if is_anthropic_model:
+            if "claude-opus-4" in model_lower and "claude-opus-4.5" not in model_lower:
+                return 31744
+        if is_grok_model and "fast" in model_lower:
+            return 29696
         if "glm-4.5v" in model_lower:
             return 16384
     elif provider == "DeepSeek":
@@ -776,7 +804,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         max_tokens_value = 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, remembered_model)
-    max_tokens_maximum = max_tokens_cap if max_tokens_cap is not None else 32768
+    max_tokens_maximum = max_tokens_cap if max_tokens_cap is not None else 63488
     max_tokens_update = gr.update(value=max_tokens_value, maximum=max_tokens_maximum)
 
     def _is_gemini_3_model(name: Optional[str]) -> bool:
@@ -990,7 +1018,7 @@ def update_params_for_model(
 
     max_tokens_value = 16384 if is_reasoning else 4096
     max_tokens_cap = get_max_tokens_cap(provider, model_name)
-    max_tokens_maximum = max_tokens_cap if max_tokens_cap is not None else 32768
+    max_tokens_maximum = max_tokens_cap if max_tokens_cap is not None else 63488
     max_tokens_update = gr.update(value=max_tokens_value, maximum=max_tokens_maximum)
 
     # Effort dropdown (Claude Opus 4.5 only)

@@ -222,6 +222,14 @@ def create_layout(
             )
             initial_max_tokens = 16384 if is_reasoning else 4096
 
+        # Calculate initial max_tokens maximum based on provider/model
+        initial_max_tokens_cap = utils.get_max_tokens_cap(
+            initial_provider, initial_model_name
+        )
+        initial_max_tokens_maximum = (
+            initial_max_tokens_cap if initial_max_tokens_cap is not None else 63488
+        )
+
         # --- Define UI Components ---
         with gr.Tabs():
             with gr.TabItem("Translator"):
@@ -857,7 +865,7 @@ def create_layout(
                             )
                             max_tokens = gr.Slider(
                                 2048,
-                                32768,
+                                initial_max_tokens_maximum,
                                 value=initial_max_tokens,
                                 step=1024,
                                 label="Max Tokens",
