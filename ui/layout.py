@@ -545,8 +545,8 @@ def create_layout(
                                 elem_id="provider_selector",
                             )
                             google_api_key = gr.Textbox(
-                                label="Google API Key",
-                                placeholder="Enter Google API key (starts with AI...)",
+                                label="Google AI Studio API Key",
+                                placeholder="Enter Google AI Studio API key (starts with AI...)",
                                 type="password",
                                 value=saved_settings.get("google_api_key", ""),
                                 show_copy_button=False,

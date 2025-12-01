@@ -242,6 +242,40 @@ def _is_reasoning_model_zai(model_name: str) -> bool:
     return lm.startswith("glm-4.")
 
 
+def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int]:
+    """
+    Get the maximum allowed max_tokens value for a specific provider/model combination.
+
+    Returns:
+        - 16384 for OpenAI models with "chat" in the name (including via OpenRouter)
+        - 8192 for DeepSeek "deepseek-chat" model
+        - 16384 for Z.ai "glm-4.5v" model (including via OpenRouter)
+        - None for all other models (no cap, use existing 32768 max)
+    """
+    if not model_name:
+        return None
+
+    model_lower = model_name.lower()
+
+    if provider == "OpenAI":
+        if "chat" in model_lower:
+            return 16384
+    elif provider == "OpenRouter":
+        is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
+        if is_openai_model and "chat" in model_lower:
+            return 16384
+        if "glm-4.5v" in model_lower:
+            return 16384
+    elif provider == "DeepSeek":
+        if model_lower == "deepseek-chat":
+            return 8192
+    elif provider == "Z.ai":
+        if model_lower == "glm-4.5v":
+            return 16384
+
+    return None
+
+
 def _add_media_resolution_to_part(
     part: Dict[str, Any],
     media_resolution_ui: str,
@@ -325,6 +359,10 @@ def _build_generation_config(
         elif provider == "Z.ai":
             is_reasoning = _is_reasoning_model_zai(model_name)
         max_tokens_value = 16384 if is_reasoning else 4096
+
+    max_tokens_cap = get_max_tokens_cap(provider, model_name)
+    if max_tokens_cap is not None and max_tokens_value > max_tokens_cap:
+        max_tokens_value = max_tokens_cap
 
     if provider == "Google":
         is_gemini_3 = "gemini-3" in model_name.lower()

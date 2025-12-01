@@ -256,6 +256,40 @@ def _is_zai_reasoning_model(model_name: Optional[str]) -> bool:
     return lm.startswith("glm-4.")
 
 
+def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int]:
+    """
+    Get the maximum allowed max_tokens value for a specific provider/model combination.
+
+    Returns:
+        - 16384 for OpenAI models with "chat" in the name (including via OpenRouter)
+        - 8192 for DeepSeek "deepseek-chat" model
+        - 16384 for Z.ai "glm-4.5v" model (including via OpenRouter)
+        - None for all other models (no cap, use existing 32768 max)
+    """
+    if not model_name:
+        return None
+
+    model_lower = model_name.lower()
+
+    if provider == "OpenAI":
+        if "chat" in model_lower:
+            return 16384
+    elif provider == "OpenRouter":
+        is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
+        if is_openai_model and "chat" in model_lower:
+            return 16384
+        if "glm-4.5v" in model_lower:
+            return 16384
+    elif provider == "DeepSeek":
+        if model_lower == "deepseek-chat":
+            return 8192
+    elif provider == "Z.ai":
+        if model_lower == "glm-4.5v":
+            return 16384
+
+    return None
+
+
 def _is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
     """Check if a Moonshot model is reasoning-capable.
 
@@ -740,7 +774,10 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         max_tokens_value = 16384 if is_reasoning else 4096
     else:
         max_tokens_value = 4096
-    max_tokens_update = gr.update(value=max_tokens_value)
+
+    max_tokens_cap = get_max_tokens_cap(provider, remembered_model)
+    max_tokens_maximum = max_tokens_cap if max_tokens_cap is not None else 32768
+    max_tokens_update = gr.update(value=max_tokens_value, maximum=max_tokens_maximum)
 
     def _is_gemini_3_model(name: Optional[str]) -> bool:
         if not name:
@@ -950,8 +987,11 @@ def update_params_for_model(
     )
 
     is_reasoning = is_reasoning_model(provider, model_name)
+
     max_tokens_value = 16384 if is_reasoning else 4096
-    max_tokens_update = gr.update(value=max_tokens_value)
+    max_tokens_cap = get_max_tokens_cap(provider, model_name)
+    max_tokens_maximum = max_tokens_cap if max_tokens_cap is not None else 32768
+    max_tokens_update = gr.update(value=max_tokens_value, maximum=max_tokens_maximum)
 
     # Effort dropdown (Claude Opus 4.5 only)
     effort_visible, effort_choices, effort_default_value = get_effort_config(
