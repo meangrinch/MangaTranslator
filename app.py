@@ -26,7 +26,7 @@ def custom_except_hook(exc_type, exc_value, exc_traceback):
 sys.excepthook = custom_except_hook
 
 # Helps prevent fragmentation OOM errors on some GPUs
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
+os.environ["PYTORCH_ALLOC_CONF"] = "max_split_size_mb:512"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MangaTranslator")
