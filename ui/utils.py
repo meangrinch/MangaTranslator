@@ -378,31 +378,31 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
     info_map = {
         "Google": (
             "Use Gemini's web search for up-to-date information. "
-            "Might improve translation quality."
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "OpenRouter": (
             "Use OpenRouter's web search (Exa) for up-to-date information. "
-            "Might improve translation quality."
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "OpenAI": (
             "Use OpenAI's web search tool for up-to-date information. "
-            "Might improve translation quality."
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "Anthropic": (
             "Use Anthropic's web search tool for up-to-date information. "
-            "Might improve translation quality."
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "xAI": (
             "Use xAI's web search tool for up-to-date information. "
-            "Might improve translation quality."
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "Z.ai": (
             "Use Z.ai's web search tool for up-to-date information. "
-            "Might improve translation quality."
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "Moonshot AI": (
             "Use Moonshot AI's web search tool for up-to-date information. "
-            "Might improve translation quality."
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
     }
 
