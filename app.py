@@ -25,8 +25,20 @@ def custom_except_hook(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = custom_except_hook
 
-# Helps prevent fragmentation OOM errors on some GPUs
-os.environ["PYTORCH_ALLOC_CONF"] = "max_split_size_mb:512"
+
+def _get_pytorch_version_tuple(version_str):
+    """Convert version string like '2.9.0' to tuple (2, 9, 0) for comparison."""
+    parts = version_str.split("+")[0].split("-")[0].split(".")
+    return tuple(int(part) for part in parts[:3])
+
+
+# PyTorch 2.9.0+ uses PYTORCH_ALLOC_CONF, older versions use PYTORCH_CUDA_ALLOC_CONF
+_pytorch_version = _get_pytorch_version_tuple(torch.__version__)
+if _pytorch_version >= (2, 9, 0):
+    # Helps prevent fragmentation OOM errors on some GPUs
+    os.environ["PYTORCH_ALLOC_CONF"] = "max_split_size_mb:512"
+else:
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MangaTranslator")
