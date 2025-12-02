@@ -19,8 +19,8 @@ from .services.translation import (
 )
 from .text.text_renderer import render_text_skia
 
-__version__ = "1.6.3"
-__version_info__ = (1, 6, 3)
+__version__ = "1.6.4"
+__version_info__ = (1, 6, 4)
 __author__ = "grinnch"
 __copyright__ = "Copyright 2025-present grinnch"
 __license__ = "Apache-2.0"
