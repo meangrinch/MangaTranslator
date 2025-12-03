@@ -206,6 +206,17 @@ def process_outside_text(
                         "min",
                         verbose,
                     )
+            elif config.translation.upscale_method == "model_lite":
+                model_manager = get_model_manager()
+                with model_manager.upscale_lite_context() as upscale_model:
+                    final_text_pil = process_bubble_image_cached(
+                        outside_text_image_pil,
+                        upscale_model,
+                        config.device,
+                        config.translation.osb_min_side_pixels,
+                        "min",
+                        verbose,
+                    )
             elif config.translation.upscale_method == "lanczos":
                 w, h = outside_text_image_pil.size
                 min_side = min(w, h)

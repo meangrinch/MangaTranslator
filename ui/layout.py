@@ -886,7 +886,8 @@ def create_layout(
                             )
                             upscale_method = gr.Radio(
                                 choices=[
-                                    ("Upscale Model", "model"),
+                                    ("Model", "model"),
+                                    ("Model (Lite)", "model_lite"),
                                     ("LANCZOS", "lanczos"),
                                     ("None", "none"),
                                 ],
@@ -894,7 +895,8 @@ def create_layout(
                                 label="Bubble/Context Resizing Method",
                                 info=(
                                     "Determines how to resize cropped bubble images/full page before sending to LLM. "
-                                    "Use model for best quality, use LANCZOS for faster processing."
+                                    "Use model for best quality, Model (Lite) for faster/less memory-intensive "
+                                    "processing, or LANCZOS for fastest processing."
                                 ),
                             )
                             initial_upscale_method = saved_settings.get(
@@ -1215,7 +1217,7 @@ def create_layout(
                         with gr.Group(
                             visible=False, elem_classes="settings-group"
                         ) as group_output:
-                            gr.Markdown("### Image Output")
+                            gr.Markdown("### Output Format")
                             output_format = gr.Radio(
                                 choices=["auto", "png", "jpeg"],
                                 label="Image Output Format",
@@ -1240,14 +1242,31 @@ def create_layout(
                                 interactive=saved_settings.get("output_format", "auto")
                                 != "jpeg",
                             )
+                            gr.Markdown("### Upscaling")
                             image_upscale_mode = gr.Radio(
                                 choices=["off", "initial", "final"],
                                 value=image_upscale_mode_default,
                                 label="Image Upscaling Method",
                                 info=(
                                     "Determines whether to upscale the initial untranslated image or the final "
-                                    "translated image. 'Initial' results in cleaner text, but consumes more memory."
+                                    "translated image. 'Initial' may result in cleaner text, but cause inconsistent "
+                                    "results compare to 'final'."
                                 ),
+                            )
+                            image_upscale_model = gr.Radio(
+                                choices=[
+                                    ("Model", "model"),
+                                    ("Model (Lite)", "model_lite"),
+                                ],
+                                value=saved_settings.get(
+                                    "image_upscale_model", "model"
+                                ),
+                                label="Upscaling Model",
+                                info=(
+                                    "Model to use for image upscaling. Model (Lite) is faster and less "
+                                    "memory-intensive, but may have slightly lower quality."
+                                ),
+                                interactive=image_upscale_mode_default != "off",
                             )
                             image_upscale_factor = gr.Slider(
                                 1.0,
@@ -1255,7 +1274,11 @@ def create_layout(
                                 value=image_upscale_factor_default,
                                 step=0.1,
                                 label="Upscale Factor",
-                                info="Factor for the selected upscaling mode.",
+                                info=(
+                                    "Factor for the selected upscaling mode. "
+                                    "The selected model will perform an upscaling pass every 2x, "
+                                    "downscaling to meet the target if needed."
+                                ),
                                 interactive=image_upscale_mode_default != "off",
                             )
                             auto_scale = gr.Checkbox(
@@ -1386,6 +1409,7 @@ def create_layout(
             outside_text_easyocr_min_size,
             image_upscale_mode,
             image_upscale_factor,
+            image_upscale_model,
             auto_scale,
         ]
 
@@ -1464,6 +1488,7 @@ def create_layout(
             outside_text_easyocr_min_size,
             image_upscale_mode,
             image_upscale_factor,
+            image_upscale_model,
             auto_scale,
         ]
 
@@ -1541,6 +1566,7 @@ def create_layout(
             outside_text_easyocr_min_size,
             image_upscale_mode,
             image_upscale_factor,
+            image_upscale_model,
             auto_scale,
             batch_input_language,
             batch_output_language,
@@ -1624,6 +1650,7 @@ def create_layout(
             outside_text_easyocr_min_size,
             image_upscale_mode,
             image_upscale_factor,
+            image_upscale_model,
             auto_scale,
             batch_input_language,
             batch_output_language,
@@ -1692,9 +1719,12 @@ def create_layout(
         )
 
         image_upscale_mode.change(
-            fn=lambda mode: gr.update(interactive=mode != "off"),
+            fn=lambda mode: (
+                gr.update(interactive=mode != "off"),
+                gr.update(interactive=mode != "off"),
+            ),
             inputs=image_upscale_mode,
-            outputs=image_upscale_factor,
+            outputs=[image_upscale_factor, image_upscale_model],
             queue=False,
         )
 

@@ -248,5 +248,5 @@ git pull
 - EasyOCR: [JaidedAI](https://github.com/JaidedAI/EasyOCR)
 - FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
 - Nunchaku: [Nunchaku Tech](https://github.com/nunchaku-tech/nunchaku)
-- 2x-AnimeSharpV4 RCAN: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
+- 2x-AnimeSharpV4: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)

@@ -1685,6 +1685,11 @@ def prepare_bubble_images_for_translation(
             f"Upscaling {len(bubble_data)} bubble images with 2x-AnimeSharpV4_RCAN",
             always_print=True,
         )
+    elif upscale_method == "model_lite":
+        log_message(
+            f"Upscaling {len(bubble_data)} bubble images with 2x-AnimeSharpV4_Fast_RCAN_PU (Lite)",
+            always_print=True,
+        )
     elif upscale_method == "lanczos":
         log_message(
             f"Upscaling {len(bubble_data)} bubble images with LANCZOS",
@@ -1703,7 +1708,7 @@ def prepare_bubble_images_for_translation(
         bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
         bubble_image_pil = cv2_to_pil(bubble_image_cv)
 
-        if upscale_method == "model":
+        if upscale_method == "model" or upscale_method == "model_lite":
             final_bubble_pil = process_bubble_image_cached(
                 bubble_image_pil,
                 upscale_model,

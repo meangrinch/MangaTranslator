@@ -97,6 +97,7 @@ class UIOutputSettings:
     png_compression: int = 6
     image_upscale_mode: str = "off"  # "off", "initial", "final"
     image_upscale_factor: float = 2.0
+    image_upscale_model: str = "model"  # "model" or "model_lite"
 
 
 @dataclass
@@ -230,6 +231,7 @@ class UIConfigState:
             "png_compression": self.output.png_compression,
             "image_upscale_mode": self.output.image_upscale_mode,
             "image_upscale_factor": self.output.image_upscale_factor,
+            "image_upscale_model": self.output.image_upscale_model,
             "verbose": self.general.verbose,
             "cleaning_only": self.general.cleaning_only,
             "test_mode": self.general.test_mode,
@@ -396,6 +398,10 @@ class UIConfigState:
                     "image_upscale_factor",
                     defaults.get("image_upscale_factor", 2.0),
                 ),
+                image_upscale_model=data.get(
+                    "image_upscale_model",
+                    defaults.get("image_upscale_model", "model"),
+                ),
             ),
             general=UIGeneralSettings(
                 verbose=data.get("verbose", defaults["verbose"]),
@@ -522,6 +528,7 @@ def map_ui_to_backend_config(
         png_compression=ui_state.output.png_compression,
         upscale_final_image=upscale_mode == "final",
         image_upscale_factor=upscale_factor,
+        image_upscale_model=ui_state.output.image_upscale_model,
     )
 
     # Determine OSB font (use main font if not specified)

@@ -442,11 +442,12 @@ def main():
     parser.add_argument(
         "--upscale-method",
         type=str,
-        choices=["model", "lanczos", "none"],
+        choices=["model", "model_lite", "lanczos", "none"],
         default="model",
         help=(
             "Method for upscaling images before translation API. "
             "model: Use 2x-AnimeSharpV4 upscaling model (best quality, slower), "
+            "model_lite: Use 2x-AnimeSharpV4 Fast RCAN PU model (faster, less memory-intensive), "
             "lanczos: Use LANCZOS resampling (fast, good quality), "
             "none: No upscaling (may affect OCR quality for small text)"
         ),

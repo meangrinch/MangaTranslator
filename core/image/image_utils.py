@@ -423,7 +423,7 @@ def upscale_image_to_dimension(
         return current_image
 
     log_message(
-        f"Upscaling from {current_image.width}x{current_image.height} with primary model...",
+        f"Upscaling from {current_image.width}x{current_image.height}...",
         verbose=verbose,
     )
     current_image = _upscale_image(model, current_image, device)
@@ -431,7 +431,7 @@ def upscale_image_to_dimension(
 
     while not met(current_image.width, current_image.height):
         log_message(
-            f"Upscaling from {current_image.width}x{current_image.height} with secondary model...",
+            f"Upscaling from {current_image.width}x{current_image.height} (additional pass)...",
             verbose=verbose,
         )
         current_image = _upscale_image(model, current_image, device)
@@ -444,26 +444,38 @@ def upscale_image_to_dimension(
 
 
 def upscale_image(
-    image: Image.Image, factor: float, verbose: bool = False
+    image: Image.Image, factor: float, model_type: str = "model", verbose: bool = False
 ) -> Image.Image:
-    """Upscales an image by a given factor."""
+    """Upscales an image by a given factor.
+
+    Args:
+        image: Image to upscale
+        factor: Upscaling factor
+        model_type: Model type to use - "model" or "model_lite"
+        verbose: Whether to print verbose logging
+    """
     if factor == 1.0:
         return image
 
     cache = get_cache()
-    cache_key = cache.get_upscale_cache_key(image, factor)
+    # Include model type in cache key to avoid cache collisions between models
+    cache_key = cache.get_upscale_cache_key(image, factor) + f"_model_{model_type}"
     cached_upscale = cache.get_upscaled_image(cache_key)
     if cached_upscale is not None:
         log_message("  - Using cached upscaled image", verbose=verbose)
         return cached_upscale
 
     model_manager = get_model_manager()
-    upscale_model = model_manager.load_upscale()
+    if model_type == "model_lite":
+        upscale_model = model_manager.load_upscale_lite()
+        log_message(f"Upscaling image by {factor}x with lite model...", verbose=verbose)
+    else:
+        upscale_model = model_manager.load_upscale()
+        log_message(f"Upscaling image by {factor}x...", verbose=verbose)
     device = model_manager.device
 
     target_width = int(image.width * factor)
     target_height = int(image.height * factor)
-    log_message(f"Upscaling image by {factor}x...", verbose=verbose)
 
     upscaled_image = upscale_image_to_dimension(
         upscale_model, image, max(target_width, target_height), device, "max", verbose

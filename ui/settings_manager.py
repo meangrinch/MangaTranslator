@@ -155,6 +155,7 @@ DEFAULT_SETTINGS = {
     "output_format": "auto",
     "image_upscale_mode": "off",
     "image_upscale_factor": 2.0,
+    "image_upscale_model": "model",
     "cleaning_only": False,
     "test_mode": False,
     "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
@@ -271,6 +272,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "png_compression",
     "image_upscale_mode",
     "image_upscale_factor",
+    "image_upscale_model",
     # General
     "verbose",
     "cleaning_only",

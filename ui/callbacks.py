@@ -128,6 +128,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_easyocr_min_size_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
+        image_upscale_model_val,
         auto_scale_val,
         batch_input_language,
         batch_output_language,
@@ -220,6 +221,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             png_compression=png_compression,
             image_upscale_mode=image_upscale_mode_val,
             image_upscale_factor=image_upscale_factor_val,
+            image_upscale_model=image_upscale_model_val,
         ),
         general=UIGeneralSettings(
             verbose=verbose,
@@ -865,6 +867,7 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_easyocr_min_size_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
+        image_upscale_model_val,
         auto_scale_val,
     ) = args
     ui_state = UIConfigState(
@@ -944,6 +947,7 @@ def handle_save_config_click(*args: Any) -> str:
             png_compression=pngc,
             image_upscale_mode=image_upscale_mode_val,
             image_upscale_factor=image_upscale_factor_val,
+            image_upscale_model=image_upscale_model_val,
         ),
         general=UIGeneralSettings(
             verbose=verb,
@@ -1166,6 +1170,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(value=default_ui_state.output.image_upscale_mode),
         gr.update(
             value=default_ui_state.output.image_upscale_factor,
+            interactive=default_ui_state.output.image_upscale_mode != "off",
+        ),
+        gr.update(
+            value=default_ui_state.output.image_upscale_model,
             interactive=default_ui_state.output.image_upscale_mode != "off",
         ),
         default_ui_state.general.auto_scale,

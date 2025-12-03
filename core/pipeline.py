@@ -78,7 +78,13 @@ def _apply_pre_upscale_if_needed(
     if factor == 1.0:
         return image, 1.0
 
-    upscaled = upscale_image(image, factor, verbose=verbose)
+    # Use the output upscale model setting for initial upscaling as well
+    model_type = (
+        getattr(config.output, "image_upscale_model", "model")
+        if hasattr(config, "output")
+        else "model"
+    )
+    upscaled = upscale_image(image, factor, model_type=model_type, verbose=verbose)
     return upscaled, factor
 
 
@@ -198,6 +204,28 @@ def translate_and_render(
                     )
                     log_message(
                         "Upscaled full image for context with model", verbose=verbose
+                    )
+            elif config.translation.upscale_method == "model_lite":
+                # Use upscaling lite model for full page context
+                model_manager = get_model_manager()
+                with model_manager.upscale_lite_context() as upscale_model:
+                    context_image_pil = upscale_image_to_dimension(
+                        upscale_model,
+                        context_image_pil,
+                        effective_context_max_side,
+                        config.device,
+                        "max",
+                        verbose,
+                    )
+                    # Resize to exact target dimension (downscale if needed)
+                    context_image_pil = resize_to_max_side(
+                        context_image_pil,
+                        effective_context_max_side,
+                        verbose=verbose,
+                    )
+                    log_message(
+                        "Upscaled full image for context with lite model",
+                        verbose=verbose,
                     )
             elif config.translation.upscale_method == "lanczos":
                 # Use LANCZOS resampling
@@ -334,7 +362,18 @@ def translate_and_render(
             log_message("Preparing bubble images...", verbose=verbose)
 
             model_manager = get_model_manager()
-            with model_manager.upscale_context() as upscale_model:
+            # Use appropriate context manager based on upscale_method
+            if config.translation.upscale_method == "model":
+                context_manager = model_manager.upscale_context()
+            elif config.translation.upscale_method == "model_lite":
+                context_manager = model_manager.upscale_lite_context()
+            else:
+                # For lanczos/none, create a dummy context manager that yields None
+                from contextlib import nullcontext
+
+                context_manager = nullcontext(None)
+
+            with context_manager as upscale_model:
                 bubble_data = prepare_bubble_images_for_translation(
                     bubble_data,
                     original_cv_image,
@@ -671,6 +710,7 @@ def translate_and_render(
         final_image_to_save = upscale_image(
             final_image_to_save,
             config.output.image_upscale_factor,
+            model_type=config.output.image_upscale_model,
             verbose=verbose,
         )
 

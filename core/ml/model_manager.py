@@ -22,6 +22,7 @@ class ModelType(Enum):
     """Enumeration of available model types."""
 
     UPSCALE = "upscale"
+    UPSCALE_LITE = "upscale_lite"
     YOLO_SPEECH_BUBBLE = "yolo_speech_bubble"
     YOLO_CONJOINED_BUBBLE = "yolo_conjoined_bubble"
     EASYOCR = "easyocr"
@@ -82,6 +83,9 @@ class ModelManager:
             ModelType.UPSCALE: (
                 model_dir / "upscale" / "2x-AnimeSharpV4_RCAN.safetensors"
             ),
+            ModelType.UPSCALE_LITE: (
+                model_dir / "upscale" / "2x-AnimeSharpV4_Fast_RCAN_PU.safetensors"
+            ),
             ModelType.YOLO_SPEECH_BUBBLE: (
                 model_dir / "yolo" / "yolov8m_seg-speech-bubble.pt"
             ),
@@ -98,6 +102,10 @@ class ModelManager:
                 "https://huggingface.co/Kim2091/2x-AnimeSharpV4/resolve/main/"
                 "2x-AnimeSharpV4_RCAN.safetensors"
             ),
+            ModelType.UPSCALE_LITE: (
+                "https://huggingface.co/Kim2091/2x-AnimeSharpV4/resolve/main/"
+                "2x-AnimeSharpV4_Fast_RCAN_PU.safetensors"
+            ),
         }
 
     def _init_hf_repos(self):
@@ -106,6 +114,10 @@ class ModelManager:
             ModelType.UPSCALE: {
                 "repo_id": "Kim2091/2x-AnimeSharpV4",
                 "filename": "2x-AnimeSharpV4_RCAN.safetensors",
+            },
+            ModelType.UPSCALE_LITE: {
+                "repo_id": "Kim2091/2x-AnimeSharpV4",
+                "filename": "2x-AnimeSharpV4_Fast_RCAN_PU.safetensors",
             },
             ModelType.YOLO_SPEECH_BUBBLE: {
                 "repo_id": "kitsumed/yolov8m_seg-speech-bubble",
@@ -304,6 +316,48 @@ class ModelManager:
             )
             self.models[ModelType.UPSCALE] = model
             log_message("Upscale model loaded.", verbose=verbose)
+            return model
+
+    def load_upscale_lite(self, verbose: bool = False):
+        """Load upscale lite model (AnimeSharpV4 Fast RCAN PU)."""
+        with self._lock:
+            if self.is_loaded(ModelType.UPSCALE_LITE):
+                return self.models[ModelType.UPSCALE_LITE]
+
+            log_message(
+                "Loading upscale lite model (2x-AnimeSharpV4_Fast_RCAN_PU)...", verbose=verbose
+            )
+            path = self.model_paths[ModelType.UPSCALE_LITE]
+
+            # Try HF download first, fallback to direct URL
+            try:
+                hf_info = self.model_hf_repos[ModelType.UPSCALE_LITE]
+                self._ensure_hf_file(
+                    hf_info["repo_id"], hf_info["filename"], path, verbose=verbose
+                )
+            except Exception:
+                self._ensure_file(
+                    path, self.model_urls[ModelType.UPSCALE_LITE], verbose=verbose
+                )
+
+            # Load model
+            if path.suffix == ".safetensors":
+                from safetensors import safe_open
+
+                state_dict = {}
+                with safe_open(path, framework="pt", device=str(self.device)) as f:
+                    for key in f.keys():
+                        state_dict[key] = f.get_tensor(key)
+            else:
+                state_dict = torch.load(
+                    path, map_location=self.device, weights_only=False
+                )
+
+            model = (
+                ModelLoader().load_from_state_dict(state_dict).to(self.device).eval()
+            )
+            self.models[ModelType.UPSCALE_LITE] = model
+            log_message("Upscale lite model loaded.", verbose=verbose)
             return model
 
     def load_yolo_speech_bubble(
@@ -579,9 +633,13 @@ class ModelManager:
                 torch.cuda.empty_cache()
 
     def unload_upscale_models(self, verbose: bool = False):
-        """Unload upscale model."""
-        self.unload_model(ModelType.UPSCALE, force_gc=True, verbose=verbose)
-        log_message("Upscale model unloaded.", verbose=verbose)
+        """Unload upscale models (both regular and lite)."""
+        self.unload_model(ModelType.UPSCALE, force_gc=False, verbose=verbose)
+        self.unload_model(ModelType.UPSCALE_LITE, force_gc=False, verbose=verbose)
+        if torch.cuda.is_available():
+            gc.collect()
+            torch.cuda.empty_cache()
+        log_message("Upscale models unloaded.", verbose=verbose)
 
     def unload_ocr_models(self, verbose: bool = False):
         """Unload OCR-related models (YOLO, SAM2, EasyOCR, and manga-ocr)."""
@@ -670,6 +728,15 @@ class ModelManager:
         try:
             self.load_upscale(verbose=verbose)
             yield self.models[ModelType.UPSCALE]
+        finally:
+            self.unload_upscale_models(verbose=verbose)
+
+    @contextmanager
+    def upscale_lite_context(self, verbose: bool = False):
+        """Context manager for upscale lite model - auto-loads and unloads."""
+        try:
+            self.load_upscale_lite(verbose=verbose)
+            yield self.models[ModelType.UPSCALE_LITE]
         finally:
             self.unload_upscale_models(verbose=verbose)
 
