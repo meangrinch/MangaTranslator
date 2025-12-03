@@ -920,7 +920,7 @@ def _parse_llm_response_with_sections(
             f"Parsing {provider} response with sections: {len(response_text)} chars",
             verbose=debug,
         )
-        log_message(f"Raw response:\n---\n{response_text}\n---", verbose=debug)
+        log_message(f"Raw response:\n---\n{response_text}\n---", always_print=True)
 
         speech_bubble_pattern = re.compile(
             r'^\s*[*_]*S(\d+)[*_]*\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*[*_]*S\d+[*_]*\s*:|\s*$)',
@@ -1142,29 +1142,29 @@ def _perform_manga_ocr(
 
     extracted_texts = formatted_texts
 
-    if debug:
-        speech_bubble_texts, osb_texts, _, _ = _format_ocr_results(
-            extracted_texts,
-            speech_bubble_indices,
-            osb_text_indices,
-            verbose=debug,
-        )
+    # Always format and print raw manga-ocr output
+    speech_bubble_texts, osb_texts, _, _ = _format_ocr_results(
+        extracted_texts,
+        speech_bubble_indices,
+        osb_text_indices,
+        verbose=debug,
+    )
 
-        log_sections = []
-        if speech_bubble_texts:
-            log_sections.append("## SPEECH BUBBLES")
-            log_sections.extend(speech_bubble_texts)
-        if osb_texts:
-            if log_sections:
-                log_sections.append("")
-            log_sections.append("## NON-DIALOGUE TEXT")
-            log_sections.extend(osb_texts)
-
+    log_sections = []
+    if speech_bubble_texts:
+        log_sections.append("## SPEECH BUBBLES")
+        log_sections.extend(speech_bubble_texts)
+    if osb_texts:
         if log_sections:
-            log_message(
-                f"Raw manga-ocr output:\n---\n{chr(10).join(log_sections)}\n---",
-                verbose=debug,
-            )
+            log_sections.append("")
+        log_sections.append("## NON-DIALOGUE TEXT")
+        log_sections.extend(osb_texts)
+
+    if log_sections:
+        log_message(
+            f"Raw manga-ocr output:\n---\n{chr(10).join(log_sections)}\n---",
+            always_print=True,
+        )
 
     if len(extracted_texts) != total_elements:
         msg = (
