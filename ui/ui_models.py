@@ -136,7 +136,7 @@ class UIGeneralSettings:
     media_resolution_context: str = "auto"  # Gemini 3 models
     reasoning_effort: Optional[str] = None
     effort: Optional[str] = None  # Claude Opus 4.5 only: token spending eagerness
-    auto_scale: bool = False
+    auto_scale: bool = True
 
 
 @dataclass
@@ -420,7 +420,7 @@ class UIConfigState:
                     "reasoning_effort", defaults.get("reasoning_effort")
                 ),
                 effort=data.get("effort", defaults.get("effort", "medium")),
-                auto_scale=data.get("auto_scale", defaults.get("auto_scale", False)),
+                auto_scale=data.get("auto_scale", defaults.get("auto_scale", True)),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
             output_language=data.get("output_language", defaults["output_language"]),

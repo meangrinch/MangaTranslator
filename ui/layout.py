@@ -1259,7 +1259,7 @@ def create_layout(
                                 interactive=image_upscale_mode_default != "off",
                             )
                             auto_scale = gr.Checkbox(
-                                value=saved_settings.get("auto_scale", False),
+                                value=saved_settings.get("auto_scale", True),
                                 label="Auto-Scale to Image Size",
                                 info=(
                                     "Automatically scale pipeline parameters (fonts, kernels, etc.) "

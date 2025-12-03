@@ -373,11 +373,12 @@ def main():
         help="Factor for the selected upscaling mode (1.0-8.0).",
     )
     parser.add_argument(
-        "--auto-scale",
-        action="store_true",
+        "--no-auto-scale",
+        action="store_false",
+        dest="auto_scale",
         help=(
-            "Enable automatic scaling of pipeline parameters (fonts, kernels, etc.) "
-            "based on image size relative to 1MP. Ensures consistent behavior across different image resolutions."
+            "Disable automatic scaling of pipeline parameters (fonts, kernels, etc.) "
+            "based on image size relative to 1MP. Prevents consistent behavior across different image resolutions."
         ),
     )
     # General args
@@ -565,6 +566,7 @@ def main():
     )
 
     parser.set_defaults(send_full_page_context=True)
+    parser.set_defaults(auto_scale=True)
     parser.set_defaults(
         verbose=False,
         cpu=False,
