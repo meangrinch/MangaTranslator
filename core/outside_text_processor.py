@@ -204,6 +204,7 @@ def process_outside_text(
                         config.device,
                         config.translation.osb_min_side_pixels,
                         "min",
+                        "model",
                         verbose,
                     )
             elif config.translation.upscale_method == "model_lite":
@@ -215,6 +216,7 @@ def process_outside_text(
                         config.device,
                         config.translation.osb_min_side_pixels,
                         "min",
+                        "model_lite",
                         verbose,
                     )
             elif config.translation.upscale_method == "lanczos":

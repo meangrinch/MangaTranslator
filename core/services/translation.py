@@ -1715,6 +1715,7 @@ def prepare_bubble_images_for_translation(
                 device,
                 bubble_min_side_pixels,
                 "min",
+                upscale_method,
                 verbose,
             )
         elif upscale_method == "lanczos":

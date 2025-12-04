@@ -194,6 +194,7 @@ def translate_and_render(
                         effective_context_max_side,
                         config.device,
                         "max",
+                        "model",
                         verbose,
                     )
                     # Resize to exact target dimension (downscale if needed)
@@ -215,6 +216,7 @@ def translate_and_render(
                         effective_context_max_side,
                         config.device,
                         "max",
+                        "model_lite",
                         verbose,
                     )
                     # Resize to exact target dimension (downscale if needed)

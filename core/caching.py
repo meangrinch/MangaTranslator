@@ -342,22 +342,25 @@ class UnifiedCache:
             verbose=verbose,
         )
 
-    def get_upscale_cache_key(self, image: Image.Image, factor: float) -> str:
+    def get_upscale_cache_key(
+        self, image: Image.Image, factor: float, model_type: str = "model"
+    ) -> str:
         """Compute cache key for image upscaling.
 
         Args:
             image: Input image
             factor: Upscaling factor
+            model_type: Model type identifier ("model" or "model_lite")
 
         Returns:
             str: Cache key
         """
         image_hash = self._hash_image(image)
-        key_string = f"upscale_{image_hash}_factor{factor:.3f}"
+        key_string = f"upscale_{image_hash}_factor{factor:.3f}_model{model_type}"
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     def get_upscale_dimension_cache_key(
-        self, image: Image.Image, target: int, mode: str
+        self, image: Image.Image, target: int, mode: str, model_type: str = "model"
     ) -> str:
         """Compute cache key for image upscaling to dimension.
 
@@ -365,16 +368,17 @@ class UnifiedCache:
             image: Input image
             target: Target dimension
             mode: Upscaling mode ('max' or 'min')
+            model_type: Model type identifier ("model" or "model_lite")
 
         Returns:
             str: Cache key
         """
         image_hash = self._hash_image(image)
-        key_string = f"upscale_dim_{image_hash}_target{target}_mode{mode}"
+        key_string = f"upscale_dim_{image_hash}_target{target}_mode{mode}_model{model_type}"
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     def get_bubble_processing_cache_key(
-        self, image: Image.Image, target: int, mode: str
+        self, image: Image.Image, target: int, mode: str, model_type: str = "model"
     ) -> str:
         """Compute cache key for complete bubble processing (upscale + color match).
 
@@ -382,12 +386,13 @@ class UnifiedCache:
             image: Input image
             target: Target dimension
             mode: Upscaling mode ('max' or 'min')
+            model_type: Model type identifier ("model" or "model_lite")
 
         Returns:
             str: Cache key
         """
         image_hash = self._hash_image(image)
-        key_string = f"bubble_proc_{image_hash}_target{target}_mode{mode}"
+        key_string = f"bubble_proc_{image_hash}_target{target}_mode{mode}_model{model_type}"
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     def get_upscaled_image(self, cache_key: str) -> Optional[Image.Image]:

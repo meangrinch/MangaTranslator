@@ -385,6 +385,7 @@ def upscale_image_to_dimension(
     target: int,
     device: torch.device,
     mode: str,
+    model_type: str = "model",
     verbose: bool = False,
 ) -> Image.Image:
     """
@@ -392,6 +393,7 @@ def upscale_image_to_dimension(
 
     Args:
         mode: 'max' ensures max(width, height) >= target, 'min' ensures min(width, height) >= target
+        model_type: Model type identifier ("model" or "model_lite")
     """
     if mode not in {"max", "min"}:
         raise ImageProcessingError("mode must be 'max' or 'min'")
@@ -407,7 +409,7 @@ def upscale_image_to_dimension(
         )
 
     cache = get_cache()
-    cache_key = cache.get_upscale_dimension_cache_key(image, target, mode)
+    cache_key = cache.get_upscale_dimension_cache_key(image, target, mode, model_type)
     cached_result = cache.get_upscaled_image(cache_key)
     if cached_result is not None:
         log_message("  - Using cached upscaled image", verbose=verbose)
@@ -458,8 +460,7 @@ def upscale_image(
         return image
 
     cache = get_cache()
-    # Include model type in cache key to avoid cache collisions between models
-    cache_key = cache.get_upscale_cache_key(image, factor) + f"_model_{model_type}"
+    cache_key = cache.get_upscale_cache_key(image, factor, model_type)
     cached_upscale = cache.get_upscaled_image(cache_key)
     if cached_upscale is not None:
         log_message("  - Using cached upscaled image", verbose=verbose)
@@ -478,7 +479,7 @@ def upscale_image(
     target_height = int(image.height * factor)
 
     upscaled_image = upscale_image_to_dimension(
-        upscale_model, image, max(target_width, target_height), device, "max", verbose
+        upscale_model, image, max(target_width, target_height), device, "max", model_type, verbose
     )
     result = upscaled_image.resize((target_width, target_height), Image.LANCZOS)
 
@@ -619,6 +620,7 @@ def process_bubble_image_cached(
     device: torch.device,
     target_min_side: int = 200,
     mode: str = "min",
+    model_type: str = "model",
     verbose: bool = False,
 ) -> Image.Image:
     """
@@ -635,6 +637,7 @@ def process_bubble_image_cached(
         device: PyTorch device for model inference
         target_min_side: Target minimum side length
         mode: Upscaling mode ('max' or 'min')
+        model_type: Model type identifier ("model" or "model_lite")
         verbose: Whether to print detailed logging
 
     Returns:
@@ -642,7 +645,7 @@ def process_bubble_image_cached(
     """
     cache = get_cache()
     cache_key = cache.get_bubble_processing_cache_key(
-        bubble_image_pil, target_min_side, mode
+        bubble_image_pil, target_min_side, mode, model_type
     )
     cached_result = cache.get_upscaled_image(cache_key)
     if cached_result is not None:
@@ -655,6 +658,7 @@ def process_bubble_image_cached(
         target_min_side,
         device,
         mode,
+        model_type,
         verbose,
     )
 
