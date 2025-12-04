@@ -213,6 +213,8 @@ python main.py --help
   - Increase "max_tokens" and/or use a higher "reasoning_effort" (e.g., "high")
 - **Text too large/small:**
   - Adjust "Max Font Size" and "Min Font Size" ranges
+- **Text too blurry/pixelated:**
+  - Increase "Supersampling Factor" (e.g., 6-8)
 - **Inconsistent behavior across different image sizes:**
   - Enable "Auto-Scale to Image Size": Settings must be tuned for 1MP sized images for proper scaling (default values should suffice)
 - **OSB text not inpainted/cleaned:**
