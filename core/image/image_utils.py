@@ -479,7 +479,13 @@ def upscale_image(
     target_height = int(image.height * factor)
 
     upscaled_image = upscale_image_to_dimension(
-        upscale_model, image, max(target_width, target_height), device, "max", model_type, verbose
+        upscale_model,
+        image,
+        max(target_width, target_height),
+        device,
+        "max",
+        model_type,
+        verbose,
     )
     result = upscaled_image.resize((target_width, target_height), Image.LANCZOS)
 

@@ -374,7 +374,9 @@ class UnifiedCache:
             str: Cache key
         """
         image_hash = self._hash_image(image)
-        key_string = f"upscale_dim_{image_hash}_target{target}_mode{mode}_model{model_type}"
+        key_string = (
+            f"upscale_dim_{image_hash}_target{target}_mode{mode}_model{model_type}"
+        )
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     def get_bubble_processing_cache_key(
@@ -392,7 +394,9 @@ class UnifiedCache:
             str: Cache key
         """
         image_hash = self._hash_image(image)
-        key_string = f"bubble_proc_{image_hash}_target{target}_mode{mode}_model{model_type}"
+        key_string = (
+            f"bubble_proc_{image_hash}_target{target}_mode{mode}_model{model_type}"
+        )
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     def get_upscaled_image(self, cache_key: str) -> Optional[Image.Image]:
