@@ -1051,7 +1051,7 @@ def create_layout(
                             )
                             supersampling_factor = gr.Slider(
                                 1,
-                                8,
+                                16,
                                 value=saved_settings.get("supersampling_factor", 4),
                                 step=1,
                                 label="Supersampling Factor",

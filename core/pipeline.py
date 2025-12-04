@@ -9,7 +9,7 @@ import cv2
 from PIL import Image
 
 from core.caching import get_cache
-from core.config import MangaTranslatorConfig, PreprocessingConfig
+from core.config import MangaTranslatorConfig, PreprocessingConfig, RenderingConfig
 from core.scaling import scale_font_size, scale_length, scale_scalar
 from utils.exceptions import (
     CancellationError,
@@ -39,7 +39,7 @@ from .services.translation import (
     prepare_bubble_images_for_translation,
     sort_bubbles_by_reading_order,
 )
-from .text.text_renderer import RenderingConfig, render_text_skia
+from .text.text_renderer import render_text_skia
 
 if TYPE_CHECKING:
     from ui.cancellation import CancellationManager
@@ -469,7 +469,7 @@ def translate_and_render(
                             probe_config = RenderingConfig(
                                 min_font_size=main_max_font,
                                 max_font_size=main_max_font,
-                                line_spacing_mult=config.rendering.line_spacing,
+                                line_spacing_mult=config.rendering.line_spacing_mult,
                                 use_subpixel_rendering=config.rendering.use_subpixel_rendering,
                                 font_hinting=config.rendering.font_hinting,
                                 use_ligatures=config.rendering.use_ligatures,
@@ -635,7 +635,7 @@ def translate_and_render(
                             font_dir = config.rendering.font_dir
                             min_font = main_min_font
                             max_font = main_max_font
-                            line_spacing = config.rendering.line_spacing
+                            line_spacing = config.rendering.line_spacing_mult
                             use_ligs = config.rendering.use_ligatures
                             render_info = bubble_render_info_map.get(tuple(bbox))
                             bubble_color_bgr = (255, 255, 255)

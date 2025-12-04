@@ -121,7 +121,7 @@ def translate_manga_logic(
             font_dir=selected_font_pack_name,
             max_font_size=config.rendering.max_font_size,
             min_font_size=config.rendering.min_font_size,
-            line_spacing=config.rendering.line_spacing,
+            line_spacing_mult=config.rendering.line_spacing_mult,
             font_hinting=config.rendering.font_hinting,
         )
         yolo_model_path, font_dir_path = validate_core_inputs(
@@ -267,7 +267,7 @@ def process_batch_logic(
             font_dir=selected_font_pack_name,
             max_font_size=config.rendering.max_font_size,
             min_font_size=config.rendering.min_font_size,
-            line_spacing=config.rendering.line_spacing,
+            line_spacing_mult=config.rendering.line_spacing_mult,
             font_hinting=config.rendering.font_hinting,
         )
         yolo_model_path, font_dir_path = validate_core_inputs(

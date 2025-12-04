@@ -85,7 +85,7 @@ class RenderingConfig:
     font_dir: str = "./fonts"
     max_font_size: int = 15
     min_font_size: int = 8
-    line_spacing: float = 1.0
+    line_spacing_mult: float = 1.0
     use_subpixel_rendering: bool = False
     font_hinting: str = "none"
     use_ligatures: bool = False
@@ -94,6 +94,7 @@ class RenderingConfig:
     hyphenation_min_word_length: int = 8
     badness_exponent: float = 3.0
     padding_pixels: float = 5.0
+    outline_width: float = 0.0
     supersampling_factor: int = 4
 
 

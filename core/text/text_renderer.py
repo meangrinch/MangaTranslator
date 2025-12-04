@@ -1,10 +1,10 @@
-from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np
 import skia
 from PIL import Image
 
+from core.config import RenderingConfig
 from core.image.image_utils import calculate_centroid_expansion_box
 from core.text.drawing_engine import (
     draw_layout,
@@ -20,25 +20,6 @@ from utils.logging import log_message
 
 GRAYSCALE_MIDPOINT = 128  # Threshold for determining text color
 FALLBACK_PADDING_RATIO = 0.08  # 8% padding ratio when safe area calculation fails
-
-
-@dataclass
-class RenderingConfig:
-    """Configuration for text rendering parameters."""
-
-    min_font_size: int = 8
-    max_font_size: int = 15
-    line_spacing_mult: float = 1.0
-    use_subpixel_rendering: bool = False
-    font_hinting: str = "none"
-    use_ligatures: bool = False
-    hyphenate_before_scaling: bool = True
-    hyphen_penalty: float = 1000.0
-    hyphenation_min_word_length: int = 8
-    badness_exponent: float = 3.0
-    padding_pixels: float = 5.0
-    outline_width: float = 0.0
-    supersampling_factor: int = 4
 
 
 def render_text_skia(

@@ -76,10 +76,10 @@ def validate_core_inputs(
     ):
         raise ValidationError("Min Font Size must be a positive integer.")
     if not (
-        isinstance(rendering_cfg.line_spacing, (int, float))
-        and float(rendering_cfg.line_spacing) > 0
+        isinstance(rendering_cfg.line_spacing_mult, (int, float))
+        and float(rendering_cfg.line_spacing_mult) > 0
     ):
-        raise ValidationError("Line Spacing must be a positive number.")
+        raise ValidationError("Line Spacing Multiplier must be a positive number.")
     if rendering_cfg.min_font_size > rendering_cfg.max_font_size:
         raise ValidationError("Min Font Size cannot be larger than Max Font Size.")
     if rendering_cfg.font_hinting not in ["none", "slight", "normal", "full"]:

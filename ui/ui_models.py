@@ -513,7 +513,7 @@ def map_ui_to_backend_config(
         font_dir=str(font_dir_path),
         max_font_size=ui_state.rendering.max_font_size,
         min_font_size=ui_state.rendering.min_font_size,
-        line_spacing=ui_state.rendering.line_spacing,
+        line_spacing_mult=ui_state.rendering.line_spacing,
         use_subpixel_rendering=ui_state.rendering.use_subpixel_rendering,
         font_hinting=ui_state.rendering.font_hinting,
         use_ligatures=ui_state.rendering.use_ligatures,
