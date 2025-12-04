@@ -229,12 +229,15 @@ python main.py --help
 ## Updating
 
 - Windows portable:
-  - Default Package: Run `update-standalone.bat`
+  - Default Package: Run `update-standalone.bat`. To update requirements, run `update-standalone.bat` -> `setup.bat`
   - Pre-downloaded Package: Download the latest version from the releases page
 - Manual install: from the repo root:
 
 ```bash
 git pull
+# Optional: Update requirements
+venv\Scripts\activate  # If venv present
+pip install -r requirements.txt
 ```
 
 ## License & credits
