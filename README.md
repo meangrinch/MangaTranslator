@@ -199,24 +199,25 @@ python main.py --help
 - **Incorrect reading order:**
   - Set correct "Reading Direction" (rtl for manga, ltr for comics)
   - Try "two-step" translation mode for less-capable LLMs
-- **Uncleaned text remaining:**
+- **Uncleaned text remaining (near edges of bubbles):**
   - Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
 - **Outlines get eaten during cleaning:**
   - Increase "Shrink Threshold ROI" (e.g., 6–8)
 - **Conjoined bubbles not detected:**
   - Ensure "Detect Conjoined Bubbles" is enabled
   - Lower "Bubble Detection Confidence" (e.g., 0.20)
+- **Small bubbles not detected/no room for rendered text:**
+  - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x)
+- **Text too large/small:**
+  - Adjust "Max Font Size" and "Min Font Size" ranges
+- **Text too blurry/pixelated:**
+  - Increase font rendering"Supersampling Factor" (e.g., 6-8)
+  - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x)
 - **Incoherent translations/API refusals:**
   - Try "two-step" translation mode for less-capable LLMs
   - Try disabling "Send Full Page to LLM"
   - Try using "manga-ocr" OCR method, particularly for less-capable LLMs (Japanese sources only)
   - Increase "max_tokens" and/or use a higher "reasoning_effort" (e.g., "high")
-- **Text too large/small:**
-  - Adjust "Max Font Size" and "Min Font Size" ranges
-- **Text too blurry/pixelated:**
-  - Increase "Supersampling Factor" (e.g., 6-8)
-- **Inconsistent behavior across different image sizes:**
-  - Enable "Auto-Scale to Image Size": Settings must be tuned for 1MP sized images for proper scaling (default values should suffice)
 - **OSB text not inpainted/cleaned:**
   - Ensure "Enable OSB Detection" is enabled
   - Install Nunchaku (see Installation step 4)
