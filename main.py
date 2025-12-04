@@ -345,7 +345,7 @@ def main():
         type=int,
         default=3,
         help="Render text at Nx resolution then downscale for smoother edges (1-4). "
-        "Higher values improve quality but use more memory. 1 = disabled.",
+        "Higher values improve quality but use slightly more memory. 1 = disabled.",
     )
     # Output args
     parser.add_argument(

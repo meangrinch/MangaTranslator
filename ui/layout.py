@@ -1056,7 +1056,7 @@ def create_layout(
                                 step=1,
                                 label="Supersampling Factor",
                                 info="Render text at Nx resolution then downscale for smoother edges. "
-                                "Higher values improve quality but use more memory. 1 = disabled.",
+                                "Higher values improve quality but use slightly more memory. 1 = disabled.",
                             )
                         setting_groups.append(group_rendering)
 
