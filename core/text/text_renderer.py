@@ -6,8 +6,12 @@ import skia
 from PIL import Image
 
 from core.image.image_utils import calculate_centroid_expansion_box
-from core.text.drawing_engine import (draw_layout, load_font_resources,
-                                      pil_to_skia_surface, skia_surface_to_pil)
+from core.text.drawing_engine import (
+    draw_layout,
+    load_font_resources,
+    pil_to_skia_surface,
+    skia_surface_to_pil,
+)
 from core.text.font_manager import find_font_variants, get_font_features
 from core.text.layout_engine import find_optimal_layout
 from core.text.text_processing import parse_styled_segments
@@ -34,6 +38,7 @@ class RenderingConfig:
     badness_exponent: float = 3.0
     padding_pixels: float = 5.0
     outline_width: float = 0.0
+    supersampling_factor: int = 4
 
 
 def render_text_skia(
@@ -243,11 +248,6 @@ def render_text_skia(
                     verbose=verbose,
                 )
 
-    try:
-        surface = pil_to_skia_surface(pil_image)
-    except RenderingError as e:
-        raise RenderingError(f"Surface preparation failed: {e}") from e
-
     # Determine text color contrast based on sampled background brightness
     text_color = skia.ColorBLACK
     if bubble_color_bgr is not None:
@@ -265,45 +265,187 @@ def render_text_skia(
         except Exception:
             text_color = skia.ColorBLACK
 
-    # Delegate rotation/translate to drawing_engine so Skia state is consistent
-    success = draw_layout(
-        surface,
-        layout_data,
-        0.0 if (rotation_deg and abs(rotation_deg) > 0.01) else target_center_x,
-        0.0 if (rotation_deg and abs(rotation_deg) > 0.01) else target_center_y,
-        loaded_typefaces,
-        loaded_hb_faces,
-        regular_typeface,
-        regular_hb_face,
-        features_to_enable,
-        text_color,
-        config.use_subpixel_rendering,
-        config.font_hinting,
-        config.outline_width,
-        verbose,
-        pre_translate_x=(
-            float(target_center_x)
-            if (rotation_deg and abs(rotation_deg) > 0.01)
-            else 0.0
-        ),
-        pre_translate_y=(
-            float(target_center_y)
-            if (rotation_deg and abs(rotation_deg) > 0.01)
-            else 0.0
-        ),
-        pre_rotate_deg=(
-            float(rotation_deg) if (rotation_deg and abs(rotation_deg) > 0.01) else 0.0
-        ),
-    )
+    # Apply supersampling if enabled
+    if config.supersampling_factor > 1:
+        log_message(
+            f"Using supersampling factor {config.supersampling_factor}", verbose=verbose
+        )
 
-    if not success:
-        log_message("Drawing failed", always_print=True)
-        raise RenderingError("Text drawing failed")
+        # Crop the bbox region from the original image
+        # Ensure bbox coordinates are within image bounds
+        img_width, img_height = pil_image.size
+        crop_x1 = max(0, x1)
+        crop_y1 = max(0, y1)
+        crop_x2 = min(img_width, x2)
+        crop_y2 = min(img_height, y2)
 
-    try:
-        final_pil_image = skia_surface_to_pil(surface)
-    except RenderingError as e:
-        raise RenderingError(f"Final conversion failed: {e}") from e
+        cropped_region = pil_image.crop((crop_x1, crop_y1, crop_x2, crop_y2))
+        crop_width = crop_x2 - crop_x1
+        crop_height = crop_y2 - crop_y1
 
-    log_message(f"Rendered at size {layout_data['font_size']}", verbose=verbose)
-    return final_pil_image
+        # Upscale the cropped region
+        factor = config.supersampling_factor
+        scaled_width = int(crop_width * factor)
+        scaled_height = int(crop_height * factor)
+        upscaled_region = cropped_region.resize(
+            (scaled_width, scaled_height), Image.Resampling.LANCZOS
+        )
+
+        # Scale coordinates relative to bbox origin
+        scaled_target_center_x = (target_center_x - crop_x1) * factor
+        scaled_target_center_y = (target_center_y - crop_y1) * factor
+
+        # Scale font size in layout_data for rendering
+        scaled_layout_data = layout_data.copy()
+        scaled_layout_data["font_size"] = layout_data["font_size"] * factor
+        scaled_layout_data["line_height"] = layout_data["line_height"] * factor
+        scaled_layout_data["max_line_width"] = layout_data["max_line_width"] * factor
+
+        # Scale line widths
+        for line_data in scaled_layout_data["lines"]:
+            line_data["width"] = line_data["width"] * factor
+
+        # Scale metrics - create a simple object with scaled attributes
+        original_metrics = layout_data["metrics"]
+
+        class ScaledMetrics:
+            def __init__(self, original, scale_factor):
+                self.fAscent = original.fAscent * scale_factor
+                self.fDescent = original.fDescent * scale_factor
+                # Preserve other attributes if they exist
+                if hasattr(original, "fLeading"):
+                    self.fLeading = original.fLeading * scale_factor
+                if hasattr(original, "fXMin"):
+                    self.fXMin = original.fXMin * scale_factor
+                if hasattr(original, "fXMax"):
+                    self.fXMax = original.fXMax * scale_factor
+                if hasattr(original, "fYMin"):
+                    self.fYMin = original.fYMin * scale_factor
+                if hasattr(original, "fYMax"):
+                    self.fYMax = original.fYMax * scale_factor
+
+        scaled_metrics = ScaledMetrics(original_metrics, factor)
+        scaled_layout_data["metrics"] = scaled_metrics
+
+        # Create Skia surface from upscaled region
+        try:
+            scaled_surface = pil_to_skia_surface(upscaled_region)
+        except RenderingError as e:
+            raise RenderingError(f"Scaled surface preparation failed: {e}") from e
+
+        # Render text at high resolution
+        success = draw_layout(
+            scaled_surface,
+            scaled_layout_data,
+            (
+                0.0
+                if (rotation_deg and abs(rotation_deg) > 0.01)
+                else scaled_target_center_x
+            ),
+            (
+                0.0
+                if (rotation_deg and abs(rotation_deg) > 0.01)
+                else scaled_target_center_y
+            ),
+            loaded_typefaces,
+            loaded_hb_faces,
+            regular_typeface,
+            regular_hb_face,
+            features_to_enable,
+            text_color,
+            config.use_subpixel_rendering,
+            config.font_hinting,
+            config.outline_width * factor,  # Scale outline width too
+            verbose,
+            pre_translate_x=(
+                float(scaled_target_center_x)
+                if (rotation_deg and abs(rotation_deg) > 0.01)
+                else 0.0
+            ),
+            pre_translate_y=(
+                float(scaled_target_center_y)
+                if (rotation_deg and abs(rotation_deg) > 0.01)
+                else 0.0
+            ),
+            pre_rotate_deg=(
+                float(rotation_deg)
+                if (rotation_deg and abs(rotation_deg) > 0.01)
+                else 0.0
+            ),
+        )
+
+        if not success:
+            log_message("Drawing failed", always_print=True)
+            raise RenderingError("Text drawing failed")
+
+        # Convert back to PIL and downscale
+        try:
+            scaled_pil_result = skia_surface_to_pil(scaled_surface)
+        except RenderingError as e:
+            raise RenderingError(f"Scaled conversion failed: {e}") from e
+
+        # Downscale using LANCZOS for high quality
+        downscaled_result = scaled_pil_result.resize(
+            (crop_width, crop_height), Image.Resampling.LANCZOS
+        )
+
+        # Paste the result back onto the original image
+        final_pil_image = pil_image.copy()
+        final_pil_image.paste(downscaled_result, (crop_x1, crop_y1))
+
+        log_message(
+            f"Rendered at size {layout_data['font_size']} with {factor}x supersampling",
+            verbose=verbose,
+        )
+        return final_pil_image
+    else:
+        # Normal rendering path (no supersampling)
+        try:
+            surface = pil_to_skia_surface(pil_image)
+        except RenderingError as e:
+            raise RenderingError(f"Surface preparation failed: {e}") from e
+
+        # Delegate rotation/translate to drawing_engine so Skia state is consistent
+        success = draw_layout(
+            surface,
+            layout_data,
+            0.0 if (rotation_deg and abs(rotation_deg) > 0.01) else target_center_x,
+            0.0 if (rotation_deg and abs(rotation_deg) > 0.01) else target_center_y,
+            loaded_typefaces,
+            loaded_hb_faces,
+            regular_typeface,
+            regular_hb_face,
+            features_to_enable,
+            text_color,
+            config.use_subpixel_rendering,
+            config.font_hinting,
+            config.outline_width,
+            verbose,
+            pre_translate_x=(
+                float(target_center_x)
+                if (rotation_deg and abs(rotation_deg) > 0.01)
+                else 0.0
+            ),
+            pre_translate_y=(
+                float(target_center_y)
+                if (rotation_deg and abs(rotation_deg) > 0.01)
+                else 0.0
+            ),
+            pre_rotate_deg=(
+                float(rotation_deg)
+                if (rotation_deg and abs(rotation_deg) > 0.01)
+                else 0.0
+            ),
+        )
+
+        if not success:
+            log_message("Drawing failed", always_print=True)
+            raise RenderingError("Text drawing failed")
+
+        try:
+            final_pil_image = skia_surface_to_pil(surface)
+        except RenderingError as e:
+            raise RenderingError(f"Final conversion failed: {e}") from e
+
+        log_message(f"Rendered at size {layout_data['font_size']}", verbose=verbose)
+        return final_pil_image

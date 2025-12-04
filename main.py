@@ -340,6 +340,13 @@ def main():
         help="Padding between text and the edge of the speech bubble (2-12). "
         "Increase for more space between text and bubble boundaries.",
     )
+    parser.add_argument(
+        "--supersampling-factor",
+        type=int,
+        default=3,
+        help="Render text at Nx resolution then downscale for smoother edges (1-4). "
+        "Higher values improve quality but use more memory. 1 = disabled.",
+    )
     # Output args
     parser.add_argument(
         "--jpeg-quality",
@@ -763,6 +770,7 @@ def main():
             hyphenation_min_word_length=args.hyphenation_min_word_length,
             badness_exponent=args.badness_exponent,
             padding_pixels=args.padding_pixels,
+            supersampling_factor=args.supersampling_factor,
         ),
         output=OutputConfig(
             output_format=args.output_format,

@@ -112,6 +112,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         hyphenation_min_word_length_val,
         badness_exponent_val,
         padding_pixels_val,
+        supersampling_factor_val,
         outside_text_enabled_val,
         outside_text_seed_val,
         outside_text_flux_num_inference_steps_val,
@@ -214,6 +215,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             hyphenation_min_word_length=hyphenation_min_word_length_val,
             badness_exponent=badness_exponent_val,
             padding_pixels=padding_pixels_val,
+            supersampling_factor=int(supersampling_factor_val),
         ),
         output=UIOutputSettings(
             output_format=output_format,
@@ -851,6 +853,7 @@ def handle_save_config_click(*args: Any) -> str:
         hyphenation_min_word_length_val,
         badness_exponent_val,
         padding_pixels_val,
+        supersampling_factor_val,
         outside_text_enabled_val,
         outside_text_seed_val,
         outside_text_flux_num_inference_steps_val,
@@ -940,6 +943,7 @@ def handle_save_config_click(*args: Any) -> str:
             hyphenation_min_word_length=hyphenation_min_word_length_val,
             badness_exponent=badness_exponent_val,
             padding_pixels=padding_pixels_val,
+            supersampling_factor=int(supersampling_factor_val),
         ),
         output=UIOutputSettings(
             output_format=out_fmt,

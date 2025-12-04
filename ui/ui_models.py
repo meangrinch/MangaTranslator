@@ -86,6 +86,7 @@ class UIRenderingSettings:
     hyphenation_min_word_length: int = 8
     badness_exponent: float = 3.0
     padding_pixels: float = 5.0
+    supersampling_factor: int = 4
 
 
 @dataclass
@@ -212,6 +213,7 @@ class UIConfigState:
             "hyphenation_min_word_length": self.rendering.hyphenation_min_word_length,
             "badness_exponent": self.rendering.badness_exponent,
             "padding_pixels": self.rendering.padding_pixels,
+            "supersampling_factor": self.rendering.supersampling_factor,
             "outside_text_enabled": self.outside_text.enabled,
             "outside_text_seed": self.outside_text.seed,
             "outside_text_huggingface_token": self.outside_text.huggingface_token,
@@ -384,6 +386,9 @@ class UIConfigState:
                 padding_pixels=data.get(
                     "padding_pixels", defaults.get("padding_pixels", 5.0)
                 ),
+                supersampling_factor=data.get(
+                    "supersampling_factor", defaults.get("supersampling_factor", 4)
+                ),
             ),
             output=UIOutputSettings(
                 output_format=data.get("output_format", defaults["output_format"]),
@@ -517,6 +522,7 @@ def map_ui_to_backend_config(
         hyphenation_min_word_length=(ui_state.rendering.hyphenation_min_word_length),
         badness_exponent=ui_state.rendering.badness_exponent,
         padding_pixels=ui_state.rendering.padding_pixels,
+        supersampling_factor=ui_state.rendering.supersampling_factor,
     )
 
     upscale_mode = ui_state.output.image_upscale_mode

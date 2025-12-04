@@ -1049,6 +1049,15 @@ def create_layout(
                                 info="Padding between text and the edge of the speech bubble. "
                                 "Increase for more space between text and bubble boundaries.",
                             )
+                            supersampling_factor = gr.Slider(
+                                1,
+                                8,
+                                value=saved_settings.get("supersampling_factor", 4),
+                                step=1,
+                                label="Supersampling Factor",
+                                info="Render text at Nx resolution then downscale for smoother edges. "
+                                "Higher values improve quality but use more memory. 1 = disabled.",
+                            )
                         setting_groups.append(group_rendering)
 
                         # --- Outside Text Removal Settings ---
@@ -1393,6 +1402,7 @@ def create_layout(
             hyphenation_min_word_length,
             badness_exponent,
             padding_pixels,
+            supersampling_factor,
             outside_text_enabled,
             outside_text_seed,
             outside_text_flux_num_inference_steps,
@@ -1550,6 +1560,7 @@ def create_layout(
             hyphenation_min_word_length,
             badness_exponent,
             padding_pixels,
+            supersampling_factor,
             outside_text_enabled,
             outside_text_seed,
             outside_text_flux_num_inference_steps,
@@ -1634,6 +1645,7 @@ def create_layout(
             hyphenation_min_word_length,
             badness_exponent,
             padding_pixels,
+            supersampling_factor,
             outside_text_enabled,
             outside_text_seed,
             outside_text_flux_num_inference_steps,

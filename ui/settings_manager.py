@@ -148,6 +148,7 @@ DEFAULT_SETTINGS = {
     "hyphenation_min_word_length": 8,
     "badness_exponent": 3.0,
     "padding_pixels": 5.0,
+    "supersampling_factor": 4,
     "font_pack": None,
     "verbose": False,
     "jpeg_quality": 95,
@@ -245,6 +246,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "hyphen_penalty",
     "hyphenation_min_word_length",
     "badness_exponent",
+    "supersampling_factor",
     # Models / Detection
     "confidence",
     "use_sam2",

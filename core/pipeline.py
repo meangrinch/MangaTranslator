@@ -478,6 +478,7 @@ def translate_and_render(
                                 hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
                                 badness_exponent=config.rendering.badness_exponent,
                                 padding_pixels=padding_pixels,
+                                supersampling_factor=1,  # No supersampling for probe
                             )
                             try:
                                 _ = render_text_skia(
@@ -669,6 +670,7 @@ def translate_and_render(
                             outline_width=(
                                 osb_outline_width if is_outside_text else 0.0
                             ),
+                            supersampling_factor=config.rendering.supersampling_factor,
                         )
                         try:
                             rendered_image = render_text_skia(

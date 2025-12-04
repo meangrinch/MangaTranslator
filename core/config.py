@@ -94,6 +94,7 @@ class RenderingConfig:
     hyphenation_min_word_length: int = 8
     badness_exponent: float = 3.0
     padding_pixels: float = 5.0
+    supersampling_factor: int = 4
 
 
 @dataclass
