@@ -80,9 +80,9 @@ def _apply_pre_upscale_if_needed(
 
     # Use the output upscale model setting for initial upscaling as well
     model_type = (
-        getattr(config.output, "image_upscale_model", "model")
+        getattr(config.output, "image_upscale_model", "model_lite")
         if hasattr(config, "output")
-        else "model"
+        else "model_lite"
     )
     upscaled = upscale_image(image, factor, model_type=model_type, verbose=verbose)
     return upscaled, factor

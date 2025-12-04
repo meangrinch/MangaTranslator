@@ -891,16 +891,18 @@ def create_layout(
                                     ("LANCZOS", "lanczos"),
                                     ("None", "none"),
                                 ],
-                                value=saved_settings.get("upscale_method", "model"),
+                                value=saved_settings.get(
+                                    "upscale_method", "model_lite"
+                                ),
                                 label="Bubble/Context Resizing Method",
                                 info=(
-                                    "Determines how to resize cropped bubble images/full page before sending to LLM. "
-                                    "Use model for best quality, Model (Lite) for faster/less memory-intensive "
-                                    "processing, or LANCZOS for fastest processing."
+                                    "Method to resize cropped bubble images/full page before sending to LLM. "
+                                    "Model is best quality, Model (Lite) is slightly worse quality but faster/less "
+                                    "memory, LANCZOS is worst quality but fastest/least memory."
                                 ),
                             )
                             initial_upscale_method = saved_settings.get(
-                                "upscale_method", "model"
+                                "upscale_method", "model_lite"
                             )
                             sliders_interactive = initial_upscale_method != "none"
                             bubble_min_side_pixels = gr.Slider(
@@ -1268,12 +1270,12 @@ def create_layout(
                                     ("Model (Lite)", "model_lite"),
                                 ],
                                 value=saved_settings.get(
-                                    "image_upscale_model", "model"
+                                    "image_upscale_model", "model_lite"
                                 ),
                                 label="Upscaling Model",
                                 info=(
-                                    "Model to use for image upscaling. Model (Lite) is faster and less "
-                                    "memory-intensive, but may have slightly lower quality."
+                                    "Model to use for image upscaling. Model is best quality, "
+                                    "Model (Lite) is slightly worse quality but faster/less memory."
                                 ),
                                 interactive=image_upscale_mode_default != "off",
                             )

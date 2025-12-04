@@ -63,7 +63,7 @@ class UITranslationLLMSettings:
     translation_mode: str = "one-step"
     reading_direction: str = "rtl"
     send_full_page_context: bool = True
-    upscale_method: str = "model"
+    upscale_method: str = "model_lite"
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
@@ -98,7 +98,7 @@ class UIOutputSettings:
     png_compression: int = 6
     image_upscale_mode: str = "off"  # "off", "initial", "final"
     image_upscale_factor: float = 2.0
-    image_upscale_model: str = "model"  # "model" or "model_lite"
+    image_upscale_model: str = "model_lite"  # "model" or "model_lite"
 
 
 @dataclass
@@ -351,7 +351,7 @@ class UIConfigState:
                 ),
                 send_full_page_context=data.get("send_full_page_context", True),
                 upscale_method=data.get(
-                    "upscale_method", defaults.get("upscale_method", "model")
+                    "upscale_method", defaults.get("upscale_method", "model_lite")
                 ),
                 bubble_min_side_pixels=data.get("bubble_min_side_pixels", 128),
                 context_image_max_side_pixels=data.get(
@@ -405,7 +405,7 @@ class UIConfigState:
                 ),
                 image_upscale_model=data.get(
                     "image_upscale_model",
-                    defaults.get("image_upscale_model", "model"),
+                    defaults.get("image_upscale_model", "model_lite"),
                 ),
             ),
             general=UIGeneralSettings(

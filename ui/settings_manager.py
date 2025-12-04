@@ -156,7 +156,7 @@ DEFAULT_SETTINGS = {
     "output_format": "auto",
     "image_upscale_mode": "off",
     "image_upscale_factor": 2.0,
-    "image_upscale_model": "model",
+    "image_upscale_model": "model_lite",
     "cleaning_only": False,
     "test_mode": False,
     "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
@@ -168,7 +168,7 @@ DEFAULT_SETTINGS = {
     "auto_scale": True,
     "send_full_page_context": True,
     "special_instructions": "",
-    "upscale_method": "model",  # "model", "lanczos", or "none"
+    "upscale_method": "model_lite",  # "model", "model_lite", "lanczos", or "none"
     "bubble_min_side_pixels": 128,
     "context_image_max_side_pixels": 1024,
     "osb_min_side_pixels": 128,

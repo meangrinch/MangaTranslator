@@ -450,12 +450,12 @@ def main():
         "--upscale-method",
         type=str,
         choices=["model", "model_lite", "lanczos", "none"],
-        default="model",
+        default="model_lite",
         help=(
             "Method for upscaling images before translation API. "
             "model: Use 2x-AnimeSharpV4 upscaling model (best quality, slower), "
-            "model_lite: Use 2x-AnimeSharpV4 Fast RCAN PU model (faster, less memory-intensive), "
-            "lanczos: Use LANCZOS resampling (fast, good quality), "
+            "model_lite: Use 2x-AnimeSharpV4 Fast RCAN PU model (worse quality, faster/less memory), "
+            "lanczos: Use LANCZOS resampling (worst quality, fastest/least memory), "
             "none: No upscaling (may affect OCR quality for small text)"
         ),
     )

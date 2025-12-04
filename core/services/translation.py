@@ -1651,7 +1651,7 @@ def prepare_bubble_images_for_translation(
     device: Any,
     mime_type: str,
     bubble_min_side_pixels: int,
-    upscale_method: str = "model",
+    upscale_method: str = "model_lite",
     verbose: bool = False,
 ) -> List[Dict[str, Any]]:
     """

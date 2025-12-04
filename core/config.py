@@ -62,7 +62,7 @@ class TranslationConfig:
         None  # Claude Opus 4.5 only: Controls token spending eagerness (high/medium/low)
     )
     send_full_page_context: bool = True
-    upscale_method: str = "model"  # "model", "model_lite", "lanczos", or "none"
+    upscale_method: str = "model_lite"  # "model", "model_lite", "lanczos", or "none"
     enable_web_search: bool = (
         False  # Enable model's built-in web search for up-to-date information. OpenRouter uses its own web search tool.
     )
@@ -130,7 +130,7 @@ class OutputConfig:
     output_format: str = "auto"
     upscale_final_image: bool = False
     image_upscale_factor: float = 2.0
-    image_upscale_model: str = "model"  # "model" or "model_lite"
+    image_upscale_model: str = "model_lite"  # "model" or "model_lite"
 
 
 @dataclass
