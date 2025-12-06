@@ -184,7 +184,12 @@ def translate_and_render(
                 maximum=4096,
             )
 
-            if config.translation.upscale_method == "model":
+            # Disable upscaling in test_mode
+            context_upscale_method = (
+                "none" if config.test_mode else config.translation.upscale_method
+            )
+
+            if context_upscale_method == "model":
                 # Use upscaling model for full page context
                 model_manager = get_model_manager()
                 with model_manager.upscale_context() as upscale_model:
@@ -206,7 +211,7 @@ def translate_and_render(
                     log_message(
                         "Upscaled full image for context with model", verbose=verbose
                     )
-            elif config.translation.upscale_method == "model_lite":
+            elif context_upscale_method == "model_lite":
                 # Use upscaling lite model for full page context
                 model_manager = get_model_manager()
                 with model_manager.upscale_lite_context() as upscale_model:
@@ -229,7 +234,7 @@ def translate_and_render(
                         "Upscaled full image for context with lite model",
                         verbose=verbose,
                     )
-            elif config.translation.upscale_method == "lanczos":
+            elif context_upscale_method == "lanczos":
                 # Use LANCZOS resampling
                 context_image_pil = resize_to_max_side(
                     context_image_pil,
@@ -363,11 +368,16 @@ def translate_and_render(
             # --- Prepare images for Translation ---
             log_message("Preparing bubble images...", verbose=verbose)
 
+            # Disable upscaling in test_mode
+            bubble_upscale_method = (
+                "none" if config.test_mode else config.translation.upscale_method
+            )
+
             model_manager = get_model_manager()
             # Use appropriate context manager based on upscale_method
-            if config.translation.upscale_method == "model":
+            if bubble_upscale_method == "model":
                 context_manager = model_manager.upscale_context()
-            elif config.translation.upscale_method == "model_lite":
+            elif bubble_upscale_method == "model_lite":
                 context_manager = model_manager.upscale_lite_context()
             else:
                 # For lanczos/none, create a dummy context manager that yields None
@@ -383,7 +393,7 @@ def translate_and_render(
                     config.device,
                     mime_type,
                     config.translation.bubble_min_side_pixels,
-                    config.translation.upscale_method,
+                    bubble_upscale_method,
                     verbose,
                 )
 
