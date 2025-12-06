@@ -1119,7 +1119,7 @@ def create_layout(
                                     1,
                                     30,
                                     value=saved_settings.get(
-                                        "outside_text_flux_num_inference_steps", 8
+                                        "outside_text_flux_num_inference_steps", 12
                                     ),
                                     step=1,
                                     label="Steps",
@@ -1134,7 +1134,7 @@ def create_layout(
                                     1.0,
                                     value=saved_settings.get(
                                         "outside_text_flux_residual_diff_threshold",
-                                        0.12,
+                                        0.15,
                                     ),
                                     step=0.01,
                                     label="Residual Diff Threshold",

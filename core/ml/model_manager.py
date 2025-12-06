@@ -68,7 +68,7 @@ class ModelManager:
             # Flux-specific configuration
             self.flux_cache_dir = Path("./models/flux")
             self.flux_hf_token = None
-            self.flux_residual_diff_threshold = 0.12
+            self.flux_residual_diff_threshold = 0.15
 
             self._initialized = True
             log_message(

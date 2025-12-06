@@ -478,7 +478,7 @@ def main():
     parser.add_argument(
         "--osb-flux-steps",
         type=int,
-        default=8,
+        default=12,
         help=(
             "Number of denoising steps for Flux Kontext (1-30). "
             "15 is best for quality (diminishing returns beyond); "
@@ -488,7 +488,7 @@ def main():
     parser.add_argument(
         "--osb-flux-residual-threshold",
         type=float,
-        default=0.12,
+        default=0.15,
         help="Residual diff threshold for Flux inference (0.0-1.0)",
     )
     parser.add_argument(

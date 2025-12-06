@@ -108,8 +108,8 @@ class UIOutsideTextSettings:
     enabled: bool = False
     seed: int = 1  # -1 = random
     huggingface_token: str = ""
-    flux_num_inference_steps: int = 8
-    flux_residual_diff_threshold: float = 0.12
+    flux_num_inference_steps: int = 12
+    flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.35
     osb_font_name: str = ""  # Empty = use main font
     osb_max_font_size: int = 64
@@ -291,10 +291,10 @@ class UIConfigState:
                 seed=data.get("outside_text_seed", 1),
                 huggingface_token=data.get("outside_text_huggingface_token", ""),
                 flux_num_inference_steps=data.get(
-                    "outside_text_flux_num_inference_steps", 8
+                    "outside_text_flux_num_inference_steps", 12
                 ),
                 flux_residual_diff_threshold=data.get(
-                    "outside_text_flux_residual_diff_threshold", 0.12
+                    "outside_text_flux_residual_diff_threshold", 0.15
                 ),
                 osb_confidence=data.get("outside_text_osb_confidence", 0.35),
                 osb_font_name=data.get(

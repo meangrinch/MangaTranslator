@@ -32,7 +32,7 @@ class FluxKontextInpainter:
         device: Optional[torch.device] = None,
         huggingface_token: str = "",
         num_inference_steps: int = 15,
-        residual_diff_threshold: float = 0.12,
+        residual_diff_threshold: float = 0.15,
     ):
         """Initialize the Flux Kontext Inpaint class.
 
