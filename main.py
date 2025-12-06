@@ -357,8 +357,8 @@ def main():
     parser.add_argument(
         "--png-compression",
         type=int,
-        default=6,
-        help="PNG compression level (0-9)",
+        default=2,
+        help="PNG compression level (0-6)",
     )
     parser.add_argument(
         "--output-format",

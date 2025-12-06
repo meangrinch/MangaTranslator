@@ -1,4 +1,5 @@
 import gc
+import io
 import os
 import tempfile
 from pathlib import Path
@@ -6,6 +7,7 @@ from typing import Tuple
 
 import cv2
 import numpy as np
+import oxipng
 import torch
 from PIL import Image
 
@@ -55,7 +57,7 @@ def cv2_to_pil(cv2_image):
 
 
 def save_image_with_compression(
-    image, output_path, jpeg_quality=95, png_compression=6, verbose=False
+    image, output_path, jpeg_quality=95, png_compression=2, verbose=False
 ):
     """
     Save an image with specified compression settings.
@@ -64,7 +66,7 @@ def save_image_with_compression(
         image (PIL.Image): Image to save
         output_path (str or Path): Path to save the image
         jpeg_quality (int): JPEG quality (1-100, higher is better quality)
-        png_compression (int): PNG compression level (0-9, higher is more compression)
+        png_compression (int): PNG compression level (0-6, higher is more compression)
         verbose (bool): Whether to print verbose logging
 
     Raises:
@@ -105,10 +107,9 @@ def save_image_with_compression(
 
     elif extension == ".png":
         output_format = "PNG"
-        save_options["compress_level"] = max(0, min(png_compression, 9))
-        save_options["optimize"] = True
+        oxipng_level = min(6, max(0, int(png_compression)))
         log_message(
-            f"Saving PNG image with compression level {save_options['compress_level']} to {output_path}",
+            f"Saving PNG image with compression level {oxipng_level} to {output_path}",
             verbose=verbose,
         )
 
@@ -127,16 +128,42 @@ def save_image_with_compression(
         )
         output_format = "PNG"
         output_path = output_path.with_suffix(".png")
-        save_options["compress_level"] = max(0, min(png_compression, 9))
-        save_options["optimize"] = True
+        oxipng_level = min(6, max(0, int(png_compression)))
         log_message(
-            f"Saving PNG image with compression level {save_options['compress_level']} to {output_path}",
+            f"Saving PNG image with compression level {oxipng_level} to {output_path}",
             verbose=verbose,
         )
 
     try:
         os.makedirs(output_path.parent, exist_ok=True)
-        image.save(str(output_path), format=output_format, **save_options)
+
+        if output_format == "PNG":
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            png_data = buffer.getvalue()
+
+            try:
+                optimized_data = oxipng.optimize_from_memory(
+                    png_data, level=oxipng_level, optimize_alpha=True
+                )
+                with open(output_path, "wb") as f:
+                    f.write(optimized_data)
+            except oxipng.PngError as e:
+                log_message(
+                    f"oxipng optimization failed: {e}. Falling back to Pillow save.",
+                    verbose=verbose,
+                    always_print=True,
+                )
+                # Fallback to Pillow if oxipng fails
+                image.save(
+                    str(output_path),
+                    format="PNG",
+                    compress_level=max(0, min(png_compression, 6)),
+                    optimize=True,
+                )
+        else:
+            # Use Pillow for non-PNG formats
+            image.save(str(output_path), format=output_format, **save_options)
         return True
     except Exception as e:
         log_message(f"Error saving image to {output_path}: {e}", always_print=True)
@@ -442,10 +469,14 @@ def upscale_image_to_dimension(
             temp_fd, temp_file = tempfile.mkstemp(suffix=".png")
             os.close(temp_fd)
             current_image.save(temp_file, format="PNG")
+
+            with Image.open(temp_file) as img_tmp:
+                img_tmp.load()
+                new_image = img_tmp.copy()
+
             del current_image
             gc.collect()
-            current_image = Image.open(temp_file)
-            current_image.load()
+            current_image = new_image
             log_message(
                 "Saved and reloaded intermediate image before additional passes",
                 verbose=verbose,
@@ -481,8 +512,9 @@ def upscale_image_to_dimension(
             del current_image
             gc.collect()
 
-            current_image = Image.open(temp_file)
-            current_image.load()
+            with Image.open(temp_file) as img_tmp:
+                img_tmp.load()
+                current_image = img_tmp.copy()
 
             log_message(
                 "Saved and reloaded intermediate image to free memory",

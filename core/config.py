@@ -126,7 +126,7 @@ class OutputConfig:
     """Configuration for saving output images."""
 
     jpeg_quality: int = 95
-    png_compression: int = 6
+    png_compression: int = 2
     output_format: str = "auto"
     upscale_final_image: bool = False
     image_upscale_factor: float = 2.0

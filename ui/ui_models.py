@@ -95,7 +95,7 @@ class UIOutputSettings:
 
     output_format: str = "auto"
     jpeg_quality: int = 95
-    png_compression: int = 6
+    png_compression: int = 2
     image_upscale_mode: str = "off"  # "off", "initial", "final"
     image_upscale_factor: float = 2.0
     image_upscale_model: str = "model_lite"  # "model" or "model_lite"

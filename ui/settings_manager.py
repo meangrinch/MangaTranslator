@@ -152,7 +152,7 @@ DEFAULT_SETTINGS = {
     "font_pack": None,
     "verbose": False,
     "jpeg_quality": 95,
-    "png_compression": 6,
+    "png_compression": 2,
     "output_format": "auto",
     "image_upscale_mode": "off",
     "image_upscale_factor": 2.0,

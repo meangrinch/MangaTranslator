@@ -1247,8 +1247,8 @@ def create_layout(
                             )
                             png_compression = gr.Slider(
                                 0,
-                                9,
-                                value=saved_settings.get("png_compression", 6),
+                                6,
+                                value=saved_settings.get("png_compression", 2),
                                 step=1,
                                 label="PNG Compression Level",
                                 info="Higher levels result in smaller file sizes, but slower processing times.",
