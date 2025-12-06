@@ -110,6 +110,7 @@ class UIOutsideTextSettings:
     huggingface_token: str = ""
     flux_num_inference_steps: int = 8
     flux_residual_diff_threshold: float = 0.12
+    osb_confidence: float = 0.35
     osb_font_name: str = ""  # Empty = use main font
     osb_max_font_size: int = 64
     osb_min_font_size: int = 12
@@ -118,7 +119,7 @@ class UIOutsideTextSettings:
     osb_line_spacing: float = 1.0
     osb_use_subpixel_rendering: bool = True
     osb_font_hinting: str = "none"
-    easyocr_min_size: int = 200
+    bbox_expansion_percent: float = 0.1
 
 
 @dataclass
@@ -219,6 +220,7 @@ class UIConfigState:
             "outside_text_huggingface_token": self.outside_text.huggingface_token,
             "outside_text_flux_num_inference_steps": self.outside_text.flux_num_inference_steps,
             "outside_text_flux_residual_diff_threshold": self.outside_text.flux_residual_diff_threshold,
+            "outside_text_osb_confidence": self.outside_text.osb_confidence,
             "outside_text_osb_font_pack": self.outside_text.osb_font_name,
             "outside_text_osb_max_font_size": self.outside_text.osb_max_font_size,
             "outside_text_osb_min_font_size": self.outside_text.osb_min_font_size,
@@ -227,7 +229,7 @@ class UIConfigState:
             "outside_text_osb_line_spacing": self.outside_text.osb_line_spacing,
             "outside_text_osb_use_subpixel_rendering": self.outside_text.osb_use_subpixel_rendering,
             "outside_text_osb_font_hinting": self.outside_text.osb_font_hinting,
-            "outside_text_easyocr_min_size": self.outside_text.easyocr_min_size,
+            "outside_text_bbox_expansion_percent": self.outside_text.bbox_expansion_percent,
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
             "png_compression": self.output.png_compression,
@@ -294,6 +296,7 @@ class UIConfigState:
                 flux_residual_diff_threshold=data.get(
                     "outside_text_flux_residual_diff_threshold", 0.12
                 ),
+                osb_confidence=data.get("outside_text_osb_confidence", 0.35),
                 osb_font_name=data.get(
                     "outside_text_osb_font_pack",
                     defaults.get("outside_text_osb_font_pack", ""),
@@ -307,7 +310,9 @@ class UIConfigState:
                     "outside_text_osb_use_subpixel_rendering", True
                 ),
                 osb_font_hinting=data.get("outside_text_osb_font_hinting", "none"),
-                easyocr_min_size=data.get("outside_text_easyocr_min_size", 200),
+                bbox_expansion_percent=data.get(
+                    "outside_text_bbox_expansion_percent", 0.1
+                ),
             ),
             provider_settings=UITranslationProviderSettings(
                 provider=data.get("provider", defaults["provider"]),
@@ -551,6 +556,7 @@ def map_ui_to_backend_config(
         huggingface_token=ui_state.outside_text.huggingface_token,
         flux_num_inference_steps=ui_state.outside_text.flux_num_inference_steps,
         flux_residual_diff_threshold=ui_state.outside_text.flux_residual_diff_threshold,
+        osb_confidence=ui_state.outside_text.osb_confidence,
         osb_font_name=str(osb_font_path) if osb_font_path else None,
         osb_max_font_size=ui_state.outside_text.osb_max_font_size,
         osb_min_font_size=ui_state.outside_text.osb_min_font_size,
@@ -559,7 +565,7 @@ def map_ui_to_backend_config(
         osb_line_spacing=ui_state.outside_text.osb_line_spacing,
         osb_use_subpixel_rendering=ui_state.outside_text.osb_use_subpixel_rendering,
         osb_font_hinting=ui_state.outside_text.osb_font_hinting,
-        easyocr_min_size=ui_state.outside_text.easyocr_min_size,
+        bbox_expansion_percent=ui_state.outside_text.bbox_expansion_percent,
     )
 
     preprocessing_cfg = PreprocessingConfig(

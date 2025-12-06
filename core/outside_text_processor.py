@@ -11,9 +11,8 @@ from sklearn.cluster import KMeans
 from core.config import MangaTranslatorConfig
 from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
 from core.image.inpainting import FluxKontextInpainter
-from core.image.ocr_detection import OCR_LANGUAGE_MAP, OutsideTextDetector
+from core.image.ocr_detection import OutsideTextDetector
 from core.ml.model_manager import get_model_manager
-from core.scaling import scale_length
 from utils.logging import log_message
 
 
@@ -22,7 +21,6 @@ def process_outside_text(
     config: MangaTranslatorConfig,
     image_path: Union[str, Path],
     image_format: Optional[str],
-    processing_scale: float,
     verbose: bool = False,
 ) -> Tuple[Image.Image, List[Dict[str, Any]]]:
     """
@@ -51,24 +49,15 @@ def process_outside_text(
 
     log_message("Detecting text outside speech bubbles...", verbose=verbose)
 
-    easyocr_min_size = scale_length(
-        config.outside_text.easyocr_min_size,
-        processing_scale,
-        minimum=32,
-        maximum=4096,
-    )
-
     try:
-        ocr_language = OCR_LANGUAGE_MAP.get(config.translation.input_language, "ja")
-
         outside_detector = OutsideTextDetector(
-            device=config.device, languages=[ocr_language]
+            device=config.device, hf_token=config.outside_text.huggingface_token
         )
         outside_text_results = outside_detector.detect_outside_text(
             str(image_path),
             yolo_model_path=config.yolo_model_path,
+            confidence=config.outside_text.osb_confidence,
             verbose=verbose,
-            min_size=easyocr_min_size,
             image_override=pil_image,
         )
 
@@ -92,11 +81,8 @@ def process_outside_text(
         # Probe original text color for OSB rendering
         original_text_colors = {}
         for ocr_result in outside_text_results:
-            bbox_coords, text, conf = ocr_result
-            x_coords = [point[0] for point in bbox_coords]
-            y_coords = [point[1] for point in bbox_coords]
-            x1, x2 = int(min(x_coords)), int(max(x_coords))
-            y1, y2 = int(min(y_coords)), int(max(y_coords))
+            bbox_coords, conf = ocr_result
+            x1, y1, x2, y2 = [int(c) for c in bbox_coords]
             bbox_tuple = (x1, y1, x2, y2)
 
             bbox_area_img = pil_image.crop((x1, y1, x2, y2))
@@ -147,7 +133,6 @@ def process_outside_text(
             str(image_path),
             bbox_expansion_percent=config.outside_text.bbox_expansion_percent,
             verbose=verbose,
-            min_size=easyocr_min_size,
             image_override=pil_image,
             existing_results=outside_text_results,
         )
@@ -184,18 +169,20 @@ def process_outside_text(
         original_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
 
         for ocr_result in outside_text_results:
-            bbox_coords, text, conf = ocr_result
-            x_coords = [point[0] for point in bbox_coords]
-            y_coords = [point[1] for point in bbox_coords]
-            x1, x2 = int(min(x_coords)), int(max(x_coords))
-            y1, y2 = int(min(y_coords)), int(max(y_coords))
+            bbox_coords, conf = ocr_result
+            x1, y1, x2, y2 = [int(c) for c in bbox_coords]
             bbox_tuple = (x1, y1, x2, y2)
 
             outside_text_image_cv = original_cv_image[y1:y2, x1:x2].copy()
 
             outside_text_image_pil = cv2_to_pil(outside_text_image_cv)
 
-            if config.translation.upscale_method == "model":
+            # Disable upscaling in test_mode
+            osb_upscale_method = (
+                "none" if config.test_mode else config.translation.upscale_method
+            )
+
+            if osb_upscale_method == "model":
                 model_manager = get_model_manager()
                 with model_manager.upscale_context() as upscale_model:
                     final_text_pil = process_bubble_image_cached(
@@ -207,7 +194,7 @@ def process_outside_text(
                         "model",
                         verbose,
                     )
-            elif config.translation.upscale_method == "model_lite":
+            elif osb_upscale_method == "model_lite":
                 model_manager = get_model_manager()
                 with model_manager.upscale_lite_context() as upscale_model:
                     final_text_pil = process_bubble_image_cached(
@@ -219,7 +206,7 @@ def process_outside_text(
                         "model_lite",
                         verbose,
                     )
-            elif config.translation.upscale_method == "lanczos":
+            elif osb_upscale_method == "lanczos":
                 w, h = outside_text_image_pil.size
                 min_side = min(w, h)
                 if min_side < config.translation.osb_min_side_pixels:
@@ -237,29 +224,6 @@ def process_outside_text(
 
             outside_text_image_cv = pil_to_cv2(final_text_pil)
 
-            # Estimate text orientation angle from the EasyOCR quadrilateral
-            signed_angle_deg = 0.0
-            try:
-                pts = [(float(px), float(py)) for px, py in bbox_coords]
-                edges = []
-                for idx in range(4):
-                    xA, yA = pts[idx]
-                    xB, yB = pts[(idx + 1) % 4]
-                    dx, dy = (xB - xA), (yB - yA)
-                    length_sq = dx * dx + dy * dy
-                    edges.append((length_sq, dx, dy))
-                if edges:
-                    edges.sort(reverse=True)
-                    _, dx_max, dy_max = edges[0]
-                    angle = np.degrees(np.arctan2(dy_max, dx_max))
-                    if angle > 90.0:
-                        angle -= 180.0
-                    elif angle < -90.0:
-                        angle += 180.0
-                    signed_angle_deg = float(angle)
-            except Exception:
-                signed_angle_deg = 0.0
-
             w = max(1, x2 - x1)
             h = max(1, y2 - y1)
             aspect_ratio = float(h) / float(w)
@@ -272,13 +236,11 @@ def process_outside_text(
                     outside_text_data.append(
                         {
                             "bbox": bbox_tuple,
-                            "original_text": text,
                             "confidence": conf,
                             "is_outside_text": True,
                             "image_b64": image_b64,
                             "mime_type": mime_type,
                             "is_dark_text": original_text_colors.get(bbox_tuple, True),
-                            "orientation_deg": signed_angle_deg,
                             "aspect_ratio": aspect_ratio,
                         }
                     )

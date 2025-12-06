@@ -23,7 +23,7 @@ from .image_utils import (
     upscale_image_to_dimension,
 )
 from .inpainting import FluxKontextInpainter
-from .ocr_detection import OCR_LANGUAGE_MAP, OutsideTextDetector
+from .ocr_detection import OutsideTextDetector
 
 __all__ = [
     "clean_speech_bubbles",
@@ -38,6 +38,5 @@ __all__ = [
     "upscale_image",
     "upscale_image_to_dimension",
     "FluxKontextInpainter",
-    "OCR_LANGUAGE_MAP",
     "OutsideTextDetector",
 ]

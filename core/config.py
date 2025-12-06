@@ -107,6 +107,7 @@ class OutsideTextConfig:
     huggingface_token: str = ""  # Required for Flux Kontext model downloads
     flux_num_inference_steps: int = 8
     flux_residual_diff_threshold: float = 0.12
+    osb_confidence: float = 0.35
     osb_font_name: Optional[str] = None  # None = use main font as fallback
     osb_max_font_size: int = 64
     osb_min_font_size: int = 12
@@ -118,7 +119,6 @@ class OutsideTextConfig:
     bbox_expansion_percent: float = 0.1
     flux_guidance_scale: float = 2.5
     flux_prompt: str = "Remove all text."
-    easyocr_min_size: int = 200
 
 
 @dataclass

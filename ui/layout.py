@@ -426,8 +426,8 @@ def create_layout(
                                 1.0,
                                 value=saved_settings.get("confidence", 0.35),
                                 step=0.05,
-                                label="Bubble Detection Confidence",
-                                info="Lower values detect more bubbles, potentially including false positives.",
+                                label="Bubble Detection Confidence Threshold",
+                                info="Lower values detect more bubbles, but potentially include false positives.",
                             )
                             use_sam2_checkbox = gr.Checkbox(
                                 value=saved_settings.get("use_sam2", True),
@@ -1079,27 +1079,42 @@ def create_layout(
                                     "outside_text_enabled", False
                                 )
                             ) as outside_text_settings_wrapper:
-                                gr.Markdown("### Detection")
-                                outside_text_easyocr_min_size = gr.Slider(
-                                    10,
-                                    500,
-                                    value=saved_settings.get(
-                                        "outside_text_easyocr_min_size", 200
-                                    ),
-                                    step=10,
-                                    label="Min Text Size (px)",
-                                    info="Minimum text region size in pixels for OSB text detection. "
-                                    "Smaller text may render awkwardly.",
-                                )
-                                gr.Markdown("### Inpainting")
                                 outside_text_huggingface_token = gr.Textbox(
                                     value=saved_settings.get(
                                         "outside_text_huggingface_token", ""
                                     ),
                                     label="HuggingFace Token (Required)",
                                     type="password",
-                                    info="Required for downloading Flux Kontext files from HuggingFace Hub.",
+                                    info=(
+                                        "Required for downloading OSB Text Detection (YOLO) and Flux Kontext models "
+                                        "from HuggingFace Hub."
+                                    ),
                                 )
+                                gr.Markdown("### Detection")
+                                outside_text_osb_confidence = gr.Slider(
+                                    0.0,
+                                    1.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_confidence", 0.35
+                                    ),
+                                    step=0.01,
+                                    label="OSB Text Detection Confidence",
+                                    info="Lower values detect more text, but potentially include false positives.",
+                                )
+                                outside_text_bbox_expansion_percent = gr.Slider(
+                                    0.0,
+                                    1.0,
+                                    value=saved_settings.get(
+                                        "outside_text_bbox_expansion_percent", 0.1
+                                    ),
+                                    step=0.01,
+                                    label="Bounding Box Expansion",
+                                    info=(
+                                        "Percentage to expand bounding boxes for text detection. "
+                                        "Higher values capture more context around text."
+                                    ),
+                                )
+                                gr.Markdown("### Inpainting")
                                 outside_text_flux_num_inference_steps = gr.Slider(
                                     1,
                                     30,
@@ -1109,7 +1124,7 @@ def create_layout(
                                     step=1,
                                     label="Steps",
                                     info=(
-                                        "Number of denoising steps for Flux Kontext. "
+                                        "Number of denoising steps for Flux. "
                                         "15 is best for quality (diminishing returns beyond); "
                                         "below 6 shows noticeable degradation."
                                     ),
@@ -1124,8 +1139,8 @@ def create_layout(
                                     step=0.01,
                                     label="Residual Diff Threshold",
                                     info=(
-                                        "First Block Caching threshold for inference "
-                                        "(higher = faster, lower quality)."
+                                        "First Block Caching threshold for Flux. "
+                                        "Higher = faster, but lower quality."
                                     ),
                                 )
                                 outside_text_seed = gr.Number(
@@ -1414,6 +1429,7 @@ def create_layout(
             outside_text_seed,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
+            outside_text_osb_confidence,
             outside_text_huggingface_token,
             outside_text_osb_font_pack,
             outside_text_osb_max_font_size,
@@ -1423,7 +1439,7 @@ def create_layout(
             outside_text_osb_line_spacing,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
-            outside_text_easyocr_min_size,
+            outside_text_bbox_expansion_percent,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -1493,6 +1509,8 @@ def create_layout(
             outside_text_seed,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
+            outside_text_osb_confidence,
+            outside_text_bbox_expansion_percent,
             outside_text_huggingface_token,
             outside_text_osb_font_pack,
             outside_text_osb_max_font_size,
@@ -1502,7 +1520,6 @@ def create_layout(
             outside_text_osb_line_spacing,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
-            outside_text_easyocr_min_size,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -1572,6 +1589,7 @@ def create_layout(
             outside_text_seed,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
+            outside_text_osb_confidence,
             outside_text_huggingface_token,
             outside_text_osb_font_pack,
             outside_text_osb_max_font_size,
@@ -1581,7 +1599,7 @@ def create_layout(
             outside_text_osb_line_spacing,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
-            outside_text_easyocr_min_size,
+            outside_text_bbox_expansion_percent,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -1657,6 +1675,7 @@ def create_layout(
             outside_text_seed,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
+            outside_text_osb_confidence,
             outside_text_huggingface_token,
             outside_text_osb_font_pack,
             outside_text_osb_max_font_size,
@@ -1666,7 +1685,7 @@ def create_layout(
             outside_text_osb_line_spacing,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
-            outside_text_easyocr_min_size,
+            outside_text_bbox_expansion_percent,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,

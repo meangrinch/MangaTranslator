@@ -154,7 +154,10 @@ def main():
         "--output-language", type=str, default="English", help="Target language"
     )
     parser.add_argument(
-        "--conf", type=float, default=0.35, help="Confidence threshold for detection"
+        "--confidence",
+        type=float,
+        default=0.35,
+        help="Confidence threshold for speech bubble detection (0.0-1.0)",
     )
     parser.add_argument(
         "--no-sam2",
@@ -549,10 +552,10 @@ def main():
         help="Bounding box expansion percent for OSB detection",
     )
     parser.add_argument(
-        "--osb-easyocr-min-size",
-        type=int,
-        default=200,
-        help="Minimum text region size in pixels for OSB text detection",
+        "--osb-confidence",
+        type=float,
+        default=0.35,
+        help="Confidence threshold for OSB text detection (0.0-1.0)",
     )
     parser.add_argument(
         "--bubble-min-side-pixels",
@@ -785,6 +788,7 @@ def main():
             or os.environ.get("HUGGINGFACE_TOKEN", ""),
             flux_num_inference_steps=args.osb_flux_steps,
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
+            osb_confidence=args.osb_confidence,
             seed=args.osb_seed,
             osb_font_name=args.osb_font_name,
             osb_max_font_size=args.osb_max_font_size,
@@ -795,7 +799,6 @@ def main():
             osb_use_subpixel_rendering=args.osb_use_subpixel,
             osb_font_hinting=args.osb_font_hinting,
             bbox_expansion_percent=args.osb_bbox_expansion,
-            easyocr_min_size=args.osb_easyocr_min_size,
         ),
         preprocessing=PreprocessingConfig(
             enabled=args.image_upscale_mode == "initial",

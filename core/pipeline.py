@@ -166,7 +166,7 @@ def translate_and_render(
 
     # Process outside text detection and inpainting
     pil_image_processed, outside_text_data = process_outside_text(
-        pil_image_processed, config, image_path, image_format, processing_scale, verbose
+        pil_image_processed, config, image_path, image_format, verbose
     )
     original_cv_image = pil_to_cv2(pil_image_processed)
 
@@ -174,7 +174,6 @@ def translate_and_render(
     full_image_mime_type = None
     if config.translation.send_full_page_context:
         try:
-            # Prepare full page context based on upscale method.
             # processing_scale is intentionally not used for context_image_max_side_pixels
             context_image_pil = cv2_to_pil(original_cv_image)
             effective_context_max_side = scale_length(
@@ -265,7 +264,6 @@ def translate_and_render(
     if cancellation_manager and cancellation_manager.is_cancelled():
         raise CancellationError("Process cancelled by user.")
 
-    # --- Detection ---
     log_message("Detecting speech bubbles...", verbose=verbose)
     try:
         bubble_data = detect_speech_bubbles(
@@ -284,51 +282,65 @@ def translate_and_render(
 
     final_image_to_save = pil_image_processed
 
-    # --- Proceed only if bubbles were detected ---
-    if not bubble_data:
-        log_message("No speech bubbles detected", always_print=True)
+    if not bubble_data and not outside_text_data:
+        log_message("No speech bubbles or outside text detected", always_print=True)
     else:
-        log_message(f"Detected {len(bubble_data)} bubbles", verbose=verbose)
+        if bubble_data:
+            log_message(f"Detected {len(bubble_data)} bubbles", verbose=verbose)
+        if outside_text_data:
+            log_message(
+                f"Detected {len(outside_text_data)} outside text regions",
+                verbose=verbose,
+            )
 
         if cancellation_manager and cancellation_manager.is_cancelled():
             raise CancellationError("Process cancelled by user.")
 
-        # --- Cleaning ---
-        log_message("Cleaning speech bubbles...", verbose=verbose)
-        try:
-            use_otsu = config.cleaning.use_otsu_threshold
+        if bubble_data:
+            log_message("Cleaning speech bubbles...", verbose=verbose)
+            try:
+                use_otsu = config.cleaning.use_otsu_threshold
 
-            cleaned_image_cv, processed_bubbles_info = clean_speech_bubbles(
-                pil_image_processed,
-                config.yolo_model_path,
-                config.detection.confidence,
-                pre_computed_detections=bubble_data,
-                device=device,
-                thresholding_value=config.cleaning.thresholding_value,
-                use_otsu_threshold=use_otsu,
-                roi_shrink_px=config.cleaning.roi_shrink_px,
-                verbose=verbose,
-                processing_scale=processing_scale,
-            )
-            log_message(
-                f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose
-            )
-        except CleaningError as e:
-            log_message(f"Cleaning failed: {e}", always_print=True)
-            cleaned_image_cv = original_cv_image.copy()
+                cleaned_image_cv, processed_bubbles_info = clean_speech_bubbles(
+                    pil_image_processed,
+                    config.yolo_model_path,
+                    config.detection.confidence,
+                    pre_computed_detections=bubble_data,
+                    device=device,
+                    thresholding_value=config.cleaning.thresholding_value,
+                    use_otsu_threshold=use_otsu,
+                    roi_shrink_px=config.cleaning.roi_shrink_px,
+                    verbose=verbose,
+                    processing_scale=processing_scale,
+                )
+                log_message(
+                    f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose
+                )
+            except CleaningError as e:
+                log_message(f"Cleaning failed: {e}", always_print=True)
+                cleaned_image_cv = original_cv_image.copy()
+                processed_bubbles_info = []
+            except Exception as e:
+                log_message(f"Error during cleaning: {e}", always_print=True)
+                cleaned_image_cv = original_cv_image.copy()
+                processed_bubbles_info = []
+
+            pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
+            if pil_cleaned_image.mode != target_mode:
+                log_message(
+                    f"Converting cleaned image to {target_mode}", verbose=verbose
+                )
+                pil_cleaned_image = pil_cleaned_image.convert(target_mode)
+            final_image_to_save = pil_cleaned_image
+        else:
             processed_bubbles_info = []
-        except Exception as e:
-            log_message(f"Error during cleaning: {e}", always_print=True)
-            cleaned_image_cv = original_cv_image.copy()
-            processed_bubbles_info = []
+            pil_cleaned_image = pil_image_processed
+            if pil_cleaned_image.mode != target_mode:
+                log_message(f"Converting image to {target_mode}", verbose=verbose)
+                pil_cleaned_image = pil_cleaned_image.convert(target_mode)
+            final_image_to_save = pil_cleaned_image
 
-        pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
-        if pil_cleaned_image.mode != target_mode:
-            log_message(f"Converting cleaned image to {target_mode}", verbose=verbose)
-            pil_cleaned_image = pil_cleaned_image.convert(target_mode)
-        final_image_to_save = pil_cleaned_image
-
-        # --- Check for Cleaning Only Mode ---
+        # Check for Cleaning Only Mode
         if config.cleaning_only:
             log_message("Cleaning only mode - skipping translation", always_print=True)
         else:
@@ -365,7 +377,7 @@ def translate_and_render(
                 minimum=0.0,
                 maximum=24.0,
             )
-            # --- Prepare images for Translation ---
+            # Prepare images for Translation
             log_message("Preparing bubble images...", verbose=verbose)
 
             # Disable upscaling in test_mode
@@ -397,18 +409,27 @@ def translate_and_render(
                     verbose,
                 )
 
-            log_message(
-                f"Upscaled {len(bubble_data)} bubble images for translation",
-                always_print=True,
-            )
+            if bubble_upscale_method != "none":
+                log_message(
+                    f"Upscaled {len(bubble_data)} bubble images for translation",
+                    always_print=True,
+                )
+            else:
+                log_message(
+                    f"Prepared {len(bubble_data)} bubble images for translation",
+                    always_print=True,
+                )
             valid_bubble_data = [b for b in bubble_data if b.get("image_b64")]
-            if not valid_bubble_data:
-                log_message("No valid bubble images for translation", always_print=True)
-            else:  # Only proceed if we have valid bubble data
+            if not valid_bubble_data and not outside_text_data:
+                log_message(
+                    "No valid bubble images or outside text for translation",
+                    always_print=True,
+                )
+            else:  # Proceed if we have valid bubble data or outside text
                 if cancellation_manager and cancellation_manager.is_cancelled():
                     raise CancellationError("Process cancelled by user.")
 
-                # --- Sort and Translate ---
+                # Sort and Translate
                 reading_direction = config.translation.reading_direction
                 # Merge outside text data with speech bubbles for reading order calculation
                 if outside_text_data:
@@ -550,7 +571,7 @@ def translate_and_render(
                                 for _ in sorted_bubble_data
                             ]
 
-                # --- Render Translations ---
+                # Render Translations
                 bubble_render_info_map = {
                     tuple(info["bbox"]): {
                         "color": info["color"],
@@ -718,7 +739,7 @@ def translate_and_render(
                         always_print=True,
                     )
 
-    # --- Final Image Upscaling (optional) ---
+    # Final Image Upscaling (optional)
     if config.output.upscale_final_image:
         log_message("Upscaling final image...", verbose=verbose, always_print=True)
         final_image_to_save = upscale_image(
@@ -728,7 +749,7 @@ def translate_and_render(
             verbose=verbose,
         )
 
-    # --- Save Output ---
+    # Save Output
     if output_path:
         if final_image_to_save.mode != target_mode:
             log_message(f"Converting final image to {target_mode}", verbose=verbose)

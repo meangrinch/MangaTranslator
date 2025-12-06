@@ -7,7 +7,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-import easyocr
 import torch
 from huggingface_hub import hf_hub_download, snapshot_download
 from spandrel import ModelLoader
@@ -25,7 +24,7 @@ class ModelType(Enum):
     UPSCALE_LITE = "upscale_lite"
     YOLO_SPEECH_BUBBLE = "yolo_speech_bubble"
     YOLO_CONJOINED_BUBBLE = "yolo_conjoined_bubble"
-    EASYOCR = "easyocr"
+    YOLO_OSBTEXT = "yolo_osbtext"
     SAM2 = "sam2"
     MANGA_OCR = "manga_ocr"
     FLUX_TRANSFORMER = "flux_transformer"
@@ -92,6 +91,7 @@ class ModelManager:
             ModelType.YOLO_CONJOINED_BUBBLE: (
                 model_dir / "yolo" / "comic-speech-bubble-detector-yolov8m.pt"
             ),
+            ModelType.YOLO_OSBTEXT: (model_dir / "yolo" / "animetext_yolov12x.pt"),
             ModelType.MANGA_OCR: (model_dir / "manga-ocr-base"),
         }
 
@@ -126,6 +126,10 @@ class ModelManager:
             ModelType.YOLO_CONJOINED_BUBBLE: {
                 "repo_id": "ogkalu/comic-speech-bubble-detector-yolov8m",
                 "filename": "comic-speech-bubble-detector.pt",
+            },
+            ModelType.YOLO_OSBTEXT: {
+                "repo_id": "deepghs/AnimeText_yolo",
+                "filename": "yolo12x_animetext/model.pt",
             },
             ModelType.SAM2: {
                 "repo_id": "facebook/sam2.1-hiera-large",
@@ -204,6 +208,7 @@ class ModelManager:
         )
         downloaded_path = Path(downloaded)
         if downloaded_path != target:
+            downloaded_parent = downloaded_path.parent
             try:
                 downloaded_path.replace(target)
             except Exception:
@@ -211,6 +216,14 @@ class ModelManager:
                 try:
                     downloaded_path.unlink()
                 except Exception:
+                    pass
+
+            # Clean up empty directory if it was created by hf_hub_download
+            if downloaded_parent != target.parent and downloaded_parent.exists():
+                try:
+                    if not any(downloaded_parent.iterdir()):
+                        downloaded_parent.rmdir()
+                except (OSError, PermissionError):
                     pass
         log_message(f"Downloaded {target.name} successfully.", verbose=verbose)
         return target
@@ -325,7 +338,8 @@ class ModelManager:
                 return self.models[ModelType.UPSCALE_LITE]
 
             log_message(
-                "Loading upscale lite model (2x-AnimeSharpV4_Fast_RCAN_PU)...", verbose=verbose
+                "Loading upscale lite model (2x-AnimeSharpV4_Fast_RCAN_PU)...",
+                verbose=verbose,
             )
             path = self.model_paths[ModelType.UPSCALE_LITE]
 
@@ -416,28 +430,34 @@ class ModelManager:
             log_message("YOLO conjoined bubble model loaded.", verbose=verbose)
             return model
 
-    def load_easyocr(self, languages=None, verbose: bool = False):
-        """Load EasyOCR reader.
+    def load_yolo_osbtext(self, token: Optional[str] = None, verbose: bool = False):
+        """Load YOLO model for outside text detection.
 
         Args:
-            languages: List of language codes. Defaults to ["ja"].
+            token: Hugging Face token for gated repo access.
             verbose: Whether to print verbose logging
         """
         with self._lock:
-            if self.is_loaded(ModelType.EASYOCR):
-                return self.models[ModelType.EASYOCR]
+            if self.is_loaded(ModelType.YOLO_OSBTEXT):
+                return self.models[ModelType.YOLO_OSBTEXT]
 
-            if languages is None:
-                languages = ["ja"]
+            log_message("Loading YOLO OSB Text detection model...", verbose=verbose)
 
-            log_message(
-                f"Loading EasyOCR reader for languages: {languages}...",
+            path = self.model_paths[ModelType.YOLO_OSBTEXT]
+            hf_info = self.model_hf_repos[ModelType.YOLO_OSBTEXT]
+
+            self._ensure_hf_file(
+                hf_info["repo_id"],
+                hf_info["filename"],
+                path,
+                token=token,
                 verbose=verbose,
             )
-            reader = easyocr.Reader(languages, gpu=torch.cuda.is_available())
-            self.models[ModelType.EASYOCR] = reader
-            log_message("EasyOCR reader loaded.", verbose=verbose)
-            return reader
+
+            model = YOLO(str(path))
+            self.models[ModelType.YOLO_OSBTEXT] = model
+            log_message("YOLO OSB Text model loaded.", verbose=verbose)
+            return model
 
     def load_manga_ocr(self, verbose: bool = False) -> Path:
         """Ensure manga-ocr model repository is downloaded.
@@ -642,7 +662,7 @@ class ModelManager:
         log_message("Upscale models unloaded.", verbose=verbose)
 
     def unload_ocr_models(self, verbose: bool = False):
-        """Unload OCR-related models (YOLO, SAM2, EasyOCR, and manga-ocr)."""
+        """Unload OCR-related models (YOLO, SAM2, and manga-ocr)."""
         models_unloaded = []
         if self.is_loaded(ModelType.YOLO_SPEECH_BUBBLE):
             models_unloaded.append("yolo_speech_bubble")
@@ -650,8 +670,8 @@ class ModelManager:
             models_unloaded.append("yolo_conjoined_bubble")
         if self.is_loaded(ModelType.SAM2):
             models_unloaded.append("sam2")
-        if self.is_loaded(ModelType.EASYOCR):
-            models_unloaded.append("easyocr")
+        if self.is_loaded(ModelType.YOLO_OSBTEXT):
+            models_unloaded.append("yolo_osbtext")
         if self.is_loaded(ModelType.MANGA_OCR):
             models_unloaded.append("manga_ocr")
 
@@ -660,7 +680,7 @@ class ModelManager:
             ModelType.YOLO_CONJOINED_BUBBLE, force_gc=False, verbose=verbose
         )
         self.unload_model(ModelType.SAM2, force_gc=False, verbose=verbose)
-        self.unload_model(ModelType.EASYOCR, force_gc=False, verbose=verbose)
+        self.unload_model(ModelType.YOLO_OSBTEXT, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.MANGA_OCR, force_gc=True, verbose=verbose)
 
         if models_unloaded:
@@ -741,17 +761,17 @@ class ModelManager:
             self.unload_upscale_models(verbose=verbose)
 
     @contextmanager
-    def ocr_context(self, languages=None, verbose: bool = False):
+    def ocr_context(self, hf_token=None, verbose: bool = False):
         """Context manager for OCR models - auto-loads and unloads.
 
         Args:
-            languages: List of language codes for EasyOCR
+            hf_token: Hugging Face token for gated repo access
             verbose: Whether to print verbose logging
         """
         try:
             yolo = self.load_yolo_speech_bubble(verbose=verbose)
-            easyocr_reader = self.load_easyocr(languages, verbose=verbose)
-            yield yolo, easyocr_reader
+            yolo_osbtext = self.load_yolo_osbtext(token=hf_token, verbose=verbose)
+            yield yolo, yolo_osbtext
         finally:
             self.unload_ocr_models(verbose=verbose)
 

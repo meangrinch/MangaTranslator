@@ -16,7 +16,6 @@ class UnifiedCache:
         """Initialize the unified cache."""
         from core.text.font_manager import LRUCache
 
-        self._ocr_cache = LRUCache(max_size=1)
         self._yolo_cache = LRUCache(max_size=1)
         self._sam_cache = LRUCache(max_size=1)
         self._translation_cache = LRUCache(max_size=1)
@@ -91,69 +90,6 @@ class UnifiedCache:
         """
         data_bytes = pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
         return hashlib.sha256(data_bytes).hexdigest()[:16]
-
-    def get_ocr_cache_key(
-        self,
-        image: Image.Image,
-        languages: list,
-        mag_ratio: float = 1.0,
-        link_threshold: float = 0.1,
-        decoder: str = "beamsearch",
-        beamWidth: int = 10,
-        rotation_info: list = None,
-        min_size: int = 100,
-    ) -> str:
-        """Compute cache key for EasyOCR detection.
-
-        Args:
-            image: Input image
-            languages: List of language codes
-            mag_ratio: Magnification ratio
-            link_threshold: Link threshold
-            decoder: Decoder type
-            beamWidth: Beam width for decoder
-            rotation_info: Rotation information
-            min_size: Minimum text size
-
-        Returns:
-            str: Cache key
-        """
-        image_hash = self._hash_image(image)
-        params_str = (
-            f"langs_{'_'.join(sorted(languages))}_"
-            f"mag{mag_ratio:.2f}_link{link_threshold:.2f}_"
-            f"dec{decoder}_beam{beamWidth}_"
-            f"rot{rotation_info}_min{min_size}"
-        )
-        key_string = f"ocr_{image_hash}_{params_str}"
-        return hashlib.sha256(key_string.encode()).hexdigest()
-
-    def get_ocr_detection(self, cache_key: str) -> Optional[Any]:
-        """Get cached OCR detection result.
-
-        Args:
-            cache_key: Cache key
-
-        Returns:
-            Cached OCR results or None if not found
-        """
-        return self._ocr_cache.get(cache_key)
-
-    def set_ocr_detection(
-        self, cache_key: str, results: Any, verbose: bool = False
-    ) -> None:
-        """Cache OCR detection result.
-
-        Args:
-            cache_key: Cache key
-            results: OCR detection results to cache
-            verbose: Whether to print verbose logging
-        """
-        self._ocr_cache.put(cache_key, results)
-        log_message(
-            f"  - Cached OCR detection (cache size: {len(self._ocr_cache.cache)})",
-            verbose=verbose,
-        )
 
     def get_yolo_cache_key(
         self, image: Image.Image, model_path: str, confidence: float
@@ -509,11 +445,6 @@ class UnifiedCache:
             verbose=verbose,
         )
 
-    def clear_ocr_cache(self, verbose: bool = False) -> None:
-        """Clear OCR detection cache."""
-        self._ocr_cache.cache.clear()
-        log_message("OCR cache cleared", verbose=verbose)
-
     def clear_yolo_cache(self, verbose: bool = False) -> None:
         """Clear YOLO detection cache."""
         self._yolo_cache.cache.clear()
@@ -541,7 +472,6 @@ class UnifiedCache:
 
     def clear_all(self) -> None:
         """Clear all caches."""
-        self.clear_ocr_cache(verbose=False)
         self.clear_yolo_cache(verbose=False)
         self.clear_sam_cache(verbose=False)
         self.clear_translation_cache(verbose=False)
@@ -580,7 +510,6 @@ class UnifiedCache:
             dict: Cache statistics
         """
         return {
-            "ocr": len(self._ocr_cache.cache),
             "yolo": len(self._yolo_cache.cache),
             "sam": len(self._sam_cache.cache),
             "translation": len(self._translation_cache.cache),

@@ -5,7 +5,7 @@ Web application for automating the translation of manga/comic page images using 
 ## Features
 
 - Speech bubble detection, segmentation, cleaning (YOLOv8 + SAM 2.1)
-- Outside speech bubble text detection & inpainting (EasyOCR + Flux Kontext)
+- Outside speech bubble text detection & inpainting (YOLO + Flux Kontext)
 - LLM-powered OCR and translations (supports 54 languages)
 - Text rendering (with custom font packs)
 - Upscaling (2x-AnimeSharpV4)
@@ -107,15 +107,16 @@ fonts/
 
 ### OSB text setup (optional)
 
-- If you want to use the OSB text pipeline, you need a Hugging Face token with access to FLUX.1 Kontext.
+- If you want to use the OSB text pipeline, you need a Hugging Face token with access to the `deepghs/AnimeText_yolo` and `black-forest-labs/FLUX.1-Kontext-dev` repositories.
 - Follow these steps to create one:
 
 1. Sign in or create a Hugging Face account
-2. Visit and accept the terms on: [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
+2. Visit and accept the terms on: [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo) and [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
 3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
 4. Add the token to the app:
    - Web UI: set `hf_token` in Config
    - Env var (alternative): set `HUGGINGFACE_TOKEN`
+5. Save config to preserve the token across sessions
 
 ## Run
 
@@ -147,7 +148,7 @@ python main.py --input <folder_path> --batch \
   --provider OpenAI-Compatible --openai-compatible-url http://localhost:1234/v1 \
   --output ./output
 
-# Single Image, Japanese → English (Google), OSB text detection, custom OSB font
+# Single Image, Japanese → English (Google), OSB text pipeline, custom OSB text font
 python main.py --input <image_path> \
   --font-dir "fonts/Komika" --provider Google --google-api-key <AI...> \
   --osb-enable --osb-font-name "fonts/fast_action"
@@ -251,8 +252,8 @@ pip install -r requirements.txt
 - YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Comic Speech Bubble Detector YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
 - SAM 2.1 (Segment Anything): [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
-- EasyOCR: [JaidedAI](https://github.com/JaidedAI/EasyOCR)
 - FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
 - Nunchaku: [Nunchaku Tech](https://github.com/nunchaku-tech/nunchaku)
 - 2x-AnimeSharpV4: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)
+- AnimeText Yolov12: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)

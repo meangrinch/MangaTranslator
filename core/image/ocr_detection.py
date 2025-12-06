@@ -1,80 +1,18 @@
 import os
 from typing import List, Optional, Tuple
 
+import cv2
 import numpy as np
 import torch
 from PIL import Image
 
 from core.caching import get_cache
-from core.ml.model_manager import get_model_manager
+from core.ml.model_manager import ModelType, get_model_manager
+from utils.exceptions import ImageProcessingError
 from utils.logging import log_message
 
 # OCR Detection Parameters
-IOU_THRESHOLD = 0.5  # IoU threshold for box overlap detection
-EASYOCR_MAG_RATIO = 1.0  # EasyOCR magnification ratio
-EASYOCR_LINK_THRESHOLD = 0.1  # EasyOCR link threshold for connecting text components
-EASYOCR_BEAM_WIDTH = 10  # Beam search width for EasyOCR decoder
-EASYOCR_ROTATION_ANGLE = 30  # Text rotation angle to attempt (degrees)
-TEXT_BOX_PROXIMITY_RATIO = (
-    0.05  # Text box spatial grouping uses 5% of image dimension as proximity threshold
-)
-
-OCR_LANGUAGE_MAP = {
-    "Afrikaans": "af",
-    "Albanian": "sq",
-    "Arabic": "ar",
-    "Belarusian": "be",
-    "Bengali": "bn",
-    "Bosnian": "bs",
-    "Bulgarian": "bg",
-    "Simplified Chinese": "ch_sim",
-    "Traditional Chinese": "ch_tra",
-    "Croatian": "hr",
-    "Czech": "cs",
-    "Danish": "da",
-    "Dutch": "nl",
-    "English": "en",
-    "Estonian": "et",
-    "Persian (Farsi)": "fa",
-    "French": "fr",
-    "German": "de",
-    "Hindi": "hi",
-    "Hungarian": "hu",
-    "Icelandic": "is",
-    "Indonesian": "id",
-    "Irish": "ga",
-    "Italian": "it",
-    "Japanese": "ja",
-    "Korean": "ko",
-    "Latvian": "lv",
-    "Lithuanian": "lt",
-    "Malay": "ms",
-    "Maltese": "mt",
-    "Marathi": "mr",
-    "Nepali": "ne",
-    "Norwegian": "no",
-    "Polish": "pl",
-    "Portuguese": "pt",
-    "Romanian": "ro",
-    "Russian": "ru",
-    "Serbian (cyrillic)": "rs_cyrillic",
-    "Serbian (latin)": "rs_latin",
-    "Slovak": "sk",
-    "Slovenian": "sl",
-    "Spanish": "es",
-    "Swahili": "sw",
-    "Swedish": "sv",
-    "Tamil": "ta",
-    "Telugu": "te",
-    "Thai": "th",
-    "Tagalog": "tl",
-    "Turkish": "tr",
-    "Ukrainian": "uk",
-    "Urdu": "ur",
-    "Uzbek": "uz",
-    "Vietnamese": "vi",
-    "Welsh": "cy",
-}
+TEXT_BOX_PROXIMITY_RATIO = 0.05  # 5% of image dimension
 
 
 class OutsideTextDetector:
@@ -83,72 +21,34 @@ class OutsideTextDetector:
     def __init__(
         self,
         device: Optional[torch.device] = None,
-        languages: Optional[List[str]] = None,
+        hf_token: Optional[str] = None,
     ):
         """Initialize the outside text detector.
 
         Args:
             device: PyTorch device to use. Auto-detects if None.
-            languages: List of language codes for EasyOCR. Defaults to ['ja'].
+            hf_token: Hugging Face token for gated repo access.
         """
         self.device = (
             device
             if device is not None
             else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         )
-        self.languages = languages if languages is not None else ["ja"]
+        self.hf_token = hf_token
         self.manager = get_model_manager()
         self.cache = get_cache()
-        self.yolo_model = None
-        self.reader = None
-        self.iou_threshold = IOU_THRESHOLD
-
-    def calculate_iou(self, box1, box2):
-        """Calculate the Intersection over Union (IoU) of two bounding boxes.
-
-        Args:
-            box1: Bounding box from EasyOCR (list of 4 corner points).
-            box2: Bounding box from EasyOCR (list of 4 corner points).
-
-        Returns:
-            float: The IoU score, between 0 and 1.
-        """
-        x1_min, y1_min = np.min(box1, axis=0)
-        x1_max, y1_max = np.max(box1, axis=0)
-
-        x2_min, y2_min = np.min(box2, axis=0)
-        x2_max, y2_max = np.max(box2, axis=0)
-
-        x_inter_min = max(x1_min, x2_min)
-        y_inter_min = max(y1_min, y2_min)
-        x_inter_max = min(x1_max, x2_max)
-        y_inter_max = min(y1_max, y2_max)
-
-        inter_width = max(0, x_inter_max - x_inter_min)
-        inter_height = max(0, y_inter_max - y_inter_min)
-        intersection_area = inter_width * inter_height
-
-        area1 = (x1_max - x1_min) * (y1_max - y1_min)
-        area2 = (x2_max - x2_min) * (y2_max - y2_min)
-
-        union_area = area1 + area2 - intersection_area
-
-        iou = intersection_area / union_area if union_area > 0 else 0
-        return iou
 
     def boxes_overlap(self, box1, box2):
         """Check if two bounding boxes overlap (have non-zero intersection).
 
         Args:
-            box1: Bounding box in EasyOCR format (list of 4 points).
+            box1: Bounding box in [x_min, y_min, x_max, y_max] format.
             box2: Bounding box in YOLO format [x_min, y_min, x_max, y_max].
 
         Returns:
             bool: True if boxes overlap, False otherwise.
         """
-        x1_min, y1_min = np.min(box1, axis=0)
-        x1_max, y1_max = np.max(box1, axis=0)
-
+        x1_min, y1_min, x1_max, y1_max = box1
         x2_min, y2_min, x2_max, y2_max = box2
 
         return not (
@@ -159,17 +59,14 @@ class OutsideTextDetector:
         """Check if box1 is completely inside box2.
 
         Args:
-            box1: Bounding box in EasyOCR format (list of 4 points).
-            box2: Bounding box in EasyOCR format (list of 4 points).
+            box1: Bounding box in [x1, y1, x2, y2] format.
+            box2: Bounding box in [x1, y1, x2, y2] format.
 
         Returns:
             bool: True if box1 is completely inside box2, False otherwise.
         """
-        x1_min, y1_min = np.min(box1, axis=0)
-        x1_max, y1_max = np.max(box1, axis=0)
-
-        x2_min, y2_min = np.min(box2, axis=0)
-        x2_max, y2_max = np.max(box2, axis=0)
+        x1_min, y1_min, x1_max, y1_max = box1
+        x2_min, y2_min, x2_max, y2_max = box2
 
         return (
             x1_min >= x2_min
@@ -182,7 +79,7 @@ class OutsideTextDetector:
         """Remove detections fully contained in larger ones to avoid duplicates.
 
         Args:
-            results: List of OCR results (bbox, text, confidence).
+            results: List of detection results (bbox, text, confidence).
 
         Returns:
             list: Filtered results with nested detections removed.
@@ -193,8 +90,7 @@ class OutsideTextDetector:
         # Prioritize larger detections to avoid removing important text
         def get_area(result):
             bbox = result[0]
-            x_min, y_min = np.min(bbox, axis=0)
-            x_max, y_max = np.max(bbox, axis=0)
+            x_min, y_min, x_max, y_max = bbox
             return (x_max - x_min) * (y_max - y_min)
 
         sorted_results = sorted(results, key=get_area, reverse=True)
@@ -215,46 +111,16 @@ class OutsideTextDetector:
 
         return filtered_results
 
-    def initialize_models(self, yolo_model_path: Optional[str] = None):
-        """Initialize YOLO and EasyOCR models via the shared model manager."""
-        if self.yolo_model is None:
-            self.yolo_model = self.manager.load_yolo_speech_bubble(yolo_model_path)
-
-        if self.reader is None:
-            self.reader = self.manager.load_easyocr(self.languages)
-
     def unload_models(self):
         """Unload OCR models via model manager to free GPU/CPU memory."""
-        self.yolo_model = None
-        self.reader = None
         self.manager.unload_ocr_models()
-
-    def convert_easyocr_to_bboxes(self, easyocr_results):
-        """Convert EasyOCR quadrilaterals to axis-aligned [x_min, y_min, x_max, y_max] boxes."""
-        boxes = []
-        for result in easyocr_results:
-            if len(result) >= 3:
-                bbox = result[0]
-            else:
-                continue
-
-            x_coords = [point[0] for point in bbox]
-            y_coords = [point[1] for point in bbox]
-            x_min = min(x_coords)
-            y_min = min(y_coords)
-            x_max = max(x_coords)
-            y_max = max(y_coords)
-
-            boxes.append([x_min, y_min, x_max, y_max])
-
-        return boxes
 
     def detect_outside_text(
         self,
         image_path: str,
         yolo_model_path: Optional[str] = None,
+        confidence: float = 0.35,
         verbose: bool = False,
-        min_size: int = 200,
         image_override: Optional[Image.Image] = None,
     ):
         """Detect non-dialogue text by subtracting YOLO speech bubbles from OCR results.
@@ -262,67 +128,107 @@ class OutsideTextDetector:
         Args:
             image_path: Path to the input image.
             yolo_model_path: Optional custom YOLO model path.
+            confidence: Confidence threshold for detections.
             verbose: If True, logs intermediate steps.
-            min_size: Minimum text region size in pixels for OCR detection.
 
         Returns:
-            list: Detected regions outside bubbles as (bbox, text, confidence).
+            list: Detected regions outside bubbles as (bbox, confidence).
         """
         if image_override is None and not os.path.exists(image_path):
             raise FileNotFoundError(f"Error: The file '{image_path}' was not found.")
 
-        self.initialize_models(yolo_model_path)
-
         log_message(f"Using device: {self.device}", verbose=verbose)
+        try:
+            if image_override is not None:
+                image_pil = (
+                    image_override
+                    if image_override.mode == "RGB"
+                    else image_override.convert("RGB")
+                )
+                image_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
+            else:
+                image_cv = cv2.imread(str(image_path))
+                if image_cv is None:
+                    raise ImageProcessingError(f"Could not read image at {image_path}")
+                image_pil = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+            image_name = image_path if image_override is None else "override"
+            log_message(
+                f"Processing image: {image_name} "
+                f"({image_cv.shape[1]}x{image_cv.shape[0]})",
+                verbose=verbose,
+            )
+        except Exception as e:
+            raise ImageProcessingError(f"Error loading image: {e}")
 
         log_message("Running YOLO detection for speech bubbles...", verbose=verbose)
-        raw_image = (
-            image_override.convert("RGB")
-            if (image_override is not None and image_override.mode != "RGB")
-            else (image_override or Image.open(image_path).convert("RGB"))
-        )
-        yolo_results = self.yolo_model(raw_image, device=self.device)
-        yolo_boxes = (
-            yolo_results[0].boxes.xyxy if yolo_results[0].boxes is not None else None
-        )
 
-        image_np = np.array(raw_image)
-
-        num_yolo_boxes = (
-            len(yolo_boxes)
-            if yolo_boxes is not None and yolo_boxes.nelement() > 0
-            else 0
+        sb_model_path = (
+            str(self.manager.model_paths[ModelType.YOLO_SPEECH_BUBBLE])
+            if yolo_model_path is None
+            else yolo_model_path
         )
+        sb_cache_key = self.cache.get_yolo_cache_key(
+            image_pil, sb_model_path, confidence
+        )
+        cached_sb = self.cache.get_yolo_detection(sb_cache_key)
+
+        if cached_sb is not None:
+            log_message("Using cached Speech Bubble detections", verbose=verbose)
+            yolo_results, yolo_boxes = cached_sb
+        else:
+            yolo_model = self.manager.load_yolo_speech_bubble(yolo_model_path)
+            yolo_results = yolo_model(
+                image_cv, conf=confidence, device=self.device, verbose=False
+            )[0]
+            yolo_boxes = (
+                yolo_results.boxes.xyxy
+                if yolo_results.boxes is not None
+                else torch.tensor([])
+            )
+            self.cache.set_yolo_detection(sb_cache_key, (yolo_results, yolo_boxes))
+
+        num_yolo_boxes = len(yolo_boxes) if yolo_boxes.nelement() > 0 else 0
         log_message(f"YOLO detected {num_yolo_boxes} speech bubbles", verbose=verbose)
 
-        log_message("Running EasyOCR...", always_print=True)
-        cache_key = self.cache.get_ocr_cache_key(
-            raw_image,
-            self.languages,
-            mag_ratio=EASYOCR_MAG_RATIO,
-            link_threshold=EASYOCR_LINK_THRESHOLD,
-            decoder="beamsearch",
-            beamWidth=EASYOCR_BEAM_WIDTH,
-            rotation_info=[EASYOCR_ROTATION_ANGLE],
-            min_size=min_size,
-        )
-        cached_ocr = self.cache.get_ocr_detection(cache_key)
+        log_message("Running YOLO OSB Text...", always_print=True)
 
-        if cached_ocr is not None:
-            log_message("  - Using cached OCR results", verbose=verbose)
-            base_results = cached_ocr
+        osbtext_model_path = str(self.manager.model_paths[ModelType.YOLO_OSBTEXT])
+        osbtext_cache_key = self.cache.get_yolo_cache_key(
+            image_pil, osbtext_model_path, confidence
+        )
+
+        cached_osbtext = self.cache.get_yolo_detection(osbtext_cache_key)
+
+        if cached_osbtext is not None:
+            log_message("Using cached OSBText detections", verbose=verbose)
+            osbtext_results, osbtext_boxes, osbtext_confs = cached_osbtext
         else:
-            base_results_raw = self.reader.readtext(
-                image_np,
-                mag_ratio=EASYOCR_MAG_RATIO,
-                link_threshold=EASYOCR_LINK_THRESHOLD,
-                decoder="beamsearch",
-                beamWidth=EASYOCR_BEAM_WIDTH,
-                rotation_info=[EASYOCR_ROTATION_ANGLE],
-                min_size=min_size,
+            osbtext_model = self.manager.load_yolo_osbtext(token=self.hf_token)
+            osbtext_results = osbtext_model(
+                image_cv, conf=confidence, device=self.device, verbose=False
+            )[0]
+            osbtext_boxes = (
+                osbtext_results.boxes.xyxy
+                if osbtext_results.boxes is not None
+                else None
             )
-            base_results = [(bbox, text, conf) for bbox, text, conf in base_results_raw]
-            self.cache.set_ocr_detection(cache_key, base_results)
+            osbtext_confs = (
+                osbtext_results.boxes.conf
+                if osbtext_results.boxes is not None
+                else None
+            )
+            self.cache.set_yolo_detection(
+                osbtext_cache_key, (osbtext_results, osbtext_boxes, osbtext_confs)
+            )
+
+        base_results = []
+        if osbtext_boxes is not None:
+            boxes_np = osbtext_boxes.detach().cpu().numpy()
+            confs_np = osbtext_confs.detach().cpu().numpy()
+
+            for i, box in enumerate(boxes_np):
+                conf = confs_np[i]
+                base_results.append((box, float(conf)))
 
         final_results = list(base_results)
 
@@ -345,7 +251,7 @@ class OutsideTextDetector:
             yolo_boxes_np = yolo_boxes.detach().cpu().numpy()
 
             for ocr_result in final_results:
-                bbox, _, _ = ocr_result
+                bbox, _ = ocr_result
 
                 overlaps_any = False
 
@@ -375,7 +281,6 @@ class OutsideTextDetector:
         image_path: str,
         bbox_expansion_percent: float = 0.0,
         verbose: bool = False,
-        min_size: int = 200,
         image_override: Optional[Image.Image] = None,
         existing_results: Optional[List] = None,
     ) -> Tuple[Optional[List], Optional[Image.Image]]:
@@ -385,7 +290,6 @@ class OutsideTextDetector:
             image_path: Path to the input image.
             bbox_expansion_percent: Percentage to expand bounding boxes.
             verbose: Whether to print verbose output.
-            min_size: Minimum text region size in pixels for OCR detection.
 
         Returns:
             tuple: (groups, image_pil) where groups is a list of dicts with:
@@ -394,7 +298,6 @@ class OutsideTextDetector:
                     'bbox': dict,
                     'individual_masks': [np.array],
                     'mask_indices': [int],
-                    'text': str,
                     'confidence': float,
                 }.
         """
@@ -404,7 +307,6 @@ class OutsideTextDetector:
             else self.detect_outside_text(
                 image_path,
                 verbose=verbose,
-                min_size=min_size,
                 image_override=image_override,
             )
         )
@@ -422,12 +324,9 @@ class OutsideTextDetector:
             image_pil = Image.open(image_path).convert("RGB")
         img_w, img_h = image_pil.size
 
-        log_message(
-            "Converting EasyOCR results to axis-aligned boxes...", verbose=verbose
-        )
-        boxes = self.convert_easyocr_to_bboxes(results)
+        log_message("Converting OCR results to axis-aligned boxes...", verbose=verbose)
+        boxes = [[int(c) for c in result[0]] for result in results]
 
-        # Expand and clip boxes
         expanded_boxes = []
         for box in boxes:
             x0, y0, x1, y1 = box
@@ -442,7 +341,6 @@ class OutsideTextDetector:
             if x1e > x0e and y1e > y0e:
                 expanded_boxes.append([x0e, y0e, x1e, y1e])
 
-        # Group nearby text boxes spatially
         log_message(
             f"Grouping {len(expanded_boxes)} text boxes spatially...",
             verbose=verbose,
@@ -454,14 +352,11 @@ class OutsideTextDetector:
 
         groups = []
         for group_boxes, group_results in grouped_boxes:
-            # Create combined mask for the group
             combined_mask = np.zeros((img_h, img_w), dtype=bool)
             individual_masks = []
             mask_indices = []
-            combined_text = []
             avg_confidence = 0.0
 
-            # Calculate combined bounding box
             min_x = min(box[0] for box in group_boxes)
             min_y = min(box[1] for box in group_boxes)
             max_x = max(box[2] for box in group_boxes)
@@ -474,7 +369,6 @@ class OutsideTextDetector:
                     f"  - Group too large ({max_x - min_x}x{max_y - min_y}), splitting...",
                     verbose=verbose,
                 )
-                # Split large groups into smaller ones
                 for i, (box, result) in enumerate(zip(group_boxes, group_results)):
                     x0, y0, x1, y1 = box
                     mask = np.zeros((img_h, img_w), dtype=bool)
@@ -487,7 +381,7 @@ class OutsideTextDetector:
                         "height": int(y1 - y0),
                     }
 
-                    _, text, conf = result
+                    _, conf = result
 
                     groups.append(
                         {
@@ -495,13 +389,11 @@ class OutsideTextDetector:
                             "bbox": bbox,
                             "individual_masks": [mask],
                             "mask_indices": [i],
-                            "text": text,
                             "confidence": conf,
                         }
                     )
                 continue
 
-            # Process each box in the group
             for i, (box, result) in enumerate(zip(group_boxes, group_results)):
                 x0, y0, x1, y1 = box
                 mask = np.zeros((img_h, img_w), dtype=bool)
@@ -511,11 +403,9 @@ class OutsideTextDetector:
                 individual_masks.append(mask)
                 mask_indices.append(i)
 
-                _, text, conf = result
-                combined_text.append(text)
+                _, conf = result
                 avg_confidence += conf
 
-            # Create combined bounding box
             bbox = {
                 "x": int(min_x),
                 "y": int(min_y),
@@ -529,7 +419,6 @@ class OutsideTextDetector:
                     "bbox": bbox,
                     "individual_masks": individual_masks,
                     "mask_indices": mask_indices,
-                    "text": " ".join(combined_text),
                     "confidence": avg_confidence / len(group_results),
                 }
             )
@@ -559,10 +448,8 @@ class OutsideTextDetector:
         if not boxes:
             return []
 
-        # Calculate proximity threshold based on image size
         proximity_threshold = min(img_w, img_h) * TEXT_BOX_PROXIMITY_RATIO
 
-        # Use Union-Find to group nearby boxes
         parent = list(range(len(boxes)))
 
         def find(x):
@@ -575,13 +462,11 @@ class OutsideTextDetector:
             if px != py:
                 parent[px] = py
 
-        # Check proximity between all pairs of boxes
         for i in range(len(boxes)):
             for j in range(i + 1, len(boxes)):
                 if self._boxes_are_nearby(boxes[i], boxes[j], proximity_threshold):
                     union(i, j)
 
-        # Group boxes by their root parent
         groups = {}
         for i in range(len(boxes)):
             root = find(i)
@@ -614,13 +499,11 @@ class OutsideTextDetector:
         x1_min, y1_min, x1_max, y1_max = box1
         x2_min, y2_min, x2_max, y2_max = box2
 
-        # Calculate center points
         cx1 = (x1_min + x1_max) / 2
         cy1 = (y1_min + y1_max) / 2
         cx2 = (x2_min + x2_max) / 2
         cy2 = (y2_min + y2_max) / 2
 
-        # Calculate distance between centers
         distance = np.sqrt((cx1 - cx2) ** 2 + (cy1 - cy2) ** 2)
 
         return distance <= threshold
@@ -642,14 +525,12 @@ def extract_text_with_manga_ocr(
         return []
 
     try:
-        # Get manga-ocr instance from model manager
         model_manager = get_model_manager()
         manga_ocr_instance = model_manager.get_manga_ocr(verbose=verbose)
 
         extracted_texts = []
         for i, img in enumerate(images):
             try:
-                # Handle None images (decode failures)
                 if img is None:
                     log_message(
                         f"Image {i + 1} is None (decode failure), skipping",
@@ -664,7 +545,6 @@ def extract_text_with_manga_ocr(
                 )
                 text = manga_ocr_instance(img)
 
-                # Return empty string if no text detected, otherwise return extracted text
                 extracted_texts.append(text.strip() if text else "")
 
             except Exception as e:

@@ -117,6 +117,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_seed_val,
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_residual_diff_threshold_val,
+        outside_text_osb_confidence_val,
         outside_text_huggingface_token_val,
         outside_text_osb_font_pack_val,
         outside_text_osb_max_font_size_val,
@@ -126,7 +127,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_osb_line_spacing_val,
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
-        outside_text_easyocr_min_size_val,
+        outside_text_bbox_expansion_percent_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
         image_upscale_model_val,
@@ -164,6 +165,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             flux_residual_diff_threshold=float(
                 outside_text_flux_residual_diff_threshold_val
             ),
+            osb_confidence=float(outside_text_osb_confidence_val),
             osb_font_name=outside_text_osb_font_pack_val,
             osb_max_font_size=int(outside_text_osb_max_font_size_val),
             osb_min_font_size=int(outside_text_osb_min_font_size_val),
@@ -172,7 +174,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             osb_line_spacing=float(outside_text_osb_line_spacing_val),
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
-            easyocr_min_size=int(outside_text_easyocr_min_size_val),
+            bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
         ),
         provider_settings=UITranslationProviderSettings(
             provider=provider_selector,
@@ -858,6 +860,7 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_seed_val,
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_residual_diff_threshold_val,
+        outside_text_osb_confidence_val,
         outside_text_huggingface_token_val,
         outside_text_osb_font_pack_val,
         outside_text_osb_max_font_size_val,
@@ -867,7 +870,7 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_osb_line_spacing_val,
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
-        outside_text_easyocr_min_size_val,
+        outside_text_bbox_expansion_percent_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
         image_upscale_model_val,
@@ -892,6 +895,7 @@ def handle_save_config_click(*args: Any) -> str:
             flux_residual_diff_threshold=float(
                 outside_text_flux_residual_diff_threshold_val
             ),
+            osb_confidence=float(outside_text_osb_confidence_val),
             osb_font_name=outside_text_osb_font_pack_val,
             osb_max_font_size=int(outside_text_osb_max_font_size_val),
             osb_min_font_size=int(outside_text_osb_min_font_size_val),
@@ -900,7 +904,7 @@ def handle_save_config_click(*args: Any) -> str:
             osb_line_spacing=float(outside_text_osb_line_spacing_val),
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
-            easyocr_min_size=int(outside_text_easyocr_min_size_val),
+            bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
         ),
         provider_settings=UITranslationProviderSettings(
             provider=prov,
@@ -1161,6 +1165,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.seed,
         default_ui_state.outside_text.flux_num_inference_steps,
         default_ui_state.outside_text.flux_residual_diff_threshold,
+        default_ui_state.outside_text.osb_confidence,
+        default_ui_state.outside_text.bbox_expansion_percent,
         default_ui_state.outside_text.huggingface_token,
         gr.update(value=default_ui_state.outside_text.osb_font_name),
         default_ui_state.outside_text.osb_max_font_size,
@@ -1170,7 +1176,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.osb_line_spacing,
         default_ui_state.outside_text.osb_use_subpixel_rendering,
         default_ui_state.outside_text.osb_font_hinting,
-        default_ui_state.outside_text.easyocr_min_size,
         gr.update(value=default_ui_state.output.image_upscale_mode),
         gr.update(
             value=default_ui_state.output.image_upscale_factor,

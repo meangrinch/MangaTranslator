@@ -1,4 +1,3 @@
-easyocr>=1.7.0
 fonttools>=4.56.0
 gradio>=5.23.1,<=5.44.1
 manga-ocr>=0.1.14
