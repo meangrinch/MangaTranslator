@@ -509,45 +509,45 @@ class UnifiedCache:
             verbose=verbose,
         )
 
-    def clear_ocr_cache(self) -> None:
+    def clear_ocr_cache(self, verbose: bool = False) -> None:
         """Clear OCR detection cache."""
         self._ocr_cache.cache.clear()
-        log_message("OCR cache cleared", verbose=True)
+        log_message("OCR cache cleared", verbose=verbose)
 
-    def clear_yolo_cache(self) -> None:
+    def clear_yolo_cache(self, verbose: bool = False) -> None:
         """Clear YOLO detection cache."""
         self._yolo_cache.cache.clear()
-        log_message("YOLO cache cleared", verbose=True)
+        log_message("YOLO cache cleared", verbose=verbose)
 
-    def clear_sam_cache(self) -> None:
+    def clear_sam_cache(self, verbose: bool = False) -> None:
         """Clear SAM masks cache."""
         self._sam_cache.cache.clear()
-        log_message("SAM cache cleared", verbose=True)
+        log_message("SAM cache cleared", verbose=verbose)
 
-    def clear_translation_cache(self) -> None:
+    def clear_translation_cache(self, verbose: bool = False) -> None:
         """Clear translation cache."""
         self._translation_cache.cache.clear()
-        log_message("Translation cache cleared", verbose=True)
+        log_message("Translation cache cleared", verbose=verbose)
 
-    def clear_upscale_cache(self) -> None:
+    def clear_upscale_cache(self, verbose: bool = False) -> None:
         """Clear upscaling cache."""
         self._upscale_cache.cache.clear()
-        log_message("Upscale cache cleared", verbose=True)
+        log_message("Upscale cache cleared", verbose=verbose)
 
-    def clear_inpaint_cache(self) -> None:
+    def clear_inpaint_cache(self, verbose: bool = False) -> None:
         """Clear inpainting cache."""
         self._inpaint_cache.cache.clear()
-        log_message("Inpaint cache cleared", verbose=True)
+        log_message("Inpaint cache cleared", verbose=verbose)
 
     def clear_all(self) -> None:
         """Clear all caches."""
-        self.clear_ocr_cache()
-        self.clear_yolo_cache()
-        self.clear_sam_cache()
-        self.clear_translation_cache()
-        self.clear_upscale_cache()
-        self.clear_inpaint_cache()
-        log_message("All caches cleared", verbose=True)
+        self.clear_ocr_cache(verbose=False)
+        self.clear_yolo_cache(verbose=False)
+        self.clear_sam_cache(verbose=False)
+        self.clear_translation_cache(verbose=False)
+        self.clear_upscale_cache(verbose=False)
+        self.clear_inpaint_cache(verbose=False)
+        log_message("All caches cleared", always_print=True)
 
     def set_current_image(self, image: Image.Image, verbose: bool = False) -> None:
         """Set the current image being processed and clear caches if different.
