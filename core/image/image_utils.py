@@ -1,4 +1,6 @@
+import gc
 import os
+import tempfile
 from pathlib import Path
 from typing import Tuple
 
@@ -433,6 +435,33 @@ def upscale_image_to_dimension(
     current_image = _upscale_image(model, current_image, device)
     log_message(f"...to {current_image.width}x{current_image.height}", verbose=verbose)
 
+    # Save intermediate image to disk if more passes will be needed
+    if not met(current_image.width, current_image.height):
+        temp_file = None
+        try:
+            temp_fd, temp_file = tempfile.mkstemp(suffix=".png")
+            os.close(temp_fd)
+            current_image.save(temp_file, format="PNG")
+            del current_image
+            gc.collect()
+            current_image = Image.open(temp_file)
+            current_image.load()
+            log_message(
+                "Saved and reloaded intermediate image before additional passes",
+                verbose=verbose,
+            )
+        except Exception as e:
+            log_message(
+                f"Warning: Failed to save intermediate image to disk: {e}. Continuing with in-memory processing.",
+                verbose=verbose,
+            )
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except Exception:
+                    pass
+
     while not met(current_image.width, current_image.height):
         log_message(
             f"Upscaling from {current_image.width}x{current_image.height} (additional pass)...",
@@ -442,6 +471,34 @@ def upscale_image_to_dimension(
         log_message(
             f"...to {current_image.width}x{current_image.height}", verbose=verbose
         )
+
+        # Save intermediate image to disk to free memory
+        temp_file = None
+        try:
+            temp_fd, temp_file = tempfile.mkstemp(suffix=".png")
+            os.close(temp_fd)
+            current_image.save(temp_file, format="PNG")
+            del current_image
+            gc.collect()
+
+            current_image = Image.open(temp_file)
+            current_image.load()
+
+            log_message(
+                "Saved and reloaded intermediate image to free memory",
+                verbose=verbose,
+            )
+        except Exception as e:
+            log_message(
+                f"Warning: Failed to save intermediate image to disk: {e}. Continuing with in-memory processing.",
+                verbose=verbose,
+            )
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except Exception:
+                    pass  # Ignore errors during cleanup
 
     cache.set_upscaled_image(cache_key, current_image, verbose)
     return current_image
