@@ -104,6 +104,7 @@ def save_image_with_compression(
     elif extension == ".png":
         output_format = "PNG"
         save_options["compress_level"] = max(0, min(png_compression, 9))
+        save_options["optimize"] = True
         log_message(
             f"Saving PNG image with compression level {save_options['compress_level']} to {output_path}",
             verbose=verbose,
@@ -125,6 +126,7 @@ def save_image_with_compression(
         output_format = "PNG"
         output_path = output_path.with_suffix(".png")
         save_options["compress_level"] = max(0, min(png_compression, 9))
+        save_options["optimize"] = True
         log_message(
             f"Saving PNG image with compression level {save_options['compress_level']} to {output_path}",
             verbose=verbose,
