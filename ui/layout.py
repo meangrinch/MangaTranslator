@@ -1240,7 +1240,8 @@ def create_layout(
                                 100,
                                 value=saved_settings.get("jpeg_quality", 95),
                                 step=1,
-                                label="JPEG Quality (higher = better quality)",
+                                label="JPEG Quality",
+                                info="Higher levels result in better quality, but larger file sizes.",
                                 interactive=saved_settings.get("output_format", "auto")
                                 != "png",
                             )
@@ -1249,7 +1250,8 @@ def create_layout(
                                 9,
                                 value=saved_settings.get("png_compression", 6),
                                 step=1,
-                                label="PNG Compression Level (higher = smaller file)",
+                                label="PNG Compression Level",
+                                info="Higher levels result in smaller file sizes, but slower processing times.",
                                 interactive=saved_settings.get("output_format", "auto")
                                 != "jpeg",
                             )
