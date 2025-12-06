@@ -1251,7 +1251,10 @@ def create_layout(
                                 value=saved_settings.get("png_compression", 2),
                                 step=1,
                                 label="PNG Compression Level",
-                                info="Higher levels result in smaller file sizes, but slower processing times.",
+                                info=(
+                                    "Uses OxiPNG. Higher levels result in smaller file sizes, "
+                                    "but slower processing times.",
+                                ),
                                 interactive=saved_settings.get("output_format", "auto")
                                 != "jpeg",
                             )
