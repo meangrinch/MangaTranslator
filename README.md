@@ -4,7 +4,7 @@ Web application for automating the translation of manga/comic page images using 
 
 ## Features
 
-- Speech bubble detection, segmentation, cleaning (YOLOv8 + SAM 2.1)
+- Speech bubble detection, segmentation, cleaning (YOLO + SAM 2.1)
 - Outside speech bubble text detection & inpainting (YOLO + Flux Kontext)
 - LLM-powered OCR and translations (supports 54 languages)
 - Text rendering (with custom font packs)
@@ -122,7 +122,7 @@ fonts/
 
 ### Web UI (Gradio)
 
-- Windows: double-click `start-webui.bat` (`venv` must be present)
+- Windows: double-click `start-webui.bat` (`venv` must be present for manual install)
 - Or run:
 
 ```bash
@@ -237,7 +237,7 @@ python main.py --help
 
 ```bash
 git pull
-# Optional: Update requirements
+# Update requirements if needed
 venv\Scripts\activate  # If venv present
 pip install -r requirements.txt
 ```
