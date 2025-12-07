@@ -256,4 +256,4 @@ pip install -r requirements.txt
 - Nunchaku: [Nunchaku Tech](https://github.com/nunchaku-tech/nunchaku)
 - 2x-AnimeSharpV4: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)
-- AnimeText Yolov12: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
+- AnimeText YOLO: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
