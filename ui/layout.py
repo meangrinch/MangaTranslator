@@ -442,6 +442,14 @@ def create_layout(
                                     "conjoined speech bubbles into separate bubbles."
                                 ),
                             )
+                            use_panel_sorting_checkbox = gr.Checkbox(
+                                value=saved_settings.get("use_panel_sorting", True),
+                                label="Use Panel-aware Sorting",
+                                info=(
+                                    "Use a panel detection YOLO model to group and sort speech bubbles "
+                                    "within each panel for better reading order accuracy."
+                                ),
+                            )
                             config_reading_direction = gr.Radio(
                                 choices=["rtl", "ltr"],
                                 label="Reading Direction",
@@ -1119,7 +1127,7 @@ def create_layout(
                                     1,
                                     30,
                                     value=saved_settings.get(
-                                        "outside_text_flux_num_inference_steps", 12
+                                        "outside_text_flux_num_inference_steps", 10
                                     ),
                                     step=1,
                                     label="Steps",
@@ -1366,6 +1374,7 @@ def create_layout(
             confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
+            use_panel_sorting_checkbox,
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
@@ -1450,6 +1459,7 @@ def create_layout(
             confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
+            use_panel_sorting_checkbox,
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
@@ -1531,6 +1541,7 @@ def create_layout(
             confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
+            use_panel_sorting_checkbox,
             thresholding_value,
             use_otsu_threshold,
             roi_shrink_px,
@@ -1617,6 +1628,7 @@ def create_layout(
             confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
+            use_panel_sorting_checkbox,
             thresholding_value,
             use_otsu_threshold,
             roi_shrink_px,

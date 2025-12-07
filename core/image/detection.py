@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -440,3 +440,108 @@ def detect_speech_bubbles(
             detections.append(detection)
 
     return detections
+
+
+def detect_panels(
+    image_path: Path,
+    device=None,
+    verbose=False,
+    image_override: Optional[Image.Image] = None,
+) -> List[Tuple[int, int, int, int]]:
+    """Detect manga/comic panels using YOLO model.
+
+    Args:
+        image_path (Path): Path to the input image
+        device (torch.device, optional): The device to run the model on. Autodetects if None.
+        verbose (bool): Whether to show detailed processing information
+        image_override (Image.Image, optional): PIL Image to use instead of loading from path
+
+    Returns:
+        list: List of tuples (x1, y1, x2, y2) representing panel bounding boxes.
+              Only includes detections with class "frame".
+    """
+    _device = (
+        device
+        if device is not None
+        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    )
+    log_message(f"Using device: {_device}", verbose=verbose)
+
+    try:
+        if image_override is not None:
+            image_pil = (
+                image_override
+                if image_override.mode == "RGB"
+                else image_override.convert("RGB")
+            )
+            image_cv = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
+        else:
+            image_cv = cv2.imread(str(image_path))
+            if image_cv is None:
+                raise ImageProcessingError(f"Could not read image at {image_path}")
+            image_pil = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_BGR2RGB))
+        log_message(
+            f"Processing image for panel detection: {image_path.name if image_path else 'override'} "
+            f"({image_cv.shape[1]}x{image_cv.shape[0]})",
+            verbose=verbose,
+        )
+    except Exception as e:
+        raise ImageProcessingError(f"Error loading image: {e}")
+
+    model_manager = get_model_manager()
+    try:
+        panel_model = model_manager.load_yolo_panel(verbose=verbose)
+        log_message("Loaded YOLO panel detection model", verbose=verbose)
+    except Exception as e:
+        raise ModelError(f"Error loading panel model: {e}")
+
+    try:
+        results = panel_model(image_cv, conf=0.25, device=_device, verbose=False)[0]
+        boxes = results.boxes.xyxy if results.boxes is not None else torch.tensor([])
+        classes = results.boxes.cls if results.boxes is not None else torch.tensor([])
+
+        if len(boxes) == 0:
+            log_message("No panels detected", verbose=verbose)
+            return []
+
+        # Filter for "frame" class (panel class)
+        frame_class_id = None
+        if hasattr(panel_model, "names"):
+            for class_id, class_name in panel_model.names.items():
+                if class_name.lower() == "frame":
+                    frame_class_id = class_id
+                    break
+
+        panel_boxes = []
+        for i, box in enumerate(boxes):
+            # If we found a frame class ID, only include detections of that class
+            # Otherwise, include all detections (fallback)
+            if frame_class_id is not None:
+                if int(classes[i]) != frame_class_id:
+                    continue
+
+            x0_f, y0_f, x1_f, y1_f = box.tolist()
+            panel_boxes.append(
+                (
+                    int(round(x0_f)),
+                    int(round(y0_f)),
+                    int(round(x1_f)),
+                    int(round(y1_f)),
+                )
+            )
+
+        log_message(
+            f"Detected {len(panel_boxes)} panels",
+            always_print=True if len(panel_boxes) > 0 else False,
+        )
+        log_message(
+            f"YOLO panel detection found {len(panel_boxes)} panels", verbose=verbose
+        )
+        return panel_boxes
+
+    except Exception as e:
+        log_message(
+            f"Panel detection failed: {e}. Proceeding without panel information.",
+            always_print=True,
+        )
+        return []

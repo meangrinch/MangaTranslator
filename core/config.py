@@ -13,6 +13,7 @@ class DetectionConfig:
     confidence: float = 0.35
     use_sam2: bool = True
     conjoined_detection: bool = True
+    use_panel_sorting: bool = True
 
 
 @dataclass
@@ -105,7 +106,7 @@ class OutsideTextConfig:
     enabled: bool = False
     seed: int = 1  # -1 = random
     huggingface_token: str = ""  # Required for Flux Kontext model downloads
-    flux_num_inference_steps: int = 12
+    flux_num_inference_steps: int = 10
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.35
     osb_font_name: Optional[str] = None  # None = use main font as fallback

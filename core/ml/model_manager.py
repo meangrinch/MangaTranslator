@@ -25,6 +25,7 @@ class ModelType(Enum):
     YOLO_SPEECH_BUBBLE = "yolo_speech_bubble"
     YOLO_CONJOINED_BUBBLE = "yolo_conjoined_bubble"
     YOLO_OSBTEXT = "yolo_osbtext"
+    YOLO_PANEL = "yolo_panel"
     SAM2 = "sam2"
     MANGA_OCR = "manga_ocr"
     FLUX_TRANSFORMER = "flux_transformer"
@@ -92,6 +93,9 @@ class ModelManager:
                 model_dir / "yolo" / "comic-speech-bubble-detector-yolov8m.pt"
             ),
             ModelType.YOLO_OSBTEXT: (model_dir / "yolo" / "animetext_yolov12x.pt"),
+            ModelType.YOLO_PANEL: (
+                model_dir / "yolo" / "manga109_v2023.12.07_l_yolov11.pt"
+            ),
             ModelType.MANGA_OCR: (model_dir / "manga-ocr-base"),
         }
 
@@ -130,6 +134,10 @@ class ModelManager:
             ModelType.YOLO_OSBTEXT: {
                 "repo_id": "deepghs/AnimeText_yolo",
                 "filename": "yolo12x_animetext/model.pt",
+            },
+            ModelType.YOLO_PANEL: {
+                "repo_id": "deepghs/manga109_yolo",
+                "filename": "v2023.12.07_l_yv11/model.pt",
             },
             ModelType.SAM2: {
                 "repo_id": "facebook/sam2.1-hiera-large",
@@ -459,6 +467,32 @@ class ModelManager:
             log_message("YOLO OSB Text model loaded.", verbose=verbose)
             return model
 
+    def load_yolo_panel(self, verbose: bool = False):
+        """Load YOLO model for panel detection.
+
+        Args:
+            verbose: Whether to print verbose logging
+        """
+        with self._lock:
+            if self.is_loaded(ModelType.YOLO_PANEL):
+                return self.models[ModelType.YOLO_PANEL]
+
+            log_message("Loading YOLO panel detection model...", verbose=verbose)
+            path = self.model_paths[ModelType.YOLO_PANEL]
+            hf_info = self.model_hf_repos[ModelType.YOLO_PANEL]
+
+            self._ensure_hf_file(
+                hf_info["repo_id"],
+                hf_info["filename"],
+                path,
+                verbose=verbose,
+            )
+
+            model = YOLO(str(path))
+            self.models[ModelType.YOLO_PANEL] = model
+            log_message("YOLO panel model loaded.", verbose=verbose)
+            return model
+
     def load_manga_ocr(self, verbose: bool = False) -> Path:
         """Ensure manga-ocr model repository is downloaded.
 
@@ -672,6 +706,8 @@ class ModelManager:
             models_unloaded.append("sam2")
         if self.is_loaded(ModelType.YOLO_OSBTEXT):
             models_unloaded.append("yolo_osbtext")
+        if self.is_loaded(ModelType.YOLO_PANEL):
+            models_unloaded.append("yolo_panel")
         if self.is_loaded(ModelType.MANGA_OCR):
             models_unloaded.append("manga_ocr")
 
@@ -681,6 +717,7 @@ class ModelManager:
         )
         self.unload_model(ModelType.SAM2, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.YOLO_OSBTEXT, force_gc=False, verbose=verbose)
+        self.unload_model(ModelType.YOLO_PANEL, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.MANGA_OCR, force_gc=True, verbose=verbose)
 
         if models_unloaded:

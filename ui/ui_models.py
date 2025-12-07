@@ -23,6 +23,7 @@ class UIDetectionSettings:
     confidence: float = 0.35
     use_sam2: bool = True
     conjoined_detection: bool = True
+    use_panel_sorting: bool = True
 
 
 @dataclass
@@ -108,7 +109,7 @@ class UIOutsideTextSettings:
     enabled: bool = False
     seed: int = 1  # -1 = random
     huggingface_token: str = ""
-    flux_num_inference_steps: int = 12
+    flux_num_inference_steps: int = 10
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.35
     osb_font_name: str = ""  # Empty = use main font
@@ -174,6 +175,7 @@ class UIConfigState:
             "confidence": self.detection.confidence,
             "use_sam2": self.detection.use_sam2,
             "conjoined_detection": self.detection.conjoined_detection,
+            "use_panel_sorting": self.detection.use_panel_sorting,
             "reading_direction": self.llm_settings.reading_direction,
             "thresholding_value": self.cleaning.thresholding_value,
             "use_otsu_threshold": self.cleaning.use_otsu_threshold,
@@ -274,6 +276,10 @@ class UIConfigState:
                     "conjoined_detection",
                     defaults.get("conjoined_detection", True),
                 ),
+                use_panel_sorting=data.get(
+                    "use_panel_sorting",
+                    defaults.get("use_panel_sorting", True),
+                ),
             ),
             cleaning=UICleaningSettings(
                 thresholding_value=data.get(
@@ -291,7 +297,7 @@ class UIConfigState:
                 seed=data.get("outside_text_seed", 1),
                 huggingface_token=data.get("outside_text_huggingface_token", ""),
                 flux_num_inference_steps=data.get(
-                    "outside_text_flux_num_inference_steps", 12
+                    "outside_text_flux_num_inference_steps", 10
                 ),
                 flux_residual_diff_threshold=data.get(
                     "outside_text_flux_residual_diff_threshold", 0.15
@@ -471,6 +477,7 @@ def map_ui_to_backend_config(
     detection_cfg = DetectionConfig(confidence=ui_state.detection.confidence)
     detection_cfg.use_sam2 = ui_state.detection.use_sam2
     detection_cfg.conjoined_detection = ui_state.detection.conjoined_detection
+    detection_cfg.use_panel_sorting = ui_state.detection.use_panel_sorting
 
     cleaning_cfg = CleaningConfig(
         thresholding_value=ui_state.cleaning.thresholding_value,

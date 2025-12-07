@@ -22,7 +22,7 @@ from utils.exceptions import (
 from utils.logging import log_message
 
 from .image.cleaning import clean_speech_bubbles
-from .image.detection import detect_speech_bubbles
+from .image.detection import detect_panels, detect_speech_bubbles
 from .image.image_utils import (
     convert_image_to_target_mode,
     cv2_to_pil,
@@ -37,8 +37,8 @@ from .outside_text_processor import process_outside_text
 from .services.translation import (
     call_translation_api_batch,
     prepare_bubble_images_for_translation,
-    sort_bubbles_by_reading_order,
 )
+from .image.sorting import sort_bubbles_by_reading_order
 from .text.text_renderer import render_text_skia
 
 if TYPE_CHECKING:
@@ -447,9 +447,37 @@ def translate_and_render(
                     verbose=verbose,
                 )
 
+                # Detect panels if panel-aware sorting is enabled
+                panels = None
+                if config.detection.use_panel_sorting:
+                    try:
+                        log_message(
+                            "Detecting panels for panel-aware sorting...",
+                            verbose=verbose,
+                        )
+                        panels = detect_panels(
+                            image_path, device=config.device, verbose=verbose
+                        )
+                        if panels:
+                            log_message(
+                                f"Detected {len(panels)} panels for sorting",
+                                always_print=True,
+                            )
+                        else:
+                            log_message(
+                                "No panels detected, using global sorting",
+                                verbose=verbose,
+                            )
+                    except Exception as e:
+                        log_message(
+                            f"Panel detection failed: {e}. Using global sorting.",
+                            always_print=True,
+                        )
+                        panels = None
+
                 # Sort all text elements (speech bubbles + OSB text) by reading order
                 sorted_bubble_data = sort_bubbles_by_reading_order(
-                    all_text_data, reading_direction
+                    all_text_data, reading_direction, panels=panels
                 )
 
                 bubble_images_b64 = [

@@ -1,5 +1,8 @@
 import base64
+import gc
+import os
 import random
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -138,32 +141,73 @@ def process_outside_text(
         )
 
         current_image = pil_image
-        if mask_groups:
-            base_seed = (
-                random.randint(1, 999999)
-                if config.outside_text.seed == -1
-                else config.outside_text.seed
-            )
+        temp_files = []
+        try:
+            if mask_groups:
+                base_seed = (
+                    random.randint(1, 999999)
+                    if config.outside_text.seed == -1
+                    else config.outside_text.seed
+                )
 
-            for i, group in enumerate(mask_groups):
+                for i, group in enumerate(mask_groups):
+                    log_message(
+                        f"Inpainting outside text region {i + 1}/{len(mask_groups)}",
+                        verbose=verbose,
+                    )
+                    combined_mask = group["combined_mask"]
+                    region_seed = base_seed + i if base_seed > 0 else base_seed
+                    inpainted_image = inpainter.inpaint_mask(
+                        current_image,
+                        combined_mask,
+                        seed=region_seed,
+                        verbose=verbose,
+                    )
+
+                    # Save to disk if more regions remain to reduce memory usage
+                    if i < len(mask_groups) - 1:
+                        temp_file = None
+                        try:
+                            temp_fd, temp_file = tempfile.mkstemp(suffix=".png")
+                            os.close(temp_fd)
+                            inpainted_image.save(temp_file, format="PNG")
+                            temp_files.append(temp_file)
+
+                            with Image.open(temp_file) as img_tmp:
+                                img_tmp.load()
+                                current_image = img_tmp.copy()
+
+                            del inpainted_image
+                            gc.collect()
+                            log_message(
+                                "Saved intermediate inpainting result to disk",
+                                verbose=verbose,
+                            )
+                        except Exception as e:
+                            log_message(
+                                "Warning: Failed to save intermediate image to disk: "
+                                f"{e}. Continuing with in-memory processing.",
+                                verbose=verbose,
+                            )
+                            # Fallback to in-memory if disk save fails
+                            current_image = inpainted_image
+                            if temp_file and temp_file in temp_files:
+                                temp_files.remove(temp_file)
+                    else:
+                        current_image = inpainted_image
+
+                log_message("Outside text inpainting completed", verbose=verbose)
                 log_message(
-                    f"Inpainting outside text region {i + 1}/{len(mask_groups)}",
-                    verbose=verbose,
+                    f"Inpainted {len(mask_groups)} outside text regions",
+                    always_print=True,
                 )
-                combined_mask = group["combined_mask"]
-                region_seed = base_seed + i if base_seed > 0 else base_seed
-                inpainted_image = inpainter.inpaint_mask(
-                    current_image,
-                    combined_mask,
-                    seed=region_seed,
-                    verbose=verbose,
-                )
-                current_image = inpainted_image
-
-            log_message("Outside text inpainting completed", verbose=verbose)
-            log_message(
-                f"Inpainted {len(mask_groups)} outside text regions", always_print=True
-            )
+        finally:
+            for temp_file in temp_files:
+                if temp_file and os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                    except Exception:
+                        pass
 
         outside_text_data = []
         original_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
