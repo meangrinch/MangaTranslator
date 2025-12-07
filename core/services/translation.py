@@ -1310,7 +1310,11 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
 
             full_page_context = (
                 "A full-page image is also provided for visual and narrative context."
-                if config.send_full_page_context
+                if (
+                    config.ocr_method != "manga-ocr"
+                    and config.send_full_page_context
+                    and full_image_b64
+                )
                 else ""
             )
 
