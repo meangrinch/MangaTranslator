@@ -684,7 +684,7 @@ def main():
         device=target_device,
         cleaning_only=args.cleaning_only,
         detection=DetectionConfig(
-            confidence=args.conf,
+            confidence=args.confidence,
             use_sam2=args.use_sam2,
             conjoined_detection=args.conjoined_detection,
         ),
