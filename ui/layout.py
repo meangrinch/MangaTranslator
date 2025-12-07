@@ -891,6 +891,7 @@ def create_layout(
                                     "Include full page image as context. Might improve translation quality. "
                                     "Disable if refusals/using less-capable models or to reduce token usage."
                                 ),
+                                interactive=initial_ocr_method != "manga-ocr",
                             )
                             upscale_method = gr.Radio(
                                 choices=[
@@ -1916,6 +1917,7 @@ def create_layout(
                 original_language_state,
                 batch_input_language,
                 batch_original_language_state,
+                send_full_page_context,
                 config_model_name,
             ],
             queue=False,

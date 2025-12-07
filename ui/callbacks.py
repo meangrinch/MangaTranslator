@@ -1350,6 +1350,8 @@ def handle_ocr_method_change(
         )
         updates.append(batch_saved_language)
 
+        updates.append(gr.update(value=False, interactive=False))
+
         # Trigger model list refresh for providers with dynamic model lists
         if provider == "OpenRouter":
             model_update = utils.fetch_and_update_openrouter_models(
@@ -1403,6 +1405,14 @@ def handle_ocr_method_change(
             )
         )
         updates.append(batch_original_language_state)
+
+        saved_settings = settings_manager.get_saved_settings()
+        restored_send_full_page_context = saved_settings.get(
+            "send_full_page_context", True
+        )
+        updates.append(
+            gr.update(value=restored_send_full_page_context, interactive=True)
+        )
 
         # Trigger model list refresh for providers with dynamic or filtered model lists
         if provider == "OpenRouter":
