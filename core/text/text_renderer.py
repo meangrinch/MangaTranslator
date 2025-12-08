@@ -30,6 +30,7 @@ def render_text_skia(
     cleaned_mask: Optional[np.ndarray] = None,
     bubble_color_bgr: Optional[Tuple[int, int, int]] = (255, 255, 255),
     config: Optional[RenderingConfig] = None,
+    raise_on_safe_error: bool = False,
     verbose: bool = False,
     bubble_id: Optional[str] = None,
     rotation_deg: float = 0.0,
@@ -104,6 +105,7 @@ def render_text_skia(
 
     layout_box_top_left = None
     safe_area_result = None
+    safe_area_fallback_logged = False
     if cleaned_mask is not None:
         try:
             safe_area_result = calculate_centroid_expansion_box(
@@ -112,10 +114,13 @@ def render_text_skia(
         except ImageProcessingError:
             # Safe area calculation failed, will use fallback below
             safe_area_result = None
+            if raise_on_safe_error:
+                raise
             log_message(
                 "Safe area calculation failed, falling back to padded bbox method",
                 verbose=verbose,
             )
+            safe_area_fallback_logged = True
 
     if safe_area_result is not None:
         guaranteed_box, _ = safe_area_result
@@ -128,10 +133,11 @@ def render_text_skia(
         log_message("Using centroid-based safe area calculation", verbose=verbose)
     else:
         # Fallback to padded bbox
-        log_message(
-            "Safe area calculation failed, falling back to padded bbox method",
-            verbose=verbose,
-        )
+        if not safe_area_fallback_logged:
+            log_message(
+                "Safe area calculation failed, falling back to padded bbox method",
+                verbose=verbose,
+            )
         max_render_width = bubble_width * (1 - 2 * FALLBACK_PADDING_RATIO)
         max_render_height = bubble_height * (1 - 2 * FALLBACK_PADDING_RATIO)
 

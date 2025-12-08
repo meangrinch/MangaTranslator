@@ -196,7 +196,7 @@ def main():
     parser.add_argument(
         "--use-otsu-threshold",
         action="store_true",
-        help="Use Otsu's method for thresholding instead of the fixed value",
+        help="Force Otsu's method for thresholding instead of the fixed value (on all bubbles)",
     )
     parser.add_argument(
         "--thresholding-value",

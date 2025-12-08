@@ -21,7 +21,7 @@ from utils.exceptions import (
 )
 from utils.logging import log_message
 
-from .image.cleaning import clean_speech_bubbles
+from .image.cleaning import clean_speech_bubbles, retry_cleaning_with_otsu
 from .image.detection import detect_panels, detect_speech_bubbles
 from .image.image_utils import (
     convert_image_to_target_mode,
@@ -32,13 +32,13 @@ from .image.image_utils import (
     upscale_image,
     upscale_image_to_dimension,
 )
+from .image.sorting import sort_bubbles_by_reading_order
 from .ml.model_manager import get_model_manager
 from .outside_text_processor import process_outside_text
 from .services.translation import (
     call_translation_api_batch,
     prepare_bubble_images_for_translation,
 )
-from .image.sorting import sort_bubbles_by_reading_order
 from .text.text_renderer import render_text_skia
 
 if TYPE_CHECKING:
@@ -620,6 +620,10 @@ def translate_and_render(
                     tuple(info["bbox"]): {
                         "color": info["color"],
                         "mask": info.get("mask"),
+                        "base_mask": info.get("base_mask"),
+                        "is_sam": info.get("is_sam", False),
+                        "is_colored": info.get("is_colored", False),
+                        "text_bbox": info.get("text_bbox"),
                     }
                     for info in processed_bubbles_info
                     if "bbox" in info and "color" in info and "mask" in info
@@ -717,9 +721,13 @@ def translate_and_render(
                             render_info = bubble_render_info_map.get(tuple(bbox))
                             bubble_color_bgr = (255, 255, 255)
                             cleaned_mask = None
+                            base_mask = None
+                            is_sam_mask = False
                             if render_info:
                                 bubble_color_bgr = render_info["color"]
                                 cleaned_mask = render_info.get("mask")
+                                base_mask = render_info.get("base_mask")
+                                is_sam_mask = render_info.get("is_sam", False)
                             # No rotation/stacking for regular bubbles
                             vertical_stack = False
                             rotation_deg = 0.0
@@ -749,25 +757,179 @@ def translate_and_render(
                             ),
                             supersampling_factor=config.rendering.supersampling_factor,
                         )
-                        try:
-                            rendered_image = render_text_skia(
-                                pil_image=pil_cleaned_image,
-                                text=text,
-                                bbox=bbox,
-                                font_dir=font_dir,
-                                cleaned_mask=cleaned_mask,
-                                bubble_color_bgr=bubble_color_bgr,
-                                config=render_config,
-                                verbose=verbose,
-                                bubble_id=str(i + 1),
-                                rotation_deg=rotation_deg,
-                                vertical_stack=vertical_stack,
-                            )
-                            success = True
-                        except (RenderingError, FontError) as e:
-                            log_message(f"Text rendering failed: {e}", verbose=verbose)
-                            rendered_image = pil_cleaned_image
-                            success = False
+                        success = False
+                        if is_outside_text:
+                            try:
+                                rendered_image = render_text_skia(
+                                    pil_image=pil_cleaned_image,
+                                    text=text,
+                                    bbox=bbox,
+                                    font_dir=font_dir,
+                                    cleaned_mask=cleaned_mask,
+                                    bubble_color_bgr=bubble_color_bgr,
+                                    config=render_config,
+                                    verbose=verbose,
+                                    bubble_id=str(i + 1),
+                                    rotation_deg=rotation_deg,
+                                    vertical_stack=vertical_stack,
+                                    raise_on_safe_error=False,
+                                )
+                                success = True
+                            except (RenderingError, FontError) as e:
+                                log_message(
+                                    f"Text rendering failed: {e}", verbose=verbose
+                                )
+                                rendered_image = pil_cleaned_image
+                                success = False
+                        else:
+                            try:
+                                rendered_image = render_text_skia(
+                                    pil_image=pil_cleaned_image,
+                                    text=text,
+                                    bbox=bbox,
+                                    font_dir=font_dir,
+                                    cleaned_mask=cleaned_mask,
+                                    bubble_color_bgr=bubble_color_bgr,
+                                    config=render_config,
+                                    verbose=verbose,
+                                    bubble_id=str(i + 1),
+                                    rotation_deg=rotation_deg,
+                                    vertical_stack=vertical_stack,
+                                    raise_on_safe_error=True,
+                                )
+                                success = True
+                            except ImageProcessingError as e:
+                                safe_area_failed = (
+                                    "Safe area calculation failed" in str(e)
+                                )
+                                retry_result = None
+                                if safe_area_failed and base_mask is not None:
+                                    log_message(
+                                        f"Safe area failed for bubble {bbox}, retrying mask with Otsu",
+                                        verbose=verbose,
+                                        always_print=True,
+                                    )
+                                    retry_result = retry_cleaning_with_otsu(
+                                        original_cv_image,
+                                        {
+                                            "base_mask": base_mask,
+                                            "bbox": bbox,
+                                            "is_sam": is_sam_mask,
+                                            "is_colored": (
+                                                render_info.get("is_colored", False)
+                                                if render_info
+                                                else False
+                                            ),
+                                            "text_bbox": (
+                                                render_info.get("text_bbox")
+                                                if render_info
+                                                else None
+                                            ),
+                                        },
+                                        config.cleaning.thresholding_value,
+                                        config.cleaning.roi_shrink_px,
+                                        processing_scale,
+                                        verbose=verbose,
+                                        classify_colored=(
+                                            config.cleaning.inpaint_colored_bubbles
+                                        ),
+                                    )
+
+                                if (
+                                    retry_result
+                                    and retry_result.get("mask") is not None
+                                ):
+                                    cleaned_mask = retry_result["mask"]
+                                    bubble_color_bgr = retry_result.get(
+                                        "color", bubble_color_bgr
+                                    )
+                                    base_mask = retry_result.get("base_mask", base_mask)
+                                    if render_info is not None:
+                                        render_info.update(
+                                            {
+                                                "mask": cleaned_mask,
+                                                "color": bubble_color_bgr,
+                                                "base_mask": base_mask,
+                                                "is_colored": retry_result.get(
+                                                    "is_colored",
+                                                    render_info.get(
+                                                        "is_colored", False
+                                                    ),
+                                                ),
+                                                "text_bbox": retry_result.get(
+                                                    "text_bbox",
+                                                    render_info.get("text_bbox"),
+                                                ),
+                                            }
+                                        )
+
+                                    try:
+                                        rendered_image = render_text_skia(
+                                            pil_image=pil_cleaned_image,
+                                            text=text,
+                                            bbox=bbox,
+                                            font_dir=font_dir,
+                                            cleaned_mask=cleaned_mask,
+                                            bubble_color_bgr=bubble_color_bgr,
+                                            config=render_config,
+                                            verbose=verbose,
+                                            bubble_id=str(i + 1),
+                                            rotation_deg=rotation_deg,
+                                            vertical_stack=vertical_stack,
+                                            raise_on_safe_error=False,
+                                        )
+                                        success = True
+                                    except (
+                                        RenderingError,
+                                        FontError,
+                                        ImageProcessingError,
+                                    ) as e2:
+                                        log_message(
+                                            f"Text rendering failed after Otsu retry: {e2}",
+                                            verbose=verbose,
+                                        )
+                                        rendered_image = pil_cleaned_image
+                                        success = False
+                                if not success:
+                                    # Final fallback to padded bbox path
+                                    fallback_msg = (
+                                        f"Safe area calculation failed for {bbox}, using padded bbox fallback"
+                                        if safe_area_failed
+                                        else f"Rendering retry fallback for {bbox}, using padded bbox method"
+                                    )
+                                    log_message(
+                                        fallback_msg,
+                                        verbose=verbose,
+                                    )
+                                    try:
+                                        rendered_image = render_text_skia(
+                                            pil_image=pil_cleaned_image,
+                                            text=text,
+                                            bbox=bbox,
+                                            font_dir=font_dir,
+                                            cleaned_mask=cleaned_mask,
+                                            bubble_color_bgr=bubble_color_bgr,
+                                            config=render_config,
+                                            verbose=verbose,
+                                            bubble_id=str(i + 1),
+                                            rotation_deg=rotation_deg,
+                                            vertical_stack=vertical_stack,
+                                            raise_on_safe_error=False,
+                                        )
+                                        success = True
+                                    except (RenderingError, FontError) as e2:
+                                        log_message(
+                                            f"Text rendering failed: {e2}",
+                                            verbose=verbose,
+                                        )
+                                        rendered_image = pil_cleaned_image
+                                        success = False
+                            except (RenderingError, FontError) as e:
+                                log_message(
+                                    f"Text rendering failed: {e}", verbose=verbose
+                                )
+                                rendered_image = pil_cleaned_image
+                                success = False
 
                         if success:
                             pil_cleaned_image = rendered_image

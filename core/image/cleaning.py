@@ -33,7 +33,16 @@ BRIGHT_DARK_RATIO_MAX = 0.10
 DARK_BRIGHT_RATIO_MAX = 0.10
 
 
-def _process_single_bubble(
+def _normalize_mask(mask: np.ndarray) -> np.ndarray:
+    """
+    Ensure mask is uint8 binary (0/255).
+    """
+    if mask.dtype != np.uint8:
+        mask = mask.astype(np.uint8)
+    return np.where(mask > 0, 255, 0).astype(np.uint8)
+
+
+def process_single_bubble(
     base_mask,
     img_gray,
     img_height,
@@ -71,9 +80,7 @@ def _process_single_bubble(
         CleaningError: If processing fails
     """
     try:
-        if base_mask.dtype != np.uint8:
-            base_mask = base_mask.astype(np.uint8)
-        base_mask = np.where(base_mask > 0, 255, 0).astype(np.uint8)
+        base_mask = _normalize_mask(base_mask)
 
         if dilation_kernel is None:
             dilation_kernel = cv2.getStructuringElement(
@@ -322,10 +329,12 @@ def clean_speech_bubbles(
         numpy.ndarray: Cleaned image with text removed.
         list[dict]: A list of dictionaries per bubble containing:
                     - 'mask' (np.ndarray): validated text mask (0/255)
+                    - 'base_mask' (np.ndarray): normalized detection mask used for processing
                     - 'color' (tuple BGR): sampled bubble color
                     - 'bbox' (tuple): detection bounding box
                     - 'is_colored' (bool): whether bubble interior was classified colored
                     - 'text_bbox' (tuple|None): bounding box of detected text mask
+                    - 'is_sam' (bool): whether detection originated from SAM
     Raises:
         ValueError: If the image cannot be loaded or if an image object is passed without pre-computed detections.
         RuntimeError: If model loading or bubble detection fails.
@@ -388,9 +397,13 @@ def clean_speech_bubbles(
             is_colored_bubble = False
             sample_color_bgr: Optional[tuple[int, int, int]] = None
             text_bbox: Optional[tuple[int, int, int, int]] = None
+            base_mask = None
+            is_sam_mask = False
 
             sam_mask = detection.get("sam_mask")
             if sam_mask is not None:
+                base_mask = _normalize_mask(sam_mask)
+                is_sam_mask = True
                 try:
                     (
                         final_mask,
@@ -398,8 +411,8 @@ def clean_speech_bubbles(
                         is_colored_bubble,
                         sample_color_bgr,
                         text_bbox,
-                    ) = _process_single_bubble(
-                        sam_mask,
+                    ) = process_single_bubble(
+                        base_mask,
                         img_gray,
                         img_height,
                         img_width,
@@ -415,9 +428,46 @@ def clean_speech_bubbles(
                         classify_colored=inpaint_colored_bubbles,
                     )
                 except Exception as e:
-                    error_msg = f"Error processing SAM mask for detection {detection.get('bbox')}: {e}"
-                    log_message(error_msg, always_print=True)
-                    continue
+                    retry_success = False
+                    if not use_otsu_threshold and base_mask is not None:
+                        log_message(
+                            f"Standard cleaning failed for {detection.get('bbox')}, retrying with Otsu...",
+                            verbose=verbose,
+                        )
+                        retry_res = retry_cleaning_with_otsu(
+                            image,
+                            {
+                                "base_mask": base_mask,
+                                "bbox": detection.get("bbox"),
+                                "is_sam": True,
+                            },
+                            thresholding_value,
+                            roi_shrink_px,
+                            processing_scale,
+                            verbose,
+                            inpaint_colored_bubbles,
+                        )
+                        if retry_res:
+                            final_mask = retry_res["mask"]
+                            fill_color_bgr = retry_res["color"]
+                            sample_color_bgr = retry_res["color"]
+                            is_colored_bubble = retry_res["is_colored"]
+                            text_bbox = retry_res["text_bbox"]
+                            retry_success = True
+                            log_message(
+                                f"Otsu retry successful for {detection.get('bbox')}",
+                                verbose=verbose,
+                            )
+                        else:
+                            log_message(
+                                f"Otsu retry failed for {detection.get('bbox')}",
+                                verbose=verbose,
+                            )
+
+                    if not retry_success:
+                        error_msg = f"Error processing SAM mask for detection {detection.get('bbox')}: {e}"
+                        log_message(error_msg, always_print=True)
+                        continue
             else:
                 if "mask_points" not in detection or not detection["mask_points"]:
                     log_message(
@@ -443,6 +493,7 @@ def clean_speech_bubbles(
 
                     yolo_mask = np.zeros((img_height, img_width), dtype=np.uint8)
                     cv2.fillPoly(yolo_mask, [points_int], 255)
+                    base_mask = _normalize_mask(yolo_mask)
 
                     (
                         final_mask,
@@ -450,8 +501,8 @@ def clean_speech_bubbles(
                         is_colored_bubble,
                         sample_color_bgr,
                         text_bbox,
-                    ) = _process_single_bubble(
-                        yolo_mask,
+                    ) = process_single_bubble(
+                        base_mask,
                         img_gray,
                         img_height,
                         img_width,
@@ -468,20 +519,59 @@ def clean_speech_bubbles(
                     )
 
                 except Exception as e:
-                    error_msg = f"Error processing YOLO mask for detection {detection.get('bbox')}: {e}"
-                    log_message(error_msg, always_print=True)
-                    continue
+                    retry_success = False
+                    if not use_otsu_threshold and base_mask is not None:
+                        log_message(
+                            f"Standard cleaning failed for {detection.get('bbox')}, retrying with Otsu...",
+                            verbose=verbose,
+                        )
+                        retry_res = retry_cleaning_with_otsu(
+                            image,
+                            {
+                                "base_mask": base_mask,
+                                "bbox": detection.get("bbox"),
+                                "is_sam": False,
+                            },
+                            thresholding_value,
+                            roi_shrink_px,
+                            processing_scale,
+                            verbose,
+                            inpaint_colored_bubbles,
+                        )
+                        if retry_res:
+                            final_mask = retry_res["mask"]
+                            fill_color_bgr = retry_res["color"]
+                            sample_color_bgr = retry_res["color"]
+                            is_colored_bubble = retry_res["is_colored"]
+                            text_bbox = retry_res["text_bbox"]
+                            retry_success = True
+                            log_message(
+                                f"Otsu retry successful for {detection.get('bbox')}",
+                                verbose=verbose,
+                            )
+                        else:
+                            log_message(
+                                f"Otsu retry failed for {detection.get('bbox')}",
+                                verbose=verbose,
+                            )
+
+                    if not retry_success:
+                        error_msg = f"Error processing YOLO mask for detection {detection.get('bbox')}: {e}"
+                        log_message(error_msg, always_print=True)
+                        continue
 
             if final_mask is not None and fill_color_bgr is not None:
                 processed_bubbles.append(
                     {
                         "mask": final_mask,
+                        "base_mask": base_mask,
                         "color": (
                             sample_color_bgr if sample_color_bgr else fill_color_bgr
                         ),
                         "bbox": detection.get("bbox"),
                         "is_colored": is_colored_bubble,
                         "text_bbox": text_bbox,
+                        "is_sam": is_sam_mask,
                     }
                 )
                 log_message(
@@ -614,3 +704,120 @@ def clean_speech_bubbles(
         raise ImageProcessingError(f"Error loading image {image_input}: {str(e)}")
     except Exception as e:
         raise CleaningError(f"Error cleaning speech bubbles: {str(e)}")
+
+
+def retry_cleaning_with_otsu(
+    image_bgr: np.ndarray,
+    bubble_info: dict,
+    thresholding_value: int,
+    roi_shrink_px: int,
+    processing_scale: float = 1.0,
+    verbose: bool = False,
+    classify_colored: bool = False,
+) -> Optional[dict]:
+    """
+    Retry cleaning for a single bubble using Otsu thresholding.
+
+    Returns a bubble-info dict compatible with clean_speech_bubbles output,
+    or None if retry fails.
+    """
+    base_mask = bubble_info.get("base_mask")
+    if base_mask is None:
+        log_message(
+            f"Otsu retry skipped for {bubble_info.get('bbox')}: missing base_mask",
+            verbose=verbose,
+        )
+        return None
+
+    try:
+        if len(image_bgr.shape) == 3 and image_bgr.shape[2] == 4:
+            img_gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGRA2GRAY)
+        else:
+            img_gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    except Exception as e:
+        log_message(
+            f"Otsu retry failed to convert image to grayscale: {e}",
+            always_print=True,
+        )
+        return None
+
+    img_height, img_width = img_gray.shape[:2]
+
+    effective_roi_shrink_px = float(
+        scale_scalar(
+            roi_shrink_px,
+            processing_scale,
+            minimum=0.0,
+            maximum=64.0,
+        )
+    )
+    dilation_kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, scale_kernel(DILATION_KERNEL_SIZE, processing_scale)
+    )
+    constraint_erosion_kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, scale_kernel(EROSION_KERNEL_SIZE, processing_scale)
+    )
+    min_contour_area = scale_area(
+        MIN_CONTOUR_AREA,
+        processing_scale,
+        minimum=MIN_CONTOUR_AREA,
+        maximum=5000,
+    )
+
+    try:
+        result = process_single_bubble(
+            base_mask,
+            img_gray,
+            img_height,
+            img_width,
+            thresholding_value,
+            True,  # force Otsu
+            effective_roi_shrink_px,
+            verbose,
+            bubble_info.get("bbox"),
+            bubble_info.get("is_sam", False),
+            dilation_kernel=dilation_kernel,
+            constraint_erosion_kernel=constraint_erosion_kernel,
+            min_contour_area=min_contour_area,
+            classify_colored=classify_colored,
+        )
+    except CleaningError as e:
+        log_message(
+            f"Otsu retry cleaning failed for {bubble_info.get('bbox')}: {e}",
+            always_print=True,
+        )
+        return None
+    except Exception as e:
+        log_message(
+            f"Otsu retry cleaning unexpected error for {bubble_info.get('bbox')}: {e}",
+            always_print=True,
+        )
+        return None
+
+    if not result:
+        return None
+
+    (
+        final_mask,
+        fill_color_bgr,
+        is_colored_bubble,
+        sample_color_bgr,
+        text_bbox,
+    ) = result
+
+    bubble_color = sample_color_bgr if sample_color_bgr else fill_color_bgr
+
+    log_message(
+        f"Otsu retry succeeded for {bubble_info.get('bbox')}",
+        verbose=verbose,
+    )
+
+    return {
+        "mask": final_mask,
+        "base_mask": _normalize_mask(base_mask),
+        "color": bubble_color,
+        "bbox": bubble_info.get("bbox"),
+        "is_colored": is_colored_bubble,
+        "text_bbox": text_bbox,
+        "is_sam": bubble_info.get("is_sam", False),
+    }

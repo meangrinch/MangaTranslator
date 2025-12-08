@@ -496,9 +496,12 @@ def create_layout(
                             )
                             use_otsu_threshold = gr.Checkbox(
                                 value=saved_settings.get("use_otsu_threshold", False),
-                                label="Use Automatic Thresholding (Otsu)",
-                                info="Automatically determine the brightness threshold instead of using the fixed "
-                                "value. Recommended for varied lighting.",
+                                label="Force Automatic Thresholding (Otsu)",
+                                info=(
+                                    "Force Otsu's method for thresholding instead of the fixed value (on all bubbles). "
+                                    "Recommended for varied lighting. Used as fallback when the fixed "
+                                    "value fails, regardless of set value."
+                                ),
                             )
                             roi_shrink_px = gr.Slider(
                                 0,
