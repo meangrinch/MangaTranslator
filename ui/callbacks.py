@@ -58,6 +58,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
     (
         confidence,
         conjoined_confidence,
+        panel_confidence,
         use_sam2_checkbox_val,
         conjoined_detection_checkbox_val,
         use_panel_sorting_checkbox_val,
@@ -152,6 +153,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         detection=UIDetectionSettings(
             confidence=confidence,
             conjoined_confidence=conjoined_confidence,
+            panel_confidence=panel_confidence,
             use_sam2=use_sam2_checkbox_val,
             conjoined_detection=conjoined_detection_checkbox_val,
             use_panel_sorting=use_panel_sorting_checkbox_val,
@@ -800,6 +802,7 @@ def handle_save_config_click(*args: Any) -> str:
     (
         conf,
         conjoined_conf,
+        panel_conf,
         use_sam2,
         conjoined_detection,
         use_panel_sorting,
@@ -886,6 +889,7 @@ def handle_save_config_click(*args: Any) -> str:
         detection=UIDetectionSettings(
             confidence=conf,
             conjoined_confidence=conjoined_conf,
+            panel_confidence=panel_conf,
             use_sam2=use_sam2,
             conjoined_detection=conjoined_detection,
             use_panel_sorting=use_panel_sorting,
@@ -1072,6 +1076,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     return [
         default_ui_state.detection.confidence,
         default_ui_state.detection.conjoined_confidence,
+        gr.update(
+            value=default_ui_state.detection.panel_confidence,
+            interactive=default_ui_state.detection.use_panel_sorting,
+        ),
         default_ui_state.detection.use_sam2,
         default_ui_state.detection.conjoined_detection,
         default_ui_state.detection.use_panel_sorting,

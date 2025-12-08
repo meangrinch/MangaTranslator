@@ -437,6 +437,17 @@ def create_layout(
                                 label="Conjoined Bubble Confidence Threshold",
                                 info="Increase to filter out false positives, but may miss some conjoined bubbles.",
                             )
+                            panel_confidence = gr.Slider(
+                                0.05,
+                                1.0,
+                                value=saved_settings.get("panel_confidence", 0.25),
+                                step=0.05,
+                                label="Panel Confidence Threshold",
+                                info="Increase to filter out false positives, but may miss some panels.",
+                                interactive=saved_settings.get(
+                                    "use_panel_sorting", True
+                                ),
+                            )
                             use_sam2_checkbox = gr.Checkbox(
                                 value=saved_settings.get("use_sam2", True),
                                 label="Use SAM 2.1 for Segmentation",
@@ -1382,6 +1393,7 @@ def create_layout(
         save_config_inputs = [
             confidence,
             conjoined_confidence,
+            panel_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
             use_panel_sorting_checkbox,
@@ -1468,6 +1480,7 @@ def create_layout(
         reset_outputs = [
             confidence,
             conjoined_confidence,
+            panel_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
             use_panel_sorting_checkbox,
@@ -1551,6 +1564,7 @@ def create_layout(
             input_image,
             confidence,
             conjoined_confidence,
+            panel_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
             use_panel_sorting_checkbox,
@@ -1638,6 +1652,8 @@ def create_layout(
             input_files,
             input_zip,
             confidence,
+            conjoined_confidence,
+            panel_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
             use_panel_sorting_checkbox,
@@ -1878,6 +1894,7 @@ def create_layout(
             queue=False,
         )
 
+        # Test mode toggle change handler
         test_mode_toggle.change(
             fn=callbacks.handle_test_mode_change,
             inputs=test_mode_toggle,
@@ -1901,6 +1918,14 @@ def create_layout(
             queue=False,
         )
 
+        # Panel sorting change handler
+        use_panel_sorting_checkbox.change(
+            fn=lambda enabled: gr.update(interactive=enabled),
+            inputs=use_panel_sorting_checkbox,
+            outputs=panel_confidence,
+            queue=False,
+        )
+
         # Confidence threshold change handlers - clear YOLO cache
         confidence.change(
             fn=callbacks.handle_confidence_threshold_change,
@@ -1912,6 +1937,13 @@ def create_layout(
         conjoined_confidence.change(
             fn=callbacks.handle_confidence_threshold_change,
             inputs=conjoined_confidence,
+            outputs=None,
+            queue=False,
+        )
+
+        panel_confidence.change(
+            fn=callbacks.handle_confidence_threshold_change,
+            inputs=panel_confidence,
             outputs=None,
             queue=False,
         )

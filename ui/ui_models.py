@@ -22,6 +22,7 @@ class UIDetectionSettings:
 
     confidence: float = 0.6
     conjoined_confidence: float = 0.35
+    panel_confidence: float = 0.25
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
@@ -175,6 +176,7 @@ class UIConfigState:
         data = {
             "confidence": self.detection.confidence,
             "conjoined_confidence": self.detection.conjoined_confidence,
+            "panel_confidence": self.detection.panel_confidence,
             "use_sam2": self.detection.use_sam2,
             "conjoined_detection": self.detection.conjoined_detection,
             "use_panel_sorting": self.detection.use_panel_sorting,
@@ -275,6 +277,9 @@ class UIConfigState:
                 confidence=data.get("confidence", defaults["confidence"]),
                 conjoined_confidence=data.get(
                     "conjoined_confidence", defaults.get("conjoined_confidence", 0.35)
+                ),
+                panel_confidence=data.get(
+                    "panel_confidence", defaults.get("panel_confidence", 0.25)
                 ),
                 use_sam2=data.get("use_sam2", defaults.get("use_sam2", True)),
                 conjoined_detection=data.get(
@@ -479,7 +484,10 @@ def map_ui_to_backend_config(
         ui_state.batch_output_language if is_batch else ui_state.output_language
     )
 
-    detection_cfg = DetectionConfig(confidence=ui_state.detection.confidence)
+    detection_cfg = DetectionConfig(
+        confidence=ui_state.detection.confidence,
+        panel_confidence=ui_state.detection.panel_confidence,
+    )
     detection_cfg.conjoined_confidence = ui_state.detection.conjoined_confidence
     detection_cfg.use_sam2 = ui_state.detection.use_sam2
     detection_cfg.conjoined_detection = ui_state.detection.conjoined_detection

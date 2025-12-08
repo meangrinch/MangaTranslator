@@ -605,6 +605,7 @@ def detect_speech_bubbles(
 
 def detect_panels(
     image_path: Path,
+    confidence: float = 0.25,
     device=None,
     verbose=False,
     image_override: Optional[Image.Image] = None,
@@ -613,6 +614,7 @@ def detect_panels(
 
     Args:
         image_path (Path): Path to the input image
+        confidence (float): Confidence threshold for panel YOLO detections
         device (torch.device, optional): The device to run the model on. Autodetects if None.
         verbose (bool): Whether to show detailed processing information
         image_override (Image.Image, optional): PIL Image to use instead of loading from path
@@ -657,7 +659,9 @@ def detect_panels(
         raise ModelError(f"Error loading panel model: {e}")
 
     try:
-        results = panel_model(image_cv, conf=0.25, device=_device, verbose=False)[0]
+        results = panel_model(image_cv, conf=confidence, device=_device, verbose=False)[
+            0
+        ]
         boxes = results.boxes.xyxy if results.boxes is not None else torch.tensor([])
         classes = results.boxes.cls if results.boxes is not None else torch.tensor([])
 

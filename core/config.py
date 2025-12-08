@@ -12,6 +12,7 @@ class DetectionConfig:
 
     confidence: float = 0.6
     conjoined_confidence: float = 0.35
+    panel_confidence: float = 0.25
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True

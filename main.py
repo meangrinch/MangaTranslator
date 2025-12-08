@@ -166,6 +166,12 @@ def main():
         help="Confidence threshold for conjoined bubble detection (0.0-1.0)",
     )
     parser.add_argument(
+        "--panel-confidence",
+        type=float,
+        default=0.25,
+        help="Confidence threshold for panel detection YOLO (0.0-1.0)",
+    )
+    parser.add_argument(
         "--no-sam2",
         dest="use_sam2",
         action="store_false",
@@ -692,6 +698,7 @@ def main():
         detection=DetectionConfig(
             confidence=args.confidence,
             conjoined_confidence=args.conjoined_confidence,
+            panel_confidence=args.panel_confidence,
             use_sam2=args.use_sam2,
             conjoined_detection=args.conjoined_detection,
         ),

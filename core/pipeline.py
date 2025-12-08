@@ -459,7 +459,10 @@ def translate_and_render(
                             verbose=verbose,
                         )
                         panels = detect_panels(
-                            image_path, device=config.device, verbose=verbose
+                            image_path,
+                            confidence=config.detection.panel_confidence,
+                            device=config.device,
+                            verbose=verbose,
                         )
                         if panels:
                             log_message(

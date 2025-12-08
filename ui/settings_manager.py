@@ -129,6 +129,7 @@ DEFAULT_SETTINGS = {
     "ocr_method": "LLM",
     "confidence": 0.6,
     "conjoined_confidence": 0.35,
+    "panel_confidence": 0.25,
     "use_sam2": True,
     "conjoined_detection": True,
     "use_panel_sorting": True,
