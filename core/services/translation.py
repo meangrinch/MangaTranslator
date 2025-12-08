@@ -421,10 +421,17 @@ def _build_generation_config(
         elif _is_reasoning_model_google(model_name) and not is_gemini_3:
             reasoning_effort = config.reasoning_effort or "auto"
             is_flash = "gemini-2.5-flash" in model_name.lower()
+            is_pro = "gemini-2.5-pro" in model_name.lower()
             if reasoning_effort == "none":
                 if is_flash:
                     generation_config["thinkingConfig"] = {"thinkingBudget": 0}
                     log_message(f"Disabled reasoning for {model_name}", verbose=debug)
+                elif is_pro:
+                    generation_config["thinkingConfig"] = {"thinkingBudget": 128}
+                    log_message(
+                        f"Using 'none' reasoning effort (thinkingBudget: 128) for {model_name}",
+                        verbose=debug,
+                    )
                 else:
                     log_message(
                         f"Warning: 'none' not supported for {model_name}, using 'auto'",

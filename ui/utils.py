@@ -511,7 +511,10 @@ def get_reasoning_effort_info_text(
     if "minimal" in choices:
         options.append("minimal=10%")
     if "none" in choices:
-        options.append("none=disabled")
+        if model_name and "gemini-2.5-pro" in model_name.lower():
+            options.append("none=128 tokens (minimum allowed)")
+        else:
+            options.append("none=disabled")
 
     if options:
         return f"{base_text} ({', '.join(options)})."
@@ -603,7 +606,8 @@ def get_reasoning_effort_config(
             return True, ["high", "low"], "high"
 
         is_flash = "gemini-2.5-flash" in lm
-        if is_flash:
+        is_pro = "gemini-2.5-pro" in lm
+        if is_flash or is_pro:
             return True, ["auto", "high", "medium", "low", "minimal", "none"], "auto"
         else:
             return True, ["auto", "high", "medium", "low", "minimal"], "auto"
