@@ -186,24 +186,26 @@ def call_openrouter_endpoint(
         is_openai_reasoning = metadata.get("is_openai_reasoning", False)
         is_anthropic_reasoning = metadata.get("is_anthropic_reasoning", False)
         is_grok_reasoning = metadata.get("is_grok_reasoning", False)
+        is_gpt5_1 = metadata.get("is_gpt5_1", False)
+        is_gpt5 = metadata.get("is_gpt5", False)
+        is_gpt5_series = is_gpt5 or is_gpt5_1
 
-        if reasoning_effort and reasoning_effort != "none":
-            if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
-                # OpenAI models support "minimal" in addition to high/medium/low
-                if is_openai_reasoning and reasoning_effort in [
-                    "low",
-                    "medium",
-                    "high",
-                    "minimal",
-                ]:
+        if reasoning_effort:
+            if is_openai_reasoning:
+                if is_gpt5_1 and reasoning_effort == "none":
+                    reasoning_config["effort"] = "none"
+                elif reasoning_effort != "none":
+                    if is_gpt5_1 and reasoning_effort == "minimal":
+                        reasoning_config["effort"] = "none"
+                    elif reasoning_effort == "minimal" and not is_gpt5_series:
+                        reasoning_config["effort"] = "low"
+                    elif reasoning_effort in ["low", "medium", "high", "minimal"]:
+                        reasoning_config["effort"] = reasoning_effort
+            elif is_anthropic_reasoning and reasoning_effort != "none":
+                if reasoning_effort in ["low", "medium", "high"]:
                     reasoning_config["effort"] = reasoning_effort
-                elif is_anthropic_reasoning and reasoning_effort in [
-                    "low",
-                    "medium",
-                    "high",
-                ]:
-                    reasoning_config["effort"] = reasoning_effort
-                elif is_grok_reasoning and reasoning_effort in ["high", "low"]:
+            elif is_grok_reasoning and reasoning_effort != "none":
+                if reasoning_effort in ["high", "low"]:
                     reasoning_config["effort"] = reasoning_effort
 
     if is_gemini_3 and generation_config.get("reasoning_effort"):

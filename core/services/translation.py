@@ -543,6 +543,8 @@ def _build_generation_config(
             or model_lower.startswith("o3")
             or model_lower.startswith("o4-mini")
         )
+        is_gpt5_1 = is_openai_model and model_lower.startswith("gpt-5.1")
+        is_gpt5 = is_openai_model and model_lower.startswith("gpt-5") and not is_gpt5_1
         # For OpenRouter, Anthropic models use dots (4.5) not hyphens (4-5)
         # Claude 3.7 Sonnet :thinking variant is reasoning-capable, non-thinking is not
         is_claude_37_sonnet_thinking = (
@@ -570,6 +572,8 @@ def _build_generation_config(
             "is_anthropic_reasoning": is_anthropic_reasoning,
             "is_grok_reasoning": is_grok_reasoning,
             "is_claude_37_sonnet_thinking": is_claude_37_sonnet_thinking,
+            "is_gpt5_1": is_gpt5_1,
+            "is_gpt5": is_gpt5,
         }
 
         if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:

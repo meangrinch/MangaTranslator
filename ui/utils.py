@@ -683,11 +683,14 @@ def get_reasoning_effort_config(
 
         if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
             if is_openai_reasoning:
-                is_gpt5 = "gpt-5" in lm
-                if is_gpt5:
-                    return True, ["high", "medium", "low", "minimal", "none"], "medium"
-                else:
+                is_gpt5_1 = lm.startswith("gpt-5.1")
+                is_gpt5 = lm.startswith("gpt-5") and not is_gpt5_1
+                if is_gpt5_1:
                     return True, ["high", "medium", "low", "none"], "medium"
+                elif is_gpt5:
+                    return True, ["high", "medium", "low", "minimal"], "medium"
+                else:
+                    return True, ["high", "medium", "low"], "medium"
             elif is_anthropic_reasoning:
                 return True, ["high", "medium", "low", "none"], "none"
             elif is_grok_reasoning:
