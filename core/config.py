@@ -10,7 +10,7 @@ from core.llm_defaults import DEFAULT_LLM_PROVIDER, get_provider_sampling_defaul
 class DetectionConfig:
     """Configuration for speech bubble detection."""
 
-    confidence: float = 0.35
+    confidence: float = 0.6
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
@@ -108,7 +108,7 @@ class OutsideTextConfig:
     huggingface_token: str = ""  # Required for Flux Kontext model downloads
     flux_num_inference_steps: int = 10
     flux_residual_diff_threshold: float = 0.15
-    osb_confidence: float = 0.35
+    osb_confidence: float = 0.6
     osb_font_name: Optional[str] = None  # None = use main font as fallback
     osb_max_font_size: int = 64
     osb_min_font_size: int = 12

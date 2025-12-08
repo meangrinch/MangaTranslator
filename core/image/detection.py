@@ -170,7 +170,7 @@ def _fallback_to_yolo_mask(primary_results, i, mask_type="points"):
 def detect_speech_bubbles(
     image_path: Path,
     model_path,
-    confidence=0.35,
+    confidence=0.6,
     verbose=False,
     device=None,
     use_sam2: bool = True,

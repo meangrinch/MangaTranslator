@@ -186,7 +186,7 @@ def _process_single_bubble(
 def clean_speech_bubbles(
     image_input: Union[str, Path, Image.Image],
     model_path,
-    confidence=0.35,
+    confidence=0.6,
     pre_computed_detections=None,
     device=None,
     thresholding_value: int = 190,

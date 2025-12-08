@@ -20,7 +20,7 @@ from core.config import (
 class UIDetectionSettings:
     """UI state for detection settings."""
 
-    confidence: float = 0.35
+    confidence: float = 0.6
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
@@ -111,7 +111,7 @@ class UIOutsideTextSettings:
     huggingface_token: str = ""
     flux_num_inference_steps: int = 10
     flux_residual_diff_threshold: float = 0.15
-    osb_confidence: float = 0.35
+    osb_confidence: float = 0.6
     osb_font_name: str = ""  # Empty = use main font
     osb_max_font_size: int = 64
     osb_min_font_size: int = 12
@@ -302,7 +302,7 @@ class UIConfigState:
                 flux_residual_diff_threshold=data.get(
                     "outside_text_flux_residual_diff_threshold", 0.15
                 ),
-                osb_confidence=data.get("outside_text_osb_confidence", 0.35),
+                osb_confidence=data.get("outside_text_osb_confidence", 0.6),
                 osb_font_name=data.get(
                     "outside_text_osb_font_pack",
                     defaults.get("outside_text_osb_font_pack", ""),

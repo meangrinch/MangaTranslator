@@ -119,7 +119,7 @@ class OutsideTextDetector:
         self,
         image_path: str,
         yolo_model_path: Optional[str] = None,
-        confidence: float = 0.35,
+        confidence: float = 0.6,
         verbose: bool = False,
         image_override: Optional[Image.Image] = None,
     ):

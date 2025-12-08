@@ -424,7 +424,7 @@ def create_layout(
                             confidence = gr.Slider(
                                 0.1,
                                 1.0,
-                                value=saved_settings.get("confidence", 0.35),
+                                value=saved_settings.get("confidence", 0.6),
                                 step=0.05,
                                 label="Bubble Detection Confidence Threshold",
                                 info="Lower values detect more bubbles, but potentially include false positives.",
@@ -1104,9 +1104,9 @@ def create_layout(
                                     0.0,
                                     1.0,
                                     value=saved_settings.get(
-                                        "outside_text_osb_confidence", 0.35
+                                        "outside_text_osb_confidence", 0.6
                                     ),
-                                    step=0.01,
+                                    step=0.05,
                                     label="OSB Text Detection Confidence",
                                     info="Lower values detect more text, but potentially include false positives.",
                                 )

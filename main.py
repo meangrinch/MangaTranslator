@@ -156,7 +156,7 @@ def main():
     parser.add_argument(
         "--confidence",
         type=float,
-        default=0.35,
+        default=0.6,
         help="Confidence threshold for speech bubble detection (0.0-1.0)",
     )
     parser.add_argument(
@@ -554,7 +554,7 @@ def main():
     parser.add_argument(
         "--osb-confidence",
         type=float,
-        default=0.35,
+        default=0.6,
         help="Confidence threshold for OSB text detection (0.0-1.0)",
     )
     parser.add_argument(
