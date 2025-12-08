@@ -66,3 +66,45 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
             return 16384
 
     return None
+
+
+def is_openai_compatible_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if an OpenAI-Compatible model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "thinking" in lm or "reasoning" in lm
+
+
+def is_deepseek_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if a DeepSeek model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return lm == "deepseek-reasoner" or lm == "deepseek-reasoner-speciale"
+
+
+def is_zai_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if a Z.ai model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return lm.startswith("glm-4.")
+
+
+def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if an xAI model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    if "non-reasoning" in lm:
+        return False
+    return "reasoning" in lm or "grok-4-0709" in lm
+
+
+def is_opus_45_model(model_name: Optional[str]) -> bool:
+    """Check if an Anthropic model is Claude Opus 4.5 (supports effort parameter)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return lm.startswith("claude-opus-4-5")

@@ -25,7 +25,14 @@ from utils.endpoints import (
 )
 from utils.exceptions import TranslationError
 from utils.logging import log_message
-from utils.model_limits import get_max_tokens_cap
+from utils.model_metadata import (
+    get_max_tokens_cap,
+    is_deepseek_reasoning_model,
+    is_openai_compatible_reasoning_model,
+    is_opus_45_model,
+    is_xai_reasoning_model,
+    is_zai_reasoning_model,
+)
 
 TRANSLATION_PATTERN = re.compile(
     r'^\s*(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*:|\s*$)',
@@ -208,41 +215,6 @@ def _is_reasoning_model_anthropic(model_name: str) -> bool:
     return any(lm.startswith(p) for p in reasoning_prefixes)
 
 
-def _is_opus_45_model(model_name: str) -> bool:
-    """Check if an Anthropic model is Claude Opus 4.5 (supports effort parameter)."""
-    lm = (model_name or "").lower()
-    return lm.startswith("claude-opus-4-5")
-
-
-def _is_reasoning_model_xai(model_name: str) -> bool:
-    """Check if an xAI model is reasoning-capable."""
-    lm = (model_name or "").lower()
-    if not lm:
-        return False
-    if "non-reasoning" in lm:
-        return False
-    return "reasoning" in lm or "grok-4-0709" in lm
-
-
-def _is_reasoning_model_openai_compatible(model_name: str) -> bool:
-    """Check if an OpenAI-Compatible model is reasoning-capable."""
-    lm = (model_name or "").lower()
-    return "thinking" in lm or "reasoning" in lm
-
-
-def _is_reasoning_model_deepseek(model_name: str) -> bool:
-    """Check if a DeepSeek model is reasoning-capable."""
-    lm = (model_name or "").lower()
-    return lm == "deepseek-reasoner" or lm == "deepseek-reasoner-speciale"
-
-
-def _is_reasoning_model_zai(model_name: str) -> bool:
-    """Check if a Z.ai model is reasoning-capable."""
-    lm = (model_name or "").lower()
-    # All glm-4.* models support reasoning
-    return lm.startswith("glm-4.")
-
-
 def _add_media_resolution_to_part(
     part: Dict[str, Any],
     media_resolution_ui: str,
@@ -316,15 +288,15 @@ def _build_generation_config(
         elif provider == "Anthropic":
             is_reasoning = _is_reasoning_model_anthropic(model_name)
         elif provider == "xAI":
-            is_reasoning = _is_reasoning_model_xai(model_name)
+            is_reasoning = is_xai_reasoning_model(model_name)
         elif provider == "OpenRouter":
             is_reasoning = openrouter_is_reasoning_model(model_name, debug)
         elif provider == "OpenAI-Compatible":
-            is_reasoning = _is_reasoning_model_openai_compatible(model_name)
+            is_reasoning = is_openai_compatible_reasoning_model(model_name)
         elif provider == "DeepSeek":
-            is_reasoning = _is_reasoning_model_deepseek(model_name)
+            is_reasoning = is_deepseek_reasoning_model(model_name)
         elif provider == "Z.ai":
-            is_reasoning = _is_reasoning_model_zai(model_name)
+            is_reasoning = is_zai_reasoning_model(model_name)
         max_tokens_value = 16384 if is_reasoning else 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, model_name)
@@ -408,7 +380,7 @@ def _build_generation_config(
 
     elif provider == "Anthropic":
         is_reasoning = _is_reasoning_model_anthropic(model_name)
-        is_opus_45 = _is_opus_45_model(model_name)
+        is_opus_45 = is_opus_45_model(model_name)
         clamped_temp = min(temperature, 1.0)  # Anthropic caps at 1.0
         generation_config = {
             "temperature": clamped_temp,
@@ -423,7 +395,7 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "xAI":
-        is_reasoning = _is_reasoning_model_xai(model_name)
+        is_reasoning = is_xai_reasoning_model(model_name)
         generation_config = {
             "temperature": temperature,
             "top_p": top_p,
@@ -434,7 +406,7 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "DeepSeek":
-        is_reasoning = _is_reasoning_model_deepseek(model_name)
+        is_reasoning = is_deepseek_reasoning_model(model_name)
         generation_config = {
             "temperature": temperature,
             "top_p": top_p,
@@ -443,7 +415,7 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "Z.ai":
-        is_reasoning = _is_reasoning_model_zai(model_name)
+        is_reasoning = is_zai_reasoning_model(model_name)
         generation_config = {
             "temperature": temperature,
             "top_p": top_p,

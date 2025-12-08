@@ -10,7 +10,14 @@ from core.llm_defaults import get_provider_sampling_defaults
 from utils.endpoints import openrouter_is_reasoning_model
 from utils.exceptions import ValidationError
 from utils.logging import log_message
-from utils.model_limits import get_max_tokens_cap
+from utils.model_metadata import (
+    get_max_tokens_cap,
+    is_deepseek_reasoning_model,
+    is_openai_compatible_reasoning_model,
+    is_opus_45_model,
+    is_xai_reasoning_model,
+    is_zai_reasoning_model,
+)
 
 from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_settings
 
@@ -230,33 +237,6 @@ def _is_google_reasoning_model(model_name: Optional[str]) -> bool:
     return "gemini-2.5" in name or "gemini-3" in name
 
 
-def _is_openai_compatible_reasoning_model(model_name: Optional[str]) -> bool:
-    """Check if an OpenAI-Compatible model is reasoning-capable."""
-    if not model_name:
-        return False
-    lm = (model_name or "").lower()
-    return "thinking" in lm or "reasoning" in lm
-
-
-def _is_deepseek_reasoning_model(model_name: Optional[str]) -> bool:
-    """Check if a DeepSeek model is reasoning-capable."""
-    if not model_name:
-        return False
-    lm = model_name.lower()
-    return lm == "deepseek-reasoner" or lm == "deepseek-reasoner-speciale"
-
-
-def _is_zai_reasoning_model(model_name: Optional[str]) -> bool:
-    """Check if a Z.ai model is reasoning-capable.
-
-    All Z.ai GLM-4.5+ models support thinking/reasoning.
-    """
-    if not model_name:
-        return False
-    lm = model_name.lower()
-    return lm.startswith("glm-4.")
-
-
 def _is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
     """Check if a Moonshot model is reasoning-capable.
 
@@ -281,11 +261,11 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
     elif provider == "Anthropic":
         return _is_anthropic_reasoning_model(model_name, provider="Anthropic")
     elif provider == "xAI":
-        return _is_xai_reasoning_model(model_name)
+        return is_xai_reasoning_model(model_name)
     elif provider == "DeepSeek":
-        return _is_deepseek_reasoning_model(model_name)
+        return is_deepseek_reasoning_model(model_name)
     elif provider == "Z.ai":
-        return _is_zai_reasoning_model(model_name)
+        return is_zai_reasoning_model(model_name)
     elif provider == "Moonshot AI":
         return _is_moonshot_reasoning_model(model_name)
     elif provider == "OpenRouter":
@@ -295,7 +275,7 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
             # Fallback to False if detection fails
             return False
     elif provider == "OpenAI-Compatible":
-        return _is_openai_compatible_reasoning_model(model_name)
+        return is_openai_compatible_reasoning_model(model_name)
     else:
         return False
 
@@ -515,16 +495,6 @@ def _is_grok_reasoning_model(model_name: Optional[str], provider: str = "xAI") -
         return "grok-4" in lm and "reasoning" in lm
 
 
-def _is_xai_reasoning_model(model_name: Optional[str]) -> bool:
-    """Check if an xAI model is reasoning-capable."""
-    if not model_name:
-        return False
-    lm = model_name.lower()
-    if "non-reasoning" in lm:
-        return False
-    return "reasoning" in lm or "grok-4-0709" in lm
-
-
 def get_reasoning_effort_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], Optional[str]]:
@@ -576,19 +546,19 @@ def get_reasoning_effort_config(
         return True, ["high", "medium", "low", "none"], "none"
 
     elif provider == "xAI":
-        is_reasoning = _is_xai_reasoning_model(model_name)
+        is_reasoning = is_xai_reasoning_model(model_name)
         if not is_reasoning:
             return False, [], None
         return True, ["high", "low"], "high"
 
     elif provider == "DeepSeek":
-        is_reasoning = _is_deepseek_reasoning_model(model_name)
+        is_reasoning = is_deepseek_reasoning_model(model_name)
         if not is_reasoning:
             return False, [], None
         return True, ["high", "medium", "low"], "high"
 
     elif provider == "Z.ai":
-        is_reasoning = _is_zai_reasoning_model(model_name)
+        is_reasoning = is_zai_reasoning_model(model_name)
         if not is_reasoning:
             return False, [], None
         # Z.ai supports enabled/disabled thinking, mapped to high/none
@@ -666,14 +636,6 @@ def get_reasoning_effort_config(
     return False, [], None
 
 
-def _is_opus_45_model(model_name: Optional[str]) -> bool:
-    """Check if an Anthropic model is Claude Opus 4.5 (supports effort parameter)."""
-    if not model_name:
-        return False
-    lm = model_name.lower()
-    return lm.startswith("claude-opus-4-5")
-
-
 def get_effort_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], Optional[str]]:
@@ -686,7 +648,7 @@ def get_effort_config(
     if provider != "Anthropic":
         return False, [], None
 
-    if not _is_opus_45_model(model_name):
+    if not is_opus_45_model(model_name):
         return False, [], None
 
     return True, ["high", "medium", "low"], "medium"
