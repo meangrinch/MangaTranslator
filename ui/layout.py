@@ -426,8 +426,16 @@ def create_layout(
                                 1.0,
                                 value=saved_settings.get("confidence", 0.6),
                                 step=0.05,
-                                label="Bubble Detection Confidence Threshold",
+                                label="Bubble Confidence Threshold",
                                 info="Lower values detect more bubbles, but potentially include false positives.",
+                            )
+                            conjoined_confidence = gr.Slider(
+                                0.1,
+                                1.0,
+                                value=saved_settings.get("conjoined_confidence", 0.35),
+                                step=0.05,
+                                label="Conjoined Bubble Confidence Threshold",
+                                info="Increase to filter out false positives, but may miss some conjoined bubbles.",
                             )
                             use_sam2_checkbox = gr.Checkbox(
                                 value=saved_settings.get("use_sam2", True),
@@ -1373,6 +1381,7 @@ def create_layout(
         # --- Define Event Handlers ---
         save_config_inputs = [
             confidence,
+            conjoined_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
             use_panel_sorting_checkbox,
@@ -1458,6 +1467,7 @@ def create_layout(
 
         reset_outputs = [
             confidence,
+            conjoined_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
             use_panel_sorting_checkbox,
@@ -1540,6 +1550,7 @@ def create_layout(
         translate_inputs = [
             input_image,
             confidence,
+            conjoined_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
             use_panel_sorting_checkbox,

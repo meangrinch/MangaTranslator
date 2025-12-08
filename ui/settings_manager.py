@@ -128,6 +128,7 @@ DEFAULT_SETTINGS = {
     "translation_mode": "one-step",
     "ocr_method": "LLM",
     "confidence": 0.6,
+    "conjoined_confidence": 0.35,
     "use_sam2": True,
     "conjoined_detection": True,
     "use_panel_sorting": True,
@@ -252,6 +253,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "supersampling_factor",
     # Models / Detection
     "confidence",
+    "conjoined_confidence",
     "use_sam2",
     # Cleaning
     "thresholding_value",

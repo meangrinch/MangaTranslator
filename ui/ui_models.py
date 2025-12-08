@@ -21,6 +21,7 @@ class UIDetectionSettings:
     """UI state for detection settings."""
 
     confidence: float = 0.6
+    conjoined_confidence: float = 0.35
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
@@ -173,6 +174,7 @@ class UIConfigState:
         """Converts the UI state into a dictionary suitable for saving to config.json."""
         data = {
             "confidence": self.detection.confidence,
+            "conjoined_confidence": self.detection.conjoined_confidence,
             "use_sam2": self.detection.use_sam2,
             "conjoined_detection": self.detection.conjoined_detection,
             "use_panel_sorting": self.detection.use_panel_sorting,
@@ -271,6 +273,9 @@ class UIConfigState:
         return UIConfigState(
             detection=UIDetectionSettings(
                 confidence=data.get("confidence", defaults["confidence"]),
+                conjoined_confidence=data.get(
+                    "conjoined_confidence", defaults.get("conjoined_confidence", 0.35)
+                ),
                 use_sam2=data.get("use_sam2", defaults.get("use_sam2", True)),
                 conjoined_detection=data.get(
                     "conjoined_detection",
@@ -475,6 +480,7 @@ def map_ui_to_backend_config(
     )
 
     detection_cfg = DetectionConfig(confidence=ui_state.detection.confidence)
+    detection_cfg.conjoined_confidence = ui_state.detection.conjoined_confidence
     detection_cfg.use_sam2 = ui_state.detection.use_sam2
     detection_cfg.conjoined_detection = ui_state.detection.conjoined_detection
     detection_cfg.use_panel_sorting = ui_state.detection.use_panel_sorting

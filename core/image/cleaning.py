@@ -194,6 +194,7 @@ def clean_speech_bubbles(
     roi_shrink_px: int = 4,
     verbose: bool = False,
     processing_scale: float = 1.0,
+    conjoined_confidence=0.35,
 ):
     """
     Clean speech bubbles in the given image using YOLO detection and refined masking.
@@ -235,7 +236,11 @@ def clean_speech_bubbles(
             detections = pre_computed_detections
         elif image_path is not None:
             detections = detect_speech_bubbles(
-                image_path, model_path, confidence, device=device
+                image_path,
+                model_path,
+                confidence,
+                device=device,
+                conjoined_confidence=conjoined_confidence,
             )
         else:
             raise ValidationError(

@@ -274,6 +274,7 @@ def translate_and_render(
             device=device,
             use_sam2=config.detection.use_sam2,
             conjoined_detection=config.detection.conjoined_detection,
+            conjoined_confidence=config.detection.conjoined_confidence,
             image_override=pil_image_processed,
         )
     except Exception as e:
@@ -312,6 +313,7 @@ def translate_and_render(
                     roi_shrink_px=config.cleaning.roi_shrink_px,
                     verbose=verbose,
                     processing_scale=processing_scale,
+                    conjoined_confidence=config.detection.conjoined_confidence,
                 )
                 log_message(
                     f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose

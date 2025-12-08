@@ -160,6 +160,12 @@ def main():
         help="Confidence threshold for speech bubble detection (0.0-1.0)",
     )
     parser.add_argument(
+        "--conjoined-confidence",
+        type=float,
+        default=0.35,
+        help="Confidence threshold for conjoined bubble detection (0.0-1.0)",
+    )
+    parser.add_argument(
         "--no-sam2",
         dest="use_sam2",
         action="store_false",
@@ -685,6 +691,7 @@ def main():
         cleaning_only=args.cleaning_only,
         detection=DetectionConfig(
             confidence=args.confidence,
+            conjoined_confidence=args.conjoined_confidence,
             use_sam2=args.use_sam2,
             conjoined_detection=args.conjoined_detection,
         ),

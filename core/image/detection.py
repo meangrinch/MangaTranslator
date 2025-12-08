@@ -181,6 +181,7 @@ def detect_speech_bubbles(
     device=None,
     use_sam2: bool = True,
     conjoined_detection: bool = True,
+    conjoined_confidence=0.35,
     image_override: Optional[Image.Image] = None,
 ):
     """Detect speech bubbles using dual YOLO models and SAM2.
@@ -191,11 +192,12 @@ def detect_speech_bubbles(
     Args:
         image_path (Path): Path to the input image
         model_path (str): Path to the primary YOLO segmentation model
-        confidence (float): Confidence threshold for detections
+        confidence (float): Confidence threshold for primary YOLO model detections
         verbose (bool): Whether to show detailed processing information
         device (torch.device, optional): The device to run the model on. Autodetects if None.
         use_sam2 (bool): Whether to use SAM2.1 for enhanced segmentation
         conjoined_detection (bool): Whether to enable conjoined bubble detection using secondary YOLO model
+        conjoined_confidence (float): Confidence threshold for secondary YOLO model (conjoined bubble detection)
 
     Returns:
         list: List of dictionaries containing detection information (bbox, class, confidence, sam_mask)
@@ -273,7 +275,7 @@ def detect_speech_bubbles(
             )
 
             secondary_results = secondary_model(
-                image_cv, conf=confidence, device=_device, verbose=False
+                image_cv, conf=conjoined_confidence, device=_device, verbose=False
             )[0]
             secondary_boxes = (
                 secondary_results.boxes.xyxy

@@ -11,6 +11,7 @@ class DetectionConfig:
     """Configuration for speech bubble detection."""
 
     confidence: float = 0.6
+    conjoined_confidence: float = 0.35
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True

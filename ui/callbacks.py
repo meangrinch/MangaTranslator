@@ -57,6 +57,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
     """Build UIConfigState from UI component arguments, handling single vs batch mode differences."""
     (
         confidence,
+        conjoined_confidence,
         use_sam2_checkbox_val,
         conjoined_detection_checkbox_val,
         use_panel_sorting_checkbox_val,
@@ -150,6 +151,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
     return UIConfigState(
         detection=UIDetectionSettings(
             confidence=confidence,
+            conjoined_confidence=conjoined_confidence,
             use_sam2=use_sam2_checkbox_val,
             conjoined_detection=conjoined_detection_checkbox_val,
             use_panel_sorting=use_panel_sorting_checkbox_val,
@@ -797,6 +799,7 @@ def handle_save_config_click(*args: Any) -> str:
     """Callback for the 'Save Config' button. Uses dataclasses."""
     (
         conf,
+        conjoined_conf,
         use_sam2,
         conjoined_detection,
         use_panel_sorting,
@@ -882,6 +885,7 @@ def handle_save_config_click(*args: Any) -> str:
     ui_state = UIConfigState(
         detection=UIDetectionSettings(
             confidence=conf,
+            conjoined_confidence=conjoined_conf,
             use_sam2=use_sam2,
             conjoined_detection=conjoined_detection,
             use_panel_sorting=use_panel_sorting,
@@ -1067,6 +1071,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
 
     return [
         default_ui_state.detection.confidence,
+        default_ui_state.detection.conjoined_confidence,
         default_ui_state.detection.use_sam2,
         default_ui_state.detection.conjoined_detection,
         default_ui_state.detection.use_panel_sorting,
