@@ -12,7 +12,7 @@ from utils.exceptions import ImageProcessingError, ModelError
 from utils.logging import log_message
 
 # Detection Parameters
-IOA_THRESHOLD = 0.80  # 80% IoA threshold for conjoined bubble detection
+IOA_THRESHOLD = 0.50  # 50% IoA threshold for conjoined bubble detection
 SAM_MASK_THRESHOLD = 0.5  # SAM2 mask binarization threshold
 
 
@@ -57,6 +57,12 @@ def _categorize_detections(primary_boxes, secondary_boxes, ioa_threshold=IOA_THR
             - conjoined_indices: List of tuples (primary_idx, [secondary_indices])
             - simple_indices: List of primary indices that are simple bubbles
     """
+    # Handle cases where one bubble is detected on the page and is conjoined
+    if primary_boxes.ndim == 1 and primary_boxes.numel() == 4:
+        primary_boxes = primary_boxes.unsqueeze(0)
+    if secondary_boxes.ndim == 1 and secondary_boxes.numel() == 4:
+        secondary_boxes = secondary_boxes.unsqueeze(0)
+
     conjoined_indices = []
     processed_secondary_indices = set()
 
