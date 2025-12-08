@@ -509,7 +509,7 @@ def get_reasoning_effort_info_text(
     if "low" in choices:
         options.append("low=20%")
     if "minimal" in choices:
-        options.append("minimal=minimal")
+        options.append("minimal=10%")
     if "none" in choices:
         options.append("none=disabled")
 
@@ -604,9 +604,9 @@ def get_reasoning_effort_config(
 
         is_flash = "gemini-2.5-flash" in lm
         if is_flash:
-            return True, ["auto", "high", "medium", "low", "none"], "auto"
+            return True, ["auto", "high", "medium", "low", "minimal", "none"], "auto"
         else:
-            return True, ["auto", "high", "medium", "low"], "auto"
+            return True, ["auto", "high", "medium", "low", "minimal"], "auto"
 
     elif provider == "OpenAI":
         is_reasoning = _is_openai_reasoning_model(model_name)
@@ -668,9 +668,13 @@ def get_reasoning_effort_config(
 
             is_flash = "gemini-2.5-flash" in lm
             if is_flash:
-                return True, ["auto", "high", "medium", "low", "none"], "auto"
+                return (
+                    True,
+                    ["auto", "high", "medium", "low", "minimal", "none"],
+                    "auto",
+                )
             else:
-                return True, ["auto", "high", "medium", "low"], "auto"
+                return True, ["auto", "high", "medium", "low", "minimal"], "auto"
 
         is_claude_37_sonnet = "claude-3.7-sonnet" in lm
         is_claude_37_sonnet_thinking = is_claude_37_sonnet and ":thinking" in lm

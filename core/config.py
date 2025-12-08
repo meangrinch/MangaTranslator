@@ -202,13 +202,14 @@ def calculate_reasoning_budget(total_tokens: int, effort_level: str) -> int:
 
     Args:
         total_tokens: Total available tokens (typically max_tokens)
-        effort_level: Reasoning effort level ("high", "medium", "low", "auto", or "none")
+        effort_level: Reasoning effort level ("high", "medium", "low", "minimal", "auto", or "none")
 
     Returns:
         int: Calculated budget in tokens
         - "high": 80% of total_tokens
         - "medium": 50% of total_tokens
         - "low": 20% of total_tokens
+        - "minimal": 10% of total_tokens
         - "auto" or "none": Returns 0 (caller should handle these cases separately)
     """
     if effort_level == "high":
@@ -217,6 +218,8 @@ def calculate_reasoning_budget(total_tokens: int, effort_level: str) -> int:
         return int(total_tokens * 0.5)
     elif effort_level == "low":
         return int(total_tokens * 0.2)
+    elif effort_level == "minimal":
+        return int(total_tokens * 0.1)
     else:
         # "auto" or "none" - return 0, caller should handle these cases
         return 0
