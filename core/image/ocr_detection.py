@@ -195,6 +195,7 @@ class OutsideTextDetector:
         log_message(
             "Running Secondary YOLO to catch missed bubbles...", verbose=verbose
         )
+        text_free_boxes = []
         try:
             sec_model = self.manager.load_yolo_conjoined_bubble()
             sec_results = sec_model(
@@ -222,7 +223,6 @@ class OutsideTextDetector:
                     elif cname == "text_free":
                         tf_id = cid
 
-            text_free_boxes = []
             if tf_id is not None and len(sec_boxes) > 0:
                 for i, cls_id in enumerate(sec_cls):
                     if int(cls_id) == tf_id:
