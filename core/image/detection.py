@@ -7,7 +7,7 @@ import torch
 from PIL import Image
 
 from core.caching import get_cache
-from core.ml.model_manager import get_model_manager
+from core.ml.model_manager import ModelType, get_model_manager
 from utils.exceptions import ImageProcessingError, ModelError
 from utils.logging import log_message
 
@@ -15,6 +15,98 @@ from utils.logging import log_message
 IOA_THRESHOLD = 0.50  # 50% IoA threshold for conjoined bubble detection
 SAM_MASK_THRESHOLD = 0.5  # SAM2 mask binarization threshold
 IOA_OVERLAP_THRESHOLD = 0.5  # IoA threshold for general overlap detection between boxes
+
+
+def _box_contains(inner, outer) -> bool:
+    """Return True if inner box is fully contained in outer box."""
+    ix0, iy0, ix1, iy1 = inner
+    ox0, oy0, ox1, oy1 = outer
+    return ix0 >= ox0 and iy0 >= oy0 and ix1 <= ox1 and iy1 <= oy1
+
+
+def _expand_boxes_with_osb_text(
+    image_cv,
+    image_pil,
+    primary_boxes: torch.Tensor,
+    cache,
+    model_manager,
+    device,
+    confidence: float,
+    hf_token: str,
+    verbose: bool,
+):
+    """Expand speech-bubble boxes to fully contain detected OSB text boxes."""
+    if primary_boxes is None or len(primary_boxes) == 0:
+        return primary_boxes
+
+    try:
+        model_path = str(model_manager.model_paths[ModelType.YOLO_OSBTEXT])
+        cache_key = cache.get_yolo_cache_key(image_pil, model_path, confidence)
+        cached = cache.get_yolo_detection(cache_key)
+
+        if cached is not None:
+            _, osb_boxes, _ = cached
+        else:
+            osb_model = model_manager.load_yolo_osbtext(token=hf_token)
+            osb_results = osb_model(
+                image_cv, conf=confidence, device=device, verbose=False
+            )[0]
+            osb_boxes = (
+                osb_results.boxes.xyxy
+                if osb_results.boxes is not None
+                else torch.tensor([])
+            )
+            osb_confs = (
+                osb_results.boxes.conf
+                if osb_results.boxes is not None
+                else torch.tensor([])
+            )
+            cache.set_yolo_detection(cache_key, (osb_results, osb_boxes, osb_confs))
+
+        if osb_boxes is None or len(osb_boxes) == 0:
+            return primary_boxes
+
+        pb_np = primary_boxes.detach().cpu().numpy()
+        osb_np = osb_boxes.detach().cpu().numpy()
+
+        for t_box in osb_np:
+            tx0, ty0, tx1, ty1 = t_box
+            best_idx = None
+            best_intersection = 0.0
+
+            for i, b_box in enumerate(pb_np):
+                bx0, by0, bx1, by1 = b_box
+                inter_x0 = max(bx0, tx0)
+                inter_y0 = max(by0, ty0)
+                inter_x1 = min(bx1, tx1)
+                inter_y1 = min(by1, ty1)
+                inter_w = max(0.0, inter_x1 - inter_x0)
+                inter_h = max(0.0, inter_y1 - inter_y0)
+                intersection = inter_w * inter_h
+                if intersection > best_intersection:
+                    best_intersection = intersection
+                    best_idx = i
+
+            if best_idx is None or best_intersection <= 0.0:
+                continue
+
+            if _box_contains(t_box, pb_np[best_idx]):
+                continue
+
+            bx0, by0, bx1, by1 = pb_np[best_idx]
+            pb_np[best_idx] = [
+                min(bx0, tx0),
+                min(by0, ty0),
+                max(bx1, tx1),
+                max(by1, ty1),
+            ]
+
+        return torch.tensor(
+            pb_np, device=primary_boxes.device, dtype=primary_boxes.dtype
+        )
+    except Exception as e:
+        log_message(f"OSB text verification skipped: {e}", verbose=verbose)
+        return primary_boxes
 
 
 def _calculate_ioa(box_inner, box_outer):
@@ -185,6 +277,8 @@ def detect_speech_bubbles(
     conjoined_confidence=0.35,
     image_override: Optional[Image.Image] = None,
     osb_enabled: bool = False,
+    osb_text_verification: bool = False,
+    osb_text_hf_token: str = "",
 ):
     """Detect speech bubbles using dual YOLO models and SAM2.
 
@@ -200,6 +294,8 @@ def detect_speech_bubbles(
         use_sam2 (bool): Whether to use SAM2.1 for enhanced segmentation
         conjoined_detection (bool): Whether to enable conjoined bubble detection using secondary YOLO model
         conjoined_confidence (float): Confidence threshold for secondary YOLO model (conjoined bubble detection)
+        osb_text_verification (bool): When True, expand bubble boxes to fully cover OSB text detections
+        osb_text_hf_token (str): Optional token for gated OSB text model downloads
 
     Returns:
         list: List of dictionaries containing detection information (bbox, class, confidence, sam_mask)
@@ -391,6 +487,19 @@ def detect_speech_bubbles(
                 verbose=verbose,
             )
             secondary_boxes = torch.tensor([])
+
+    if osb_text_verification and len(primary_boxes) > 0:
+        primary_boxes = _expand_boxes_with_osb_text(
+            image_cv,
+            image_pil,
+            primary_boxes,
+            cache,
+            model_manager,
+            _device,
+            confidence,
+            osb_text_hf_token,
+            verbose,
+        )
 
     if not use_sam2:
         log_message("SAM2 disabled, using YOLO segmentation masks", verbose=verbose)

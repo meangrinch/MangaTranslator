@@ -277,6 +277,8 @@ def translate_and_render(
             conjoined_confidence=config.detection.conjoined_confidence,
             image_override=pil_image_processed,
             osb_enabled=config.outside_text.enabled,
+            osb_text_verification=config.detection.use_osb_text_verification,
+            osb_text_hf_token=config.outside_text.huggingface_token,
         )
     except Exception as e:
         log_message(f"Error during detection: {e}", always_print=True)
@@ -325,6 +327,8 @@ def translate_and_render(
                     flux_num_inference_steps=config.outside_text.flux_num_inference_steps,
                     flux_residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
                     flux_seed=config.outside_text.seed,
+                    osb_text_verification=config.detection.use_osb_text_verification,
+                    osb_text_hf_token=config.outside_text.huggingface_token,
                 )
             except CleaningError as e:
                 log_message(f"Cleaning failed: {e}", always_print=True)

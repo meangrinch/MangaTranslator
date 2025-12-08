@@ -26,6 +26,7 @@ class UIDetectionSettings:
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
+    use_osb_text_verification: bool = False
 
 
 @dataclass
@@ -181,6 +182,7 @@ class UIConfigState:
             "use_sam2": self.detection.use_sam2,
             "conjoined_detection": self.detection.conjoined_detection,
             "use_panel_sorting": self.detection.use_panel_sorting,
+            "use_osb_text_verification": self.detection.use_osb_text_verification,
             "reading_direction": self.llm_settings.reading_direction,
             "thresholding_value": self.cleaning.thresholding_value,
             "use_otsu_threshold": self.cleaning.use_otsu_threshold,
@@ -287,6 +289,10 @@ class UIConfigState:
                 conjoined_detection=data.get(
                     "conjoined_detection",
                     defaults.get("conjoined_detection", True),
+                ),
+                use_osb_text_verification=data.get(
+                    "use_osb_text_verification",
+                    defaults.get("use_osb_text_verification", False),
                 ),
                 use_panel_sorting=data.get(
                     "use_panel_sorting",
@@ -498,6 +504,9 @@ def map_ui_to_backend_config(
     detection_cfg.use_sam2 = ui_state.detection.use_sam2
     detection_cfg.conjoined_detection = ui_state.detection.conjoined_detection
     detection_cfg.use_panel_sorting = ui_state.detection.use_panel_sorting
+    detection_cfg.use_osb_text_verification = (
+        ui_state.detection.use_osb_text_verification
+    )
 
     cleaning_cfg = CleaningConfig(
         thresholding_value=ui_state.cleaning.thresholding_value,

@@ -461,6 +461,17 @@ def create_layout(
                                     "conjoined speech bubbles into separate bubbles."
                                 ),
                             )
+                            osb_text_verification_checkbox = gr.Checkbox(
+                                value=saved_settings.get(
+                                    "use_osb_text_verification", False
+                                ),
+                                label="Use OSB Text model for BBox Verification",
+                                info=(
+                                    "Use the OSB text YOLO model to confirm bubble detections fully cover text. "
+                                    "Requires a Hugging Face token."
+                                    "(hf_token is shared with the 'OSB Text' section)."
+                                ),
+                            )
                             use_panel_sorting_checkbox = gr.Checkbox(
                                 value=saved_settings.get("use_panel_sorting", True),
                                 label="Use Panel-aware Sorting",
@@ -1413,6 +1424,7 @@ def create_layout(
             panel_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
+            osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
             config_reading_direction,
             thresholding_value,
@@ -1501,6 +1513,7 @@ def create_layout(
             panel_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
+            osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
             config_reading_direction,
             thresholding_value,
@@ -1586,6 +1599,7 @@ def create_layout(
             panel_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
+            osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
             thresholding_value,
             use_otsu_threshold,
@@ -1676,6 +1690,7 @@ def create_layout(
             panel_confidence,
             use_sam2_checkbox,
             conjoined_detection_checkbox,
+            osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
             thresholding_value,
             use_otsu_threshold,

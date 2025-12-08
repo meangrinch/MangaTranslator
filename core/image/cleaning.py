@@ -305,6 +305,8 @@ def clean_speech_bubbles(
     flux_num_inference_steps: int = 10,
     flux_residual_diff_threshold: float = 0.15,
     flux_seed: int = 1,
+    osb_text_verification: bool = False,
+    osb_text_hf_token: str = "",
 ):
     """
     Clean speech bubbles using YOLO/SAM masks and optional Flux inpainting for colored bubbles.
@@ -324,6 +326,8 @@ def clean_speech_bubbles(
         flux_num_inference_steps (int): Flux denoising steps for colored bubble inpainting.
         flux_residual_diff_threshold (float): Flux residual diff threshold for caching.
         flux_seed (int): Seed for Flux; -1 enables random per run.
+        osb_text_verification (bool): When True, expand bubble boxes to fully cover OSB text detections.
+        osb_text_hf_token (str): Optional token for OSB text model downloads.
 
     Returns:
         numpy.ndarray: Cleaned image with text removed.
@@ -362,6 +366,8 @@ def clean_speech_bubbles(
                 confidence,
                 device=device,
                 conjoined_confidence=conjoined_confidence,
+                osb_text_verification=osb_text_verification,
+                osb_text_hf_token=osb_text_hf_token,
             )
         else:
             raise ValidationError(

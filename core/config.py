@@ -16,6 +16,7 @@ class DetectionConfig:
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
+    use_osb_text_verification: bool = False
 
 
 @dataclass

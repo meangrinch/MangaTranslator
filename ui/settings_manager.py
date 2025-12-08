@@ -133,6 +133,7 @@ DEFAULT_SETTINGS = {
     "panel_confidence": 0.25,
     "use_sam2": True,
     "conjoined_detection": True,
+    "use_osb_text_verification": False,
     "use_panel_sorting": True,
     "use_otsu_threshold": False,
     "thresholding_value": 190,
@@ -258,6 +259,10 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "confidence",
     "conjoined_confidence",
     "use_sam2",
+    "conjoined_detection",
+    "panel_confidence",
+    "use_panel_sorting",
+    "use_osb_text_verification",
     # Cleaning
     "thresholding_value",
     "use_otsu_threshold",
