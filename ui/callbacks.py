@@ -64,6 +64,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         use_panel_sorting_checkbox_val,
         thresholding_value,
         use_otsu_threshold,
+        inpaint_colored_bubbles,
         roi_shrink_px,
         provider_selector,
         google_api_key,
@@ -162,6 +163,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             thresholding_value=thresholding_value,
             use_otsu_threshold=use_otsu_threshold,
             roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
+            inpaint_colored_bubbles=inpaint_colored_bubbles,
         ),
         outside_text=UIOutsideTextSettings(
             enabled=outside_text_enabled_val,
@@ -809,6 +811,7 @@ def handle_save_config_click(*args: Any) -> str:
         rd,
         thresholding_val,
         otsu,
+        inpaint_colored_bubbles,
         roi_shrink_px,
         prov,
         gem_key,
@@ -897,6 +900,7 @@ def handle_save_config_click(*args: Any) -> str:
         cleaning=UICleaningSettings(
             thresholding_value=thresholding_val,
             use_otsu_threshold=otsu,
+            inpaint_colored_bubbles=inpaint_colored_bubbles,
             roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
         ),
         outside_text=UIOutsideTextSettings(
@@ -1086,6 +1090,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.llm_settings.reading_direction,
         default_ui_state.cleaning.thresholding_value,
         default_ui_state.cleaning.use_otsu_threshold,
+        default_ui_state.cleaning.inpaint_colored_bubbles,
         default_ui_state.cleaning.roi_shrink_px,
         gr.update(value=default_provider),
         gr.update(

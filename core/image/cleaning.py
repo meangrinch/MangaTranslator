@@ -1,5 +1,9 @@
+import gc
+import os
+import random
+import tempfile
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 import cv2
 import numpy as np
@@ -11,12 +15,22 @@ from utils.logging import log_message
 
 from .detection import detect_speech_bubbles
 from .image_utils import pil_to_cv2
+from .inpainting import FluxKontextInpainter
 
+# Cleaning parameters
 GRAYSCALE_MIDPOINT = 128  # Threshold for determining black vs white bubbles
 MIN_CONTOUR_AREA = 50  # Minimum area threshold for filtering small contours
 DILATION_KERNEL_SIZE = (7, 7)  # Kernel size for morphological dilation
 EROSION_KERNEL_SIZE = (5, 5)  # Kernel size for morphological erosion
 DISTANCE_TRANSFORM_MASK_SIZE = 5  # Mask size for distance transform
+
+# Classification thresholds for colored bubbles
+BRIGHT_RATIO_THRESHOLD = 0.50
+DARK_RATIO_THRESHOLD = 0.50
+BRIGHT_DOM_RATIO_MIN = 0.30
+DARK_DOM_RATIO_MIN = 0.30
+BRIGHT_DARK_RATIO_MAX = 0.10
+DARK_BRIGHT_RATIO_MAX = 0.10
 
 
 def _process_single_bubble(
@@ -33,6 +47,7 @@ def _process_single_bubble(
     dilation_kernel=None,
     constraint_erosion_kernel=None,
     min_contour_area: float = MIN_CONTOUR_AREA,
+    classify_colored: bool = False,
 ):
     """
     Process a single speech bubble mask to extract text regions and determine fill color.
@@ -50,7 +65,7 @@ def _process_single_bubble(
         is_sam (bool): Whether this is a SAM mask (for logging)
 
     Returns:
-        tuple: (final_mask, fill_color_bgr)
+        tuple: (final_mask, fill_color_bgr, is_colored, sample_color_bgr, text_bbox)
 
     Raises:
         CleaningError: If processing fails
@@ -79,6 +94,8 @@ def _process_single_bubble(
         mean_pixel_value = np.mean(masked_pixels)
         is_black_bubble = mean_pixel_value < GRAYSCALE_MIDPOINT
         fill_color_bgr = (0, 0, 0) if is_black_bubble else (255, 255, 255)
+        is_colored_bubble = False
+        sample_color_bgr: tuple[int, int, int] = fill_color_bgr
 
         log_message(
             f"{'[SAM]' if is_sam else ''}Detection {detection_bbox}: "
@@ -155,6 +172,7 @@ def _process_single_bubble(
             verbose=verbose,
         )
 
+        text_bbox = None
         if valid_contours:
             validated_mask = np.zeros((img_height, img_width), dtype=np.uint8)
             cv2.drawContours(
@@ -171,7 +189,87 @@ def _process_single_bubble(
                 cv2.drawContours(
                     final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED
                 )
-                return final_mask, fill_color_bgr
+                x, y, w, h = cv2.boundingRect(largest_contour)
+                text_bbox = (x, y, x + w, y + h)
+
+                if classify_colored:
+                    # Sample bubble interior excluding text box and outline to determine if colored
+                    sampling_mask = cv2.erode(
+                        base_mask, constraint_erosion_kernel, iterations=2
+                    )
+                    if text_bbox:
+                        x1, y1, x2, y2 = text_bbox
+                        x1 = max(0, x1)
+                        y1 = max(0, y1)
+                        x2 = min(img_width, x2)
+                        y2 = min(img_height, y2)
+                        sampling_mask[y1:y2, x1:x2] = 0
+                    sample_pixels = img_gray[sampling_mask == 255]
+                    if sample_pixels.size == 0:
+                        sample_pixels = masked_pixels
+
+                    sample_values = sample_pixels.astype(np.uint8).flatten()
+                    hist = np.bincount(sample_values, minlength=256)
+                    dominant_val = (
+                        int(hist.argmax()) if hist.size > 0 else int(mean_pixel_value)
+                    )
+                    dominant_count = int(hist.max()) if hist.size > 0 else 0
+                    total_count = max(int(sample_values.size), 1)
+                    dominant_ratio = dominant_count / float(total_count)
+                    bright_ratio = float(
+                        np.count_nonzero(sample_values >= 245)
+                    ) / float(total_count)
+                    dark_ratio = float(np.count_nonzero(sample_values <= 15)) / float(
+                        total_count
+                    )
+
+                    log_prefix = "[SAM] " if is_sam else ""
+                    if bright_ratio >= BRIGHT_RATIO_THRESHOLD or (
+                        dominant_val >= 245
+                        and dominant_ratio >= BRIGHT_DOM_RATIO_MIN
+                        and dark_ratio <= BRIGHT_DARK_RATIO_MAX
+                    ):
+                        is_colored_bubble = False
+                        fill_color_bgr = (255, 255, 255)
+                        sample_color_bgr = (255, 255, 255)
+                        log_message(
+                            f"{log_prefix}Detection {detection_bbox}: white "
+                            f"(mode={dominant_val}, dom_ratio={dominant_ratio:.2f}, "
+                            f"bright_ratio={bright_ratio:.2f}, dark_ratio={dark_ratio:.2f})",
+                            verbose=verbose,
+                        )
+                    elif dark_ratio >= DARK_RATIO_THRESHOLD or (
+                        dominant_val <= 15
+                        and dominant_ratio >= DARK_DOM_RATIO_MIN
+                        and bright_ratio <= DARK_BRIGHT_RATIO_MAX
+                    ):
+                        is_colored_bubble = False
+                        fill_color_bgr = (0, 0, 0)
+                        sample_color_bgr = (0, 0, 0)
+                        log_message(
+                            f"{log_prefix}Detection {detection_bbox}: black "
+                            f"(mode={dominant_val}, dom_ratio={dominant_ratio:.2f}, "
+                            f"bright_ratio={bright_ratio:.2f}, dark_ratio={dark_ratio:.2f})",
+                            verbose=verbose,
+                        )
+                    else:
+                        is_colored_bubble = True
+                        sample_color_bgr = (dominant_val, dominant_val, dominant_val)
+                        log_message(
+                            f"{log_prefix}Detection {detection_bbox}: "
+                            f"colored/gradient (mode={dominant_val}, "
+                            f"dom_ratio={dominant_ratio:.2f}, "
+                            f"bright_ratio={bright_ratio:.2f}, "
+                            f"dark_ratio={dark_ratio:.2f})",
+                            verbose=verbose,
+                        )
+                return (
+                    final_mask,
+                    fill_color_bgr,
+                    is_colored_bubble,
+                    sample_color_bgr,
+                    text_bbox,
+                )
 
         raise CleaningError("Failed to process bubble mask")
 
@@ -195,9 +293,14 @@ def clean_speech_bubbles(
     verbose: bool = False,
     processing_scale: float = 1.0,
     conjoined_confidence=0.35,
+    inpaint_colored_bubbles: bool = False,
+    flux_hf_token: str = "",
+    flux_num_inference_steps: int = 10,
+    flux_residual_diff_threshold: float = 0.15,
+    flux_seed: int = 1,
 ):
     """
-    Clean speech bubbles in the given image using YOLO detection and refined masking.
+    Clean speech bubbles using YOLO/SAM masks and optional Flux inpainting for colored bubbles.
 
     Args:
         image_input (str, Path, or PIL.Image.Image): Path to input image or a PIL Image object.
@@ -209,11 +312,20 @@ def clean_speech_bubbles(
                                  are useful for uncleaned text close to bubble's edges.
         use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value.
         roi_shrink_px (int): Number of pixels to shrink the ROI inwards before identification/fill.
+        inpaint_colored_bubbles (bool): If True, detect non-white/black bubbles and inpaint text with Flux.
+        flux_hf_token (str): Hugging Face token for Flux downloads (shared with outside-text removal).
+        flux_num_inference_steps (int): Flux denoising steps for colored bubble inpainting.
+        flux_residual_diff_threshold (float): Flux residual diff threshold for caching.
+        flux_seed (int): Seed for Flux; -1 enables random per run.
 
     Returns:
-        numpy.ndarray: Cleaned image with white bubbles.
-        list[dict]: A list of dictionaries, each containing the 'mask' (numpy.ndarray)
-                    and 'color' (tuple BGR) for each processed bubble.
+        numpy.ndarray: Cleaned image with text removed.
+        list[dict]: A list of dictionaries per bubble containing:
+                    - 'mask' (np.ndarray): validated text mask (0/255)
+                    - 'color' (tuple BGR): sampled bubble color
+                    - 'bbox' (tuple): detection bounding box
+                    - 'is_colored' (bool): whether bubble interior was classified colored
+                    - 'text_bbox' (tuple|None): bounding box of detected text mask
     Raises:
         ValueError: If the image cannot be loaded or if an image object is passed without pre-computed detections.
         RuntimeError: If model loading or bubble detection fails.
@@ -273,11 +385,20 @@ def clean_speech_bubbles(
         for detection in detections:
             final_mask = None
             fill_color_bgr = None
+            is_colored_bubble = False
+            sample_color_bgr: Optional[tuple[int, int, int]] = None
+            text_bbox: Optional[tuple[int, int, int, int]] = None
 
             sam_mask = detection.get("sam_mask")
             if sam_mask is not None:
                 try:
-                    final_mask, fill_color_bgr = _process_single_bubble(
+                    (
+                        final_mask,
+                        fill_color_bgr,
+                        is_colored_bubble,
+                        sample_color_bgr,
+                        text_bbox,
+                    ) = _process_single_bubble(
                         sam_mask,
                         img_gray,
                         img_height,
@@ -291,6 +412,7 @@ def clean_speech_bubbles(
                         dilation_kernel=dilation_kernel,
                         constraint_erosion_kernel=constraint_erosion_kernel,
                         min_contour_area=min_contour_area,
+                        classify_colored=inpaint_colored_bubbles,
                     )
                 except Exception as e:
                     error_msg = f"Error processing SAM mask for detection {detection.get('bbox')}: {e}"
@@ -322,7 +444,13 @@ def clean_speech_bubbles(
                     yolo_mask = np.zeros((img_height, img_width), dtype=np.uint8)
                     cv2.fillPoly(yolo_mask, [points_int], 255)
 
-                    final_mask, fill_color_bgr = _process_single_bubble(
+                    (
+                        final_mask,
+                        fill_color_bgr,
+                        is_colored_bubble,
+                        sample_color_bgr,
+                        text_bbox,
+                    ) = _process_single_bubble(
                         yolo_mask,
                         img_gray,
                         img_height,
@@ -336,6 +464,7 @@ def clean_speech_bubbles(
                         dilation_kernel=dilation_kernel,
                         constraint_erosion_kernel=constraint_erosion_kernel,
                         min_contour_area=min_contour_area,
+                        classify_colored=inpaint_colored_bubbles,
                     )
 
                 except Exception as e:
@@ -347,8 +476,12 @@ def clean_speech_bubbles(
                 processed_bubbles.append(
                     {
                         "mask": final_mask,
-                        "color": fill_color_bgr,
+                        "color": (
+                            sample_color_bgr if sample_color_bgr else fill_color_bgr
+                        ),
                         "bbox": detection.get("bbox"),
+                        "is_colored": is_colored_bubble,
+                        "text_bbox": text_bbox,
                     }
                 )
                 log_message(
@@ -356,10 +489,108 @@ def clean_speech_bubbles(
                     verbose=verbose,
                 )
 
-        # Group masks by color for efficient batch processing
+        # Optional Flux inpainting for colored bubbles (text-only mask)
+        if inpaint_colored_bubbles:
+            colored_bubbles = [
+                b for b in processed_bubbles if b.get("is_colored", False)
+            ]
+            if colored_bubbles and flux_hf_token:
+                log_message(
+                    f"Inpainting {len(colored_bubbles)} colored bubbles with Flux",
+                    always_print=True,
+                )
+                pil_working = Image.fromarray(
+                    cv2.cvtColor(cleaned_image, cv2.COLOR_BGR2RGB)
+                )
+                base_seed = (
+                    random.randint(1, 999999)
+                    if flux_seed == -1
+                    else max(0, int(flux_seed))
+                )
+                inpainter = FluxKontextInpainter(
+                    device=device,
+                    huggingface_token=flux_hf_token,
+                    num_inference_steps=int(flux_num_inference_steps),
+                    residual_diff_threshold=float(flux_residual_diff_threshold),
+                )
+                temp_files = []
+                try:
+                    for idx, bubble_info in enumerate(colored_bubbles):
+                        mask_np = bubble_info["mask"]
+                        mask_bool = mask_np.astype(bool)
+                        region_seed = base_seed + idx if base_seed > 0 else base_seed
+                        bbox_tuple = bubble_info.get("bbox")
+                        ocr_params = {"type": "colored_bubble", "bbox": bbox_tuple}
+                        try:
+                            pil_working = inpainter.inpaint_mask(
+                                pil_working,
+                                mask_bool,
+                                seed=region_seed,
+                                verbose=verbose,
+                                ocr_params=ocr_params,
+                            )
+                            # Re-sample background brightness after inpaint for accurate text contrast
+                            cv_after = cv2.cvtColor(
+                                np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR
+                            )
+                            masked_after = cv_after[mask_bool]
+                            if masked_after.size > 0:
+                                mean_val = int(np.clip(np.mean(masked_after), 0, 255))
+                                bubble_info["color"] = (mean_val, mean_val, mean_val)
+                        except Exception as e:
+                            log_message(
+                                f"Flux inpainting failed for bubble {bbox_tuple}: {e}",
+                                always_print=True,
+                            )
+                            continue
+
+                        # Save intermediate result to disk to free memory when multiple regions
+                        if idx < len(colored_bubbles) - 1:
+                            temp_file = None
+                            try:
+                                temp_fd, temp_file = tempfile.mkstemp(suffix=".png")
+                                os.close(temp_fd)
+                                pil_working.save(temp_file, format="PNG")
+                                log_message(
+                                    "Saved intermediate inpainting result to disk",
+                                    verbose=verbose,
+                                )
+                                temp_files.append(temp_file)
+                                with Image.open(temp_file) as img_tmp:
+                                    img_tmp.load()
+                                    pil_working = img_tmp.copy()
+                                gc.collect()
+                            except Exception as e:
+                                log_message(
+                                    f"Warning: Failed to save intermediate inpainting result: {e}",
+                                    verbose=verbose,
+                                )
+                                if temp_file and temp_file in temp_files:
+                                    temp_files.remove(temp_file)
+                                # fall through with in-memory image
+
+                    cleaned_image = cv2.cvtColor(
+                        np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR
+                    )
+                finally:
+                    for temp_file in temp_files:
+                        if temp_file and os.path.exists(temp_file):
+                            try:
+                                os.remove(temp_file)
+                            except Exception:
+                                pass
+            elif colored_bubbles:
+                log_message(
+                    "Colored bubbles detected but Flux inpainting skipped (missing Hugging Face token)",
+                    always_print=True,
+                )
+
+        # Group masks by color for efficient batch processing (skip colored when inpainting enabled)
         if processed_bubbles:
             color_groups = {}
             for bubble_info in processed_bubbles:
+                if bubble_info.get("is_colored", False) and inpaint_colored_bubbles:
+                    continue
                 color_key = bubble_info["color"]
                 if color_key not in color_groups:
                     color_groups[color_key] = []

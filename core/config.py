@@ -25,6 +25,7 @@ class CleaningConfig:
     thresholding_value: int = 190
     use_otsu_threshold: bool = False
     roi_shrink_px: int = 4
+    inpaint_colored_bubbles: bool = False
 
 
 _DEFAULT_TRANSLATION_PROVIDER = DEFAULT_LLM_PROVIDER

@@ -35,6 +35,7 @@ class UICleaningSettings:
     thresholding_value: int = 190
     use_otsu_threshold: bool = False
     roi_shrink_px: int = 4
+    inpaint_colored_bubbles: bool = False
 
 
 @dataclass
@@ -184,6 +185,7 @@ class UIConfigState:
             "thresholding_value": self.cleaning.thresholding_value,
             "use_otsu_threshold": self.cleaning.use_otsu_threshold,
             "roi_shrink_px": self.cleaning.roi_shrink_px,
+            "inpaint_colored_bubbles": self.cleaning.inpaint_colored_bubbles,
             "provider": self.provider_settings.provider,
             "google_api_key": self.provider_settings.google_api_key,
             "openai_api_key": self.provider_settings.openai_api_key,
@@ -300,6 +302,10 @@ class UIConfigState:
                 ),
                 roi_shrink_px=data.get(
                     "roi_shrink_px", defaults.get("roi_shrink_px", 4)
+                ),
+                inpaint_colored_bubbles=data.get(
+                    "inpaint_colored_bubbles",
+                    defaults.get("inpaint_colored_bubbles", False),
                 ),
             ),
             outside_text=UIOutsideTextSettings(
@@ -497,6 +503,7 @@ def map_ui_to_backend_config(
         thresholding_value=ui_state.cleaning.thresholding_value,
         use_otsu_threshold=ui_state.cleaning.use_otsu_threshold,
         roi_shrink_px=ui_state.cleaning.roi_shrink_px,
+        inpaint_colored_bubbles=ui_state.cleaning.inpaint_colored_bubbles,
     )
 
     translation_cfg = TranslationConfig(

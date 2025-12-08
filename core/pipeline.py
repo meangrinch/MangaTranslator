@@ -302,6 +302,11 @@ def translate_and_render(
             log_message("Cleaning speech bubbles...", verbose=verbose)
             try:
                 use_otsu = config.cleaning.use_otsu_threshold
+                if config.cleaning.inpaint_colored_bubbles:
+                    log_message(
+                        "Flux inpainting enabled for colored bubbles",
+                        verbose=verbose,
+                    )
 
                 cleaned_image_cv, processed_bubbles_info = clean_speech_bubbles(
                     pil_image_processed,
@@ -315,6 +320,11 @@ def translate_and_render(
                     verbose=verbose,
                     processing_scale=processing_scale,
                     conjoined_confidence=config.detection.conjoined_confidence,
+                    inpaint_colored_bubbles=config.cleaning.inpaint_colored_bubbles,
+                    flux_hf_token=config.outside_text.huggingface_token,
+                    flux_num_inference_steps=config.outside_text.flux_num_inference_steps,
+                    flux_residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
+                    flux_seed=config.outside_text.seed,
                 )
                 log_message(
                     f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose

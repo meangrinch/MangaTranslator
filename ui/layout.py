@@ -455,7 +455,7 @@ def create_layout(
                             )
                             conjoined_detection_checkbox = gr.Checkbox(
                                 value=saved_settings.get("conjoined_detection", True),
-                                label="Detect Conjoined Bubbles",
+                                label="Enable Conjoined Bubble Detection",
                                 info=(
                                     "Uses a secondary YOLO model to detect and split "
                                     "conjoined speech bubbles into separate bubbles."
@@ -509,6 +509,17 @@ def create_layout(
                                 info=(
                                     "Shrink the threshold ROI inward by N pixels before fill. "
                                     "Lower helps clean edge-hugging text; higher preserves outlines."
+                                ),
+                            )
+                            inpaint_colored_bubbles = gr.Checkbox(
+                                value=saved_settings.get(
+                                    "inpaint_colored_bubbles", False
+                                ),
+                                label="Use Flux Kontext to Inpaint Colored Bubbles",
+                                info=(
+                                    "Use Flux Kontext for cleaning when the bubble interior is not pure white/black. "
+                                    "Requires a Hugging Face token "
+                                    "(hf_token and Flux settings are shared with the 'OSB Text' section)."
                                 ),
                             )
                         setting_groups.append(group_cleaning)
@@ -1400,6 +1411,7 @@ def create_layout(
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
+            inpaint_colored_bubbles,
             roi_shrink_px,
             provider_selector,
             google_api_key,
@@ -1487,6 +1499,7 @@ def create_layout(
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
+            inpaint_colored_bubbles,
             roi_shrink_px,
             provider_selector,
             google_api_key,
@@ -1570,6 +1583,7 @@ def create_layout(
             use_panel_sorting_checkbox,
             thresholding_value,
             use_otsu_threshold,
+            inpaint_colored_bubbles,
             roi_shrink_px,
             provider_selector,
             google_api_key,
@@ -1659,6 +1673,7 @@ def create_layout(
             use_panel_sorting_checkbox,
             thresholding_value,
             use_otsu_threshold,
+            inpaint_colored_bubbles,
             roi_shrink_px,
             provider_selector,
             google_api_key,

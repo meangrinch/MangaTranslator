@@ -136,6 +136,7 @@ DEFAULT_SETTINGS = {
     "use_otsu_threshold": False,
     "thresholding_value": 190,
     "roi_shrink_px": 4,
+    "inpaint_colored_bubbles": False,
     "temperature": DEFAULT_PROVIDER_SAMPLING["temperature"],
     "top_p": DEFAULT_PROVIDER_SAMPLING["top_p"],
     "top_k": DEFAULT_PROVIDER_SAMPLING["top_k"],
@@ -260,6 +261,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "thresholding_value",
     "use_otsu_threshold",
     "roi_shrink_px",
+    "inpaint_colored_bubbles",
     # Outside Text Removal
     "outside_text_enabled",
     "outside_text_seed",
