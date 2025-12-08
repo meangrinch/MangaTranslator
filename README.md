@@ -199,7 +199,8 @@ python main.py --help
 
 - **Incorrect reading order:**
   - Set correct "Reading Direction" (rtl for manga, ltr for comics)
-  - Try "two-step" translation mode for less-capable LLMs
+  - Try "two-step" mode or disabling "Send Full Page to LLM" for less-capable LLMs
+  - Ensure "Use Panel-aware Sorting" is enabled
 - **Uncleaned text remaining (near edges of bubbles):**
   - Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
 - **Outlines get eaten during cleaning:**
@@ -220,9 +221,10 @@ python main.py --help
   - Try using "manga-ocr" OCR method, particularly for less-capable LLMs (Japanese sources only)
   - Increase "max_tokens" and/or use a higher "reasoning_effort" (e.g., "high")
 - **OSB text not inpainted/cleaned:**
-  - Ensure "Enable OSB Detection" is enabled
-  - Install Nunchaku (see Installation step 4)
-  - Set your Hugging Face access token (see Post-Install Setup)
+  - Ensure "Enable OSB Text Detection" is enabled
+  - Ensure Nunchaku is installed/hf_token is set (see Installation/Post-Install Setup)
+- **Colored bubbles not preserving interior color:**
+  - Enable "Use Flux Kontext to Inpaint Colored Bubbles" (requires Nunchaku/hf_token)
 - **High LLM token usage:**
   - Disable "Send Full Page to LLM"
   - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes
