@@ -14,6 +14,7 @@ from utils.logging import log_message
 # Detection Parameters
 IOA_THRESHOLD = 0.50  # 50% IoA threshold for conjoined bubble detection
 SAM_MASK_THRESHOLD = 0.5  # SAM2 mask binarization threshold
+IOA_OVERLAP_THRESHOLD = 0.5  # IoA threshold for general overlap detection between boxes
 
 
 def _calculate_ioa(box_inner, box_outer):
@@ -183,6 +184,7 @@ def detect_speech_bubbles(
     conjoined_detection: bool = True,
     conjoined_confidence=0.35,
     image_override: Optional[Image.Image] = None,
+    osb_enabled: bool = False,
 ):
     """Detect speech bubbles using dual YOLO models and SAM2.
 
@@ -267,11 +269,13 @@ def detect_speech_bubbles(
     )
 
     secondary_boxes = torch.tensor([])
-    if use_sam2 and conjoined_detection:
+    text_free_boxes = []
+    if use_sam2:
         try:
             secondary_model = model_manager.load_yolo_conjoined_bubble()
             log_message(
-                "Loaded secondary YOLO model for conjoined detection", verbose=verbose
+                "Loaded secondary YOLO model for conjoined/fallback detection",
+                verbose=verbose,
             )
 
             secondary_results = secondary_model(
@@ -282,9 +286,108 @@ def detect_speech_bubbles(
                 if secondary_results.boxes is not None
                 else torch.tensor([])
             )
+
+            # Fallback: Add bubbles detected by secondary model but missed by primary
+            if len(secondary_boxes) > 0 and hasattr(secondary_model, "names"):
+                text_bubble_id = None
+                text_free_id = None
+                for cid, cname in secondary_model.names.items():
+                    if cname == "text_bubble":
+                        text_bubble_id = cid
+                    elif cname == "text_free":
+                        text_free_id = cid
+
+                secondary_cls = secondary_results.boxes.cls
+
+                # Collect text_free boxes regardless of OSB setting
+                if text_free_id is not None:
+                    for i, s_box in enumerate(secondary_boxes):
+                        if int(secondary_cls[i]) == text_free_id:
+                            text_free_boxes.append(s_box.tolist())
+
+                if text_bubble_id is not None:
+                    new_boxes = []
+                    primary_boxes_list = (
+                        primary_boxes.tolist() if len(primary_boxes) > 0 else []
+                    )
+
+                    for i, s_box in enumerate(secondary_boxes):
+                        if int(secondary_cls[i]) != text_bubble_id:
+                            continue
+
+                        s_box_list = s_box.tolist()
+
+                        is_covered = False
+
+                        for p_box_list in primary_boxes_list:
+                            ioa_s_in_p = _calculate_ioa(s_box_list, p_box_list)
+                            ioa_p_in_s = _calculate_ioa(p_box_list, s_box_list)
+
+                            if (
+                                ioa_s_in_p > IOA_OVERLAP_THRESHOLD
+                                or ioa_p_in_s > IOA_OVERLAP_THRESHOLD
+                            ):
+                                is_covered = True
+                                break
+
+                        if not is_covered:
+                            new_boxes.append(s_box)
+
+                    if new_boxes:
+                        log_message(
+                            f"Found {len(new_boxes)} missed bubbles from secondary model",
+                            always_print=True,
+                        )
+                        new_boxes_tensor = torch.stack(new_boxes)
+                        if len(primary_boxes) > 0:
+                            primary_boxes = torch.cat(
+                                (primary_boxes, new_boxes_tensor), dim=0
+                            )
+                        else:
+                            primary_boxes = new_boxes_tensor
+
+            # Remove text_free detections (route to OSB if enabled, discard otherwise)
+            if text_free_boxes and len(primary_boxes) > 0:
+                indices_to_remove = []
+                primary_boxes_list = primary_boxes.tolist()
+
+                for i, p_box in enumerate(primary_boxes_list):
+                    overlaps_text_free = False
+                    for tf_box in text_free_boxes:
+                        if (
+                            _calculate_ioa(p_box, tf_box) > IOA_OVERLAP_THRESHOLD
+                            or _calculate_ioa(tf_box, p_box) > IOA_OVERLAP_THRESHOLD
+                        ):
+                            overlaps_text_free = True
+                            break
+
+                    if overlaps_text_free:
+                        indices_to_remove.append(i)
+
+                if indices_to_remove:
+                    action = (
+                        "routing to OSB pipeline"
+                        if osb_enabled
+                        else "discarding (OSB disabled)"
+                    )
+                    log_message(
+                        f"Removing {len(indices_to_remove)} bubbles marked text_free ({action})",
+                        always_print=True,
+                    )
+                    keep_indices = [
+                        i
+                        for i in range(len(primary_boxes))
+                        if i not in indices_to_remove
+                    ]
+                    if keep_indices:
+                        primary_boxes = primary_boxes[keep_indices]
+                    else:
+                        primary_boxes = torch.tensor([])
+
         except Exception as e:
             log_message(
-                f"Warning: Could not load/run secondary YOLO model: {e}. Proceeding without conjoined detection.",
+                f"Warning: Could not load/run secondary YOLO model: {e}. "
+                "Proceeding without conjoined/fallback detection.",
                 verbose=verbose,
             )
             secondary_boxes = torch.tensor([])
@@ -313,6 +416,8 @@ def detect_speech_bubbles(
             detections.append(detection)
         return detections
 
+    conjoined_indices = []
+    simple_indices = list(range(len(primary_boxes)))
     try:
         log_message("Applying SAM2.1 segmentation refinement", verbose=verbose)
         sam_cache_key = cache.get_sam_cache_key(
@@ -326,7 +431,7 @@ def detect_speech_bubbles(
             return detections
 
         processor, sam_model = model_manager.load_sam2()
-        if len(secondary_boxes) > 0:
+        if len(secondary_boxes) > 0 and conjoined_detection:
             log_message(
                 "Categorizing detections (simple vs conjoined)...", verbose=verbose
             )
@@ -349,19 +454,15 @@ def detect_speech_bubbles(
                 f"No secondary detections, processing all {len(simple_indices)} as simple bubbles",
                 verbose=verbose,
             )
-        # Collect all boxes to process as simple bubbles
         boxes_to_process = []
 
-        # Add simple bubbles
         for idx in simple_indices:
             boxes_to_process.append(primary_boxes[idx])
 
-        # Add secondary boxes from conjoined groups
         for _, s_indices in conjoined_indices:
             for s_idx in s_indices:
                 boxes_to_process.append(secondary_boxes[s_idx])
 
-        # Process all boxes as simple bubbles
         if boxes_to_process:
             all_boxes_tensor = torch.stack(boxes_to_process)
             all_masks = _process_simple_bubbles(
@@ -374,7 +475,6 @@ def detect_speech_bubbles(
             )
             all_boxes = boxes_to_process
 
-            # Log processing summary
             total_boxes = len(boxes_to_process)
             simple_count = len(simple_indices)
             conjoined_count = sum(len(s_indices) for _, s_indices in conjoined_indices)
@@ -427,11 +527,58 @@ def detect_speech_bubbles(
             always_print=True,
         )
         detections = []
-        for i, box in enumerate(primary_boxes):
+
+        # Process primary boxes first in fallback to avoid duplicating secondary splits
+        fallback_boxes = []
+        if conjoined_detection and len(secondary_boxes) > 0 and conjoined_indices:
+            for idx in simple_indices:
+                fallback_boxes.append(("primary", idx, primary_boxes[idx]))
+            for _, s_indices in conjoined_indices:
+                for s_idx in s_indices:
+                    fallback_boxes.append(("secondary", s_idx, secondary_boxes[s_idx]))
+        elif len(primary_boxes) > 0:
+            for idx in range(len(primary_boxes)):
+                fallback_boxes.append(("primary", idx, primary_boxes[idx]))
+
+        img_h, img_w = image_cv.shape[:2]
+        primary_fallback_count = 0
+        secondary_fallback_count = 0
+
+        for _, (source, orig_idx, box) in enumerate(fallback_boxes):
             x0_f, y0_f, x1_f, y1_f = box.tolist()
-            conf = float(primary_results.boxes.conf[i])
-            cls_id = int(primary_results.boxes.cls[i])
-            cls_name = primary_model.names[cls_id]
+
+            if source == "primary" and len(primary_results.boxes) > 0:
+                safe_idx = min(orig_idx, len(primary_results.boxes.conf) - 1)
+                conf = float(primary_results.boxes.conf[safe_idx])
+                cls_id = int(primary_results.boxes.cls[safe_idx])
+                cls_name = primary_model.names[cls_id]
+                sam_mask = _fallback_to_yolo_mask(primary_results, safe_idx, "binary")
+                primary_fallback_count += 1
+            elif source == "secondary" and "secondary_results" in locals():
+                try:
+                    safe_idx = min(orig_idx, len(secondary_results.boxes.conf) - 1)
+                    conf = float(secondary_results.boxes.conf[safe_idx])
+                except Exception:
+                    conf = conjoined_confidence
+                cls_name = "speech_bubble"
+                x0 = int(max(0, min(x0_f, img_w)))
+                y0 = int(max(0, min(y0_f, img_h)))
+                x1 = int(max(0, min(x1_f, img_w)))
+                y1 = int(max(0, min(y1_f, img_h)))
+                mask = np.zeros((img_h, img_w), dtype=np.uint8)
+                mask[y0:y1, x0:x1] = 255
+                sam_mask = mask
+                secondary_fallback_count += 1
+            else:
+                conf = conjoined_confidence
+                cls_name = "speech_bubble"
+                x0 = int(max(0, min(x0_f, img_w)))
+                y0 = int(max(0, min(y0_f, img_h)))
+                x1 = int(max(0, min(x1_f, img_w)))
+                y1 = int(max(0, min(y1_f, img_h)))
+                mask = np.zeros((img_h, img_w), dtype=np.uint8)
+                mask[y0:y1, x0:x1] = 255
+                sam_mask = mask
 
             detection = {
                 "bbox": (
@@ -443,9 +590,15 @@ def detect_speech_bubbles(
                 "confidence": conf,
                 "class": cls_name,
             }
-            detection["sam_mask"] = _fallback_to_yolo_mask(primary_results, i, "binary")
+            detection["sam_mask"] = sam_mask
 
             detections.append(detection)
+
+        log_message(
+            f"Fallback segmentation used {len(detections)} boxes "
+            f"(primary: {primary_fallback_count}, secondary splits: {secondary_fallback_count})",
+            verbose=verbose,
+        )
 
     return detections
 

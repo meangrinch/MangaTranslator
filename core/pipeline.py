@@ -276,6 +276,7 @@ def translate_and_render(
             conjoined_detection=config.detection.conjoined_detection,
             conjoined_confidence=config.detection.conjoined_confidence,
             image_override=pil_image_processed,
+            osb_enabled=config.outside_text.enabled,
         )
     except Exception as e:
         log_message(f"Error during detection: {e}", always_print=True)

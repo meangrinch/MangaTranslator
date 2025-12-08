@@ -120,6 +120,7 @@ class OutsideTextDetector:
         image_path: str,
         yolo_model_path: Optional[str] = None,
         confidence: float = 0.6,
+        conjoined_confidence: float = 0.35,
         verbose: bool = False,
         image_override: Optional[Image.Image] = None,
     ):
@@ -128,7 +129,8 @@ class OutsideTextDetector:
         Args:
             image_path: Path to the input image.
             yolo_model_path: Optional custom YOLO model path.
-            confidence: Confidence threshold for detections.
+            confidence: Confidence threshold for primary YOLO model detections.
+            conjoined_confidence: Confidence threshold for secondary YOLO model (conjoined bubble detection).
             verbose: If True, logs intermediate steps.
 
         Returns:
@@ -189,6 +191,61 @@ class OutsideTextDetector:
 
         num_yolo_boxes = len(yolo_boxes) if yolo_boxes.nelement() > 0 else 0
         log_message(f"YOLO detected {num_yolo_boxes} speech bubbles", verbose=verbose)
+
+        log_message(
+            "Running Secondary YOLO to catch missed bubbles...", verbose=verbose
+        )
+        try:
+            sec_model = self.manager.load_yolo_conjoined_bubble()
+            sec_results = sec_model(
+                image_cv, conf=conjoined_confidence, device=self.device, verbose=False
+            )[0]
+
+            sec_boxes = (
+                sec_results.boxes.xyxy
+                if sec_results.boxes is not None
+                else torch.tensor([])
+            )
+            sec_cls = (
+                sec_results.boxes.cls
+                if sec_results.boxes is not None
+                else torch.tensor([])
+            )
+
+            # Find text_bubble and text_free classes
+            tb_id = None
+            tf_id = None
+            if hasattr(sec_model, "names"):
+                for cid, cname in sec_model.names.items():
+                    if cname == "text_bubble":
+                        tb_id = cid
+                    elif cname == "text_free":
+                        tf_id = cid
+
+            text_free_boxes = []
+            if tf_id is not None and len(sec_boxes) > 0:
+                for i, cls_id in enumerate(sec_cls):
+                    if int(cls_id) == tf_id:
+                        text_free_boxes.append(sec_boxes[i].detach().cpu().numpy())
+
+            if tb_id is not None and len(sec_boxes) > 0:
+                boxes_to_add = []
+                for i, cls_id in enumerate(sec_cls):
+                    if int(cls_id) == tb_id:
+                        boxes_to_add.append(sec_boxes[i])
+
+                if boxes_to_add:
+                    log_message(
+                        f"Secondary YOLO found {len(boxes_to_add)} potential bubbles",
+                        verbose=verbose,
+                    )
+                    boxes_to_add_tensor = torch.stack(boxes_to_add)
+                    if yolo_boxes.nelement() > 0:
+                        yolo_boxes = torch.cat((yolo_boxes, boxes_to_add_tensor), dim=0)
+                    else:
+                        yolo_boxes = boxes_to_add_tensor
+        except Exception as e:
+            log_message(f"Secondary YOLO failed: {e}", verbose=verbose)
 
         log_message("Running YOLO OSB Text...", always_print=True)
 
@@ -253,14 +310,24 @@ class OutsideTextDetector:
             for ocr_result in final_results:
                 bbox, _ = ocr_result
 
-                overlaps_any = False
+                overlaps_any_bubble = False
 
                 for yolo_box in yolo_boxes_np:
                     if self.boxes_overlap(bbox, yolo_box):
-                        overlaps_any = True
-                        break
+                        # Check if this bubble is actually a text_free region
+                        is_text_free_bubble = False
+                        if text_free_boxes:
+                            for tf_box in text_free_boxes:
+                                # We check if the YOLO bubble overlaps with a text_free detection
+                                if self.boxes_overlap(yolo_box, tf_box):
+                                    is_text_free_bubble = True
+                                    break
 
-                if not overlaps_any:
+                        if not is_text_free_bubble:
+                            overlaps_any_bubble = True
+                            break
+
+                if not overlaps_any_bubble:
                     filtered_results.append(ocr_result)
 
             filtered_out = len(final_results) - len(filtered_results)

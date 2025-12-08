@@ -60,6 +60,7 @@ def process_outside_text(
             str(image_path),
             yolo_model_path=config.yolo_model_path,
             confidence=config.outside_text.osb_confidence,
+            conjoined_confidence=config.detection.conjoined_confidence,
             verbose=verbose,
             image_override=pil_image,
         )
