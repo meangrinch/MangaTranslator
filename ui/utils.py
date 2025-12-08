@@ -10,6 +10,7 @@ from core.llm_defaults import get_provider_sampling_defaults
 from utils.endpoints import openrouter_is_reasoning_model
 from utils.exceptions import ValidationError
 from utils.logging import log_message
+from utils.model_limits import get_max_tokens_cap
 
 from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_settings
 
@@ -254,73 +255,6 @@ def _is_zai_reasoning_model(model_name: Optional[str]) -> bool:
         return False
     lm = model_name.lower()
     return lm.startswith("glm-4.")
-
-
-def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int]:
-    """
-    Get the maximum allowed max_tokens value for a specific provider/model combination.
-
-    Returns:
-        - 32768 for OpenAI GPT 4.1 models
-        - 16384 for OpenAI GPT 4o models and models with "chat" in the name
-        - 31744 for Anthropic Claude Opus 4/4.1 models
-        - 29696 for xAI Grok fast models
-        - 8192 for DeepSeek "deepseek-chat" model (not including via OpenRouter)
-        - 23552 for Z.ai "glm-4.6v" model
-        - 16384 for Z.ai "glm-4.5v" model
-        - None for all other models (no cap, use existing 63488 max)
-    """
-    if not model_name:
-        return None
-
-    model_lower = model_name.lower()
-
-    if provider == "OpenAI":
-        if "gpt-4.1" in model_lower:
-            return 32768
-        if "gpt-4o" in model_lower:
-            return 16384
-        if "chat" in model_lower:
-            return 16384
-    elif provider == "Anthropic":
-        if "claude-opus-4" in model_lower and "claude-opus-4-5" not in model_lower:
-            return 31744
-    elif provider == "xAI":
-        if "grok" in model_lower and "fast" in model_lower:
-            return 29696
-    elif provider == "OpenRouter":
-        is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
-        is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith(
-            "claude-"
-        )
-        is_grok_model = "grok" in model_lower
-
-        if is_openai_model:
-            if "gpt-4.1" in model_lower:
-                return 32768
-            if "gpt-4o" in model_lower:
-                return 16384
-            if "chat" in model_lower:
-                return 16384
-        if is_anthropic_model:
-            if "claude-opus-4" in model_lower and "claude-opus-4.5" not in model_lower:
-                return 31744
-        if is_grok_model and "fast" in model_lower:
-            return 29696
-        if "glm-4.6v" in model_lower:
-            return 23552
-        if "glm-4.5v" in model_lower:
-            return 16384
-    elif provider == "DeepSeek":
-        if model_lower == "deepseek-chat":
-            return 8192
-    elif provider == "Z.ai":
-        if model_lower == "glm-4.6v":
-            return 23552
-        if model_lower == "glm-4.5v":
-            return 16384
-
-    return None
 
 
 def _is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
