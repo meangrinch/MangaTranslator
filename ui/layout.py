@@ -1227,7 +1227,10 @@ def create_layout(
                                     ),
                                     step=0.05,
                                     label="Line Spacing Multiplier",
-                                    info="Adjusts the vertical space between lines of text (1.0 = standard).",
+                                    info=(
+                                        "Adjusts the vertical space between lines of text (1.0 = standard). "
+                                        "Decrease for tighter vertically stacked text (e.g., 0.9)."
+                                    ),
                                 )
                                 outside_text_osb_use_subpixel_rendering = gr.Checkbox(
                                     value=saved_settings.get(

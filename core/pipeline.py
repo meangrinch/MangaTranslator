@@ -326,9 +326,6 @@ def translate_and_render(
                     flux_residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
                     flux_seed=config.outside_text.seed,
                 )
-                log_message(
-                    f"Cleaned {len(processed_bubbles_info)} bubbles", verbose=verbose
-                )
             except CleaningError as e:
                 log_message(f"Cleaning failed: {e}", always_print=True)
                 cleaned_image_cv = original_cv_image.copy()
@@ -687,27 +684,9 @@ def translate_and_render(
                             bubble_color_bgr = (
                                 (50, 50, 50) if is_dark_text else (255, 255, 255)
                             )
-                            # Orientation & aspect decision for OSB
-                            angle_signed = float(bubble.get("orientation_deg", 0.0))
-                            x1, y1, x2, y2 = bbox
-                            w = max(1.0, float(x2 - x1))
-                            h = max(1.0, float(y2 - y1))
-                            aspect_ratio = float(bubble.get("aspect_ratio", h / w))
-                            # Determine verticality based on residual from perfect vertical (±90°)
-                            residual_to_vertical = (
-                                angle_signed - 90.0
-                                if angle_signed >= 0.0
-                                else angle_signed + 90.0
-                            )
-                            near_vertical = abs(residual_to_vertical) <= 5.0
-                            portrait = aspect_ratio >= 1.5
-                            vertical_stack = bool(near_vertical and portrait)
-                            # Carry orientation:
-                            # - If stacked: rotate only by the residual from perfect vertical
-                            # - Else: rotate by full angle (negative due to Y-down)
-                            rotation_deg = (
-                                residual_to_vertical if vertical_stack else angle_signed
-                            )
+                            # OSB renders default to horizontal; vertical stacking is fallback-only
+                            rotation_deg = 0.0
+                            vertical_stack = False
                         else:
                             log_message(
                                 f"Rendering bubble {bbox}: '{text[:30]}...'",
@@ -781,6 +760,43 @@ def translate_and_render(
                                 )
                                 rendered_image = pil_cleaned_image
                                 success = False
+
+                                # Absolute last-chance fallback: force vertical stacking before giving up
+                                if not vertical_stack:
+                                    # Fallback uses neutral rotation since we no longer track orientation
+                                    forced_stack_rotation = 0.0
+                                    try:
+                                        log_message(
+                                            "OSB render failed, retrying with vertical-stack fallback",
+                                            verbose=verbose,
+                                            always_print=True,
+                                        )
+                                        rendered_image = render_text_skia(
+                                            pil_image=pil_cleaned_image,
+                                            text=text,
+                                            bbox=bbox,
+                                            font_dir=font_dir,
+                                            cleaned_mask=cleaned_mask,
+                                            bubble_color_bgr=bubble_color_bgr,
+                                            config=render_config,
+                                            verbose=verbose,
+                                            bubble_id=str(i + 1),
+                                            rotation_deg=forced_stack_rotation,
+                                            vertical_stack=True,
+                                            raise_on_safe_error=False,
+                                        )
+                                        log_message(
+                                            "Vertical-stack fallback succeeded",
+                                            verbose=verbose,
+                                        )
+                                        success = True
+                                    except (RenderingError, FontError) as e2:
+                                        log_message(
+                                            f"Vertical-stack fallback failed: {e2}",
+                                            verbose=verbose,
+                                        )
+                                        rendered_image = pil_cleaned_image
+                                        success = False
                         else:
                             try:
                                 rendered_image = render_text_skia(
