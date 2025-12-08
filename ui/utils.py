@@ -613,11 +613,14 @@ def get_reasoning_effort_config(
         if not is_reasoning:
             return False, [], None
 
-        is_gpt5 = lm.startswith("gpt-5")
-        if is_gpt5:
-            return True, ["high", "medium", "low", "minimal", "none"], "medium"
-        else:
+        is_gpt5_1 = lm.startswith("gpt-5.1")
+        is_gpt5 = lm.startswith("gpt-5") and not is_gpt5_1
+        if is_gpt5_1:
             return True, ["high", "medium", "low", "none"], "medium"
+        elif is_gpt5:
+            return True, ["high", "medium", "low", "minimal"], "medium"
+        else:
+            return True, ["high", "medium", "low"], "medium"
 
     elif provider == "Anthropic":
         is_reasoning = _is_anthropic_reasoning_model(model_name, provider)

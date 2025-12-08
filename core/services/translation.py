@@ -453,8 +453,11 @@ def _build_generation_config(
             "top_p": top_p,
             "max_output_tokens": max_tokens_value,
         }  # top_k not supported by OpenAI
-        if config.reasoning_effort and config.reasoning_effort != "none":
-            generation_config["reasoning_effort"] = config.reasoning_effort
+        if config.reasoning_effort:
+            lm = (model_name or "").lower()
+            is_gpt5_1 = lm.startswith("gpt-5.1")
+            if is_gpt5_1 or config.reasoning_effort != "none":
+                generation_config["reasoning_effort"] = config.reasoning_effort
         return generation_config
 
     elif provider == "Anthropic":
