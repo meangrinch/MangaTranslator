@@ -1305,6 +1305,15 @@ def handle_conjoined_detection_change(_conjoined_detection: bool):
     return None
 
 
+def handle_confidence_threshold_change(_confidence: float):
+    """Handles changes in confidence threshold settings to clear YOLO cache."""
+    from core.caching import get_cache
+
+    cache = get_cache()
+    cache.clear_yolo_cache()
+    return None
+
+
 def handle_ocr_method_change(
     ocr_method: str,
     input_language: str,

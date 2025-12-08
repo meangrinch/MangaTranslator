@@ -1901,6 +1901,28 @@ def create_layout(
             queue=False,
         )
 
+        # Confidence threshold change handlers - clear YOLO cache
+        confidence.change(
+            fn=callbacks.handle_confidence_threshold_change,
+            inputs=confidence,
+            outputs=None,
+            queue=False,
+        )
+
+        conjoined_confidence.change(
+            fn=callbacks.handle_confidence_threshold_change,
+            inputs=conjoined_confidence,
+            outputs=None,
+            queue=False,
+        )
+
+        outside_text_osb_confidence.change(
+            fn=callbacks.handle_confidence_threshold_change,
+            inputs=outside_text_osb_confidence,
+            outputs=None,
+            queue=False,
+        )
+
         # Translation mode change handler - disable OCR selection when one-step
         config_translation_mode.change(
             fn=callbacks.handle_translation_mode_change,
