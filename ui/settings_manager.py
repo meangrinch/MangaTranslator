@@ -140,7 +140,7 @@ DEFAULT_SETTINGS = {
     "top_p": DEFAULT_PROVIDER_SAMPLING["top_p"],
     "top_k": DEFAULT_PROVIDER_SAMPLING["top_k"],
     "max_tokens": 4096,
-    "max_font_size": 15,
+    "max_font_size": 16,
     "min_font_size": 8,
     "line_spacing": 1.0,
     "use_subpixel_rendering": True,

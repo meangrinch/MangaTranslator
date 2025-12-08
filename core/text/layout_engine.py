@@ -5,10 +5,12 @@ import numpy as np
 import skia
 import uharfbuzz as hb
 
-from core.text.text_processing import (find_optimal_breaks_dp,
-                                       parse_styled_segments,
-                                       tokenize_styled_text,
-                                       try_hyphenate_word)
+from core.text.text_processing import (
+    find_optimal_breaks_dp,
+    parse_styled_segments,
+    tokenize_styled_text,
+    try_hyphenate_word,
+)
 from utils.exceptions import RenderingError
 from utils.logging import log_message
 
@@ -405,7 +407,7 @@ def find_optimal_layout(
     loaded_hb_faces: Dict[str, Optional[hb.Face]],
     features_to_enable: Dict[str, bool],
     min_font_size: int = 8,
-    max_font_size: int = 15,
+    max_font_size: int = 16,
     line_spacing_mult: float = 1.0,
     hyphenate_before_scaling: bool = True,
     hyphen_penalty: float = 1000.0,
