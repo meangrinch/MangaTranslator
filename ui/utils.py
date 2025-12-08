@@ -512,7 +512,7 @@ def get_reasoning_effort_info_text(
         options.append("minimal=10%")
     if "none" in choices:
         if model_name and "gemini-2.5-pro" in model_name.lower():
-            options.append("none=128 tokens (minimum allowed)")
+            options.append("none=128 tokens - minimum allowed")
         else:
             options.append("none=disabled")
 
@@ -529,9 +529,13 @@ def _is_openai_reasoning_model(model_name: Optional[str]) -> bool:
     lm = model_name.lower()
     return (
         lm.startswith("gpt-5")
+        or "/gpt-5" in lm
         or lm.startswith("o1")
+        or "/o1" in lm
         or lm.startswith("o3")
+        or "/o3" in lm
         or lm.startswith("o4-mini")
+        or "/o4-mini" in lm
     )
 
 
@@ -691,8 +695,8 @@ def get_reasoning_effort_config(
 
         if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
             if is_openai_reasoning:
-                is_gpt5_1 = lm.startswith("gpt-5.1")
-                is_gpt5 = lm.startswith("gpt-5") and not is_gpt5_1
+                is_gpt5_1 = "gpt-5.1" in lm
+                is_gpt5 = "gpt-5" in lm and not is_gpt5_1
                 if is_gpt5_1:
                     return True, ["high", "medium", "low", "none"], "medium"
                 elif is_gpt5:
