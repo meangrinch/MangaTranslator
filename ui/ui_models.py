@@ -26,7 +26,7 @@ class UIDetectionSettings:
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
-    use_osb_text_verification: bool = False
+    use_osb_text_verification: bool = True
 
 
 @dataclass
@@ -36,7 +36,7 @@ class UICleaningSettings:
     thresholding_value: int = 190
     use_otsu_threshold: bool = False
     roi_shrink_px: int = 4
-    inpaint_colored_bubbles: bool = False
+    inpaint_colored_bubbles: bool = True
 
 
 @dataclass
@@ -292,7 +292,7 @@ class UIConfigState:
                 ),
                 use_osb_text_verification=data.get(
                     "use_osb_text_verification",
-                    defaults.get("use_osb_text_verification", False),
+                    defaults.get("use_osb_text_verification", True),
                 ),
                 use_panel_sorting=data.get(
                     "use_panel_sorting",
@@ -311,7 +311,7 @@ class UIConfigState:
                 ),
                 inpaint_colored_bubbles=data.get(
                     "inpaint_colored_bubbles",
-                    defaults.get("inpaint_colored_bubbles", False),
+                    defaults.get("inpaint_colored_bubbles", True),
                 ),
             ),
             outside_text=UIOutsideTextSettings(

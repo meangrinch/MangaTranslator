@@ -16,7 +16,7 @@ class DetectionConfig:
     use_sam2: bool = True
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
-    use_osb_text_verification: bool = False
+    use_osb_text_verification: bool = True
 
 
 @dataclass
@@ -26,7 +26,7 @@ class CleaningConfig:
     thresholding_value: int = 190
     use_otsu_threshold: bool = False
     roi_shrink_px: int = 4
-    inpaint_colored_bubbles: bool = False
+    inpaint_colored_bubbles: bool = True
 
 
 _DEFAULT_TRANSLATION_PROVIDER = DEFAULT_LLM_PROVIDER

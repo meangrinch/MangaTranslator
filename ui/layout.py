@@ -463,7 +463,7 @@ def create_layout(
                             )
                             osb_text_verification_checkbox = gr.Checkbox(
                                 value=saved_settings.get(
-                                    "use_osb_text_verification", False
+                                    "use_osb_text_verification", True
                                 ),
                                 label="Use OSB Text model for BBox Verification",
                                 info=(
@@ -527,7 +527,7 @@ def create_layout(
                             )
                             inpaint_colored_bubbles = gr.Checkbox(
                                 value=saved_settings.get(
-                                    "inpaint_colored_bubbles", False
+                                    "inpaint_colored_bubbles", True
                                 ),
                                 label="Use Flux Kontext to Inpaint Colored Bubbles",
                                 info=(
