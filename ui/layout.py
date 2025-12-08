@@ -1097,27 +1097,27 @@ def create_layout(
                             gr.Markdown("### Outside Speech Bubble Text")
                             outside_text_enabled = gr.Checkbox(
                                 value=saved_settings.get("outside_text_enabled", False),
-                                label="Enable OSB Detection",
+                                label="Enable OSB Text Detection",
                                 info="Detect, inpaint, and translate text outside speech bubbles.",
                             )
+                            outside_text_huggingface_token = gr.Textbox(
+                                value=saved_settings.get(
+                                    "outside_text_huggingface_token", ""
+                                ),
+                                label="HuggingFace Token (Required for certain features)",
+                                type="password",
+                                info=(
+                                    "Required for downloading OSB Text Detection (YOLO) and Flux Kontext models "
+                                    "from HuggingFace Hub."
+                                ),
+                            )
 
-                            # Wrap all settings except the enable checkbox in a Column with visibility control
+                            # Wrap all settings except the enable checkbox and token in a Column with visibility control
                             with gr.Column(
                                 visible=saved_settings.get(
                                     "outside_text_enabled", False
                                 )
                             ) as outside_text_settings_wrapper:
-                                outside_text_huggingface_token = gr.Textbox(
-                                    value=saved_settings.get(
-                                        "outside_text_huggingface_token", ""
-                                    ),
-                                    label="HuggingFace Token (Required)",
-                                    type="password",
-                                    info=(
-                                        "Required for downloading OSB Text Detection (YOLO) and Flux Kontext models "
-                                        "from HuggingFace Hub."
-                                    ),
-                                )
                                 gr.Markdown("### Detection")
                                 outside_text_osb_confidence = gr.Slider(
                                     0.0,
