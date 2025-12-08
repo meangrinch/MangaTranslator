@@ -266,6 +266,7 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
         - 31744 for Anthropic Claude Opus 4/4.1 models
         - 29696 for xAI Grok fast models
         - 8192 for DeepSeek "deepseek-chat" model (not including via OpenRouter)
+        - 23552 for Z.ai "glm-4.6v" model
         - 16384 for Z.ai "glm-4.5v" model
         - None for all other models (no cap, use existing 63488 max)
     """
@@ -306,12 +307,16 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
                 return 31744
         if is_grok_model and "fast" in model_lower:
             return 29696
+        if "glm-4.6v" in model_lower:
+            return 23552
         if "glm-4.5v" in model_lower:
             return 16384
     elif provider == "DeepSeek":
         if model_lower == "deepseek-chat":
             return 8192
     elif provider == "Z.ai":
+        if model_lower == "glm-4.6v":
+            return 23552
         if model_lower == "glm-4.5v":
             return 16384
 
@@ -770,7 +775,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
     models = PROVIDER_MODELS.get(provider, [])
 
     if provider == "Z.ai" and ocr_method == "LLM":
-        models = [m for m in models if m == "glm-4.5v"]
+        models = [m for m in models if m in ("glm-4.5v", "glm-4.6v")]
 
     selected_model = (
         remembered_model

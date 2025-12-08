@@ -25,7 +25,7 @@ def call_zai_endpoint(
 
     Args:
         api_key (str): Z.ai API key.
-        model_name (str): Z.ai model to use (glm-4.6, glm-4.5, glm-4.5v).
+        model_name (str): Z.ai model to use (glm-4.6, glm-4.6v, glm-4.5, glm-4.5v).
         parts (List[Dict[str, Any]]): List of content parts (text, images).
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens, thinking).
         system_prompt (Optional[str]): System prompt for the model.
@@ -65,10 +65,10 @@ def call_zai_endpoint(
 
     # Check if this is a vision model
     model_lower = (model_name or "").lower()
-    is_vision_model = "glm-4.5v" in model_lower
+    is_vision_model = "glm-4.5v" in model_lower or "glm-4.6v" in model_lower
 
     if image_parts and is_vision_model:
-        # Build multimodal content for vision model (glm-4.5v)
+        # Build multimodal content for vision models (glm-4.5v / glm-4.6v)
         user_content = []
         for part in image_parts:
             if (

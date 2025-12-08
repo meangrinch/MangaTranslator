@@ -69,6 +69,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
     ],
     "Z.ai": [
         "glm-4.6",
+        "glm-4.6v",
         "glm-4.5",
         "glm-4.5v",
     ],
