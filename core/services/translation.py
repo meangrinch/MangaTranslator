@@ -50,7 +50,7 @@ def _build_system_prompt_ocr(
 You are an expert manga/comic OCR transcriber.
 
 ## OBJECTIVE
-Your sole purpose is to accurately transcribe the original text from a series of provided images. You must not translate, interpret, or add commentary. The images may contain either dialogue text (speech bubbles) or non-dialogue text (text outside speech bubbles).
+Your sole purpose is to accurately transcribe the original text from a series of provided images. You must not translate, interpret, or add commentary. The images may contain either dialogue text (speech bubbles) or outside-bubble text (text outside speech bubbles).
 
 ## CORE RULES
 - **Reading Context:** The images are presented in a {direction} reading order.
@@ -64,10 +64,10 @@ Your sole purpose is to accurately transcribe the original text from a series of
   - If text is present but indecipherable, you must return the exact token: `[OCR FAILED]`.
 
 ## OUTPUT SCHEMA
-- You must return your response in separate sections{f': `## SPEECH BUBBLES`' if num_speech_bubbles > 0 else ''}{f' followed by `## NON-DIALOGUE TEXT`' if num_osb_text > 0 else ''}.
+- You must return your response in separate sections{f': `## SPEECH BUBBLES`' if num_speech_bubbles > 0 else ''}{f' followed by `## OUTSIDE-BUBBLE TEXT`' if num_osb_text > 0 else ''}.
 - Each section must be a numbered list with exactly one line per image of that type.
-- Use S-prefixed numbering for speech bubbles (S1, S2, S3...){f' and N-prefixed numbering for non-dialogue text (N1, N2, N3...)' if num_osb_text > 0 else ''}.
-- The format must be `Si: <transcribed {lang_label}text>` for speech bubbles{f' and `Ni: <transcribed {lang_label}text>` for non-dialogue text' if num_osb_text > 0 else ''}.
+- Use S-prefixed numbering for speech bubbles (S1, S2, S3...){f' and N-prefixed numbering for outside-bubble text (N1, N2, N3...)' if num_osb_text > 0 else ''}.
+- The format must be `Si: <transcribed {lang_label}text>` for speech bubbles{f' and `Ni: <transcribed {lang_label}text>` for outside-bubble text' if num_osb_text > 0 else ''}.
 - If a section has no images, omit that section entirely.
 - Do not include any other text, explanations, or formatting outside of these sections.
 """  # noqa
@@ -81,21 +81,23 @@ def _build_system_prompt_translation(
 You are a professional manga localization translator and editor.
 
 ## OBJECTIVE
-Your goal is to produce natural-sounding, high-quality translations in {output_language} that are faithful to the original source's meaning, tone, and visual emphasis. You will handle both dialogue text (speech bubbles) and non-dialogue text (text outside speech bubbles).
+Your goal is to produce natural-sounding, high-quality translations in {output_language} that are faithful to the original source's meaning, tone, and visual emphasis. You will handle both dialogue text (speech bubbles) and outside-bubble text (text outside speech bubbles).
 
 ## STYLING GUIDE
 You must use the following markdown-style markers to convey emphasis:
 - `*italic*`: Used for onomatopoeias, thoughts, flashbacks, distant sounds, or dialogue mediated by a device (e.g., phone, radio).
 - `**bold**`: Used for sound effects (SFX), shouting, timestamps, or individual emphatic words.
 - `***bold-italic***`: Used for extremely loud sounds or dialogue that also meets the criteria for italics (e.g., shouting over a radio).
-- **Non-Dialogue Text Styling:** For text outside speech bubbles, use minimal styling and focus on clarity and impact.
+- **Outside-Bubble Text Styling:** For text outside speech bubbles, use minimal styling and focus on clarity and impact.
 
 ## CORE RULES
 - **Fidelity:** Stay faithful to the source. Do not add content, explanations, or cultural notes.
 - **Conciseness:** Keep translations idiomatic and concise.
 - **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
 - **Punctuation:** Use standard ASCII quotes and punctuation. Retain ellipses where meaningful.
-- **Non-Dialogue Text Translation:** For text categorized as non-dialogue, focus on capturing the feeling and visual metaphor relative to the surrounding panel rather than literal phonetic sounds. Keep these translations concise and impactful.
+- **Outside-Bubble Text Translation:** For text categorized as outside-bubble text, determine if it is a sound effect or narration text:
+  - For sound effects, focus on capturing the feeling and visual metaphor relative to the surrounding panel rather than literal phonetic sounds. Keep these translations concise and impactful.
+  - For narration text, translate it like you would dialogue text. Do not style it.
 - **Edge Cases:** If an input line is `[OCR FAILED]` or `[NO TEXT]`, you must output it unchanged.
 """  # noqa
 
@@ -105,19 +107,19 @@ You must use the following markdown-style markers to convey emphasis:
         )
         if num_osb_text > 0:
             numbering_instruction += (
-                " and N-prefixed numbering for non-dialogue text (N1, N2, N3...)"
+                " and N-prefixed numbering for outside-bubble text (N1, N2, N3...)"
             )
         numbering_instruction += "."
 
         sections_list = [
-            "- `## SPEECH BUBBLES TRANSCRIPTION`",
-            "- `## SPEECH BUBBLES TRANSLATION`",
+            "- `## SPEECH BUBBLES TRANSCRIPTION` (if present)",
+            "- `## SPEECH BUBBLES TRANSLATION` (if present)",
         ]
         if num_osb_text > 0:
             sections_list.extend(
                 [
-                    "- `## NON-DIALOGUE TEXT TRANSCRIPTION` (if present)",
-                    "- `## NON-DIALOGUE TEXT TRANSLATION` (if present)",
+                    "- `## OUTSIDE-BUBBLE TEXT TRANSCRIPTION` (if present)",
+                    "- `## OUTSIDE-BUBBLE TEXT TRANSLATION` (if present)",
                 ]
             )
 
@@ -135,7 +137,7 @@ You must use the following markdown-style markers to convey emphasis:
     elif mode == "two-step":
         sections = ["`## SPEECH BUBBLES`"]
         if num_osb_text > 0:
-            sections.append("`## NON-DIALOGUE TEXT`")
+            sections.append("`## OUTSIDE-BUBBLE TEXT`")
 
         sections_text = " and ".join(sections) if len(sections) > 1 else sections[0]
 
@@ -144,7 +146,7 @@ You must use the following markdown-style markers to convey emphasis:
         )
         if num_osb_text > 0:
             numbering_instruction += (
-                " and N-prefixed numbering for non-dialogue text (N1, N2, N3...)"
+                " and N-prefixed numbering for outside-bubble text (N1, N2, N3...)"
             )
         numbering_instruction += "."
 
@@ -152,9 +154,7 @@ You must use the following markdown-style markers to convey emphasis:
             f"`Si: <translated {output_language} text>` for speech bubbles"
         )
         if num_osb_text > 0:
-            format_instruction += (
-                f" and `Ni: <translated {output_language} text>` for non-dialogue text"
-            )
+            format_instruction += f" and `Ni: <translated {output_language} text>` for outside-bubble text"
         format_instruction += "."
 
         output_schema = f"""
@@ -1032,7 +1032,7 @@ def _perform_manga_ocr(
     if osb_texts:
         if log_sections:
             log_sections.append("")
-        log_sections.append("## NON-DIALOGUE TEXT")
+        log_sections.append("## OUTSIDE-BUBBLE TEXT")
         log_sections.extend(osb_texts)
 
     if log_sections:
@@ -1149,7 +1149,7 @@ def call_translation_api_batch(
 ) -> List[str]:
     """
     Generates prompts and calls the appropriate LLM API endpoint based on the provider and mode
-    specified in the configuration, translating text from speech bubbles and non-dialogue text.
+    specified in the configuration, translating text from speech bubbles and outside-bubble text.
 
     Supports "one-step" (OCR+Translate+Style) and "two-step" (OCR then Translate+Style) modes.
 
@@ -1239,10 +1239,10 @@ You have been provided with {num_speech_bubbles} speech bubble images. These con
 
             if num_osb_text > 0:
                 osb_text_section = f"""
-## NON-DIALOGUE TEXT
-You have been provided with {num_osb_text} non-dialogue text images.
-These contain text outside speech bubbles such as sound effects, environmental text, or narrative elements."""
-                osb_text_context = f" and {num_osb_text} non-dialogue text images,"
+## OUTSIDE-BUBBLE TEXT
+You have been provided with {num_osb_text} outside-bubble text images.
+These contain text outside speech bubbles such as sound effects or narrative elements."""
+                osb_text_context = f" and {num_osb_text} outside-bubble text images,"
 
             special_instructions_section = _format_special_instructions(config)
 
@@ -1316,11 +1316,13 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
 
             if osb_texts:
                 osb_text_section = f"""
-### Non-Dialogue Text
+### Outside-Bubble Text
 ---
 {"\n".join(osb_texts)}
 ---"""
-                osb_text_context = f" and {num_osb_text} transcribed non-dialogue texts"
+                osb_text_context = (
+                    f" and {num_osb_text} transcribed outside-bubble text"
+                )
 
             full_page_context = (
                 "A full-page image is also provided for visual and narrative context."
@@ -1432,10 +1434,12 @@ You have been provided with {num_speech_bubbles} speech bubble images. These con
 
             if num_osb_text > 0:
                 osb_text_section = f"""
-## NON-DIALOGUE TEXT
-You have been provided with {num_osb_text} non-dialogue text images.
-These contain text outside speech bubbles such as sound effects, environmental text, or narrative elements."""
-                osb_text_context = f" and {num_osb_text} transcribed non-dialogue texts"
+## OUTSIDE-BUBBLE TEXT
+You have been provided with {num_osb_text} outside-bubble text images.
+These contain text outside speech bubbles such as sound effects or narrative elements."""
+                osb_text_context = (
+                    f" and {num_osb_text} transcribed outside-bubble text"
+                )
 
             special_instructions_section = _format_special_instructions(config)
 
@@ -1460,9 +1464,9 @@ S1: <original {input_language} text for speech bubble 1>
 S2: <original {input_language} text for speech bubble 2>
 ...{f"""
 
-## NON-DIALOGUE TEXT TRANSCRIPTION
-N1: <original {input_language} text for non-dialogue text 1>
-N2: <original {input_language} text for non-dialogue text 2>
+## OUTSIDE-BUBBLE TEXT TRANSCRIPTION
+N1: <original {input_language} text for outside-bubble text 1>
+N2: <original {input_language} text for outside-bubble text 2>
 ...""" if num_osb_text > 0 else ""}
 
 ---
@@ -1472,9 +1476,9 @@ S1: <{output_language} translation for speech bubble 1>
 S2: <{output_language} translation for speech bubble 2>
 ...{f"""
 
-## NON-DIALOGUE TEXT TRANSLATION
-N1: <{output_language} translation for non-dialogue text 1>
-N2: <{output_language} translation for non-dialogue text 2>
+## OUTSIDE-BUBBLE TEXT TRANSLATION
+N1: <{output_language} translation for outside-bubble text 1>
+N2: <{output_language} translation for outside-bubble text 2>
 ...""" if num_osb_text > 0 else ""}
 """  # noqa
 
