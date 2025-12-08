@@ -578,6 +578,7 @@ def clean_speech_bubbles(
                         "is_colored": is_colored_bubble,
                         "text_bbox": text_bbox,
                         "is_sam": is_sam_mask,
+                        "inpainted": False,
                     }
                 )
                 log_message(
@@ -603,14 +604,14 @@ def clean_speech_bubbles(
                     if flux_seed == -1
                     else max(0, int(flux_seed))
                 )
-                inpainter = FluxKontextInpainter(
-                    device=device,
-                    huggingface_token=flux_hf_token,
-                    num_inference_steps=int(flux_num_inference_steps),
-                    residual_diff_threshold=float(flux_residual_diff_threshold),
-                )
                 temp_files = []
                 try:
+                    inpainter = FluxKontextInpainter(
+                        device=device,
+                        huggingface_token=flux_hf_token,
+                        num_inference_steps=int(flux_num_inference_steps),
+                        residual_diff_threshold=float(flux_residual_diff_threshold),
+                    )
                     for idx, bubble_info in enumerate(colored_bubbles):
                         mask_np = bubble_info["mask"]
                         mask_bool = mask_np.astype(bool)
@@ -625,6 +626,7 @@ def clean_speech_bubbles(
                                 verbose=verbose,
                                 ocr_params=ocr_params,
                             )
+                            bubble_info["inpainted"] = True
                             # Re-sample background brightness after inpaint for accurate text contrast
                             cv_after = cv2.cvtColor(
                                 np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR
@@ -635,7 +637,7 @@ def clean_speech_bubbles(
                                 bubble_info["color"] = (mean_val, mean_val, mean_val)
                         except Exception as e:
                             log_message(
-                                f"Flux inpainting failed for bubble {bbox_tuple}: {e}",
+                                f"Flux inpainting failed for bubble {bbox_tuple}: {e}; falling back to standard fill",
                                 always_print=True,
                             )
                             continue
@@ -668,6 +670,11 @@ def clean_speech_bubbles(
                     cleaned_image = cv2.cvtColor(
                         np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR
                     )
+                except Exception as e:
+                    log_message(
+                        f"Flux inpainting aborted; falling back to standard fill: {e}",
+                        always_print=True,
+                    )
                 finally:
                     for temp_file in temp_files:
                         if temp_file and os.path.exists(temp_file):
@@ -677,15 +684,16 @@ def clean_speech_bubbles(
                                 pass
             elif colored_bubbles:
                 log_message(
-                    "Colored bubbles detected but Flux inpainting skipped (missing Hugging Face token)",
+                    "Colored bubbles detected but Flux inpainting skipped (missing "
+                    "Hugging Face token); falling back to standard fill",
                     always_print=True,
                 )
 
-        # Group masks by color for efficient batch processing (skip colored when inpainting enabled)
+        # Group masks by color for efficient batch processing (skip already inpainted regions)
         if processed_bubbles:
             color_groups = {}
             for bubble_info in processed_bubbles:
-                if bubble_info.get("is_colored", False) and inpaint_colored_bubbles:
+                if bubble_info.get("inpainted", False):
                     continue
                 color_key = bubble_info["color"]
                 if color_key not in color_groups:
