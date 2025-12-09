@@ -531,8 +531,8 @@ def create_layout(
                                 ),
                                 label="Use Flux Kontext to Inpaint Colored Bubbles",
                                 info=(
-                                    "Use Flux Kontext for cleaning when the bubble interior is not pure white/black. "
-                                    "Requires a Hugging Face token "
+                                    "Use Flux Kontext for bubble cleaning when the interior is not pure white/black "
+                                    "(e.g., colored/complex). Requires a Hugging Face token "
                                     "(hf_token and Flux settings are shared with the 'OSB Text' section)."
                                 ),
                             )

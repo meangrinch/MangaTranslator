@@ -223,7 +223,7 @@ python main.py --help
 - **OSB text not inpainted/cleaned:**
   - Ensure "Enable OSB Text Detection" is enabled
   - Ensure Nunchaku is installed/hf_token is set (see Installation/Post-Install Setup)
-- **Colored bubbles not preserving interior color:**
+- **Colored/complex bubbles not preserving interior color:**
   - Enable "Use Flux Kontext to Inpaint Colored Bubbles" (requires Nunchaku/hf_token)
 - **High LLM token usage:**
   - Disable "Send Full Page to LLM"
