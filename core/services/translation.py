@@ -461,8 +461,9 @@ def _build_generation_config(
             or model_lower.startswith("o3")
             or model_lower.startswith("o4-mini")
         )
-        is_gpt5_1 = is_openai_model and model_lower.startswith("gpt-5.1")
-        is_gpt5 = is_openai_model and model_lower.startswith("gpt-5") and not is_gpt5_1
+        # FIX: Use "in" instead of startswith for OpenRouter models like "openai/gpt-5"
+        is_gpt5_1 = is_openai_model and "gpt-5.1" in model_lower
+        is_gpt5 = is_openai_model and "gpt-5" in model_lower and not is_gpt5_1
         # For OpenRouter, Anthropic models use dots (4.5) not hyphens (4-5)
         # Claude 3.7 Sonnet :thinking variant is reasoning-capable, non-thinking is not
         is_claude_37_sonnet_thinking = (
@@ -498,11 +499,17 @@ def _build_generation_config(
             if is_anthropic_reasoning:
                 reasoning_effort = config.reasoning_effort or "none"
                 generation_config["reasoning_effort"] = reasoning_effort
-            elif config.reasoning_effort and config.reasoning_effort != "none":
+            elif config.reasoning_effort:
+                # FIX: GPT-5.1 supports "none" to disable reasoning, so pass it through
+                # Other OpenAI models don't support "none", but we let openrouter.py handle that
                 generation_config["reasoning_effort"] = config.reasoning_effort
         elif is_gemini_3:
             reasoning_effort = config.reasoning_effort or "high"
             generation_config["reasoning_effort"] = reasoning_effort
+        # FIX: Add handling for Gemini 2.5 and other Google reasoning models
+        elif "google/" in model_lower or "gemini" in model_lower:
+            if config.reasoning_effort:
+                generation_config["reasoning_effort"] = config.reasoning_effort
 
         return generation_config
 

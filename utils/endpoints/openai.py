@@ -75,13 +75,18 @@ def call_openai_endpoint(
             log_message(f"Invalid image part format: {part}", always_print=True)
     input_content.append({"type": "input_text", "text": text_part["text"]})
 
+    # Detect models that don't support temperature/top_p
+    lower_model = (model_name or "").lower()
+    is_gpt5_series = lower_model.startswith("gpt-5")
+    skip_sampling_params = lower_model == "o4-mini" or is_gpt5_series
+
     payload = {
         "model": model_name,
         "input": [{"role": "user", "content": input_content}],
         "temperature": (
-            generation_config.get("temperature") if model_name != "o4-mini" else 1.0
+            generation_config.get("temperature") if not skip_sampling_params else None
         ),
-        "top_p": generation_config.get("top_p") if model_name != "o4-mini" else None,
+        "top_p": generation_config.get("top_p") if not skip_sampling_params else None,
         "max_output_tokens": generation_config.get("max_output_tokens", 4096),
     }
     if system_prompt:
@@ -91,10 +96,8 @@ def call_openai_endpoint(
     payload = {k: v for k, v in payload.items() if v is not None}
 
     try:
-        lower_model = (model_name or "").lower()
         is_gpt5_1 = lower_model.startswith("gpt-5.1")
         is_gpt5 = lower_model.startswith("gpt-5") and not is_gpt5_1
-        is_gpt5_series = is_gpt5 or is_gpt5_1
         is_reasoning_capable = (
             is_gpt5_series
             or lower_model.startswith("o1")

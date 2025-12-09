@@ -169,20 +169,17 @@ def call_openrouter_endpoint(
     if top_p is not None:
         payload["top_p"] = top_p
 
+    # FIX: Don't send top_k for Google models - LunaTranslator doesn't send it
+    # and it may interfere with reasoning_effort
     top_k = generation_config.get("top_k")
-    if top_k is not None and not is_openai_model and not is_anthropic_model:
+    if top_k is not None and not is_openai_model and not is_anthropic_model and not is_google_model:
         payload["top_k"] = top_k
 
-    reasoning_config = {}
-    # For reasoning-capable Google models (excluding Gemini 3), "auto" should route to reasoning={"enabled": true}
+    # Use top-level reasoning_effort parameter instead of nested reasoning object
+    # OpenRouter expects: {"reasoning_effort": "low"} not {"reasoning": {"effort": "low"}}
     reasoning_effort = generation_config.get("reasoning_effort")
-    if reasoning_effort == "auto" and is_google_model and not is_gemini_3:
-        reasoning_config["enabled"] = True
-
-    # Skip if we already set enabled=True for Google auto case
-    if reasoning_effort and not (
-        reasoning_effort == "auto" and is_google_model and not is_gemini_3
-    ):
+    
+    if reasoning_effort:
         is_openai_reasoning = metadata.get("is_openai_reasoning", False)
         is_anthropic_reasoning = metadata.get("is_anthropic_reasoning", False)
         is_grok_reasoning = metadata.get("is_grok_reasoning", False)
@@ -190,35 +187,37 @@ def call_openrouter_endpoint(
         is_gpt5 = metadata.get("is_gpt5", False)
         is_gpt5_series = is_gpt5 or is_gpt5_1
 
-        if reasoning_effort:
-            if is_openai_reasoning:
-                if is_gpt5_1 and reasoning_effort == "none":
-                    reasoning_config["effort"] = "none"
-                elif reasoning_effort != "none":
-                    if is_gpt5_1 and reasoning_effort == "minimal":
-                        reasoning_config["effort"] = "none"
-                    elif reasoning_effort == "minimal" and not is_gpt5_series:
-                        reasoning_config["effort"] = "low"
-                    elif reasoning_effort in ["low", "medium", "high", "minimal"]:
-                        reasoning_config["effort"] = reasoning_effort
-            elif is_anthropic_reasoning and reasoning_effort != "none":
-                if reasoning_effort in ["low", "medium", "high"]:
-                    reasoning_config["effort"] = reasoning_effort
-            elif is_grok_reasoning and reasoning_effort != "none":
-                if reasoning_effort in ["high", "low"]:
-                    reasoning_config["effort"] = reasoning_effort
+        mapped_effort = None
 
-    if is_gemini_3 and generation_config.get("reasoning_effort"):
-        reasoning_effort_gemini3 = generation_config.get("reasoning_effort")
-        if reasoning_effort_gemini3 in ["low", "high"]:
-            reasoning_config["effort"] = reasoning_effort_gemini3
+        if is_openai_reasoning:
+            # GPT-5.1 supports "none" for disabling reasoning
+            if is_gpt5_1 and reasoning_effort in ["none", "minimal"]:
+                mapped_effort = "none"
+            elif reasoning_effort == "none":
+                # GPT-5 (non-5.1) doesn't support "none", skip setting
+                pass
+            elif reasoning_effort == "minimal":
+                # Map "minimal" to "low" for non-GPT-5 series
+                mapped_effort = "low" if not is_gpt5_series else "minimal"
+            elif reasoning_effort in ["low", "medium", "high"]:
+                mapped_effort = reasoning_effort
+        elif is_anthropic_reasoning:
+            if reasoning_effort in ["low", "medium", "high"]:
+                mapped_effort = reasoning_effort
+        elif is_grok_reasoning:
+            if reasoning_effort in ["low", "high"]:
+                mapped_effort = reasoning_effort
+        elif is_gemini_3:
+            if reasoning_effort in ["low", "high", "minimal"]:
+                mapped_effort = reasoning_effort  # Pass directly, including minimal
+        elif is_google_model:
+            # For other Google models (Gemini 2.5), pass through directly
+            # OpenRouter may accept "minimal" directly for Google models
+            if reasoning_effort in ["low", "medium", "high", "minimal"]:
+                mapped_effort = reasoning_effort
 
-    # Exception: Google models with auto (enabled=True) don't need exclude set
-    if reasoning_config:
-        # Only set exclude if we're using effort-based reasoning, not enabled-based
-        if reasoning_config.get("enabled") is not True:
-            reasoning_config["exclude"] = True
-        payload["reasoning"] = reasoning_config
+        if mapped_effort:
+            payload["reasoning_effort"] = mapped_effort
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
