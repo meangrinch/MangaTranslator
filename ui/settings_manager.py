@@ -194,6 +194,7 @@ DEFAULT_SETTINGS = {
     "outside_text_osb_line_spacing": 1.0,
     "outside_text_osb_use_subpixel_rendering": True,
     "outside_text_osb_font_hinting": "none",
+    "outside_text_text_box_proximity_ratio": 0.02,
 }
 
 DEFAULT_BATCH_SETTINGS = {
@@ -276,6 +277,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "outside_text_flux_residual_diff_threshold",
     "outside_text_osb_confidence",
     "outside_text_bbox_expansion_percent",
+    "outside_text_text_box_proximity_ratio",
     "outside_text_osb_font_pack",
     "outside_text_osb_max_font_size",
     "outside_text_osb_min_font_size",

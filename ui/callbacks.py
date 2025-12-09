@@ -133,6 +133,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
         outside_text_bbox_expansion_percent_val,
+        outside_text_text_box_proximity_ratio_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
         image_upscale_model_val,
@@ -185,6 +186,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
             bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
+            text_box_proximity_ratio=float(outside_text_text_box_proximity_ratio_val),
         ),
         provider_settings=UITranslationProviderSettings(
             provider=provider_selector,
@@ -886,6 +888,7 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
         outside_text_bbox_expansion_percent_val,
+        outside_text_text_box_proximity_ratio_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
         image_upscale_model_val,
@@ -925,6 +928,7 @@ def handle_save_config_click(*args: Any) -> str:
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
             bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
+            text_box_proximity_ratio=float(outside_text_text_box_proximity_ratio_val),
         ),
         provider_settings=UITranslationProviderSettings(
             provider=prov,

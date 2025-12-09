@@ -564,6 +564,12 @@ def main():
         help="Bounding box expansion percent for OSB detection",
     )
     parser.add_argument(
+        "--osb-text-box-proximity-ratio",
+        type=float,
+        default=0.02,
+        help="Proximity ratio for grouping nearby text boxes (as fraction of image dimension)",
+    )
+    parser.add_argument(
         "--osb-confidence",
         type=float,
         default=0.6,
@@ -813,6 +819,7 @@ def main():
             osb_use_subpixel_rendering=args.osb_use_subpixel,
             osb_font_hinting=args.osb_font_hinting,
             bbox_expansion_percent=args.osb_bbox_expansion,
+            text_box_proximity_ratio=args.osb_text_box_proximity_ratio,
         ),
         preprocessing=PreprocessingConfig(
             enabled=args.image_upscale_mode == "initial",

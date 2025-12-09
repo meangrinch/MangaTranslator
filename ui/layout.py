@@ -1167,6 +1167,19 @@ def create_layout(
                                         "Higher values capture more context around text."
                                     ),
                                 )
+                                outside_text_text_box_proximity_ratio = gr.Slider(
+                                    0.01,
+                                    0.1,
+                                    value=saved_settings.get(
+                                        "outside_text_text_box_proximity_ratio", 0.02
+                                    ),
+                                    step=0.01,
+                                    label="Text Box Proximity Ratio",
+                                    info=(
+                                        "Ratio for grouping nearby text boxes (as fraction of image dimension). "
+                                        "Increase to group more distant boxes together."
+                                    ),
+                                )
                                 gr.Markdown("### Inpainting")
                                 outside_text_flux_num_inference_steps = gr.Slider(
                                     1,
@@ -1501,6 +1514,7 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
+            outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -1671,6 +1685,7 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
+            outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -1762,6 +1777,7 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
+            outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,

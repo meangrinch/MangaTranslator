@@ -170,6 +170,7 @@ def process_outside_text(
         mask_groups, _ = outside_detector.get_text_masks(
             str(image_path),
             bbox_expansion_percent=config.outside_text.bbox_expansion_percent,
+            text_box_proximity_ratio=config.outside_text.text_box_proximity_ratio,
             verbose=verbose,
             image_override=pil_image,
             existing_results=outside_text_results,

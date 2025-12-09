@@ -11,9 +11,6 @@ from core.ml.model_manager import ModelType, get_model_manager
 from utils.exceptions import ImageProcessingError
 from utils.logging import log_message
 
-# OCR Detection Parameters
-TEXT_BOX_PROXIMITY_RATIO = 0.05  # 5% of image dimension
-
 
 class OutsideTextDetector:
     """Detects text outside speech bubbles to isolate SFX/captions from dialogue."""
@@ -389,6 +386,7 @@ class OutsideTextDetector:
         self,
         image_path: str,
         bbox_expansion_percent: float = 0.0,
+        text_box_proximity_ratio: float = 0.02,
         verbose: bool = False,
         image_override: Optional[Image.Image] = None,
         existing_results: Optional[List] = None,
@@ -398,6 +396,7 @@ class OutsideTextDetector:
         Args:
             image_path: Path to the input image.
             bbox_expansion_percent: Percentage to expand bounding boxes.
+            text_box_proximity_ratio: Ratio for grouping nearby text boxes (as fraction of image dimension).
             verbose: Whether to print verbose output.
 
         Returns:
@@ -456,7 +455,7 @@ class OutsideTextDetector:
         )
 
         grouped_boxes = self._group_text_boxes_spatially(
-            expanded_boxes, results, img_w, img_h, verbose
+            expanded_boxes, results, img_w, img_h, text_box_proximity_ratio, verbose
         )
 
         groups = []
@@ -566,7 +565,9 @@ class OutsideTextDetector:
 
         return groups, image_pil
 
-    def _group_text_boxes_spatially(self, boxes, results, img_w, img_h, verbose=False):
+    def _group_text_boxes_spatially(
+        self, boxes, results, img_w, img_h, text_box_proximity_ratio=0.02, verbose=False
+    ):
         """
         Group nearby text boxes based on spatial proximity.
 
@@ -575,6 +576,7 @@ class OutsideTextDetector:
             results: List of OCR results corresponding to boxes
             img_w: Image width
             img_h: Image height
+            text_box_proximity_ratio: Ratio for grouping nearby text boxes (as fraction of image dimension).
             verbose: Whether to print detailed logs
 
         Returns:
@@ -584,7 +586,7 @@ class OutsideTextDetector:
         if not boxes:
             return []
 
-        proximity_threshold = min(img_w, img_h) * TEXT_BOX_PROXIMITY_RATIO
+        proximity_threshold = min(img_w, img_h) * text_box_proximity_ratio
 
         parent = list(range(len(boxes)))
 
