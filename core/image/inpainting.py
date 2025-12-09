@@ -570,13 +570,13 @@ class FluxKontextInpainter:
             )
 
         if dx_left < 0:
-            mask_for_composite = mask_for_composite[:, :, :, -dx_left:]
+            mask_for_composite = mask_for_composite[:, :, -dx_left:]
         if dy_top < 0:
-            mask_for_composite = mask_for_composite[:, :, -dy_top:, :]
+            mask_for_composite = mask_for_composite[:, -dy_top:, :]
         if mask_for_composite.shape[-1] > qwidth:
-            mask_for_composite = mask_for_composite[:, :, :, :qwidth]
+            mask_for_composite = mask_for_composite[:, :, :qwidth]
         if mask_for_composite.shape[-2] > qheight:
-            mask_for_composite = mask_for_composite[:, :, :qheight, :]
+            mask_for_composite = mask_for_composite[:, :qheight, :]
 
         x, y, width, height = qx1, qy1, qwidth, qheight
 
