@@ -465,7 +465,7 @@ def create_layout(
                                 value=saved_settings.get(
                                     "use_osb_text_verification", True
                                 ),
-                                label="Use OSB Text model for BBox Verification",
+                                label="Use OSB Text model for Bubble Verification",
                                 info=(
                                     "Use the OSB text YOLO model to confirm bubble detections fully cover text. "
                                     "Requires a Hugging Face token."
