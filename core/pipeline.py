@@ -1,4 +1,5 @@
 import base64
+import io
 import math
 import os
 import time
@@ -807,6 +808,32 @@ def translate_and_render(
                                         )
                                         rendered_image = pil_cleaned_image
                                         success = False
+
+                                # FIX Issue 3: Restore original patch if ALL rendering attempts failed
+                                # This prevents blank OSB regions after inpainting
+                                if not success and bubble.get("original_patch_b64"):
+                                    try:
+                                        log_message(
+                                            f"Restoring original patch for OSB {bbox} after render failure",
+                                            verbose=verbose,
+                                            always_print=True,
+                                        )
+                                        patch_data = base64.b64decode(bubble["original_patch_b64"])
+                                        patch_img = Image.open(io.BytesIO(patch_data))
+                                        patch_img = patch_img.convert(pil_cleaned_image.mode)
+                                        x1, y1, x2, y2 = bbox
+                                        pil_cleaned_image.paste(patch_img, (x1, y1))
+                                        final_image_to_save = pil_cleaned_image
+                                        log_message(
+                                            f"Successfully restored original Japanese text for OSB {bbox}",
+                                            verbose=verbose,
+                                        )
+                                    except Exception as restore_err:
+                                        log_message(
+                                            f"Failed to restore original patch for OSB {bbox}: {restore_err}",
+                                            verbose=verbose,
+                                            always_print=True,
+                                        )
                         else:
                             try:
                                 rendered_image = render_text_skia(

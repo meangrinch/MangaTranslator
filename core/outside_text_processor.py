@@ -1,5 +1,6 @@
 import base64
 import gc
+import io
 import os
 import random
 import tempfile
@@ -71,6 +72,16 @@ def process_outside_text(
             log_message("No outside text regions found", verbose=verbose)
             outside_detector.unload_models()
             return pil_image, []
+
+        # ============================================================
+        # FIX: Sort OSB detections by (y, x) for deterministic ordering
+        # This ensures consistent mapping between detections and translations
+        # ============================================================
+        outside_text_results.sort(key=lambda r: (int(r[0][1]), int(r[0][0])))
+        log_message(
+            f"Sorted {len(outside_text_results)} outside text regions by position (y, x)",
+            verbose=verbose,
+        )
 
         log_message(
             f"Found {len(outside_text_results)} outside text regions",
@@ -279,6 +290,15 @@ def process_outside_text(
 
             outside_text_image_pil = cv2_to_pil(outside_text_image_cv)
 
+            # ============================================================
+            # FIX: Cache original patch BEFORE inpainting for transactional restore
+            # This allows restoring the original Japanese if rendering fails
+            # ============================================================
+            original_patch = pil_image.crop((x1, y1, x2, y2))
+            orig_patch_buf = io.BytesIO()
+            original_patch.save(orig_patch_buf, format="PNG")
+            original_patch_b64 = base64.b64encode(orig_patch_buf.getvalue()).decode("utf-8")
+
             # Disable upscaling in test_mode
             osb_upscale_method = (
                 "none" if config.test_mode else config.translation.upscale_method
@@ -344,6 +364,8 @@ def process_outside_text(
                             "mime_type": mime_type,
                             "is_dark_text": original_text_colors.get(bbox_tuple, True),
                             "aspect_ratio": aspect_ratio,
+                            # FIX: Include original patch for transactional restore
+                            "original_patch_b64": original_patch_b64,
                         }
                     )
             except Exception as e:
