@@ -569,14 +569,15 @@ class FluxKontextInpainter:
                 mask_for_composite, (pad_l, pad_r, pad_t, pad_b)
             )
 
+        # FIX: mask_for_composite is 3D (1, H, W), not 4D - use 3 indices
         if dx_left < 0:
-            mask_for_composite = mask_for_composite[:, :, :, -dx_left:]
+            mask_for_composite = mask_for_composite[:, :, -dx_left:]
         if dy_top < 0:
-            mask_for_composite = mask_for_composite[:, :, -dy_top:, :]
+            mask_for_composite = mask_for_composite[:, -dy_top:, :]
         if mask_for_composite.shape[-1] > qwidth:
-            mask_for_composite = mask_for_composite[:, :, :, :qwidth]
+            mask_for_composite = mask_for_composite[:, :, :qwidth]
         if mask_for_composite.shape[-2] > qheight:
-            mask_for_composite = mask_for_composite[:, :, :qheight, :]
+            mask_for_composite = mask_for_composite[:, :qheight, :]
 
         x, y, width, height = qx1, qy1, qwidth, qheight
 
@@ -735,8 +736,17 @@ class FluxKontextInpainter:
                 (width, height), Image.Resampling.LANCZOS
             )
 
+        # FIX: Ensure images are RGB to avoid tensor dimension errors with grayscale images
+        original_mode = image_pil.mode
+        if image_pil.mode not in ("RGB", "RGBA"):
+            image_pil_rgb = image_pil.convert("RGB")
+        else:
+            image_pil_rgb = image_pil
+        if patch_pil.mode not in ("RGB", "RGBA"):
+            patch_pil = patch_pil.convert("RGB")
+
         dest_tensor = torch.from_numpy(
-            np.asarray(image_pil, dtype=np.float32) / 255.0
+            np.asarray(image_pil_rgb, dtype=np.float32) / 255.0
         ).unsqueeze(0)
         src_tensor = torch.from_numpy(
             np.asarray(patch_pil, dtype=np.float32) / 255.0
@@ -754,6 +764,10 @@ class FluxKontextInpainter:
         composited_pil = Image.fromarray(
             (composited_tensor[0].cpu().numpy() * 255).astype("uint8")
         )
+
+        # Convert back to original mode if needed
+        if original_mode not in ("RGB", "RGBA") and composited_pil.mode == "RGB":
+            composited_pil = composited_pil.convert(original_mode)
 
         if (
             self.cache.should_use_inpaint_cache(seed)

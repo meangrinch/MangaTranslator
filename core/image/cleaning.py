@@ -223,19 +223,24 @@ def process_single_bubble(
                     dominant_count = int(hist.max()) if hist.size > 0 else 0
                     total_count = max(int(sample_values.size), 1)
                     dominant_ratio = dominant_count / float(total_count)
+                    # FIX: Widen thresholds to handle grayscale manga with screentones
+                    # Original: >= 245 was too strict, missing light gray bubbles
+                    # Original: <= 15 was too strict, missing dark gray bubbles
                     bright_ratio = float(
-                        np.count_nonzero(sample_values >= 245)
+                        np.count_nonzero(sample_values >= 200)
                     ) / float(total_count)
-                    dark_ratio = float(np.count_nonzero(sample_values <= 15)) / float(
+                    dark_ratio = float(np.count_nonzero(sample_values <= 55)) / float(
                         total_count
                     )
 
                     log_prefix = "[SAM] " if is_sam else ""
+                    # FIX: Also check if dominant value is in clearly white/black range
+                    # to handle grayscale manga with gray screentones
                     if bright_ratio >= BRIGHT_RATIO_THRESHOLD or (
-                        dominant_val >= 245
+                        dominant_val >= 200
                         and dominant_ratio >= BRIGHT_DOM_RATIO_MIN
                         and dark_ratio <= BRIGHT_DARK_RATIO_MAX
-                    ):
+                    ) or dominant_val >= 180:  # FIX: Light gray is effectively white
                         is_colored_bubble = False
                         fill_color_bgr = (255, 255, 255)
                         sample_color_bgr = (255, 255, 255)
@@ -246,10 +251,10 @@ def process_single_bubble(
                             verbose=verbose,
                         )
                     elif dark_ratio >= DARK_RATIO_THRESHOLD or (
-                        dominant_val <= 15
+                        dominant_val <= 55
                         and dominant_ratio >= DARK_DOM_RATIO_MIN
                         and bright_ratio <= DARK_BRIGHT_RATIO_MAX
-                    ):
+                    ) or dominant_val <= 75:  # FIX: Dark gray is effectively black
                         is_colored_bubble = False
                         fill_color_bgr = (0, 0, 0)
                         sample_color_bgr = (0, 0, 0)
@@ -260,16 +265,33 @@ def process_single_bubble(
                             verbose=verbose,
                         )
                     else:
-                        is_colored_bubble = True
-                        sample_color_bgr = (dominant_val, dominant_val, dominant_val)
-                        log_message(
-                            f"{log_prefix}Detection {detection_bbox}: "
-                            f"colored/gradient (mode={dominant_val}, "
-                            f"dom_ratio={dominant_ratio:.2f}, "
-                            f"bright_ratio={bright_ratio:.2f}, "
-                            f"dark_ratio={dark_ratio:.2f})",
-                            verbose=verbose,
-                        )
+                        # FIX: For mid-gray values (76-179), classify as white or black
+                        # based on which is closer, rather than marking as "colored".
+                        # True colored bubbles require actual color saturation, which
+                        # we can't detect from grayscale alone. Mid-gray in B&W manga
+                        # is typically screentone, not a colored bubble.
+                        if dominant_val >= 128:
+                            # Closer to white
+                            is_colored_bubble = False
+                            fill_color_bgr = (255, 255, 255)
+                            sample_color_bgr = (dominant_val, dominant_val, dominant_val)
+                            log_message(
+                                f"{log_prefix}Detection {detection_bbox}: mid-gray->white "
+                                f"(mode={dominant_val}, dom_ratio={dominant_ratio:.2f}, "
+                                f"bright_ratio={bright_ratio:.2f}, dark_ratio={dark_ratio:.2f})",
+                                verbose=verbose,
+                            )
+                        else:
+                            # Closer to black
+                            is_colored_bubble = False
+                            fill_color_bgr = (0, 0, 0)
+                            sample_color_bgr = (dominant_val, dominant_val, dominant_val)
+                            log_message(
+                                f"{log_prefix}Detection {detection_bbox}: mid-gray->black "
+                                f"(mode={dominant_val}, dom_ratio={dominant_ratio:.2f}, "
+                                f"bright_ratio={bright_ratio:.2f}, dark_ratio={dark_ratio:.2f})",
+                                verbose=verbose,
+                            )
                 return (
                     final_mask,
                     fill_color_bgr,
