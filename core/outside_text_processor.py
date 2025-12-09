@@ -279,6 +279,8 @@ def process_outside_text(
 
             outside_text_image_pil = cv2_to_pil(outside_text_image_cv)
 
+            original_crop_pil = outside_text_image_pil.copy()
+
             # Disable upscaling in test_mode
             osb_upscale_method = (
                 "none" if config.test_mode else config.translation.upscale_method
@@ -344,6 +346,7 @@ def process_outside_text(
                             "mime_type": mime_type,
                             "is_dark_text": original_text_colors.get(bbox_tuple, True),
                             "aspect_ratio": aspect_ratio,
+                            "original_crop_pil": original_crop_pil,
                         }
                     )
             except Exception as e:

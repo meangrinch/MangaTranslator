@@ -805,8 +805,22 @@ def translate_and_render(
                                             f"Vertical-stack fallback failed: {e2}",
                                             verbose=verbose,
                                         )
-                                        rendered_image = pil_cleaned_image
-                                        success = False
+                                        # Restore original OSB patch if available
+                                        if "original_crop_pil" in bubble:
+                                            log_message(
+                                                f"Restoring original OSB patch for {bbox}",
+                                                verbose=verbose,
+                                                always_print=True,
+                                            )
+                                            rendered_image = pil_cleaned_image.copy()
+                                            original_patch = bubble["original_crop_pil"]
+                                            rendered_image.paste(
+                                                original_patch, (bbox[0], bbox[1])
+                                            )
+                                            success = True
+                                        else:
+                                            rendered_image = pil_cleaned_image
+                                            success = False
                         else:
                             try:
                                 rendered_image = render_text_skia(
