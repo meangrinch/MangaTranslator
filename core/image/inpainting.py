@@ -659,6 +659,7 @@ class FluxKontextInpainter:
                 self.residual_diff_threshold,
                 self.guidance_scale,
                 self.prompt,
+                ocr_params if ocr_params else None,
             )
             self.cache.set_inpainted_image(cache_key, composited_pil)
 

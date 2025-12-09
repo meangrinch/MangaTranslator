@@ -530,7 +530,11 @@ def detect_speech_bubbles(
     try:
         log_message("Applying SAM2.1 segmentation refinement", verbose=verbose)
         sam_cache_key = cache.get_sam_cache_key(
-            image_pil, primary_boxes, use_sam2, conjoined_detection
+            image_pil,
+            primary_boxes,
+            use_sam2,
+            conjoined_detection,
+            conjoined_confidence,
         )
         cached_sam = cache.get_sam_masks(sam_cache_key)
 

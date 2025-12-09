@@ -1219,6 +1219,9 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
 
 def handle_provider_change(provider: str, current_temp: float, ocr_method: str = "LLM"):
     """Handles changes in the provider selector."""
+    from core.caching import get_cache
+
+    get_cache().clear_translation_cache()
     return utils.update_translation_ui(provider, current_temp, ocr_method)
 
 
@@ -1254,6 +1257,9 @@ def handle_unload_models_click():
 
 def handle_model_change(provider: str, model_name: Optional[str], current_temp: float):
     """Handles changes in the model name dropdown."""
+    from core.caching import get_cache
+
+    get_cache().clear_translation_cache()
     return utils.update_params_for_model(provider, model_name, current_temp)
 
 
@@ -1345,7 +1351,11 @@ def handle_ocr_method_change(
     """Handles changes in OCR method selection."""
     import gradio as gr
 
+    from core.caching import get_cache
+
     from . import layout, utils
+
+    get_cache().clear_translation_cache()
 
     updates = []
 

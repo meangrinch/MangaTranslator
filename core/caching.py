@@ -142,6 +142,7 @@ class UnifiedCache:
         yolo_boxes: Any,
         use_sam2: bool = True,
         conjoined_detection: bool = True,
+        conjoined_confidence: float = 0.35,
     ) -> str:
         """Compute cache key for SAM segmentation.
 
@@ -150,6 +151,7 @@ class UnifiedCache:
             yolo_boxes: YOLO detection boxes (tensor or list)
             use_sam2: Whether SAM2 is enabled
             conjoined_detection: Whether conjoined detection is enabled
+            conjoined_confidence: Confidence threshold for conjoined detection
 
         Returns:
             str: Cache key
@@ -167,6 +169,7 @@ class UnifiedCache:
         key_string = (
             f"sam_{image_hash}_{boxes_hash}_{model_hash}_sam2{int(use_sam2)}"
             f"_conjoined{int(conjoined_detection)}"
+            f"_conf{conjoined_confidence:.3f}"
         )
         return hashlib.sha256(key_string.encode()).hexdigest()
 
@@ -241,6 +244,28 @@ class UnifiedCache:
             "temperature": config.temperature,
             "top_k": config.top_k,
             "top_p": config.top_p,
+            "ocr_method": config.ocr_method,
+            "special_instructions": (
+                config.special_instructions.strip()
+                if config.special_instructions
+                else None
+            ),
+            "max_tokens": config.max_tokens,
+            "reasoning_effort": config.reasoning_effort,
+            "effort": config.effort,
+            "media_resolution": getattr(config, "media_resolution", None),
+            "media_resolution_bubbles": getattr(
+                config, "media_resolution_bubbles", None
+            ),
+            "media_resolution_context": getattr(
+                config, "media_resolution_context", None
+            ),
+            "enable_web_search": getattr(config, "enable_web_search", None),
+            "upscale_method": getattr(config, "upscale_method", None),
+            "bubble_min_side_pixels": getattr(config, "bubble_min_side_pixels", None),
+            "context_image_max_side_pixels": getattr(
+                config, "context_image_max_side_pixels", None
+            ),
         }
         config_hash = self._hash_dict(cache_params)
 
