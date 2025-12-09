@@ -2,7 +2,6 @@ import hashlib
 import pickle
 from typing import Any, Dict, Optional
 
-import cv2
 import numpy as np
 from PIL import Image
 
@@ -24,7 +23,7 @@ class UnifiedCache:
         self._current_image_hash = None
 
     def _hash_image(self, image: Image.Image) -> str:
-        """Compute perceptual hash (pHash) of PIL Image.
+        """Compute strict SHA256 hash of PIL Image pixel data.
 
         Args:
             image: PIL Image to hash
@@ -35,25 +34,21 @@ class UnifiedCache:
         if image.mode == "RGBA":
             rgb_image = Image.new("RGB", image.size, (255, 255, 255))
             rgb_image.paste(image, mask=image.split()[-1])
-            cv_image = cv2.cvtColor(np.array(rgb_image), cv2.COLOR_RGB2BGR)
+            data_image = rgb_image
         elif image.mode == "L":
-            cv_image = np.array(image)
+            data_image = image
         else:
-            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            data_image = image
 
-        hasher = cv2.img_hash.PHash_create()
-        hash_bytes = hasher.compute(cv_image)
-
-        hash_hex = "".join(f"{byte:02x}" for byte in hash_bytes.flatten())
-
-        # Include image metadata for additional uniqueness
-        metadata = f"{image.mode}_{image.size[0]}_{image.size[1]}"
-        combined_data = metadata.encode() + hash_hex.encode()
-
-        return hashlib.blake2b(combined_data, digest_size=8).hexdigest()
+        metadata = (
+            f"{data_image.mode}_{data_image.size[0]}_{data_image.size[1]}".encode()
+        )
+        image_bytes = data_image.tobytes()
+        digest = hashlib.sha256(metadata + image_bytes).hexdigest()
+        return digest[:16]
 
     def _hash_numpy(self, array: np.ndarray) -> str:
-        """Compute hash of numpy array using sampling for better performance.
+        """Compute strict SHA256 hash of numpy array contents.
 
         Args:
             array: Numpy array to hash
@@ -61,23 +56,12 @@ class UnifiedCache:
         Returns:
             str: Hash string (16 chars)
         """
-        # Sample array data instead of hashing entire array
         if array.size == 0:
-            return hashlib.blake2b(b"empty_array", digest_size=8).hexdigest()
+            return hashlib.sha256(b"empty_array").hexdigest()[:16]
 
-        # Sample every nth element based on array size
-        sample_size = min(1024, array.size // 4)  # Adaptive sample size
-        step = max(1, array.size // sample_size)
-
-        # Flatten and sample
-        flat_array = array.flatten()
-        sampled_data = flat_array[::step]
-
-        # Include array metadata for uniqueness
-        metadata = f"{array.shape}_{array.dtype}_{len(sampled_data)}"
-        combined_data = metadata.encode() + sampled_data.tobytes()
-
-        return hashlib.blake2b(combined_data, digest_size=8).hexdigest()
+        metadata = f"{array.shape}_{array.dtype}".encode()
+        combined_data = metadata + array.tobytes()
+        return hashlib.sha256(combined_data).hexdigest()[:16]
 
     def _hash_dict(self, data: Dict) -> str:
         """Compute hash of dictionary.

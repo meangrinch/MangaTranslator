@@ -496,32 +496,9 @@ class FluxKontextInpainter:
         Returns:
             PIL.Image: The inpainted image
         """
-        # Check cache first (if seed is not random)
-        if self.cache.should_use_inpaint_cache(seed):
-            cache_key = self.cache.get_inpaint_cache_key(
-                image_pil,
-                mask_np,
-                seed,
-                self.num_inference_steps,
-                self.residual_diff_threshold,
-                self.guidance_scale,
-                self.prompt,
-                ocr_params if ocr_params else None,
-            )
-            cached_result = self.cache.get_inpainted_image(cache_key)
-            if cached_result is not None:
-                log_message("  - Using cached inpainting result", verbose=verbose)
-                return cached_result
-
-        self.load_models()
-
-        # Check if models loaded successfully
-        if self.pipeline is None:
-            log_message(
-                "Warning: Flux Kontext pipeline not available. Skipping inpainting.",
-                always_print=True,
-            )
-            return image_pil
+        mask_np = np.asarray(mask_np)
+        if mask_np.dtype != bool:
+            mask_np = mask_np.astype(bool)
 
         if not np.any(mask_np):
             return image_pil
@@ -541,15 +518,13 @@ class FluxKontextInpainter:
         bbox_width = x_max - x_min
         bbox_height = y_max - y_min
 
-        # Ensure a minimum context padding proportional to the detection size
         padding_pixels = int(max(bbox_width, bbox_height) * self.context_padding_ratio)
-        padding = min(padding_pixels, self.max_context_padding)  # Cap padding
+        padding = min(padding_pixels, self.max_context_padding)
         log_message(
             f"  - Proportional context padding: {padding_pixels}px, capped to: {padding}px",
             verbose=verbose,
         )
 
-        # Dynamic blur radius calculation
         blur_radius = int(max(bbox_width, bbox_height) * BLUR_SCALE_FACTOR)
         blur_radius = max(
             MIN_BLUR_RADIUS, min(blur_radius, MAX_BLUR_RADIUS)
@@ -568,6 +543,42 @@ class FluxKontextInpainter:
             transpose=False,
             verbose=verbose,
         )
+
+        # Quantize bbox to improve cache stability against minor detection jitter
+        quant = 2
+        img_h, img_w = mask_np.shape
+        qx1 = max(0, min(img_w, int(round(x / quant) * quant)))
+        qy1 = max(0, min(img_h, int(round(y / quant) * quant)))
+        qx2 = max(qx1 + 1, min(img_w, int(round((x + width) / quant) * quant)))
+        qy2 = max(qy1 + 1, min(img_h, int(round((y + height) / quant) * quant)))
+        qwidth = max(1, qx2 - qx1)
+        qheight = max(1, qy2 - qy1)
+
+        # Adjust mask_for_composite to the quantized bbox via pad/crop
+        dx_left = x - qx1
+        dy_top = y - qy1
+        dx_right = (qx1 + qwidth) - (x + width)
+        dy_bottom = (qy1 + qheight) - (y + height)
+
+        if dx_left > 0 or dx_right > 0 or dy_top > 0 or dy_bottom > 0:
+            pad_l = max(dx_left, 0)
+            pad_r = max(dx_right, 0)
+            pad_t = max(dy_top, 0)
+            pad_b = max(dy_bottom, 0)
+            mask_for_composite = torch.nn.functional.pad(
+                mask_for_composite, (pad_l, pad_r, pad_t, pad_b)
+            )
+
+        if dx_left < 0:
+            mask_for_composite = mask_for_composite[:, :, :, -dx_left:]
+        if dy_top < 0:
+            mask_for_composite = mask_for_composite[:, :, -dy_top:, :]
+        if mask_for_composite.shape[-1] > qwidth:
+            mask_for_composite = mask_for_composite[:, :, :, :qwidth]
+        if mask_for_composite.shape[-2] > qheight:
+            mask_for_composite = mask_for_composite[:, :, :qheight, :]
+
+        x, y, width, height = qx1, qy1, qwidth, qheight
 
         if strict_mask_clipping:
             original_mask_crop = mask_tensor[0, 0, y : y + height, x : x + width]
@@ -602,71 +613,133 @@ class FluxKontextInpainter:
         )
 
         image_cropped_pil = image_pil.crop((x, y, x + width, y + height))
+        mask_crop_np = mask_np[y : y + height, x : x + width]
 
-        # Scale to preferred resolution for optimal Flux performance
-        image_scaled_for_inference_pil = self.flux_kontext_image_scale(
-            image_cropped_pil
-        )
-        inference_width, inference_height = image_scaled_for_inference_pil.size
+        cache_params = {
+            "bbox": (x, y, width, height),
+            "padding": padding,
+            "blur": blur_radius,
+        }
+        if strict_mask_clipping:
+            cache_params["strict_clip"] = True
+        if composite_clip_bbox is not None:
+            cache_params["clip_bbox"] = tuple(composite_clip_bbox)
+        if ocr_params:
+            cache_params.update(ocr_params)
 
-        # Ensure image is RGB for the model
-        if image_scaled_for_inference_pil.mode == "RGBA":
-            image_scaled_for_inference_pil = image_scaled_for_inference_pil.convert(
-                "RGB"
+        cache_key = None
+        cached_patch = None
+        if self.cache.should_use_inpaint_cache(seed):
+            # Downsample mask signature to reduce sensitivity to minor jitter
+            if mask_crop_np.size > 0:
+                sig_h = min(64, max(4, mask_crop_np.shape[0]))
+                sig_w = min(64, max(4, mask_crop_np.shape[1]))
+                mask_sig = (
+                    torch.from_numpy(mask_crop_np.astype(np.float32))
+                    .unsqueeze(0)
+                    .unsqueeze(0)
+                )
+                mask_sig = torch.nn.functional.interpolate(
+                    mask_sig, size=(sig_h, sig_w), mode="bilinear", align_corners=False
+                )
+                mask_sig_np = (mask_sig > 0.5).cpu().numpy().astype(np.uint8)[0, 0]
+            else:
+                mask_sig_np = mask_crop_np
+
+            cache_key = self.cache.get_inpaint_cache_key(
+                image_cropped_pil,
+                mask_sig_np,
+                seed,
+                self.num_inference_steps,
+                self.residual_diff_threshold,
+                self.guidance_scale,
+                self.prompt,
+                cache_params,
+            )
+            cached_patch = self.cache.get_inpainted_image(cache_key)
+            if cached_patch is not None:
+                log_message("  - Using cached inpainting patch", verbose=verbose)
+
+        patch_pil = cached_patch
+
+        if patch_pil is None:
+            self.load_models()
+
+            if self.pipeline is None:
+                log_message(
+                    "Warning: Flux Kontext pipeline not available. Skipping inpainting.",
+                    always_print=True,
+                )
+                return image_pil
+
+            image_scaled_for_inference_pil = self.flux_kontext_image_scale(
+                image_cropped_pil
+            )
+            inference_width, inference_height = image_scaled_for_inference_pil.size
+
+            if image_scaled_for_inference_pil.mode == "RGBA":
+                image_scaled_for_inference_pil = image_scaled_for_inference_pil.convert(
+                    "RGB"
+                )
+
+            log_message("  - Running inference...", verbose=verbose)
+
+            self.pipeline.text_encoder_2.to(self.DEVICE)
+
+            prompt_embeds, pooled_prompt_embeds, _ = self.pipeline.encode_prompt(
+                prompt=self.prompt,
+                prompt_2=None,
+                device=self.DEVICE,
             )
 
-        log_message("  - Running inference...", verbose=verbose)
+            self.pipeline.text_encoder_2.to("cpu")
+            gc.collect()
+            torch.cuda.empty_cache()
 
-        self.pipeline.text_encoder_2.to(self.DEVICE)
+            self.pipeline.transformer.to(self.DEVICE)
 
-        prompt_embeds, pooled_prompt_embeds, _ = self.pipeline.encode_prompt(
-            prompt=self.prompt,
-            prompt_2=None,
-            device=self.DEVICE,
-        )
+            required_area = inference_width * inference_height
+            with torch.inference_mode():
+                gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
+                out = self.pipeline(
+                    prompt_embeds=prompt_embeds,
+                    pooled_prompt_embeds=pooled_prompt_embeds,
+                    image=image_scaled_for_inference_pil,
+                    width=inference_width,
+                    height=inference_height,
+                    num_inference_steps=self.num_inference_steps,
+                    guidance_scale=self.guidance_scale,
+                    generator=gen,
+                    output_type="pt",
+                    max_area=required_area,
+                )
+                img = out.images[0]
+                torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
+                img.clamp_(0, 1)
+                generated_patch_pil = Image.fromarray(
+                    (
+                        img.mul(255)
+                        .round()
+                        .to(torch.uint8)
+                        .permute(1, 2, 0)
+                        .cpu()
+                        .numpy()
+                    )
+                )
 
-        # Offload text encoder to free VRAM before inference
-        self.pipeline.text_encoder_2.to("cpu")
-        gc.collect()
-        torch.cuda.empty_cache()
+            self.pipeline.transformer.to("cpu")
+            gc.collect()
+            torch.cuda.empty_cache()
 
-        self.pipeline.transformer.to(self.DEVICE)
-
-        required_area = inference_width * inference_height
-        with torch.inference_mode():
-            gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
-            out = self.pipeline(
-                prompt_embeds=prompt_embeds,
-                pooled_prompt_embeds=pooled_prompt_embeds,
-                image=image_scaled_for_inference_pil,
-                width=inference_width,
-                height=inference_height,
-                num_inference_steps=self.num_inference_steps,
-                guidance_scale=self.guidance_scale,
-                generator=gen,
-                output_type="pt",
-                max_area=required_area,
+            patch_pil = generated_patch_pil.resize(
+                (width, height), Image.Resampling.LANCZOS
             )
-            img = out.images[0]
-            torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
-            img.clamp_(0, 1)
-            generated_patch_pil = Image.fromarray(
-                (img.mul(255).round().to(torch.uint8).permute(1, 2, 0).cpu().numpy())
-            )
 
-        # Offload transformer to free VRAM
-        self.pipeline.transformer.to("cpu")
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        src_resized_for_composite_pil = generated_patch_pil.resize(
-            (width, height), Image.Resampling.LANCZOS
-        )
         dest_tensor = torch.from_numpy(
             np.asarray(image_pil, dtype=np.float32) / 255.0
         ).unsqueeze(0)
         src_tensor = torch.from_numpy(
-            np.asarray(src_resized_for_composite_pil, dtype=np.float32) / 255.0
+            np.asarray(patch_pil, dtype=np.float32) / 255.0
         ).unsqueeze(0)
 
         composited_tensor = self.image_composite_masked(
@@ -682,18 +755,11 @@ class FluxKontextInpainter:
             (composited_tensor[0].cpu().numpy() * 255).astype("uint8")
         )
 
-        # Cache the result if caching is enabled
-        if self.cache.should_use_inpaint_cache(seed):
-            cache_key = self.cache.get_inpaint_cache_key(
-                image_pil,
-                mask_np,
-                seed,
-                self.num_inference_steps,
-                self.residual_diff_threshold,
-                self.guidance_scale,
-                self.prompt,
-                ocr_params if ocr_params else None,
-            )
-            self.cache.set_inpainted_image(cache_key, composited_pil)
+        if (
+            self.cache.should_use_inpaint_cache(seed)
+            and cache_key is not None
+            and cached_patch is None
+        ):
+            self.cache.set_inpainted_image(cache_key, patch_pil)
 
         return composited_pil
