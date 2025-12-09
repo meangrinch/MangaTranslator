@@ -25,6 +25,7 @@ def process_outside_text(
     image_path: Union[str, Path],
     image_format: Optional[str],
     verbose: bool = False,
+    bubble_data: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[Image.Image, List[Dict[str, Any]]]:
     """
     Process outside text detection, inpainting, and prepare data for translation.
@@ -63,6 +64,7 @@ def process_outside_text(
             conjoined_confidence=config.detection.conjoined_confidence,
             verbose=verbose,
             image_override=pil_image,
+            existing_bubbles=bubble_data,
         )
 
         if not outside_text_results:
@@ -74,6 +76,38 @@ def process_outside_text(
             f"Found {len(outside_text_results)} outside text regions",
             verbose=verbose,
         )
+
+        img_w, img_h = pil_image.size
+
+        # Build a mask of all detected speech bubbles to prevent OSB inpainting overlap
+        total_bubble_mask = np.zeros((img_h, img_w), dtype=bool)
+        if bubble_data:
+            for bubble in bubble_data:
+                try:
+                    mask = bubble.get("sam_mask") if isinstance(bubble, dict) else None
+                    if mask is not None:
+                        mask_np = np.asarray(mask)
+                        if mask_np.ndim == 3:
+                            mask_np = mask_np[..., 0]
+                        mask_bool = mask_np > 0
+                        if mask_bool.shape[0] == img_h and mask_bool.shape[1] == img_w:
+                            total_bubble_mask |= mask_bool
+                            continue
+
+                    bbox = bubble.get("bbox") if isinstance(bubble, dict) else None
+                    if bbox and len(bbox) == 4:
+                        x0, y0, x1, y1 = [int(c) for c in bbox]
+                        x0 = max(0, min(img_w, x0))
+                        x1 = max(0, min(img_w, x1))
+                        y0 = max(0, min(img_h, y0))
+                        y1 = max(0, min(img_h, y1))
+                        if x1 > x0 and y1 > y0:
+                            total_bubble_mask[y0:y1, x0:x1] = True
+                except Exception as e:
+                    log_message(
+                        f"Warning: Failed to apply bubble mask for OSB exclusion: {e}",
+                        verbose=verbose,
+                    )
 
         mime_type = (
             "image/png"
@@ -157,12 +191,34 @@ def process_outside_text(
                         verbose=verbose,
                     )
                     combined_mask = group["combined_mask"]
+                    combined_mask = np.logical_and(
+                        combined_mask, np.logical_not(total_bubble_mask)
+                    )
+                    if not np.any(combined_mask):
+                        log_message(
+                            "Skipping outside text region after bubble masking (no remaining area)",
+                            verbose=verbose,
+                        )
+                        continue
                     region_seed = base_seed + i if base_seed > 0 else base_seed
+
+                    original_bbox_dict = group.get("original_bbox")
+                    composite_clip_bbox = None
+                    if original_bbox_dict:
+                        ox = int(original_bbox_dict.get("x", 0))
+                        oy = int(original_bbox_dict.get("y", 0))
+                        ow = int(original_bbox_dict.get("width", 0))
+                        oh = int(original_bbox_dict.get("height", 0))
+                        if ow > 0 and oh > 0:
+                            composite_clip_bbox = (ox, oy, ox + ow, oy + oh)
+
                     inpainted_image = inpainter.inpaint_mask(
                         current_image,
                         combined_mask,
                         seed=region_seed,
                         verbose=verbose,
+                        strict_mask_clipping=True,
+                        composite_clip_bbox=composite_clip_bbox,
                     )
 
                     # Save to disk if more regions remain to reduce memory usage

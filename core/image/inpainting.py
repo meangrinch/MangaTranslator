@@ -1,6 +1,6 @@
 import gc
 import math
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -477,6 +477,8 @@ class FluxKontextInpainter:
         seed: int = 1,
         verbose: bool = False,
         ocr_params: Optional[Dict] = None,
+        strict_mask_clipping: bool = False,
+        composite_clip_bbox: Optional[Tuple[int, int, int, int]] = None,
     ) -> Image.Image:
         """Inpaint a specific mask region in the image.
 
@@ -486,6 +488,10 @@ class FluxKontextInpainter:
             seed: Random seed for inference
             verbose: Whether to print verbose output
             ocr_params: Optional OCR parameters dict for cache key generation
+            strict_mask_clipping: When True, ensure compositing is limited to the
+                original mask extent (no bleed from padding/blur)
+            composite_clip_bbox: Optional (x1, y1, x2, y2) bbox to clip the final
+                composite mask to, in original image coordinates.
 
         Returns:
             PIL.Image: The inpainted image
@@ -562,6 +568,33 @@ class FluxKontextInpainter:
             transpose=False,
             verbose=verbose,
         )
+
+        if strict_mask_clipping:
+            original_mask_crop = mask_tensor[0, 0, y : y + height, x : x + width]
+            mask_for_composite = mask_for_composite * original_mask_crop
+
+        if composite_clip_bbox is not None:
+            clip_x1, clip_y1, clip_x2, clip_y2 = composite_clip_bbox
+
+            img_h, img_w = mask_np.shape
+            clip_x1 = max(0, min(img_w, clip_x1))
+            clip_x2 = max(0, min(img_w, clip_x2))
+            clip_y1 = max(0, min(img_h, clip_y1))
+            clip_y2 = max(0, min(img_h, clip_y2))
+
+            start_x = max(0, clip_x1 - x)
+            end_x = min(width, clip_x2 - x)
+            start_y = max(0, clip_y1 - y)
+            end_y = min(height, clip_y2 - y)
+
+            if end_x <= start_x or end_y <= start_y:
+                mask_for_composite = torch.zeros_like(mask_for_composite)
+            else:
+                clipped_mask = torch.zeros_like(mask_for_composite)
+                clipped_mask[:, start_y:end_y, start_x:end_x] = mask_for_composite[
+                    :, start_y:end_y, start_x:end_x
+                ]
+                mask_for_composite = clipped_mask
 
         log_message(
             f"  - Optimized bbox found at ({x}, {y}) with size {width}x{height}",

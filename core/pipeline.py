@@ -164,9 +164,35 @@ def translate_and_render(
 
     original_cv_image = pil_to_cv2(pil_image_processed)
 
-    # Process outside text detection and inpainting
+    # Detect speech bubbles first so OSB processing can respect bubble regions
+    log_message("Detecting speech bubbles...", verbose=verbose)
+    try:
+        bubble_data = detect_speech_bubbles(
+            image_path,
+            config.yolo_model_path,
+            config.detection.confidence,
+            verbose=verbose,
+            device=device,
+            use_sam2=config.detection.use_sam2,
+            conjoined_detection=config.detection.conjoined_detection,
+            conjoined_confidence=config.detection.conjoined_confidence,
+            image_override=pil_image_processed,
+            osb_enabled=config.outside_text.enabled,
+            osb_text_verification=config.detection.use_osb_text_verification,
+            osb_text_hf_token=config.outside_text.huggingface_token,
+        )
+    except Exception as e:
+        log_message(f"Error during detection: {e}", always_print=True)
+        bubble_data = []
+
+    # Process outside text detection and inpainting (bubble-aware)
     pil_image_processed, outside_text_data = process_outside_text(
-        pil_image_processed, config, image_path, image_format, verbose
+        pil_image_processed,
+        config,
+        image_path,
+        image_format,
+        verbose,
+        bubble_data=bubble_data,
     )
     original_cv_image = pil_to_cv2(pil_image_processed)
 
@@ -263,26 +289,6 @@ def translate_and_render(
 
     if cancellation_manager and cancellation_manager.is_cancelled():
         raise CancellationError("Process cancelled by user.")
-
-    log_message("Detecting speech bubbles...", verbose=verbose)
-    try:
-        bubble_data = detect_speech_bubbles(
-            image_path,
-            config.yolo_model_path,
-            config.detection.confidence,
-            verbose=verbose,
-            device=device,
-            use_sam2=config.detection.use_sam2,
-            conjoined_detection=config.detection.conjoined_detection,
-            conjoined_confidence=config.detection.conjoined_confidence,
-            image_override=pil_image_processed,
-            osb_enabled=config.outside_text.enabled,
-            osb_text_verification=config.detection.use_osb_text_verification,
-            osb_text_hf_token=config.outside_text.huggingface_token,
-        )
-    except Exception as e:
-        log_message(f"Error during detection: {e}", always_print=True)
-        bubble_data = []
 
     final_image_to_save = pil_image_processed
 

@@ -123,6 +123,7 @@ class OutsideTextDetector:
         conjoined_confidence: float = 0.35,
         verbose: bool = False,
         image_override: Optional[Image.Image] = None,
+        existing_bubbles: Optional[List] = None,
     ):
         """Detect non-dialogue text by subtracting YOLO speech bubbles from OCR results.
 
@@ -162,90 +163,132 @@ class OutsideTextDetector:
         except Exception as e:
             raise ImageProcessingError(f"Error loading image: {e}")
 
-        log_message("Running YOLO detection for speech bubbles...", verbose=verbose)
-
-        sb_model_path = (
-            str(self.manager.model_paths[ModelType.YOLO_SPEECH_BUBBLE])
-            if yolo_model_path is None
-            else yolo_model_path
-        )
-        sb_cache_key = self.cache.get_yolo_cache_key(
-            image_pil, sb_model_path, confidence
-        )
-        cached_sb = self.cache.get_yolo_detection(sb_cache_key)
-
-        if cached_sb is not None:
-            log_message("Using cached Speech Bubble detections", verbose=verbose)
-            yolo_results, yolo_boxes = cached_sb
-        else:
-            yolo_model = self.manager.load_yolo_speech_bubble(yolo_model_path)
-            yolo_results = yolo_model(
-                image_cv, conf=confidence, device=self.device, verbose=False
-            )[0]
-            yolo_boxes = (
-                yolo_results.boxes.xyxy
-                if yolo_results.boxes is not None
-                else torch.tensor([])
-            )
-            self.cache.set_yolo_detection(sb_cache_key, (yolo_results, yolo_boxes))
-
-        num_yolo_boxes = len(yolo_boxes) if yolo_boxes.nelement() > 0 else 0
-        log_message(f"YOLO detected {num_yolo_boxes} speech bubbles", verbose=verbose)
-
-        log_message(
-            "Running Secondary YOLO to catch missed bubbles...", verbose=verbose
-        )
-        text_free_boxes = []
-        try:
-            sec_model = self.manager.load_yolo_conjoined_bubble()
-            sec_results = sec_model(
-                image_cv, conf=conjoined_confidence, device=self.device, verbose=False
-            )[0]
-
-            sec_boxes = (
-                sec_results.boxes.xyxy
-                if sec_results.boxes is not None
-                else torch.tensor([])
-            )
-            sec_cls = (
-                sec_results.boxes.cls
-                if sec_results.boxes is not None
-                else torch.tensor([])
-            )
-
-            # Find text_bubble and text_free classes
-            tb_id = None
-            tf_id = None
-            if hasattr(sec_model, "names"):
-                for cid, cname in sec_model.names.items():
-                    if cname == "text_bubble":
-                        tb_id = cid
-                    elif cname == "text_free":
-                        tf_id = cid
-
-            if tf_id is not None and len(sec_boxes) > 0:
-                for i, cls_id in enumerate(sec_cls):
-                    if int(cls_id) == tf_id:
-                        text_free_boxes.append(sec_boxes[i].detach().cpu().numpy())
-
-            if tb_id is not None and len(sec_boxes) > 0:
-                boxes_to_add = []
-                for i, cls_id in enumerate(sec_cls):
-                    if int(cls_id) == tb_id:
-                        boxes_to_add.append(sec_boxes[i])
-
-                if boxes_to_add:
+        provided_bubble_boxes = None
+        if existing_bubbles is not None:
+            try:
+                provided_bubble_boxes = []
+                for b in existing_bubbles:
+                    bbox = b.get("bbox") if isinstance(b, dict) else b
+                    if bbox is None or len(bbox) != 4:
+                        continue
+                    x0, y0, x1, y1 = bbox
+                    provided_bubble_boxes.append(
+                        [float(x0), float(y0), float(x1), float(y1)]
+                    )
+                if provided_bubble_boxes:
                     log_message(
-                        f"Secondary YOLO found {len(boxes_to_add)} potential bubbles",
+                        f"Using {len(provided_bubble_boxes)} provided bubble boxes for OSB filtering",
                         verbose=verbose,
                     )
-                    boxes_to_add_tensor = torch.stack(boxes_to_add)
-                    if yolo_boxes.nelement() > 0:
-                        yolo_boxes = torch.cat((yolo_boxes, boxes_to_add_tensor), dim=0)
-                    else:
-                        yolo_boxes = boxes_to_add_tensor
-        except Exception as e:
-            log_message(f"Secondary YOLO failed: {e}", verbose=verbose)
+            except Exception as e:
+                log_message(
+                    f"Warning: Failed to parse provided bubbles: {e}. Falling back to YOLO.",
+                    always_print=True,
+                )
+                provided_bubble_boxes = None
+
+        text_free_boxes = []
+
+        if provided_bubble_boxes:
+            yolo_boxes = torch.tensor(
+                provided_bubble_boxes, device=self.device, dtype=torch.float32
+            )
+            num_yolo_boxes = len(yolo_boxes)
+            log_message(
+                f"Skipping YOLO; using provided bubbles ({num_yolo_boxes})",
+                verbose=verbose,
+            )
+        else:
+            log_message("Running YOLO detection for speech bubbles...", verbose=verbose)
+
+            sb_model_path = (
+                str(self.manager.model_paths[ModelType.YOLO_SPEECH_BUBBLE])
+                if yolo_model_path is None
+                else yolo_model_path
+            )
+            sb_cache_key = self.cache.get_yolo_cache_key(
+                image_pil, sb_model_path, confidence
+            )
+            cached_sb = self.cache.get_yolo_detection(sb_cache_key)
+
+            if cached_sb is not None:
+                log_message("Using cached Speech Bubble detections", verbose=verbose)
+                yolo_results, yolo_boxes = cached_sb
+            else:
+                yolo_model = self.manager.load_yolo_speech_bubble(yolo_model_path)
+                yolo_results = yolo_model(
+                    image_cv, conf=confidence, device=self.device, verbose=False
+                )[0]
+                yolo_boxes = (
+                    yolo_results.boxes.xyxy
+                    if yolo_results.boxes is not None
+                    else torch.tensor([])
+                )
+                self.cache.set_yolo_detection(sb_cache_key, (yolo_results, yolo_boxes))
+
+            num_yolo_boxes = len(yolo_boxes) if yolo_boxes.nelement() > 0 else 0
+            log_message(
+                f"YOLO detected {num_yolo_boxes} speech bubbles", verbose=verbose
+            )
+
+            log_message(
+                "Running Secondary YOLO to catch missed bubbles...", verbose=verbose
+            )
+            try:
+                sec_model = self.manager.load_yolo_conjoined_bubble()
+                sec_results = sec_model(
+                    image_cv,
+                    conf=conjoined_confidence,
+                    device=self.device,
+                    verbose=False,
+                )[0]
+
+                sec_boxes = (
+                    sec_results.boxes.xyxy
+                    if sec_results.boxes is not None
+                    else torch.tensor([])
+                )
+                sec_cls = (
+                    sec_results.boxes.cls
+                    if sec_results.boxes is not None
+                    else torch.tensor([])
+                )
+
+                # Find text_bubble and text_free classes
+                tb_id = None
+                tf_id = None
+                if hasattr(sec_model, "names"):
+                    for cid, cname in sec_model.names.items():
+                        if cname == "text_bubble":
+                            tb_id = cid
+                        elif cname == "text_free":
+                            tf_id = cid
+
+                if tf_id is not None and len(sec_boxes) > 0:
+                    for i, cls_id in enumerate(sec_cls):
+                        if int(cls_id) == tf_id:
+                            text_free_boxes.append(sec_boxes[i].detach().cpu().numpy())
+
+                if tb_id is not None and len(sec_boxes) > 0:
+                    boxes_to_add = []
+                    for i, cls_id in enumerate(sec_cls):
+                        if int(cls_id) == tb_id:
+                            boxes_to_add.append(sec_boxes[i])
+
+                    if boxes_to_add:
+                        log_message(
+                            f"Secondary YOLO found {len(boxes_to_add)} potential bubbles",
+                            verbose=verbose,
+                        )
+                        boxes_to_add_tensor = torch.stack(boxes_to_add)
+                        if yolo_boxes.nelement() > 0:
+                            yolo_boxes = torch.cat(
+                                (yolo_boxes, boxes_to_add_tensor), dim=0
+                            )
+                        else:
+                            yolo_boxes = boxes_to_add_tensor
+            except Exception as e:
+                log_message(f"Secondary YOLO failed: {e}", verbose=verbose)
 
         log_message("Running YOLO OSB Text...", always_print=True)
 
@@ -448,12 +491,22 @@ class OutsideTextDetector:
                         "height": int(y1 - y0),
                     }
 
+                    raw_box = [int(c) for c in result[0]]
+                    raw_x0, raw_y0, raw_x1, raw_y1 = raw_box
+                    original_bbox = {
+                        "x": raw_x0,
+                        "y": raw_y0,
+                        "width": raw_x1 - raw_x0,
+                        "height": raw_y1 - raw_y0,
+                    }
+
                     _, conf = result
 
                     groups.append(
                         {
                             "combined_mask": mask,
                             "bbox": bbox,
+                            "original_bbox": original_bbox,
                             "individual_masks": [mask],
                             "mask_indices": [i],
                             "confidence": conf,
@@ -461,7 +514,11 @@ class OutsideTextDetector:
                     )
                 continue
 
-            for i, (box, result) in enumerate(zip(group_boxes, group_results)):
+            raw_boxes = [[int(c) for c in res[0]] for res in group_results]
+
+            for i, (box, result, raw_box) in enumerate(
+                zip(group_boxes, group_results, raw_boxes)
+            ):
                 x0, y0, x1, y1 = box
                 mask = np.zeros((img_h, img_w), dtype=bool)
                 mask[y0:y1, x0:x1] = True
@@ -473,6 +530,11 @@ class OutsideTextDetector:
                 _, conf = result
                 avg_confidence += conf
 
+            raw_min_x = min(box[0] for box in raw_boxes)
+            raw_min_y = min(box[1] for box in raw_boxes)
+            raw_max_x = max(box[2] for box in raw_boxes)
+            raw_max_y = max(box[3] for box in raw_boxes)
+
             bbox = {
                 "x": int(min_x),
                 "y": int(min_y),
@@ -480,10 +542,18 @@ class OutsideTextDetector:
                 "height": int(max_y - min_y),
             }
 
+            original_bbox = {
+                "x": int(raw_min_x),
+                "y": int(raw_min_y),
+                "width": int(raw_max_x - raw_min_x),
+                "height": int(raw_max_y - raw_min_y),
+            }
+
             groups.append(
                 {
                     "combined_mask": combined_mask,
                     "bbox": bbox,
+                    "original_bbox": original_bbox,
                     "individual_masks": individual_masks,
                     "mask_indices": mask_indices,
                     "confidence": avg_confidence / len(group_results),
