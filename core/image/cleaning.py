@@ -282,10 +282,10 @@ def process_single_bubble(
 
     except Exception as e:
         log_message(
-            f"Failed to process {'SAM' if is_sam else 'YOLO'} mask for {detection_bbox}: {e}",
+            f"Failed to process {'SAM' if is_sam else 'YOLO'} mask for {detection_bbox}",
             always_print=True,
         )
-        raise CleaningError("Failed to process bubble mask")
+        raise CleaningError("Failed to process bubble mask") from e
 
 
 def clean_speech_bubbles(

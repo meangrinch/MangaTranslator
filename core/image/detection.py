@@ -809,10 +809,6 @@ def detect_panels(
             )
 
         log_message(
-            f"Detected {len(panel_boxes)} panels",
-            always_print=True if len(panel_boxes) > 0 else False,
-        )
-        log_message(
             f"YOLO panel detection found {len(panel_boxes)} panels", verbose=verbose
         )
         return panel_boxes
