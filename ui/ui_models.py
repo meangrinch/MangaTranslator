@@ -319,7 +319,7 @@ class UIConfigState:
                 seed=data.get("outside_text_seed", 1),
                 huggingface_token=data.get("outside_text_huggingface_token", ""),
                 flux_num_inference_steps=data.get(
-                    "outside_text_flux_num_inference_steps", 10
+                    "outside_text_flux_num_inference_steps", 8
                 ),
                 flux_residual_diff_threshold=data.get(
                     "outside_text_flux_residual_diff_threshold", 0.15

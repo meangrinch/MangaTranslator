@@ -1172,7 +1172,7 @@ def create_layout(
                                     1,
                                     30,
                                     value=saved_settings.get(
-                                        "outside_text_flux_num_inference_steps", 10
+                                        "outside_text_flux_num_inference_steps", 8
                                     ),
                                     step=1,
                                     label="Steps",

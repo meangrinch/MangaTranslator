@@ -110,7 +110,7 @@ class OutsideTextConfig:
     enabled: bool = False
     seed: int = 1  # -1 = random
     huggingface_token: str = ""  # Required for Flux Kontext model downloads
-    flux_num_inference_steps: int = 10
+    flux_num_inference_steps: int = 8
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6
     osb_font_name: Optional[str] = None  # None = use main font as fallback

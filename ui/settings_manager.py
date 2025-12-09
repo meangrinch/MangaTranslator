@@ -182,7 +182,7 @@ DEFAULT_SETTINGS = {
     "outside_text_enabled": False,
     "outside_text_seed": 1,
     "outside_text_huggingface_token": "",
-    "outside_text_flux_num_inference_steps": 10,
+    "outside_text_flux_num_inference_steps": 8,
     "outside_text_flux_residual_diff_threshold": 0.15,
     "outside_text_osb_confidence": 0.6,
     "outside_text_bbox_expansion_percent": 0.1,

@@ -490,7 +490,7 @@ def main():
     parser.add_argument(
         "--osb-flux-steps",
         type=int,
-        default=12,
+        default=8,
         help=(
             "Number of denoising steps for Flux Kontext (1-30). "
             "15 is best for quality (diminishing returns beyond); "
