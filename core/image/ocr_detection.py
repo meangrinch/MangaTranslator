@@ -140,7 +140,6 @@ class OutsideTextDetector:
         if image_override is None and not os.path.exists(image_path):
             raise FileNotFoundError(f"Error: The file '{image_path}' was not found.")
 
-        log_message(f"Using device: {self.device}", verbose=verbose)
         try:
             if image_override is not None:
                 image_pil = (

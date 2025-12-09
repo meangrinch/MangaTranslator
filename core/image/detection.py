@@ -307,7 +307,6 @@ def detect_speech_bubbles(
         if device is not None
         else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     )
-    log_message(f"Using device: {_device}", verbose=verbose)
     try:
         if image_override is not None:
             image_pil = (
@@ -741,7 +740,6 @@ def detect_panels(
         if device is not None
         else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     )
-    log_message(f"Using device: {_device}", verbose=verbose)
 
     try:
         if image_override is not None:
