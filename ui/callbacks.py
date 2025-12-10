@@ -1379,6 +1379,7 @@ def handle_ocr_method_change(
     batch_input_language: str,
     batch_original_language_state: str,
     provider: str,
+    current_model: Optional[str],
     openai_compatible_url: str,
     openai_compatible_api_key: Optional[str],
 ):
@@ -1431,7 +1432,7 @@ def handle_ocr_method_change(
         # Trigger model list refresh for providers with dynamic model lists
         if provider == "OpenRouter":
             model_update = utils.fetch_and_update_openrouter_models(
-                ocr_method="manga-ocr"
+                ocr_method="manga-ocr", current_model=current_model
             )
             updates.append(model_update)
         elif provider == "OpenAI-Compatible":
@@ -1492,7 +1493,9 @@ def handle_ocr_method_change(
 
         # Trigger model list refresh for providers with dynamic or filtered model lists
         if provider == "OpenRouter":
-            model_update = utils.fetch_and_update_openrouter_models(ocr_method="LLM")
+            model_update = utils.fetch_and_update_openrouter_models(
+                ocr_method="LLM", current_model=current_model
+            )
             updates.append(model_update)
         elif provider == "OpenAI-Compatible":
             model_update = utils.fetch_and_update_compatible_models(

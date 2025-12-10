@@ -2103,6 +2103,7 @@ def create_layout(
                 batch_input_language,
                 batch_original_language_state,
                 provider_selector,
+                config_model_name,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,
             ],

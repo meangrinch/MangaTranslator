@@ -946,7 +946,9 @@ def switch_settings_view(
     return updates
 
 
-def fetch_and_update_openrouter_models(ocr_method: str = "LLM"):
+def fetch_and_update_openrouter_models(
+    ocr_method: str = "LLM", current_model: Optional[str] = None
+):
     """Fetches models from OpenRouter API and updates dropdown.
 
     Args:
@@ -1015,10 +1017,13 @@ def fetch_and_update_openrouter_models(ocr_method: str = "LLM"):
         "provider_models", DEFAULT_SETTINGS["provider_models"]
     )
     remembered_or_model = provider_models_dict.get("OpenRouter")
-    selected_or_model = (
-        remembered_or_model
-        if remembered_or_model in filtered_models
-        else (filtered_models[0] if filtered_models else None)
+
+    preferred_model = current_model if current_model in filtered_models else None
+    if preferred_model is None and remembered_or_model in filtered_models:
+        preferred_model = remembered_or_model
+
+    selected_or_model = preferred_model or (
+        filtered_models[0] if filtered_models else None
     )
     return gr.update(choices=filtered_models, value=selected_or_model)
 
