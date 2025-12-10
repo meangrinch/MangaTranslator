@@ -429,6 +429,14 @@ def create_layout(
                                 label="Bubble Confidence Threshold",
                                 info="Lower values detect more bubbles, but potentially include false positives.",
                             )
+                            conjoined_detection_checkbox = gr.Checkbox(
+                                value=saved_settings.get("conjoined_detection", True),
+                                label="Enable Conjoined Bubble Detection",
+                                info=(
+                                    "Uses a secondary YOLO model to detect and split "
+                                    "conjoined speech bubbles into separate bubbles."
+                                ),
+                            )
                             conjoined_confidence = gr.Slider(
                                 0.1,
                                 1.0,
@@ -436,6 +444,17 @@ def create_layout(
                                 step=0.05,
                                 label="Conjoined Bubble Confidence Threshold",
                                 info="Increase to filter out false positives, but may miss some conjoined bubbles.",
+                                interactive=saved_settings.get(
+                                    "conjoined_detection", True
+                                ),
+                            )
+                            use_panel_sorting_checkbox = gr.Checkbox(
+                                value=saved_settings.get("use_panel_sorting", True),
+                                label="Use Panel-aware Sorting",
+                                info=(
+                                    "Use a panel detection YOLO model to group and sort speech bubbles "
+                                    "within each panel for better reading order accuracy."
+                                ),
                             )
                             panel_confidence = gr.Slider(
                                 0.05,
@@ -451,14 +470,9 @@ def create_layout(
                             use_sam2_checkbox = gr.Checkbox(
                                 value=saved_settings.get("use_sam2", True),
                                 label="Use SAM 2.1 for Segmentation",
-                                info="Enhances bubble segmentation quality, especially for oddly shaped bubbles.",
-                            )
-                            conjoined_detection_checkbox = gr.Checkbox(
-                                value=saved_settings.get("conjoined_detection", True),
-                                label="Enable Conjoined Bubble Detection",
                                 info=(
-                                    "Uses a secondary YOLO model to detect and split "
-                                    "conjoined speech bubbles into separate bubbles."
+                                    "Greatly enhances bubble segmentation quality, especially for oddly shaped bubbles."
+                                    " Uses YOLO segmentation if disabled."
                                 ),
                             )
                             osb_text_verification_checkbox = gr.Checkbox(
@@ -470,14 +484,6 @@ def create_layout(
                                     "Use the OSB text YOLO model to confirm bubble detections fully cover text. "
                                     "Requires a Hugging Face token."
                                     "(hf_token is shared with the 'OSB Text' section)."
-                                ),
-                            )
-                            use_panel_sorting_checkbox = gr.Checkbox(
-                                value=saved_settings.get("use_panel_sorting", True),
-                                label="Use Panel-aware Sorting",
-                                info=(
-                                    "Use a panel detection YOLO model to group and sort speech bubbles "
-                                    "within each panel for better reading order accuracy."
                                 ),
                             )
                             config_reading_direction = gr.Radio(
@@ -1160,7 +1166,7 @@ def create_layout(
                                     value=saved_settings.get(
                                         "outside_text_bbox_expansion_percent", 0.1
                                     ),
-                                    step=0.01,
+                                    step=0.05,
                                     label="Bounding Box Expansion",
                                     info=(
                                         "Percentage to expand bounding boxes for text detection. "
@@ -1298,7 +1304,7 @@ def create_layout(
                                     label="Line Spacing Multiplier",
                                     info=(
                                         "Adjusts the vertical space between lines of text (1.0 = standard). "
-                                        "Decrease for tighter vertically stacked text (e.g., 0.9)."
+                                        "Also affects vertically stacked text. Decrease for tighter text (e.g., 0.9)."
                                     ),
                                 )
                                 outside_text_osb_use_subpixel_rendering = gr.Checkbox(
@@ -2038,7 +2044,7 @@ def create_layout(
         conjoined_detection_checkbox.change(
             fn=callbacks.handle_conjoined_detection_change,
             inputs=conjoined_detection_checkbox,
-            outputs=None,
+            outputs=conjoined_confidence,
             queue=False,
         )
 

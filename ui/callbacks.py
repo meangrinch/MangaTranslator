@@ -1360,7 +1360,7 @@ def handle_conjoined_detection_change(_conjoined_detection: bool):
 
     cache = get_cache()
     cache.clear_sam_cache()
-    return None
+    return gr.update(interactive=_conjoined_detection)
 
 
 def handle_confidence_threshold_change(_confidence: float):
