@@ -106,7 +106,7 @@ def call_openai_endpoint(
             effort = generation_config.get("reasoning_effort")
             if effort:
                 if is_gpt5_1 and effort == "none":
-                    payload["reasoning"] = {"effort": "none"}
+                    payload["reasoning_effort"] = "none"
                 elif effort != "none":
                     if is_gpt5_1 and effort == "minimal":
                         effort_to_send = "none"  # Fallback to "none" for GPT-5.1
@@ -114,7 +114,7 @@ def call_openai_endpoint(
                         effort_to_send = "low"
                     else:
                         effort_to_send = effort
-                    payload["reasoning"] = {"effort": effort_to_send}
+                    payload["reasoning_effort"] = effort_to_send
 
         if is_gpt5_series:
             payload["text"] = {"verbosity": "low"}

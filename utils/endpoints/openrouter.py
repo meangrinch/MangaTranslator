@@ -208,10 +208,10 @@ def call_openrouter_endpoint(
                 if reasoning_effort in ["high", "low"]:
                     reasoning_config["effort"] = reasoning_effort
 
-    if is_gemini_3 and generation_config.get("reasoning_effort"):
-        reasoning_effort_gemini3 = generation_config.get("reasoning_effort")
-        if reasoning_effort_gemini3 in ["low", "high"]:
-            reasoning_config["effort"] = reasoning_effort_gemini3
+    if is_google_model and generation_config.get("reasoning_effort"):
+        r_effort = generation_config.get("reasoning_effort")
+        if r_effort != "auto" or is_gemini_3:
+            reasoning_config["effort"] = r_effort
 
     # Exception: Google models with auto (enabled=True) don't need exclude set
     if reasoning_config:
