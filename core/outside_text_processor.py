@@ -73,11 +73,6 @@ def process_outside_text(
             outside_detector.unload_models()
             return pil_image, []
 
-        log_message(
-            f"Found {len(outside_text_results)} outside text regions",
-            verbose=verbose,
-        )
-
         img_w, img_h = pil_image.size
 
         # Filter out probable page numbers
