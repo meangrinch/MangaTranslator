@@ -373,9 +373,6 @@ def detect_speech_bubbles(
     log_message(
         f"Detected {len(primary_boxes)} speech bubbles with YOLO", always_print=True
     )
-    log_message(
-        f"Primary YOLO found {len(primary_boxes)} speech bubbles", verbose=verbose
-    )
 
     secondary_boxes = torch.tensor([])
     text_free_boxes = []
@@ -779,7 +776,6 @@ def detect_panels(
     model_manager = get_model_manager()
     try:
         panel_model = model_manager.load_yolo_panel(verbose=verbose)
-        log_message("Loaded YOLO panel detection model", verbose=verbose)
     except Exception as e:
         raise ModelError(f"Error loading panel model: {e}")
 
@@ -820,9 +816,6 @@ def detect_panels(
                 )
             )
 
-        log_message(
-            f"YOLO panel detection found {len(panel_boxes)} panels", verbose=verbose
-        )
         return panel_boxes
 
     except Exception as e:
