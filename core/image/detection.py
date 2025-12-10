@@ -172,11 +172,25 @@ def _categorize_detections(primary_boxes, secondary_boxes, ioa_threshold=IOA_THR
             conjoined_indices.append((i, contained_indices))
             processed_secondary_indices.update(contained_indices)
 
-    primary_simple_indices = [
-        i
-        for i in range(len(primary_boxes))
-        if i not in [c[0] for c in conjoined_indices]
-    ]
+    primary_simple_indices = []
+    conjoined_primary_indices = {c[0] for c in conjoined_indices}
+
+    for i in range(len(primary_boxes)):
+        if i in conjoined_primary_indices:
+            continue
+
+        # Check for duplication against processed secondary bubbles
+        is_duplicate = False
+        p_box_list = primary_boxes[i].tolist()
+
+        for s_idx in processed_secondary_indices:
+            s_box_list = secondary_boxes[s_idx].tolist()
+            if _calculate_ioa(s_box_list, p_box_list) > ioa_threshold:
+                is_duplicate = True
+                break
+
+        if not is_duplicate:
+            primary_simple_indices.append(i)
 
     return conjoined_indices, primary_simple_indices
 
