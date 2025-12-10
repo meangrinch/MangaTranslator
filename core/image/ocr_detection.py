@@ -376,6 +376,53 @@ class OutsideTextDetector:
             )
             final_results = filtered_results
 
+        # Filter out likely page numbers (small text at very bottom of image)
+        img_height = image_cv.shape[0]
+        img_width = image_cv.shape[1]
+        page_number_filtered = []
+        page_numbers_removed = 0
+        
+        for ocr_result in final_results:
+            bbox, conf = ocr_result
+            x1, y1, x2, y2 = bbox
+            
+            # Calculate bbox properties
+            bbox_height = y2 - y1
+            bbox_width = x2 - x1
+            bbox_bottom = y2
+            bbox_center_x = (x1 + x2) / 2
+            
+            # Check if bbox is in bottom 8% of image
+            is_at_bottom = bbox_bottom > img_height * 0.92
+            
+            # Check if bbox is small (less than 3% of image area)
+            bbox_area = bbox_height * bbox_width
+            img_area = img_height * img_width
+            is_small = bbox_area < img_area * 0.03
+            
+            # Check if bbox is near corners or center-bottom (typical page number positions)
+            is_near_left = bbox_center_x < img_width * 0.15
+            is_near_right = bbox_center_x > img_width * 0.85
+            is_near_center = img_width * 0.4 < bbox_center_x < img_width * 0.6
+            is_typical_position = is_near_left or is_near_right or is_near_center
+            
+            # Filter out if at bottom, small, and in typical page number position
+            if is_at_bottom and is_small and is_typical_position:
+                page_numbers_removed += 1
+                log_message(
+                    f"Filtered out likely page number at bbox {bbox} (bottom={bbox_bottom/img_height:.2%}, area={bbox_area/img_area:.3%})",
+                    verbose=verbose,
+                )
+            else:
+                page_number_filtered.append(ocr_result)
+        
+        if page_numbers_removed > 0:
+            log_message(
+                f"Filtered out {page_numbers_removed} likely page number(s)",
+                always_print=True,
+            )
+        final_results = page_number_filtered
+
         log_message(
             f"Found {len(final_results)} outside text regions", always_print=True
         )
