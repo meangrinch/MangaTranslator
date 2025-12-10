@@ -1443,7 +1443,7 @@ def handle_ocr_method_change(
             updates.append(model_update)
         elif provider == "OpenAI-Compatible":
             model_update = utils.fetch_and_update_compatible_models(
-                openai_compatible_url, openai_compatible_api_key
+                openai_compatible_url, openai_compatible_api_key, current_model
             )
             updates.append(model_update)
         elif provider == "Z.ai":
@@ -1505,7 +1505,7 @@ def handle_ocr_method_change(
             updates.append(model_update)
         elif provider == "OpenAI-Compatible":
             model_update = utils.fetch_and_update_compatible_models(
-                openai_compatible_url, openai_compatible_api_key
+                openai_compatible_url, openai_compatible_api_key, current_model
             )
             updates.append(model_update)
         elif provider == "Z.ai":

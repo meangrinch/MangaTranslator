@@ -1028,8 +1028,16 @@ def fetch_and_update_openrouter_models(
     return gr.update(choices=filtered_models, value=selected_or_model)
 
 
-def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
-    """Fetches models from a generic OpenAI-Compatible endpoint and updates dropdown."""
+def fetch_and_update_compatible_models(
+    url: str, api_key: Optional[str], current_model: Optional[str] = None
+):
+    """Fetches models from a generic OpenAI-Compatible endpoint and updates dropdown.
+
+    Args:
+        url: Base URL of the OpenAI-Compatible endpoint.
+        api_key: Optional API key for the endpoint.
+        current_model: Currently selected model in the dropdown to preserve when available.
+    """
     global COMPATIBLE_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
     if not url or not url.startswith(("http://", "https://")):
@@ -1050,9 +1058,13 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
         )
         remembered_comp_model = provider_models_dict.get("OpenAI-Compatible")
         selected_comp_model = (
-            remembered_comp_model
-            if remembered_comp_model in cached_models
-            else (cached_models[0] if cached_models else None)
+            current_model
+            if current_model in cached_models
+            else (
+                remembered_comp_model
+                if remembered_comp_model in cached_models
+                else (cached_models[0] if cached_models else None)
+            )
         )
         return gr.update(choices=cached_models, value=selected_comp_model)
 
@@ -1103,9 +1115,13 @@ def fetch_and_update_compatible_models(url: str, api_key: Optional[str]):
         )
         remembered_comp_model = provider_models_dict.get("OpenAI-Compatible")
         selected_comp_model = (
-            remembered_comp_model
-            if remembered_comp_model in fetched_models
-            else (fetched_models[0] if fetched_models else None)
+            current_model
+            if current_model in fetched_models
+            else (
+                remembered_comp_model
+                if remembered_comp_model in fetched_models
+                else (fetched_models[0] if fetched_models else None)
+            )
         )
         return gr.update(choices=fetched_models, value=selected_comp_model)
 
