@@ -609,6 +609,20 @@ def translate_and_render(
                                 debug=verbose,
                             )
                         except TranslationError as e:
+                            error_str = str(e).lower()
+                            critical_tokens = (
+                                "429",
+                                "rate limit",
+                                "rate-limit",
+                                "auth",
+                                "unauthorized",
+                                "forbidden",
+                                "payment",
+                                "quota",
+                            )
+                            if any(token in error_str for token in critical_tokens):
+                                raise
+
                             log_message(f"Translation failed: {e}", always_print=True)
                             translated_texts = [f"[Translation Error: {e}]"] * len(
                                 bubble_images_b64
@@ -621,6 +635,27 @@ def translate_and_render(
                                 "[Translation Error: API call raised exception]"
                                 for _ in sorted_bubble_data
                             ]
+
+                        valid_translations = [
+                            t
+                            for t in translated_texts
+                            if t
+                            and not t.startswith("[Translation Error")
+                            and not t.startswith("API Error")
+                            and t.strip()
+                            not in {
+                                "[OCR FAILED]",
+                                "[Empty response / no content]",
+                                f"[{config.translation.provider}: API call failed/blocked]",
+                                f"[{config.translation.provider}: OCR call failed/blocked]",
+                                f"[{config.translation.provider}: Failed to parse response]",
+                            }
+                        ]
+
+                        if bubble_images_b64 and not valid_translations:
+                            raise TranslationError(
+                                "Total translation failure: All bubbles failed."
+                            )
 
                 # Render Translations
                 bubble_render_info_map = {
