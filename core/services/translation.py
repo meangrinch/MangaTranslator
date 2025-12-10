@@ -918,6 +918,15 @@ def _perform_manga_ocr(
     """
     log_message("Using manga-ocr for text extraction", verbose=debug)
 
+    cache = get_cache()
+    cache_key = cache.get_manga_ocr_cache_key(images_b64, total_elements)
+    cached_ocr = cache.get_manga_ocr_result(cache_key)
+    if cached_ocr is not None:
+        if len(cached_ocr) == total_elements:
+            log_message("Using cached manga-ocr results", verbose=debug)
+            return cached_ocr
+        log_message("Discarding manga-ocr cache due to length mismatch", verbose=debug)
+
     pil_images = _prepare_images_for_ocr(images_b64, verbose=debug)
     extracted_texts = extract_text_with_manga_ocr(pil_images, verbose=debug)
 
@@ -966,12 +975,16 @@ def _perform_manga_ocr(
 
     if not extracted_texts:
         log_message("manga-ocr returned empty results", verbose=debug)
-        return ["[OCR FAILED]"] * total_elements
+        failure_results = ["[OCR FAILED]"] * total_elements
+        cache.set_manga_ocr_result(cache_key, failure_results, debug)
+        return failure_results
 
     if _check_ocr_failure(extracted_texts):
         log_message("manga-ocr returned only failures", verbose=debug)
+        cache.set_manga_ocr_result(cache_key, extracted_texts, debug)
         return extracted_texts
 
+    cache.set_manga_ocr_result(cache_key, extracted_texts, debug)
     return extracted_texts
 
 

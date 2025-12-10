@@ -1,6 +1,6 @@
 import hashlib
 import pickle
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from PIL import Image
@@ -18,6 +18,7 @@ class UnifiedCache:
         self._yolo_cache = LRUCache(max_size=1)
         self._sam_cache = LRUCache(max_size=1)
         self._translation_cache = LRUCache(max_size=1)
+        self._manga_ocr_cache = LRUCache(max_size=20)
         self._upscale_cache = LRUCache(max_size=20)
         self._inpaint_cache = LRUCache(max_size=20)
         self._current_image_hash = None
@@ -287,6 +288,40 @@ class UnifiedCache:
             verbose=verbose,
         )
 
+    def get_manga_ocr_cache_key(
+        self, images_b64: List[str], total_elements: int
+    ) -> Optional[str]:
+        """Compute cache key for manga-ocr results.
+
+        Args:
+            images_b64: List of base64-encoded cropped images.
+            total_elements: Expected number of OCR outputs.
+
+        Returns:
+            str: Cache key (always deterministic)
+        """
+        images_hash = hashlib.sha256("".join(images_b64).encode()).hexdigest()[:16]
+        key_string = f"mocr_{images_hash}_n{total_elements}"
+        return hashlib.sha256(key_string.encode()).hexdigest()
+
+    def get_manga_ocr_result(self, cache_key: Optional[str]) -> Optional[list]:
+        """Get cached manga-ocr results."""
+        if cache_key is None:
+            return None
+        return self._manga_ocr_cache.get(cache_key)
+
+    def set_manga_ocr_result(
+        self, cache_key: Optional[str], results: list, verbose: bool = False
+    ) -> None:
+        """Cache manga-ocr results (including failure markers)."""
+        if cache_key is None:
+            return
+        self._manga_ocr_cache.put(cache_key, results)
+        log_message(
+            f"  - Cached manga-ocr result (cache size: {len(self._manga_ocr_cache.cache)})",
+            verbose=verbose,
+        )
+
     def get_upscale_cache_key(
         self, image: Image.Image, factor: float, model_type: str = "model"
     ) -> str:
@@ -469,6 +504,11 @@ class UnifiedCache:
         self._translation_cache.cache.clear()
         log_message("Translation cache cleared", verbose=verbose)
 
+    def clear_manga_ocr_cache(self, verbose: bool = False) -> None:
+        """Clear manga-ocr cache."""
+        self._manga_ocr_cache.cache.clear()
+        log_message("manga-ocr cache cleared", verbose=verbose)
+
     def clear_upscale_cache(self, verbose: bool = False) -> None:
         """Clear upscaling cache."""
         self._upscale_cache.cache.clear()
@@ -484,6 +524,7 @@ class UnifiedCache:
         self.clear_yolo_cache(verbose=False)
         self.clear_sam_cache(verbose=False)
         self.clear_translation_cache(verbose=False)
+        self.clear_manga_ocr_cache(verbose=False)
         self.clear_upscale_cache(verbose=False)
         self.clear_inpaint_cache(verbose=False)
         log_message("All caches cleared", always_print=True)
@@ -522,6 +563,7 @@ class UnifiedCache:
             "yolo": len(self._yolo_cache.cache),
             "sam": len(self._sam_cache.cache),
             "translation": len(self._translation_cache.cache),
+            "manga_ocr": len(self._manga_ocr_cache.cache),
             "upscale": len(self._upscale_cache.cache),
             "inpaint": len(self._inpaint_cache.cache),
         }

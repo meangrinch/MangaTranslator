@@ -1255,7 +1255,9 @@ def handle_provider_change(provider: str, current_temp: float, ocr_method: str =
     """Handles changes in the provider selector."""
     from core.caching import get_cache
 
-    get_cache().clear_translation_cache()
+    cache = get_cache()
+    cache.clear_translation_cache()
+    cache.clear_manga_ocr_cache()
     return utils.update_translation_ui(provider, current_temp, ocr_method)
 
 
@@ -1293,7 +1295,9 @@ def handle_model_change(provider: str, model_name: Optional[str], current_temp: 
     """Handles changes in the model name dropdown."""
     from core.caching import get_cache
 
-    get_cache().clear_translation_cache()
+    cache = get_cache()
+    cache.clear_translation_cache()
+    cache.clear_manga_ocr_cache()
     return utils.update_params_for_model(provider, model_name, current_temp)
 
 
@@ -1390,7 +1394,9 @@ def handle_ocr_method_change(
 
     from . import layout, utils
 
-    get_cache().clear_translation_cache()
+    cache = get_cache()
+    cache.clear_translation_cache()
+    cache.clear_manga_ocr_cache()
 
     updates = []
 
