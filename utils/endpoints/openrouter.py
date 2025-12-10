@@ -174,50 +174,25 @@ def call_openrouter_endpoint(
         payload["top_k"] = top_k
 
     reasoning_config = {}
-    # For reasoning-capable Google models (excluding Gemini 3), "auto" should route to reasoning={"enabled": true}
     reasoning_effort = generation_config.get("reasoning_effort")
+
+    # For Google (non-Gemini 3) models, "auto" maps to reasoning.enabled=True
     if reasoning_effort == "auto" and is_google_model and not is_gemini_3:
         reasoning_config["enabled"] = True
+    else:
+        is_reasoning_model = False
+        try:
+            is_reasoning_model = openrouter_is_reasoning_model(model_name, debug=debug)
+        except Exception:
+            is_reasoning_model = False
 
-    # Skip if we already set enabled=True for Google auto case
-    if reasoning_effort and not (
-        reasoning_effort == "auto" and is_google_model and not is_gemini_3
-    ):
-        is_openai_reasoning = metadata.get("is_openai_reasoning", False)
-        is_anthropic_reasoning = metadata.get("is_anthropic_reasoning", False)
-        is_grok_reasoning = metadata.get("is_grok_reasoning", False)
-        is_gpt5_1 = metadata.get("is_gpt5_1", False)
-        is_gpt5 = metadata.get("is_gpt5", False)
-        is_gpt5_series = is_gpt5 or is_gpt5_1
+        if reasoning_effort and is_google_model:
+            reasoning_config["effort"] = reasoning_effort
+        elif reasoning_effort and is_reasoning_model:
+            reasoning_config["effort"] = reasoning_effort
 
-        if reasoning_effort:
-            if is_openai_reasoning:
-                if is_gpt5_1 and reasoning_effort == "none":
-                    reasoning_config["effort"] = "none"
-                elif reasoning_effort != "none":
-                    if is_gpt5_1 and reasoning_effort == "minimal":
-                        reasoning_config["effort"] = "none"
-                    elif reasoning_effort == "minimal" and not is_gpt5_series:
-                        reasoning_config["effort"] = "low"
-                    elif reasoning_effort in ["low", "medium", "high", "minimal"]:
-                        reasoning_config["effort"] = reasoning_effort
-            elif is_anthropic_reasoning and reasoning_effort != "none":
-                if reasoning_effort in ["low", "medium", "high"]:
-                    reasoning_config["effort"] = reasoning_effort
-            elif is_grok_reasoning and reasoning_effort != "none":
-                if reasoning_effort in ["high", "low"]:
-                    reasoning_config["effort"] = reasoning_effort
-
-    if is_google_model and generation_config.get("reasoning_effort"):
-        r_effort = generation_config.get("reasoning_effort")
-        if r_effort != "auto" or is_gemini_3:
-            reasoning_config["effort"] = r_effort
-
-    # Exception: Google models with auto (enabled=True) don't need exclude set
     if reasoning_config:
-        # Only set exclude if we're using effort-based reasoning, not enabled-based
-        if reasoning_config.get("enabled") is not True:
-            reasoning_config["exclude"] = True
+        reasoning_config["exclude"] = True
         payload["reasoning"] = reasoning_config
 
     payload = {k: v for k, v in payload.items() if v is not None}

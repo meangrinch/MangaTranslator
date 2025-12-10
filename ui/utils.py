@@ -569,60 +569,43 @@ def get_reasoning_effort_config(
         return False, [], None
 
     elif provider == "OpenRouter":
-        is_openai_reasoning = _is_openai_reasoning_model(model_name)
-        is_anthropic_reasoning = _is_anthropic_reasoning_model(model_name, "OpenRouter")
-        is_grok_reasoning = _is_grok_reasoning_model(model_name, "OpenRouter")
         is_google_model = "google/" in lm or "gemini" in lm
 
         if is_google_model:
-            is_gemini_3 = "gemini-3" in lm
-            if is_gemini_3:
-                return True, ["high", "low"], "high"
-
             is_reasoning = is_reasoning_model(provider, model_name)
             if not is_reasoning:
                 return False, [], None
 
-            is_flash = "gemini-2.5-flash" in lm
-            if is_flash:
+            is_gemini_3 = "gemini-3" in lm
+            if not is_gemini_3:
+                is_flash = "gemini-2.5-flash" in lm
+                if is_flash:
+                    return (
+                        True,
+                        ["auto", "high", "medium", "low", "minimal", "none"],
+                        "auto",
+                    )
                 return (
                     True,
                     ["auto", "high", "medium", "low", "minimal", "none"],
                     "auto",
                 )
-            else:
-                return True, ["auto", "high", "medium", "low", "minimal"], "auto"
+            # Gemini 3: fall through to generic reasoning handling
 
         is_claude_37_sonnet = "claude-3.7-sonnet" in lm
-        is_claude_37_sonnet_thinking = is_claude_37_sonnet and ":thinking" in lm
-
         if is_claude_37_sonnet:
-            if is_claude_37_sonnet_thinking:
-                return True, ["high", "medium", "low", "none"], "none"
-            else:
+            is_claude_37_sonnet_thinking = ":thinking" in lm
+            if not is_claude_37_sonnet_thinking:
                 return False, [], None
-
-        if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
-            if is_openai_reasoning:
-                is_gpt5_1 = "gpt-5.1" in lm
-                is_gpt5 = "gpt-5" in lm and not is_gpt5_1
-                if is_gpt5_1:
-                    return True, ["high", "medium", "low", "none"], "medium"
-                elif is_gpt5:
-                    return True, ["high", "medium", "low", "minimal"], "medium"
-                else:
-                    return True, ["high", "medium", "low"], "medium"
-            elif is_anthropic_reasoning:
-                return True, ["high", "medium", "low", "none"], "none"
-            elif is_grok_reasoning:
-                return True, ["high", "low"], "high"
+            return True, ["high", "medium", "low", "minimal"], "low"
 
         try:
             is_reasoning = openrouter_is_reasoning_model(model_name, debug=False)
-            if is_reasoning:
-                return True, ["high", "medium", "low"], "medium"
         except Exception:
-            pass
+            is_reasoning = False
+
+        if is_reasoning:
+            return True, ["high", "medium", "low", "minimal", "none"], "low"
 
         is_anthropic_model = "anthropic/" in lm or lm.startswith("claude-")
         if is_anthropic_model:
