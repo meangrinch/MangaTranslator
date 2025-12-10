@@ -576,6 +576,30 @@ def main():
         help="Confidence threshold for OSB text detection (0.0-1.0)",
     )
     parser.add_argument(
+        "--osb-filter-page-numbers",
+        action="store_true",
+        help=(
+            "Filter probable page numbers near margins using manga-ocr (slightly slower and may detect false positives)"
+        ),
+    )
+    parser.add_argument(
+        "--osb-page-filter-margin",
+        type=float,
+        default=0.1,
+        help=(
+            "Margin ratio (0-0.3) for page-number filtering; only used when page-number filtering is enabled"
+        ),
+    )
+    parser.add_argument(
+        "--osb-page-filter-min-area",
+        type=float,
+        default=0.05,
+        help=(
+            "Minimum area ratio (0-0.2) to treat detection as a potential page number; "
+            "only used when page-number filtering is enabled"
+        ),
+    )
+    parser.add_argument(
         "--bubble-min-side-pixels",
         type=int,
         default=128,
@@ -804,6 +828,9 @@ def main():
         ),
         outside_text=OutsideTextConfig(
             enabled=args.osb_enable,
+            enable_page_number_filtering=args.osb_filter_page_numbers,
+            page_filter_margin_threshold=args.osb_page_filter_margin,
+            page_filter_min_area_ratio=args.osb_page_filter_min_area,
             huggingface_token=args.osb_huggingface_token
             or os.environ.get("HUGGINGFACE_TOKEN", ""),
             flux_num_inference_steps=args.osb_flux_steps,

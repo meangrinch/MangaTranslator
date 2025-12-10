@@ -108,6 +108,9 @@ class OutsideTextConfig:
     """Configuration for outside speech bubble text detection and removal."""
 
     enabled: bool = False
+    enable_page_number_filtering: bool = False
+    page_filter_margin_threshold: float = 0.1
+    page_filter_min_area_ratio: float = 0.05
     seed: int = 1  # -1 = random
     huggingface_token: str = ""  # Required for Flux Kontext model downloads
     flux_num_inference_steps: int = 8

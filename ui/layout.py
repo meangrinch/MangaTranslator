@@ -1180,6 +1180,51 @@ def create_layout(
                                         "Increase to group more distant boxes together."
                                     ),
                                 )
+                                outside_text_enable_page_number_filtering = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_enable_page_number_filtering",
+                                        False,
+                                    ),
+                                    label="Filter Page Numbers",
+                                    info=(
+                                        "Use manga-ocr on margin detections to drop likely page numbers. "
+                                        "Slightly slower and may detect false positives."
+                                    ),
+                                )
+                                outside_text_page_filter_margin_threshold = gr.Slider(
+                                    0.0,
+                                    0.3,
+                                    value=saved_settings.get(
+                                        "outside_text_page_filter_margin_threshold",
+                                        0.1,
+                                    ),
+                                    step=0.01,
+                                    label="Page Number Margin Ratio",
+                                    info=(
+                                        "Maximum vertical margin (ratio of height) for page-number filtering."
+                                    ),
+                                    interactive=saved_settings.get(
+                                        "outside_text_enable_page_number_filtering",
+                                        False,
+                                    ),
+                                )
+                                outside_text_page_filter_min_area_ratio = gr.Slider(
+                                    0.0,
+                                    0.2,
+                                    value=saved_settings.get(
+                                        "outside_text_page_filter_min_area_ratio",
+                                        0.05,
+                                    ),
+                                    step=0.01,
+                                    label="Page Number Min Area Ratio",
+                                    info=(
+                                        "Minimum area ratio for page-number filtering."
+                                    ),
+                                    interactive=saved_settings.get(
+                                        "outside_text_enable_page_number_filtering",
+                                        False,
+                                    ),
+                                )
                                 gr.Markdown("### Inpainting")
                                 outside_text_flux_num_inference_steps = gr.Slider(
                                     1,
@@ -1504,6 +1549,9 @@ def create_layout(
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_enable_page_number_filtering,
+            outside_text_page_filter_margin_threshold,
+            outside_text_page_filter_min_area_ratio,
             outside_text_huggingface_token,
             outside_text_osb_font_pack,
             outside_text_osb_max_font_size,
@@ -1590,7 +1638,9 @@ def create_layout(
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
-            outside_text_bbox_expansion_percent,
+            outside_text_enable_page_number_filtering,
+            outside_text_page_filter_margin_threshold,
+            outside_text_page_filter_min_area_ratio,
             outside_text_huggingface_token,
             outside_text_osb_font_pack,
             outside_text_osb_max_font_size,
@@ -1600,6 +1650,8 @@ def create_layout(
             outside_text_osb_line_spacing,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
+            outside_text_bbox_expansion_percent,
+            outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -1675,6 +1727,9 @@ def create_layout(
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_enable_page_number_filtering,
+            outside_text_page_filter_margin_threshold,
+            outside_text_page_filter_min_area_ratio,
             outside_text_huggingface_token,
             outside_text_osb_font_pack,
             outside_text_osb_max_font_size,
@@ -1767,6 +1822,9 @@ def create_layout(
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_enable_page_number_filtering,
+            outside_text_page_filter_margin_threshold,
+            outside_text_page_filter_min_area_ratio,
             outside_text_huggingface_token,
             outside_text_osb_font_pack,
             outside_text_osb_max_font_size,
@@ -1959,6 +2017,20 @@ def create_layout(
             fn=lambda x: gr.update(visible=x),
             inputs=outside_text_enabled,
             outputs=outside_text_settings_wrapper,
+            queue=False,
+        )
+
+        # Page-number filtering toggle -> enable/disable related sliders
+        outside_text_enable_page_number_filtering.change(
+            fn=lambda enabled: (
+                gr.update(interactive=enabled),
+                gr.update(interactive=enabled),
+            ),
+            inputs=outside_text_enable_page_number_filtering,
+            outputs=[
+                outside_text_page_filter_margin_threshold,
+                outside_text_page_filter_min_area_ratio,
+            ],
             queue=False,
         )
 

@@ -123,6 +123,9 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_residual_diff_threshold_val,
         outside_text_osb_confidence_val,
+        outside_text_enable_page_number_filtering_val,
+        outside_text_page_filter_margin_threshold_val,
+        outside_text_page_filter_min_area_ratio_val,
         outside_text_huggingface_token_val,
         outside_text_osb_font_pack_val,
         outside_text_osb_max_font_size_val,
@@ -177,6 +180,13 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
                 outside_text_flux_residual_diff_threshold_val
             ),
             osb_confidence=float(outside_text_osb_confidence_val),
+            enable_page_number_filtering=outside_text_enable_page_number_filtering_val,
+            page_filter_margin_threshold=float(
+                outside_text_page_filter_margin_threshold_val
+            ),
+            page_filter_min_area_ratio=float(
+                outside_text_page_filter_min_area_ratio_val
+            ),
             osb_font_name=outside_text_osb_font_pack_val,
             osb_max_font_size=int(outside_text_osb_max_font_size_val),
             osb_min_font_size=int(outside_text_osb_min_font_size_val),
@@ -878,6 +888,9 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_residual_diff_threshold_val,
         outside_text_osb_confidence_val,
+        outside_text_enable_page_number_filtering_val,
+        outside_text_page_filter_margin_threshold_val,
+        outside_text_page_filter_min_area_ratio_val,
         outside_text_huggingface_token_val,
         outside_text_osb_font_pack_val,
         outside_text_osb_max_font_size_val,
@@ -919,6 +932,13 @@ def handle_save_config_click(*args: Any) -> str:
                 outside_text_flux_residual_diff_threshold_val
             ),
             osb_confidence=float(outside_text_osb_confidence_val),
+            enable_page_number_filtering=outside_text_enable_page_number_filtering_val,
+            page_filter_margin_threshold=float(
+                outside_text_page_filter_margin_threshold_val
+            ),
+            page_filter_min_area_ratio=float(
+                outside_text_page_filter_min_area_ratio_val
+            ),
             osb_font_name=outside_text_osb_font_pack_val,
             osb_max_font_size=int(outside_text_osb_max_font_size_val),
             osb_min_font_size=int(outside_text_osb_min_font_size_val),
@@ -1198,7 +1218,17 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.flux_num_inference_steps,
         default_ui_state.outside_text.flux_residual_diff_threshold,
         default_ui_state.outside_text.osb_confidence,
+        gr.update(value=default_ui_state.outside_text.enable_page_number_filtering),
+        gr.update(
+            value=default_ui_state.outside_text.page_filter_margin_threshold,
+            interactive=default_ui_state.outside_text.enable_page_number_filtering,
+        ),
+        gr.update(
+            value=default_ui_state.outside_text.page_filter_min_area_ratio,
+            interactive=default_ui_state.outside_text.enable_page_number_filtering,
+        ),
         default_ui_state.outside_text.bbox_expansion_percent,
+        default_ui_state.outside_text.text_box_proximity_ratio,
         default_ui_state.outside_text.huggingface_token,
         gr.update(value=default_ui_state.outside_text.osb_font_name),
         default_ui_state.outside_text.osb_max_font_size,

@@ -2,6 +2,7 @@ import base64
 import gc
 import os
 import random
+import re
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -14,7 +15,7 @@ from sklearn.cluster import KMeans
 from core.config import MangaTranslatorConfig
 from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
 from core.image.inpainting import FluxKontextInpainter
-from core.image.ocr_detection import OutsideTextDetector
+from core.image.ocr_detection import OutsideTextDetector, extract_text_with_manga_ocr
 from core.ml.model_manager import get_model_manager
 from utils.logging import log_message
 
@@ -78,6 +79,70 @@ def process_outside_text(
         )
 
         img_w, img_h = pil_image.size
+
+        # Filter out probable page numbers
+        # Only run OCR on "suspicious" detections (small & in margin)
+        if config.outside_text.enable_page_number_filtering and outside_text_results:
+            suspicious_crops = []
+            suspicious_indices = []
+            safe_results = []
+
+            margin_threshold = max(
+                0.0, min(0.3, config.outside_text.page_filter_margin_threshold)
+            )
+            min_area_threshold = max(
+                0.0, min(0.2, config.outside_text.page_filter_min_area_ratio)
+            )
+
+            for i, res in enumerate(outside_text_results):
+                bbox, _ = res
+                x1, y1, x2, y2 = [int(c) for c in bbox]
+                cy = (y1 + y2) / 2
+
+                is_in_margin = (cy < img_h * margin_threshold) or (
+                    cy > img_h * (1 - margin_threshold)
+                )
+
+                area = (x2 - x1) * (y2 - y1)
+                is_small = area < (img_w * img_h * min_area_threshold)
+
+                if is_in_margin and is_small:
+                    suspicious_crops.append(pil_image.crop((x1, y1, x2, y2)))
+                    suspicious_indices.append(i)
+                else:
+                    safe_results.append(res)
+
+            if suspicious_crops:
+                log_message(
+                    f"Verifying {len(suspicious_crops)} suspicious OSB regions with OCR...",
+                    verbose=verbose,
+                )
+                suspicious_texts = extract_text_with_manga_ocr(
+                    suspicious_crops, verbose=verbose
+                )
+
+                kept_suspicious_count = 0
+                for i, text in enumerate(suspicious_texts):
+                    # Regex for page numbers: digits, "Page 20", "p. 20", etc.
+                    is_page_number = bool(
+                        re.match(
+                            r"^\s*(?:page\.?|p\.?)?\s*\d+\s*$", text, re.IGNORECASE
+                        )
+                    )
+
+                    if not is_page_number:
+                        safe_results.append(outside_text_results[suspicious_indices[i]])
+                        kept_suspicious_count += 1
+                    else:
+                        log_message(
+                            f"Filtered out page number: '{text}'", verbose=verbose
+                        )
+
+                outside_text_results = safe_results
+                log_message(
+                    f"Remaining OSB regions after filtering: {len(outside_text_results)}",
+                    verbose=verbose,
+                )
 
         # Build a mask of all detected speech bubbles to prevent OSB inpainting overlap
         total_bubble_mask = np.zeros((img_h, img_w), dtype=bool)

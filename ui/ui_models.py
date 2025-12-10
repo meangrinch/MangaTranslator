@@ -111,6 +111,9 @@ class UIOutsideTextSettings:
     """UI state for outside speech bubble text removal settings."""
 
     enabled: bool = False
+    enable_page_number_filtering: bool = False
+    page_filter_margin_threshold: float = 0.1
+    page_filter_min_area_ratio: float = 0.05
     seed: int = 1  # -1 = random
     huggingface_token: str = ""
     flux_num_inference_steps: int = 10
@@ -232,6 +235,9 @@ class UIConfigState:
             "outside_text_flux_num_inference_steps": self.outside_text.flux_num_inference_steps,
             "outside_text_flux_residual_diff_threshold": self.outside_text.flux_residual_diff_threshold,
             "outside_text_osb_confidence": self.outside_text.osb_confidence,
+            "outside_text_enable_page_number_filtering": self.outside_text.enable_page_number_filtering,
+            "outside_text_page_filter_margin_threshold": self.outside_text.page_filter_margin_threshold,
+            "outside_text_page_filter_min_area_ratio": self.outside_text.page_filter_min_area_ratio,
             "outside_text_osb_font_pack": self.outside_text.osb_font_name,
             "outside_text_osb_max_font_size": self.outside_text.osb_max_font_size,
             "outside_text_osb_min_font_size": self.outside_text.osb_min_font_size,
@@ -318,6 +324,18 @@ class UIConfigState:
             ),
             outside_text=UIOutsideTextSettings(
                 enabled=data.get("outside_text_enabled", False),
+                enable_page_number_filtering=data.get(
+                    "outside_text_enable_page_number_filtering",
+                    defaults.get("outside_text_enable_page_number_filtering", False),
+                ),
+                page_filter_margin_threshold=data.get(
+                    "outside_text_page_filter_margin_threshold",
+                    defaults.get("outside_text_page_filter_margin_threshold", 0.1),
+                ),
+                page_filter_min_area_ratio=data.get(
+                    "outside_text_page_filter_min_area_ratio",
+                    defaults.get("outside_text_page_filter_min_area_ratio", 0.05),
+                ),
                 seed=data.get("outside_text_seed", 1),
                 huggingface_token=data.get("outside_text_huggingface_token", ""),
                 flux_num_inference_steps=data.get(
@@ -594,6 +612,9 @@ def map_ui_to_backend_config(
 
     outside_text_cfg = OutsideTextConfig(
         enabled=ui_state.outside_text.enabled,
+        enable_page_number_filtering=ui_state.outside_text.enable_page_number_filtering,
+        page_filter_margin_threshold=ui_state.outside_text.page_filter_margin_threshold,
+        page_filter_min_area_ratio=ui_state.outside_text.page_filter_min_area_ratio,
         seed=ui_state.outside_text.seed,
         huggingface_token=ui_state.outside_text.huggingface_token,
         flux_num_inference_steps=ui_state.outside_text.flux_num_inference_steps,
