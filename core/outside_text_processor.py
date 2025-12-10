@@ -220,11 +220,15 @@ def process_outside_text(
             )
 
         log_message("Inpainting outside text regions...", verbose=verbose)
-        inpainter = FluxKontextInpainter(
-            device=config.device,
-            huggingface_token=config.outside_text.huggingface_token,
-            num_inference_steps=config.outside_text.flux_num_inference_steps,
-            residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
+        inpainter = (
+            None
+            if config.outside_text.force_cv2_inpainting
+            else FluxKontextInpainter(
+                device=config.device,
+                huggingface_token=config.outside_text.huggingface_token,
+                num_inference_steps=config.outside_text.flux_num_inference_steps,
+                residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
+            )
         )
 
         mask_groups, _ = outside_detector.get_text_masks(
@@ -310,18 +314,38 @@ def process_outside_text(
                                         np.all(border_pixels <= black_thresh, axis=1)
                                     )
 
-                                    if white_ratio >= ratio_threshold:
-                                        fill_color = (255, 255, 255)
-                                        log_message(
-                                            "Skipping Flux for OSB region: detected pure white background",
-                                            verbose=verbose,
+                                    force_fill = (
+                                        config.outside_text.force_cv2_inpainting
+                                    )
+                                    choose_fill = (
+                                        white_ratio >= ratio_threshold
+                                        or black_ratio >= ratio_threshold
+                                        or force_fill
+                                    )
+                                    if choose_fill:
+                                        # In force mode, pick the dominant ratio; otherwise, respect thresholds.
+                                        use_white = (
+                                            white_ratio >= ratio_threshold
+                                            and white_ratio >= black_ratio
+                                        ) or (force_fill and white_ratio >= black_ratio)
+                                        fill_color = (
+                                            (255, 255, 255) if use_white else (0, 0, 0)
                                         )
-                                    elif black_ratio >= ratio_threshold:
-                                        fill_color = (0, 0, 0)
-                                        log_message(
-                                            "Skipping Flux for OSB region: detected pure black background",
-                                            verbose=verbose,
-                                        )
+                                        if force_fill and not (
+                                            white_ratio >= ratio_threshold
+                                            or black_ratio >= ratio_threshold
+                                        ):
+                                            log_message(
+                                                "Forcing CV2 fill: defaulting to "
+                                                f"{'white' if use_white else 'black'} background",
+                                                verbose=verbose,
+                                            )
+                                        else:
+                                            log_message(
+                                                "Skipping Flux for OSB region: detected pure "
+                                                f"{'white' if use_white else 'black'} background",
+                                                verbose=verbose,
+                                            )
 
                     if fill_color is not None:
                         img_np = np.array(current_image.convert("RGB"))

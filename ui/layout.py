@@ -1245,6 +1245,9 @@ def create_layout(
                                         "15 is best for quality (diminishing returns beyond); "
                                         "below 6 shows noticeable degradation."
                                     ),
+                                    interactive=not saved_settings.get(
+                                        "outside_text_force_cv2_inpainting", False
+                                    ),
                                 )
                                 outside_text_flux_residual_diff_threshold = gr.Slider(
                                     0.0,
@@ -1259,12 +1262,29 @@ def create_layout(
                                         "First Block Caching threshold for Flux. "
                                         "Higher = faster, but lower quality."
                                     ),
+                                    interactive=not saved_settings.get(
+                                        "outside_text_force_cv2_inpainting", False
+                                    ),
                                 )
                                 outside_text_seed = gr.Number(
                                     value=saved_settings.get("outside_text_seed", 1),
                                     label="Seed",
                                     info="Seed for reproducible inpainting (-1 = random)",
                                     precision=0,
+                                    interactive=not saved_settings.get(
+                                        "outside_text_force_cv2_inpainting", False
+                                    ),
+                                )
+                                outside_text_force_cv2_inpainting = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_force_cv2_inpainting", False
+                                    ),
+                                    label="Force CV2 Inpainting Instead of Flux",
+                                    info=(
+                                        "Use OpenCV inpainting instead of Flux. "
+                                        "Generates a simple white or black background for maximum speed and "
+                                        "readability. Useful if you do not value background preservation."
+                                    ),
                                 )
 
                                 gr.Markdown("### Font Rendering")
@@ -1552,6 +1572,7 @@ def create_layout(
             supersampling_factor,
             outside_text_enabled,
             outside_text_seed,
+            outside_text_force_cv2_inpainting,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
@@ -1641,6 +1662,7 @@ def create_layout(
             batch_special_instructions,
             outside_text_enabled,
             outside_text_seed,
+            outside_text_force_cv2_inpainting,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
@@ -1730,6 +1752,7 @@ def create_layout(
             supersampling_factor,
             outside_text_enabled,
             outside_text_seed,
+            outside_text_force_cv2_inpainting,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
@@ -1825,6 +1848,7 @@ def create_layout(
             supersampling_factor,
             outside_text_enabled,
             outside_text_seed,
+            outside_text_force_cv2_inpainting,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
@@ -2036,6 +2060,22 @@ def create_layout(
             outputs=[
                 outside_text_page_filter_margin_threshold,
                 outside_text_page_filter_min_area_ratio,
+            ],
+            queue=False,
+        )
+
+        # Force CV2 inpainting toggle -> disable Flux controls
+        outside_text_force_cv2_inpainting.change(
+            fn=lambda forced: (
+                gr.update(interactive=not forced),
+                gr.update(interactive=not forced),
+                gr.update(interactive=not forced),
+            ),
+            inputs=outside_text_force_cv2_inpainting,
+            outputs=[
+                outside_text_flux_num_inference_steps,
+                outside_text_flux_residual_diff_threshold,
+                outside_text_seed,
             ],
             queue=False,
         )

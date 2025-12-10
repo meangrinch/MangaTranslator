@@ -120,6 +120,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         supersampling_factor_val,
         outside_text_enabled_val,
         outside_text_seed_val,
+        outside_text_force_cv2_inpainting_val,
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_residual_diff_threshold_val,
         outside_text_osb_confidence_val,
@@ -175,6 +176,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             enabled=outside_text_enabled_val,
             seed=int(outside_text_seed_val),
             huggingface_token=outside_text_huggingface_token_val,
+            force_cv2_inpainting=outside_text_force_cv2_inpainting_val,
             flux_num_inference_steps=int(outside_text_flux_num_inference_steps_val),
             flux_residual_diff_threshold=float(
                 outside_text_flux_residual_diff_threshold_val
@@ -885,6 +887,7 @@ def handle_save_config_click(*args: Any) -> str:
         supersampling_factor_val,
         outside_text_enabled_val,
         outside_text_seed_val,
+        outside_text_force_cv2_inpainting_val,
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_residual_diff_threshold_val,
         outside_text_osb_confidence_val,
@@ -927,6 +930,7 @@ def handle_save_config_click(*args: Any) -> str:
             enabled=outside_text_enabled_val,
             seed=int(outside_text_seed_val),
             huggingface_token=outside_text_huggingface_token_val,
+            force_cv2_inpainting=outside_text_force_cv2_inpainting_val,
             flux_num_inference_steps=int(outside_text_flux_num_inference_steps_val),
             flux_residual_diff_threshold=float(
                 outside_text_flux_residual_diff_threshold_val
@@ -1215,6 +1219,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.batch_special_instructions or "",
         default_ui_state.outside_text.enabled,
         default_ui_state.outside_text.seed,
+        gr.update(value=default_ui_state.outside_text.force_cv2_inpainting),
         default_ui_state.outside_text.flux_num_inference_steps,
         default_ui_state.outside_text.flux_residual_diff_threshold,
         default_ui_state.outside_text.osb_confidence,

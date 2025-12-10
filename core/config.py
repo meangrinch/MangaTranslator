@@ -113,6 +113,7 @@ class OutsideTextConfig:
     page_filter_min_area_ratio: float = 0.05
     seed: int = 1  # -1 = random
     huggingface_token: str = ""  # Required for Flux Kontext model downloads
+    force_cv2_inpainting: bool = False
     flux_num_inference_steps: int = 8
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6

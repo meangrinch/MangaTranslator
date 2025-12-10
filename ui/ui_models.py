@@ -116,6 +116,7 @@ class UIOutsideTextSettings:
     page_filter_min_area_ratio: float = 0.05
     seed: int = 1  # -1 = random
     huggingface_token: str = ""
+    force_cv2_inpainting: bool = False
     flux_num_inference_steps: int = 10
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6
@@ -232,6 +233,7 @@ class UIConfigState:
             "outside_text_enabled": self.outside_text.enabled,
             "outside_text_seed": self.outside_text.seed,
             "outside_text_huggingface_token": self.outside_text.huggingface_token,
+            "outside_text_force_cv2_inpainting": self.outside_text.force_cv2_inpainting,
             "outside_text_flux_num_inference_steps": self.outside_text.flux_num_inference_steps,
             "outside_text_flux_residual_diff_threshold": self.outside_text.flux_residual_diff_threshold,
             "outside_text_osb_confidence": self.outside_text.osb_confidence,
@@ -338,6 +340,10 @@ class UIConfigState:
                 ),
                 seed=data.get("outside_text_seed", 1),
                 huggingface_token=data.get("outside_text_huggingface_token", ""),
+                force_cv2_inpainting=data.get(
+                    "outside_text_force_cv2_inpainting",
+                    defaults.get("outside_text_force_cv2_inpainting", False),
+                ),
                 flux_num_inference_steps=data.get(
                     "outside_text_flux_num_inference_steps", 8
                 ),
@@ -619,6 +625,7 @@ def map_ui_to_backend_config(
         page_filter_min_area_ratio=ui_state.outside_text.page_filter_min_area_ratio,
         seed=ui_state.outside_text.seed,
         huggingface_token=ui_state.outside_text.huggingface_token,
+        force_cv2_inpainting=ui_state.outside_text.force_cv2_inpainting,
         flux_num_inference_steps=ui_state.outside_text.flux_num_inference_steps,
         flux_residual_diff_threshold=ui_state.outside_text.flux_residual_diff_threshold,
         osb_confidence=ui_state.outside_text.osb_confidence,
