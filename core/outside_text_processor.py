@@ -270,13 +270,76 @@ def process_outside_text(
 
                     original_bbox_dict = group.get("original_bbox")
                     composite_clip_bbox = None
+                    fill_color = None
                     if original_bbox_dict:
                         ox = int(original_bbox_dict.get("x", 0))
                         oy = int(original_bbox_dict.get("y", 0))
                         ow = int(original_bbox_dict.get("width", 0))
                         oh = int(original_bbox_dict.get("height", 0))
                         if ow > 0 and oh > 0:
+                            ox0 = max(0, min(img_w, ox))
+                            oy0 = max(0, min(img_h, oy))
+                            ox1 = max(0, min(img_w, ox + ow))
+                            oy1 = max(0, min(img_h, oy + oh))
                             composite_clip_bbox = (ox, oy, ox + ow, oy + oh)
+
+                            # Expanded sampling around the original bbox to find background color
+                            expansion_px = 2
+                            sx1 = max(0, ox - expansion_px)
+                            sy1 = max(0, oy - expansion_px)
+                            sx2 = min(img_w, ox + ow + expansion_px)
+                            sy2 = min(img_h, oy + oh + expansion_px)
+
+                            if sx2 > sx1 and sy2 > sy1:
+                                sampling_mask = np.zeros((img_h, img_w), dtype=bool)
+                                sampling_mask[sy1:sy2, sx1:sx2] = True
+
+                                # Remove the original bbox area from sampling to avoid text pixels
+                                sampling_mask[oy0:oy1, ox0:ox1] = False
+
+                                border_pixels = None
+                                min_border_pixels = 20
+                                if np.count_nonzero(sampling_mask) >= min_border_pixels:
+                                    img_np = np.array(current_image.convert("RGB"))
+                                    border_pixels = img_np[sampling_mask]
+
+                                if border_pixels is not None and border_pixels.size > 0:
+                                    white_thresh = 250
+                                    black_thresh = 5
+                                    ratio_threshold = 0.95
+
+                                    white_ratio = np.mean(
+                                        np.all(border_pixels >= white_thresh, axis=1)
+                                    )
+                                    black_ratio = np.mean(
+                                        np.all(border_pixels <= black_thresh, axis=1)
+                                    )
+
+                                    if white_ratio >= ratio_threshold:
+                                        fill_color = (255, 255, 255)
+                                        log_message(
+                                            "Skipping Flux for OSB region: detected pure white background",
+                                            verbose=verbose,
+                                        )
+                                    elif black_ratio >= ratio_threshold:
+                                        fill_color = (0, 0, 0)
+                                        log_message(
+                                            "Skipping Flux for OSB region: detected pure black background",
+                                            verbose=verbose,
+                                        )
+
+                    if fill_color is not None:
+                        img_np = np.array(current_image.convert("RGB"))
+                        if original_bbox_dict and ox1 > ox0 and oy1 > oy0:
+                            fill_mask = np.zeros_like(combined_mask, dtype=bool)
+                            fill_mask[oy0:oy1, ox0:ox1] = combined_mask[
+                                oy0:oy1, ox0:ox1
+                            ]
+                        else:
+                            fill_mask = combined_mask
+                        img_np[fill_mask] = fill_color
+                        current_image = Image.fromarray(img_np)
+                        continue
 
                     inpainted_image = inpainter.inpaint_mask(
                         current_image,
