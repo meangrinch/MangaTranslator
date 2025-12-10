@@ -155,8 +155,6 @@ def call_openrouter_endpoint(
     metadata = generation_config.get("_metadata", {})
     is_openai_model = metadata.get("is_openai_model", False)
     is_anthropic_model = metadata.get("is_anthropic_model", False)
-    is_gemini_3 = metadata.get("is_gemini_3", False)
-    is_google_model = metadata.get("is_google_model", False)
 
     temp = generation_config.get("temperature")
     if temp is not None:
@@ -176,20 +174,14 @@ def call_openrouter_endpoint(
     reasoning_config = {}
     reasoning_effort = generation_config.get("reasoning_effort")
 
-    # For Google (non-Gemini 3) models, "auto" maps to reasoning.enabled=True
-    if reasoning_effort == "auto" and is_google_model and not is_gemini_3:
-        reasoning_config["enabled"] = True
-    else:
+    is_reasoning_model = False
+    try:
+        is_reasoning_model = openrouter_is_reasoning_model(model_name, debug=debug)
+    except Exception:
         is_reasoning_model = False
-        try:
-            is_reasoning_model = openrouter_is_reasoning_model(model_name, debug=debug)
-        except Exception:
-            is_reasoning_model = False
 
-        if reasoning_effort and is_google_model:
-            reasoning_config["effort"] = reasoning_effort
-        elif reasoning_effort and is_reasoning_model:
-            reasoning_config["effort"] = reasoning_effort
+    if reasoning_effort and is_reasoning_model:
+        reasoning_config["effort"] = reasoning_effort
 
     if reasoning_config:
         reasoning_config["exclude"] = True

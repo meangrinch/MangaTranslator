@@ -403,14 +403,9 @@ def get_reasoning_effort_info_text(
             "gpt-5" in lm or "o1" in lm or "o3" in lm or "o4-mini" in lm
         )
         is_grok_reasoning = "grok-4" in lm
-        is_google_model = "google/" in lm or "gemini" in lm
         is_gemini_3 = "gemini-3" in lm
-        if is_openai_reasoning or is_grok_reasoning:
+        if is_openai_reasoning or is_grok_reasoning or is_gemini_3:
             return "Controls model's internal reasoning effort."
-        elif is_google_model and is_gemini_3:
-            return "Controls model's internal reasoning effort."
-        elif is_google_model and not is_gemini_3:
-            base_text = "Controls reasoning token allocation relative to 'max_tokens'"
         else:
             base_text = (
                 "Controls reasoning token budget allocation relative to 'max_tokens'"
@@ -576,21 +571,7 @@ def get_reasoning_effort_config(
             if not is_reasoning:
                 return False, [], None
 
-            is_gemini_3 = "gemini-3" in lm
-            if not is_gemini_3:
-                is_flash = "gemini-2.5-flash" in lm
-                if is_flash:
-                    return (
-                        True,
-                        ["auto", "high", "medium", "low", "minimal", "none"],
-                        "auto",
-                    )
-                return (
-                    True,
-                    ["auto", "high", "medium", "low", "minimal", "none"],
-                    "auto",
-                )
-            # Gemini 3: fall through to generic reasoning handling
+            return True, ["high", "medium", "low", "minimal", "none"], "low"
 
         is_claude_37_sonnet = "claude-3.7-sonnet" in lm
         if is_claude_37_sonnet:
