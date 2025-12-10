@@ -145,7 +145,7 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
         min_h = min(ya2 - ya1, yb2 - yb1)
         return inter / min_h if min_h > 0 else 0
 
-    def sort_panels_strict(panels_list):
+    def sort_panels_strict(panels_list, rtl=True):
         if not panels_list:
             return []
 
@@ -178,7 +178,11 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
                 root_nodes.append(n)
 
         if root_nodes:
-            start_node = max(root_nodes, key=lambda n: n["bbox"][2])
+            start_node = (
+                max(root_nodes, key=lambda n: n["bbox"][2])
+                if rtl
+                else min(root_nodes, key=lambda n: n["bbox"][0])
+            )
         else:
             start_node = min(nodes, key=lambda n: n["bbox"][1])
 
@@ -203,19 +207,30 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
                     col_candidates.append((dist_y, cand))
 
             if col_candidates:
-                col_candidates.sort(key=lambda x: (int(x[0] / 50), -x[1]["center"][0]))
+                col_candidates.sort(
+                    key=lambda x: (
+                        int(x[0] / 50),
+                        -x[1]["center"][0] if rtl else x[1]["center"][0],
+                    )
+                )
                 col_cand = col_candidates[0][1]
 
             row_cand = None
             row_candidates = []
             for cand in candidates:
                 cand_box = cand["bbox"]
-                if cand_box[2] <= (c_box[0] + 50):
+                if rtl:
+                    is_row_neighbor = cand_box[2] <= (c_box[0] + 50)
+                    dist_x = c_box[0] - cand_box[2]
+                else:
+                    is_row_neighbor = cand_box[0] >= (c_box[2] - 50)
+                    dist_x = cand_box[0] - c_box[2]
+
+                if is_row_neighbor:
                     y_inter = max(
                         0, min(c_box[3], cand_box[3]) - max(c_box[1], cand_box[1])
                     )
                     if y_inter > 0:
-                        dist_x = c_box[0] - cand_box[2]
                         row_candidates.append((dist_x, cand))
 
             if row_candidates:
@@ -233,9 +248,16 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
                     if is_above and x_overlap > 0.2:
                         is_blocked = True
                         break
-                    is_to_right = other["bbox"][0] > (col_cand["bbox"][0] + 20)
+                    if rtl:
+                        has_block_neighbor = other["bbox"][0] > (
+                            col_cand["bbox"][0] + 20
+                        )
+                    else:
+                        has_block_neighbor = other["bbox"][2] < (
+                            col_cand["bbox"][2] - 20
+                        )
                     y_overlap_ratio = _iou_y_overlap(col_cand["bbox"], other["bbox"])
-                    if is_to_right and y_overlap_ratio > 0.3:
+                    if has_block_neighbor and y_overlap_ratio > 0.3:
                         is_blocked = True
                         break
                 if is_blocked:
@@ -269,7 +291,11 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
                         sub_roots.append(n)
 
                 if sub_roots:
-                    next_node = max(sub_roots, key=lambda n: n["bbox"][2])
+                    next_node = (
+                        max(sub_roots, key=lambda n: n["bbox"][2])
+                        if rtl
+                        else min(sub_roots, key=lambda n: n["bbox"][0])
+                    )
                 else:
                     next_node = min(candidates, key=lambda n: n["bbox"][1])
 
@@ -282,7 +308,7 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
     if not panels:
         return _spatial_sort(detections)
 
-    sorted_panel_indices = sort_panels_strict(panels)
+    sorted_panel_indices = sort_panels_strict(panels, rtl)
     if not sorted_panel_indices:
         sorted_panel_indices = list(range(len(panels)))
 
