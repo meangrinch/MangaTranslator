@@ -1227,8 +1227,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
             value=default_ui_state.outside_text.page_filter_min_area_ratio,
             interactive=default_ui_state.outside_text.enable_page_number_filtering,
         ),
-        default_ui_state.outside_text.bbox_expansion_percent,
-        default_ui_state.outside_text.text_box_proximity_ratio,
         default_ui_state.outside_text.huggingface_token,
         gr.update(value=default_ui_state.outside_text.osb_font_name),
         default_ui_state.outside_text.osb_max_font_size,
@@ -1238,6 +1236,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.osb_line_spacing,
         default_ui_state.outside_text.osb_use_subpixel_rendering,
         default_ui_state.outside_text.osb_font_hinting,
+        default_ui_state.outside_text.bbox_expansion_percent,
+        default_ui_state.outside_text.text_box_proximity_ratio,
         gr.update(value=default_ui_state.output.image_upscale_mode),
         gr.update(
             value=default_ui_state.output.image_upscale_factor,
