@@ -270,6 +270,8 @@ def process_outside_text(
                     original_bbox_dict = group.get("original_bbox")
                     composite_clip_bbox = None
                     fill_color = None
+                    fallback_fill_color = None
+                    ox0 = oy0 = ox1 = oy1 = None
                     if original_bbox_dict:
                         ox = int(original_bbox_dict.get("x", 0))
                         oy = int(original_bbox_dict.get("y", 0))
@@ -290,17 +292,25 @@ def process_outside_text(
                             sy2 = min(img_h, oy + oh + expansion_px)
 
                             if sx2 > sx1 and sy2 > sy1:
-                                sampling_mask = np.zeros((img_h, img_w), dtype=bool)
-                                sampling_mask[sy1:sy2, sx1:sx2] = True
+                                mask_h, mask_w = sy2 - sy1, sx2 - sx1
+                                local_mask = np.ones((mask_h, mask_w), dtype=bool)
 
-                                # Remove the original bbox area from sampling to avoid text pixels
-                                sampling_mask[oy0:oy1, ox0:ox1] = False
+                                lx0 = max(0, ox0 - sx1)
+                                ly0 = max(0, oy0 - sy1)
+                                lx1 = min(mask_w, ox1 - sx1)
+                                ly1 = min(mask_h, oy1 - sy1)
+
+                                if lx1 > lx0 and ly1 > ly0:
+                                    local_mask[ly0:ly1, lx0:lx1] = False
 
                                 border_pixels = None
                                 min_border_pixels = 20
-                                if np.count_nonzero(sampling_mask) >= min_border_pixels:
-                                    img_np = np.array(current_image.convert("RGB"))
-                                    border_pixels = img_np[sampling_mask]
+                                if np.count_nonzero(local_mask) >= min_border_pixels:
+                                    sampling_crop = current_image.crop(
+                                        (sx1, sy1, sx2, sy2)
+                                    )
+                                    crop_np = np.array(sampling_crop.convert("RGB"))
+                                    border_pixels = crop_np[local_mask]
 
                                 if border_pixels is not None and border_pixels.size > 0:
                                     white_thresh = 250
@@ -313,61 +323,118 @@ def process_outside_text(
                                     black_ratio = np.mean(
                                         np.all(border_pixels <= black_thresh, axis=1)
                                     )
+                                    fallback_fill_color = (
+                                        (255, 255, 255)
+                                        if white_ratio >= black_ratio
+                                        else (0, 0, 0)
+                                    )
 
                                     force_fill = (
                                         config.outside_text.force_cv2_inpainting
                                     )
-                                    choose_fill = (
+                                    should_simple_fill = (
                                         white_ratio >= ratio_threshold
                                         or black_ratio >= ratio_threshold
                                         or force_fill
                                     )
-                                    if choose_fill:
-                                        # In force mode, pick the dominant ratio; otherwise, respect thresholds.
-                                        use_white = (
-                                            white_ratio >= ratio_threshold
-                                            and white_ratio >= black_ratio
-                                        ) or (force_fill and white_ratio >= black_ratio)
-                                        fill_color = (
-                                            (255, 255, 255) if use_white else (0, 0, 0)
-                                        )
+
+                                    if should_simple_fill:
+                                        fill_color = fallback_fill_color
+
                                         if force_fill and not (
                                             white_ratio >= ratio_threshold
                                             or black_ratio >= ratio_threshold
                                         ):
                                             log_message(
                                                 "Forcing CV2 fill: defaulting to "
-                                                f"{'white' if use_white else 'black'} background",
+                                                f"{'white' if fill_color == (255, 255, 255) else 'black'} background",
                                                 verbose=verbose,
                                             )
                                         else:
                                             log_message(
                                                 "Skipping Flux for OSB region: detected pure "
-                                                f"{'white' if use_white else 'black'} background",
+                                                f"{'white' if fill_color == (255, 255, 255) else 'black'} background",
                                                 verbose=verbose,
                                             )
 
-                    if fill_color is not None:
-                        img_np = np.array(current_image.convert("RGB"))
-                        if original_bbox_dict and ox1 > ox0 and oy1 > oy0:
-                            fill_mask = np.zeros_like(combined_mask, dtype=bool)
-                            fill_mask[oy0:oy1, ox0:ox1] = combined_mask[
-                                oy0:oy1, ox0:ox1
-                            ]
+                    def apply_simple_fill(color_to_use):
+                        new_img = current_image.copy()
+
+                        if (
+                            original_bbox_dict
+                            and ox1 is not None
+                            and ox0 is not None
+                            and oy1 is not None
+                            and oy0 is not None
+                            and ox1 > ox0
+                            and oy1 > oy0
+                        ):
+                            # Restricted fill logic: Clip mask to bbox
+                            region_mask = combined_mask[oy0:oy1, ox0:ox1]
+                            if not np.any(region_mask):
+                                return new_img
+
+                            mask_pil = Image.fromarray(
+                                (region_mask * 255).astype(np.uint8), mode="L"
+                            )
+                            patch = Image.new(
+                                "RGB", (ox1 - ox0, oy1 - oy0), color_to_use
+                            )
+                            new_img.paste(patch, (ox0, oy0), mask=mask_pil)
                         else:
-                            fill_mask = combined_mask
-                        img_np[fill_mask] = fill_color
-                        current_image = Image.fromarray(img_np)
+                            # Full mask fill
+                            mask_pil = Image.fromarray(
+                                (combined_mask * 255).astype(np.uint8), mode="L"
+                            )
+                            patch = Image.new("RGB", new_img.size, color_to_use)
+                            new_img.paste(patch, (0, 0), mask=mask_pil)
+
+                        return new_img
+
+                    if fill_color is not None:
+                        current_image = apply_simple_fill(fill_color)
                         continue
 
-                    inpainted_image = inpainter.inpaint_mask(
-                        current_image,
-                        combined_mask,
-                        seed=region_seed,
-                        verbose=verbose,
-                        strict_mask_clipping=True,
-                        composite_clip_bbox=composite_clip_bbox,
-                    )
+                    flux_failed = False
+                    flux_fail_reason = None
+                    inpainted_image = None
+
+                    if inpainter is None:
+                        flux_failed = True
+                        flux_fail_reason = "Flux inpainter unavailable"
+                    else:
+                        try:
+                            inpainted_image = inpainter.inpaint_mask(
+                                current_image,
+                                combined_mask,
+                                seed=region_seed,
+                                verbose=verbose,
+                                strict_mask_clipping=True,
+                                composite_clip_bbox=composite_clip_bbox,
+                            )
+                            if inpainted_image is current_image:
+                                flux_failed = True
+                                flux_fail_reason = (
+                                    "Flux returned original image (no inpaint)"
+                                )
+                        except Exception as e:
+                            flux_failed = True
+                            flux_fail_reason = f"Flux inpainting error: {e}"
+
+                    if flux_failed:
+                        fallback_color_to_use = (
+                            fallback_fill_color
+                            if fallback_fill_color
+                            else (255, 255, 255)
+                        )
+                        log_message(
+                            f"Flux failed for OSB region {i + 1}"
+                            + (f" ({flux_fail_reason})" if flux_fail_reason else "")
+                            + f"; falling back to CV2 fill ({fallback_color_to_use})",
+                            always_print=True,
+                        )
+                        current_image = apply_simple_fill(fallback_color_to_use)
+                        continue
 
                     # Save to disk if more regions remain to reduce memory usage
                     if i < len(mask_groups) - 1:
