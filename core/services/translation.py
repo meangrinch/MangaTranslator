@@ -43,8 +43,6 @@ TRANSLATION_PATTERN = re.compile(
 def _build_system_prompt_ocr(
     input_language: Optional[str],
     reading_direction: str,
-    num_speech_bubbles: int = 0,
-    num_osb_text: int = 0,
 ) -> str:
     lang_label = f"{input_language} " if input_language else ""
     direction = (
@@ -53,16 +51,12 @@ def _build_system_prompt_ocr(
         else "left-to-right"
     )
 
-    text_types = "dialogue text (speech bubbles)"
-    if num_osb_text > 0:
-        text_types += " or outside-bubble text (text outside speech bubbles)"
-
     return f"""
 ## ROLE
 You are an expert manga/comic OCR transcriber.
 
 ## OBJECTIVE
-Your sole purpose is to accurately transcribe the original text from a series of provided images. You must not translate, interpret, or add commentary. The images will contain {text_types}.
+Your sole purpose is to accurately transcribe the original text from a series of provided images. You must not translate, interpret, or add commentary.
 
 ## CORE RULES
 - **Reading Context:** The images are presented in a {direction} reading order.
@@ -76,37 +70,24 @@ Your sole purpose is to accurately transcribe the original text from a series of
   - If text is present but indecipherable, you must return the exact token: `[OCR FAILED]`.
 
 ## OUTPUT SCHEMA
-- You must return your response in separate sections{f': `## SPEECH BUBBLES`' if num_speech_bubbles > 0 else ''}{f' followed by `## OUTSIDE-BUBBLE TEXT`' if num_osb_text > 0 else ''}.
-- Each section must be a numbered list with exactly one line per image of that type.
-- Use S-prefixed numbering for speech bubbles (S1, S2, S3...){f' and N-prefixed numbering for outside-bubble text (N1, N2, N3...)' if num_osb_text > 0 else ''}.
-- The format must be `Si: <transcribed {lang_label}text>` for speech bubbles{f' and `Ni: <transcribed {lang_label}text>` for outside-bubble text' if num_osb_text > 0 else ''}.
-- If a section has no images, omit that section entirely.
-- Do not include any other text, explanations, or formatting outside of these sections.
+- You must return your response as a single numbered list with exactly one line per input image.
+- The numbering must correspond to the input image order (1, 2, 3...).
+- The format must be `i: <transcribed {lang_label}text>`.
+- Do not include section headers, explanations, or formatting outside of this list.
 """  # noqa
 
 
-def _build_system_prompt_translation(
-    output_language: str, mode: str, num_osb_text: int = 0
-) -> str:
-    text_types = "dialogue text (speech bubbles)"
-    if num_osb_text > 0:
-        text_types += " and outside-bubble text (text outside speech bubbles)"
-
+def _build_system_prompt_translation(output_language: str, mode: str) -> str:
     core_rules = """
 ## CORE RULES
 - **Fidelity:** Stay faithful to the source. Do not add content, explanations, or cultural notes.
 - **Conciseness:** Keep translations idiomatic and concise.
 - **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
 - **Punctuation:** Use standard ASCII quotes and punctuation. Retain ellipses where meaningful.
-"""  # noqa
-    if num_osb_text > 0:
-        core_rules += """
-- **Outside-Bubble Text Translation:** For text categorized as outside-bubble text, determine if it is a sound effect/onomatopoeia or narration text:
-  - For sound effects/onomatopoeias, focus on capturing the feeling and visual metaphor relative to the surrounding panel. Keep these translations concise and impactful.
-  - For narration text, translate it like you would dialogue text. Do not style it.
-"""  # noqa
-
-    core_rules += """
+- **Text Types:**
+  - **Dialogue:** Translate naturally, matching the character's voice.
+  - **Narration:** Translate neutrally without special styling.
+  - **Sound Effects:** Translate as an onomatopoeia, keeping it concise and impactful. Choose one that captures the feeling and visual metaphor relative to the surrounding context.
 - **Edge Cases:** If an input line is `[OCR FAILED]` or `[NO TEXT]`, you must output it unchanged.
 """  # noqa
 
@@ -115,7 +96,7 @@ def _build_system_prompt_translation(
 You are a professional manga localization translator and editor.
 
 ## OBJECTIVE
-Your goal is to produce natural-sounding, high-quality translations in {output_language} that are faithful to the original source's meaning, tone, and visual emphasis. You will handle {text_types}.
+Your goal is to produce natural-sounding, high-quality translations in {output_language} that are faithful to the original source's meaning, tone, and visual emphasis.
 
 ## STYLING GUIDE
 You must use the following markdown-style markers to convey emphasis:
@@ -127,69 +108,21 @@ You must use the following markdown-style markers to convey emphasis:
 """  # noqa
 
     if mode == "one-step":
-        numbering_instruction = (
-            "Use S-prefixed numbering for speech bubbles (S1, S2, S3...)"
-        )
-        if num_osb_text > 0:
-            numbering_instruction += (
-                " and N-prefixed numbering for outside-bubble text (N1, N2, N3...)"
-            )
-        numbering_instruction += "."
-
-        sections_list = [
-            "- `## SPEECH BUBBLES TRANSCRIPTION` (if present)",
-            "- `## SPEECH BUBBLES TRANSLATION` (if present)",
-        ]
-        if num_osb_text > 0:
-            sections_list.extend(
-                [
-                    "- `## OUTSIDE-BUBBLE TEXT TRANSCRIPTION` (if present)",
-                    "- `## OUTSIDE-BUBBLE TEXT TRANSLATION` (if present)",
-                ]
-            )
-
-        sections_text = "\n".join(sections_list)
-
         output_schema = f"""
 ## OUTPUT SCHEMA
-- You must return your response using the following section headings in this exact order:
-{sections_text}
-- Each section must be a numbered list with exactly one line per image of that type.
-- {numbering_instruction}
-- If a section has no images, omit that section entirely.
-- Do not include any other text, explanations, or formatting outside of these sections.
+- You must return your response as a single numbered list with exactly one line per input image.
+- The numbering must correspond to the input image order (1, 2, 3...).
+- For each item, provide both transcription and translation in the format:
+  `i: <transcribed text> || <translated {output_language} text>`
+- Do not include section headers, explanations, or formatting outside of this list.
 """
     elif mode == "two-step":
-        sections = ["`## SPEECH BUBBLES`"]
-        if num_osb_text > 0:
-            sections.append("`## OUTSIDE-BUBBLE TEXT`")
-
-        sections_text = " and ".join(sections) if len(sections) > 1 else sections[0]
-
-        numbering_instruction = (
-            "Use S-prefixed numbering for speech bubbles (S1, S2, S3...)"
-        )
-        if num_osb_text > 0:
-            numbering_instruction += (
-                " and N-prefixed numbering for outside-bubble text (N1, N2, N3...)"
-            )
-        numbering_instruction += "."
-
-        format_instruction = (
-            f"`Si: <translated {output_language} text>` for speech bubbles"
-        )
-        if num_osb_text > 0:
-            format_instruction += f" and `Ni: <translated {output_language} text>` for outside-bubble text"
-        format_instruction += "."
-
         output_schema = f"""
 ## OUTPUT SCHEMA
-- You must return your response in separate sections: {sections_text}.
-- Each section must be a numbered list with exactly one line per input text of that type.
-- {numbering_instruction}
-- The format must be {format_instruction}
-- If a section has no text, omit that section entirely.
-- Do not include any other text, explanations, or formatting.
+- You must return your response as a single numbered list with exactly one line per input text.
+- The numbering must correspond to the input order (1, 2, 3...).
+- The format must be `i: <translated {output_language} text>`.
+- Do not include section headers, explanations, or formatting outside of this list.
 """  # noqa
     else:
         raise ValueError(
@@ -703,98 +636,63 @@ def _call_llm_endpoint(
         raise
 
 
-def _parse_llm_response_with_sections(
+def _parse_llm_response_unified(
     response_text: Optional[str],
-    speech_bubble_indices: List[int],
-    osb_text_indices: List[int],
+    total_elements: int,
     provider: str,
     debug: bool = False,
 ) -> List[str]:
-    """Parse LLM response with separate S/N prefixed sections and merge in original order."""
+    """Parse LLM response with a single numbered list."""
     if response_text is None:
         log_message(f"API call failed: {provider} returned None", always_print=True)
-        total_count = len(speech_bubble_indices) + len(osb_text_indices)
-        return [f"[{provider}: API failed]"] * total_count
+        return [f"[{provider}: API failed]"] * total_elements
     elif response_text == "":
         log_message(f"API call returned empty response: {provider}", always_print=True)
-        total_count = len(speech_bubble_indices) + len(osb_text_indices)
-        return [f"[{provider}: Empty response]"] * total_count
+        return [f"[{provider}: Empty response]"] * total_elements
 
     try:
         log_message(
-            f"Parsing {provider} response with sections: {len(response_text)} chars",
+            f"Parsing {provider} unified response: {len(response_text)} chars",
             verbose=debug,
         )
         log_message(f"Raw response:\n---\n{response_text}\n---", always_print=True)
 
-        speech_bubble_pattern = re.compile(
-            r'^\s*[*_]*S(\d+)[*_]*\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*[*_]*S\d+[*_]*\s*:|\s*$)',
+        # Pattern matches "1: text" or "1. text" or "1 text" etc.
+        pattern = re.compile(
+            r'^\s*(\d+)\s*[:.]\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*[:.]|\s*$)',
             re.MULTILINE | re.DOTALL,
         )
-        speech_matches = speech_bubble_pattern.findall(response_text)
-        speech_dict = {}
-        for num_str, text in speech_matches:
+
+        matches = pattern.findall(response_text)
+        result_dict = {}
+
+        for num_str, text in matches:
             try:
                 num = int(num_str)
-                if 1 <= num <= len(speech_bubble_indices):
-                    speech_dict[num] = text.strip()
+                if 1 <= num <= total_elements:
+                    result_dict[num] = text.strip()
             except ValueError:
-                log_message(
-                    f"Invalid speech bubble number format: '{num_str}'", verbose=debug
-                )
-
-        osb_pattern = re.compile(
-            r'^\s*[*_]*N(\d+)[*_]*\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*[*_]*N\d+[*_]*\s*:|\s*$)',
-            re.MULTILINE | re.DOTALL,
-        )
-        osb_matches = osb_pattern.findall(response_text)
-        osb_dict = {}
-        for num_str, text in osb_matches:
-            try:
-                num = int(num_str)
-                if 1 <= num <= len(osb_text_indices):
-                    osb_dict[num] = text.strip()
-            except ValueError:
-                log_message(
-                    f"Invalid OSB text number format: '{num_str}'", verbose=debug
-                )
-
-        speech_bubble_map = {idx: pos for pos, idx in enumerate(speech_bubble_indices)}
-        osb_text_map = {idx: pos for pos, idx in enumerate(osb_text_indices)}
+                continue
 
         final_list = []
-        for i in range(len(speech_bubble_indices) + len(osb_text_indices)):
-            speech_pos = speech_bubble_map.get(i, -1)
-            if speech_pos >= 0:
-                speech_idx = speech_pos + 1
-                final_list.append(
-                    speech_dict.get(
-                        speech_idx, f"[{provider}: Missing speech bubble {speech_idx}]"
-                    )
-                )
+        for i in range(1, total_elements + 1):
+            if i in result_dict:
+                final_list.append(result_dict[i])
             else:
-                osb_pos = osb_text_map.get(i, -1)
-                if osb_pos >= 0:
-                    osb_idx = osb_pos + 1
-                    final_list.append(
-                        osb_dict.get(
-                            osb_idx, f"[{provider}: Missing OSB text {osb_idx}]"
-                        )
-                    )
+                final_list.append(f"[{provider}: Missing item {i}]")
 
         log_message(
-            f"Parsed {len(speech_dict)} speech bubbles and {len(osb_dict)} OSB texts",
+            f"Parsed {len(result_dict)} items from unified response (expected {total_elements})",
             verbose=debug,
         )
         return final_list
 
     except Exception as e:
         log_message(
-            f"Failed to parse {provider} response with sections: {str(e)}",
+            f"Failed to parse {provider} unified response: {str(e)}",
             always_print=True,
         )
-        total_count = len(speech_bubble_indices) + len(osb_text_indices)
-        return [f"[{provider}: Parse error]"] * total_count
+        return [f"[{provider}: Parse error]"] * total_elements
 
 
 def _prepare_images_for_ocr(
@@ -828,50 +726,30 @@ def _prepare_images_for_ocr(
 
 def _format_ocr_results(
     extracted_texts: List[str],
-    speech_bubble_indices: List[int],
-    osb_text_indices: List[int],
-    verbose: bool = False,
-) -> tuple[List[str], List[str], set, bool]:
-    """Format OCR results with S/N prefixes and track failed indices.
+    bubble_metadata: List[Dict[str, Any]],
+) -> None:
+    """Format and log OCR results.
 
     Args:
         extracted_texts: List of extracted text strings
-        speech_bubble_indices: List of indices that are speech bubbles
-        osb_text_indices: List of indices that are outside speech bubble text
+        bubble_metadata: List of metadata dicts for text elements
         verbose: Whether to print verbose logging
-
-    Returns:
-        Tuple of (speech_bubble_texts, osb_texts, ocr_failed_indices, all_failed)
     """
-    speech_bubble_map = {idx: pos for pos, idx in enumerate(speech_bubble_indices)}
-    osb_text_map = {idx: pos for pos, idx in enumerate(osb_text_indices)}
-
-    speech_bubble_texts = []
-    osb_texts = []
-    ocr_failed_indices = set()
-    all_failed = True
+    log_lines = []
 
     for i, text in enumerate(extracted_texts):
-        if text == "[OCR FAILED]" or not text:
-            ocr_failed_indices.add(i)
-            speech_pos = speech_bubble_map.get(i, -1)
-            if speech_pos >= 0:
-                speech_bubble_texts.append(f"S{speech_pos + 1}: [OCR FAILED]")
-            else:
-                osb_pos = osb_text_map.get(i, -1)
-                if osb_pos >= 0:
-                    osb_texts.append(f"N{osb_pos + 1}: [OCR FAILED]")
-        else:
-            all_failed = False
-            speech_pos = speech_bubble_map.get(i, -1)
-            if speech_pos >= 0:
-                speech_bubble_texts.append(f"S{speech_pos + 1}: {text}")
-            else:
-                osb_pos = osb_text_map.get(i, -1)
-                if osb_pos >= 0:
-                    osb_texts.append(f"N{osb_pos + 1}: {text}")
+        metadata = bubble_metadata[i] if i < len(bubble_metadata) else {}
+        is_osb = metadata.get("is_outside_text", False)
+        prefix = f"{i + 1}"
+        type_label = "[OSB]" if is_osb else "[Bubble]"
 
-    return speech_bubble_texts, osb_texts, ocr_failed_indices, all_failed
+        log_lines.append(f"{prefix}: {type_label} {text}")
+
+    if log_lines:
+        log_message(
+            f"Raw OCR output:\n---\n{chr(10).join(log_lines)}\n---",
+            always_print=True,
+        )
 
 
 def _check_ocr_failure(texts: List[str], provider: Optional[str] = None) -> bool:
@@ -916,23 +794,20 @@ def _format_special_instructions(config: TranslationConfig) -> str:
 
 def _perform_manga_ocr(
     images_b64: List[str],
-    speech_bubble_indices: List[int],
-    osb_text_indices: List[int],
-    total_elements: int,
+    bubble_metadata: List[Dict[str, Any]],
     debug: bool = False,
 ) -> List[str]:
     """Perform OCR using manga-ocr model.
 
     Args:
         images_b64: List of base64-encoded images
-        speech_bubble_indices: List of indices that are speech bubbles
-        osb_text_indices: List of indices that are outside speech bubble text
-        total_elements: Total number of text elements
+        bubble_metadata: List of metadata dicts for text elements
         debug: Whether to print verbose logging
 
     Returns:
         List of extracted text strings, or early return with failure list
     """
+    total_elements = len(images_b64)
     log_message("Using manga-ocr for text extraction", verbose=debug)
 
     cache = get_cache()
@@ -956,29 +831,7 @@ def _perform_manga_ocr(
 
     extracted_texts = formatted_texts
 
-    # Always format and print raw manga-ocr output
-    speech_bubble_texts, osb_texts, _, _ = _format_ocr_results(
-        extracted_texts,
-        speech_bubble_indices,
-        osb_text_indices,
-        verbose=debug,
-    )
-
-    log_sections = []
-    if speech_bubble_texts:
-        log_sections.append("## SPEECH BUBBLES")
-        log_sections.extend(speech_bubble_texts)
-    if osb_texts:
-        if log_sections:
-            log_sections.append("")
-        log_sections.append("## OUTSIDE-BUBBLE TEXT")
-        log_sections.extend(osb_texts)
-
-    if log_sections:
-        log_message(
-            f"Raw manga-ocr output:\n---\n{chr(10).join(log_sections)}\n---",
-            always_print=True,
-        )
+    _format_ocr_results(extracted_texts, bubble_metadata)
 
     if len(extracted_texts) != total_elements:
         msg = (
@@ -1010,15 +863,10 @@ def _perform_llm_ocr(
     images_b64: List[str],
     mime_types: List[str],
     ocr_prompt: str,
-    speech_bubble_indices: List[int],
-    osb_text_indices: List[int],
     is_gemini_3: bool,
     provider: str,
-    total_elements: int,
     input_language: Optional[str],
     reading_direction: str,
-    num_speech_bubbles: int,
-    num_osb_text: int,
     debug: bool = False,
 ) -> List[str]:
     """Perform OCR using vision LLM.
@@ -1028,20 +876,16 @@ def _perform_llm_ocr(
         images_b64: List of base64-encoded images
         mime_types: List of MIME types for each image
         ocr_prompt: OCR prompt text
-        speech_bubble_indices: List of indices that are speech bubbles
-        osb_text_indices: List of indices that are outside speech bubble text
         is_gemini_3: Whether model is Gemini 3
         provider: Provider name
-        total_elements: Total number of text elements
         input_language: Input language
         reading_direction: Reading direction
-        num_speech_bubbles: Number of speech bubbles
-        num_osb_text: Number of OSB text elements
         debug: Whether to print verbose logging
 
     Returns:
         List of extracted text strings, or early return with failure list
     """
+    total_elements = len(images_b64)
     ocr_parts = []
     for i, img_b64 in enumerate(images_b64):
         mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
@@ -1052,9 +896,7 @@ def _perform_llm_ocr(
             )
         ocr_parts.append(bubble_part)
 
-    ocr_system = _build_system_prompt_ocr(
-        input_language, reading_direction, num_speech_bubbles, num_osb_text
-    )
+    ocr_system = _build_system_prompt_ocr(input_language, reading_direction)
     ocr_response_text = _call_llm_endpoint(
         config,
         ocr_parts,
@@ -1062,10 +904,9 @@ def _perform_llm_ocr(
         debug,
         system_prompt=ocr_system,
     )
-    extracted_texts = _parse_llm_response_with_sections(
+    extracted_texts = _parse_llm_response_unified(
         ocr_response_text,
-        speech_bubble_indices,
-        osb_text_indices,
+        total_elements,
         provider + "-OCR",
         debug,
     )
@@ -1119,17 +960,19 @@ def call_translation_api_batch(
     reading_direction = config.reading_direction
     translation_mode = config.translation_mode
 
-    speech_bubble_indices = []
-    osb_text_indices = []
-    for i, metadata in enumerate(bubble_metadata):
-        if metadata.get("is_outside_text", False):
-            osb_text_indices.append(i)
-        else:
-            speech_bubble_indices.append(i)
-
-    num_speech_bubbles = len(speech_bubble_indices)
-    num_osb_text = len(osb_text_indices)
+    # Include conditional OSB hints
     total_elements = len(images_b64)
+    osb_indices = [
+        i + 1 for i, meta in enumerate(bubble_metadata) if meta.get("is_outside_text")
+    ]
+
+    context_hints = ""
+    if osb_indices:
+        osb_list_str = ", ".join(map(str, osb_indices))
+        context_hints = (
+            f"\nNote: Items {osb_list_str} contain sound effects or narration. "
+            "Translate them accordingly."
+        )
 
     reading_order_desc = (
         "right-to-left, top-to-bottom"
@@ -1171,30 +1014,11 @@ def call_translation_api_batch(
 
     try:
         if translation_mode == "two-step":
-            speech_bubble_section = ""
-            osb_text_section = ""
-            osb_text_context = ""
-
-            if num_speech_bubbles > 0:
-                speech_bubble_section = f"""
-## SPEECH BUBBLES
-You have been provided with {num_speech_bubbles} speech bubble images. These contain dialogue text."""
-
-            if num_osb_text > 0:
-                osb_text_section = f"""
-## OUTSIDE-BUBBLE TEXT
-You have been provided with {num_osb_text} outside-bubble text images.
-These contain text outside speech bubbles such as sound effects or narrative elements."""
-                osb_text_context = f" and {num_osb_text} outside-bubble text images,"
-
             special_instructions_section = _format_special_instructions(config)
 
             ocr_prompt = f"""
 ## CONTEXT
-You have been provided with {num_speech_bubbles} individual dialogue text images{osb_text_context} from a manga page. They are presented in their natural reading order ({reading_order_desc}).
-
-{speech_bubble_section}
-{osb_text_section}
+You have been provided with {total_elements} individual text images from a manga page. They are presented in their natural reading order ({reading_order_desc}).
 
 ## TASK
 Apply your OCR transcription rules to each image provided.{special_instructions_section}
@@ -1205,9 +1029,7 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
             if config.ocr_method == "manga-ocr":
                 extracted_texts = _perform_manga_ocr(
                     images_b64,
-                    speech_bubble_indices,
-                    osb_text_indices,
-                    total_elements,
+                    bubble_metadata,
                     debug,
                 )
             else:
@@ -1216,56 +1038,29 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
                     images_b64,
                     mime_types,
                     ocr_prompt,
-                    speech_bubble_indices,
-                    osb_text_indices,
                     is_gemini_3,
                     provider,
-                    total_elements,
                     input_language,
                     reading_direction,
-                    num_speech_bubbles,
-                    num_osb_text,
                     debug,
                 )
 
             log_message("Starting translation step", verbose=debug)
 
             formatted_texts = []
-            for text in extracted_texts:
-                if f"[{provider}-OCR:" in text:
+            ocr_failed_indices = set()
+            for i, text in enumerate(extracted_texts):
+                if f"[{provider}-OCR:" in text or text == "[OCR FAILED]":
                     formatted_texts.append("[OCR FAILED]")
+                    ocr_failed_indices.add(i)
                 else:
                     formatted_texts.append(text)
 
-            speech_bubble_texts, osb_texts, ocr_failed_indices, all_failed = (
-                _format_ocr_results(
-                    formatted_texts,
-                    speech_bubble_indices,
-                    osb_text_indices,
-                    verbose=debug,
-                )
-            )
-
-            speech_bubble_section = ""
-            osb_text_section = ""
-            osb_text_context = ""
-
-            if speech_bubble_texts:
-                speech_bubble_section = f"""
-### Speech Bubbles
----
-{"\n".join(speech_bubble_texts)}
----"""
-
-            if osb_texts:
-                osb_text_section = f"""
-### Outside-Bubble Text
----
-{"\n".join(osb_texts)}
----"""
-                osb_text_context = (
-                    f" and {num_osb_text} transcribed outside-bubble text"
-                )
+            ocr_input_section = """
+## INPUT DATA
+"""
+            for i, text in enumerate(formatted_texts):
+                ocr_input_section += f"{i + 1}: {text}\n"
 
             full_page_context = (
                 "A full-page image is also provided for visual and narrative context."
@@ -1281,11 +1076,10 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
 
             translation_prompt = f"""
 ## CONTEXT
-You have been provided with a list of {num_speech_bubbles} transcribed dialogue texts{osb_text_context} from a manga page. {full_page_context}
+You have been provided with a list of {total_elements} transcribed text segments from a manga page. {full_page_context}
+{context_hints}
 
-## INPUT DATA
-{speech_bubble_section}
-{osb_text_section}
+{ocr_input_section}
 
 ## TASK
 Apply your translation and styling rules to the text in the `## INPUT DATA` section. 
@@ -1313,7 +1107,6 @@ The target language is {output_language}. Use the appropriate translation approa
             translation_system = _build_system_prompt_translation(
                 output_language,
                 mode="two-step",
-                num_osb_text=num_osb_text,
             )
             translation_response_text = _call_llm_endpoint(
                 config,
@@ -1322,10 +1115,9 @@ The target language is {output_language}. Use the appropriate translation approa
                 debug,
                 system_prompt=translation_system,
             )
-            final_translations = _parse_llm_response_with_sections(
+            final_translations = _parse_llm_response_unified(
                 translation_response_text,
-                speech_bubble_indices,
-                osb_text_indices,
+                total_elements,
                 provider + "-Translate",
                 debug,
             )
@@ -1366,32 +1158,12 @@ The target language is {output_language}. Use the appropriate translation approa
                 else ""
             )
 
-            speech_bubble_section = ""
-            osb_text_section = ""
-            osb_text_context = ""
-
-            if num_speech_bubbles > 0:
-                speech_bubble_section = f"""
-## SPEECH BUBBLES
-You have been provided with {num_speech_bubbles} speech bubble images. These contain dialogue text."""
-
-            if num_osb_text > 0:
-                osb_text_section = f"""
-## OUTSIDE-BUBBLE TEXT
-You have been provided with {num_osb_text} outside-bubble text images.
-These contain text outside speech bubbles such as sound effects or narrative elements."""
-                osb_text_context = (
-                    f" and {num_osb_text} transcribed outside-bubble text"
-                )
-
             special_instructions_section = _format_special_instructions(config)
 
             one_step_prompt = f"""
 ## CONTEXT
-You have been provided with {num_speech_bubbles} individual dialogue text images{osb_text_context} from a manga page. {full_page_context}
-
-{speech_bubble_section}
-{osb_text_section}
+You have been provided with {total_elements} individual text images from a manga page. {full_page_context}
+{context_hints}
 
 ## TASK
 For each image, you must perform two steps:
@@ -1399,36 +1171,14 @@ For each image, you must perform two steps:
 2.  **Translate:** Translate the text you just transcribed into {output_language}, applying your translation and styling rules.{special_instructions_section}
 
 ## OUTPUT FORMAT
-You must return your response in separate sections for each text type. Each section must have 
-both transcription and translation subsections.
-
-## SPEECH BUBBLES TRANSCRIPTION
-S1: <original {input_language} text for speech bubble 1>
-S2: <original {input_language} text for speech bubble 2>
-...{f"""
-
-## OUTSIDE-BUBBLE TEXT TRANSCRIPTION
-N1: <original {input_language} text for outside-bubble text 1>
-N2: <original {input_language} text for outside-bubble text 2>
-...""" if num_osb_text > 0 else ""}
-
----
-
-## SPEECH BUBBLES TRANSLATION
-S1: <{output_language} translation for speech bubble 1>
-S2: <{output_language} translation for speech bubble 2>
-...{f"""
-
-## OUTSIDE-BUBBLE TEXT TRANSLATION
-N1: <{output_language} translation for outside-bubble text 1>
-N2: <{output_language} translation for outside-bubble text 2>
-...""" if num_osb_text > 0 else ""}
+You must return your response as a single numbered list with exactly one line per input image.
+The numbering must correspond to the input image order (1, 2, 3...).
+Format: `i: <transcribed text> || <translated {output_language} text>`
 """  # noqa
 
             one_step_system = _build_system_prompt_translation(
                 output_language,
                 mode="one-step",
-                num_osb_text=num_osb_text,
             )
             response_text = _call_llm_endpoint(
                 config,
@@ -1437,30 +1187,22 @@ N2: <{output_language} translation for outside-bubble text 2>
                 debug,
                 system_prompt=one_step_system,
             )
-            translation_block = None
-            try:
-                section_pattern = re.compile(
-                    r"^\s*##\s*TRANSLATION\s*$([\s\S]*?)(?=^\s*##\s+|\Z)", re.MULTILINE
-                )
-                m = section_pattern.search(response_text or "")
-                if m:
-                    translation_block = m.group(1).strip()
-            except Exception:
-                translation_block = None
 
-            parse_text = (
-                translation_block if translation_block else (response_text or "")
-            )
-            translations = _parse_llm_response_with_sections(
-                parse_text, speech_bubble_indices, osb_text_indices, provider, debug
+            # Parse one-step format ("Original || Translated")
+            raw_lines = _parse_llm_response_unified(
+                response_text, total_elements, provider, debug
             )
 
-            if translations is None:
-                log_message("One-step API call failed", always_print=True)
-                return [f"[{provider}: API failed]"] * total_elements
-            else:
-                cache.set_translation(cache_key, translations)
-                return translations
+            translations = []
+            for line in raw_lines:
+                if "||" in line:
+                    parts = line.split("||", 1)
+                    translations.append(parts[1].strip())
+                else:
+                    translations.append(line)
+
+            cache.set_translation(cache_key, translations)
+            return translations
         else:
             raise TranslationError(
                 f"Unknown translation_mode specified in config: {translation_mode}"
