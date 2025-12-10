@@ -766,7 +766,7 @@ def _parse_llm_response_with_sections(
                     )
 
         log_message(
-            f"Parsed {len(speech_matches)} speech bubbles and {len(osb_matches)} OSB texts",
+            f"Parsed {len(speech_dict)} speech bubbles and {len(osb_dict)} OSB texts",
             verbose=debug,
         )
         return final_list
