@@ -3,26 +3,9 @@ from typing import Any, Dict, List
 
 def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=None):
     """
-    Sort text elements (speech bubbles and OSB text) into a robust reading order.
-
-    Strategy:
-    - If panels are provided:
-      1. Assign bubbles to panels.
-      2. Sort bubbles within each panel.
-      3. Treat panels (with their bubbles) and unassigned bubbles as "spatial entities".
-      4. Sort all spatial entities (panels + unassigned bubbles) together using the robust
-         bands/columns algorithm. This ensures unassigned bubbles are interleaved correctly
-         between panels based on their position.
-    - Otherwise, use global sorting on all bubbles.
-
-    Args:
-        detections (list): List of detection dicts with a "bbox" key: (x1, y1, x2, y2).
-        reading_direction (str): "rtl" or "ltr".
-        panels (list, optional): List of panel bounding boxes as tuples (x1, y1, x2, y2).
-
-    Returns:
-        list: New list with the same detection dicts, sorted in reading order.
-              Elements will have a "panel_id" key added if panels are provided.
+    Hybrid Algorithm (veto system):
+    - Macro: graph sort with ceiling + right-neighbor veto to enforce Z flow.
+    - Micro: tuned spatial banding with looser thresholds for offset bubbles.
     """
 
     if not detections:
@@ -30,6 +13,7 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
 
     rtl = (reading_direction or "rtl").lower() == "rtl"
 
+    # Micro layout: keep slightly offset bubbles grouped into lines/columns.
     def _get_features(bbox):
         x1, y1, x2, y2 = bbox
         w = max(1.0, float(x2 - x1))
@@ -39,18 +23,15 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
         return x1, y1, x2, y2, w, h, cx, cy
 
     def _spatial_sort(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Sort items spatially using bands and columns.
-        Items must be dicts with at least a "bbox" key.
-        Returns the sorted list of items.
-        """
+        """Robust spatial sort for bubbles (vertical columns + horizontal rows)."""
         if not items:
             return []
 
-        y_overlap_ratio_threshold = 0.3
-        y_center_band_factor = 0.35
-        x_overlap_ratio_threshold = 0.3
-        x_center_band_factor = 0.35
+        # Tuned thresholds to keep slightly offset bubbles in the same line.
+        y_overlap_ratio_threshold = 0.25
+        y_center_band_factor = 0.5
+        x_overlap_ratio_threshold = 0.2
+        x_center_band_factor = 0.5
 
         enriched = []
         for item in items:
@@ -72,14 +53,11 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
         enriched.sort(key=lambda e: e["cy"])
 
         bands = []
-
         for e in enriched:
-            y1 = e["y1"]
-            y2 = e["y2"]
-            h = e["h"]
-
+            y1, y2, h = e["y1"], e["y2"], e["h"]
             best_band_idx = -1
             best_score = -1.0
+
             for i, band in enumerate(bands):
                 band_h = max(1.0, float(band["y_max"] - band["y_min"]))
                 overlap_v = max(0.0, min(y2, band["y_max"]) - max(y1, band["y_min"]))
@@ -89,6 +67,7 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
                 same_row = (overlap_ratio >= y_overlap_ratio_threshold) or (
                     center_delta_y <= y_center_band_factor * min(h, band_h)
                 )
+
                 if same_row:
                     score = overlap_ratio - (center_delta_y / (h + band_h)) * 0.1
                     if score > best_score:
@@ -108,15 +87,13 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
         ordered_items = []
         for band in bands:
             items_in_band = band["items"]
-
             columns = []
-            for e in items_in_band:
-                x1 = e["x1"]
-                x2 = e["x2"]
-                w = e["w"]
 
+            for e in items_in_band:
+                x1, x2, w = e["x1"], e["x2"], e["w"]
                 best_col_idx = -1
                 best_score = -1.0
+
                 for i, col in enumerate(columns):
                     col_w = max(1.0, float(col["x_max"] - col["x_min"]))
                     overlap_h = max(0.0, min(x2, col["x_max"]) - max(x1, col["x_min"]))
@@ -127,6 +104,7 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
                     same_col = (overlap_ratio >= x_overlap_ratio_threshold) or (
                         center_delta_x <= x_center_band_factor * min(w, col_w)
                     )
+
                     if same_col:
                         score = overlap_ratio - (center_delta_x / (w + col_w)) * 0.1
                         if score > best_score:
@@ -152,100 +130,204 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
 
         return ordered_items
 
-    def _point_in_box(x, y, box):
-        px1, py1, px2, py2 = box
-        return px1 <= x <= px2 and py1 <= y <= py2
+    # Macro layout: panel graph with root detection and dual veto for Z-flow.
+    def _iou_x(boxA, boxB):
+        xa1, _, xa2, _ = boxA
+        xb1, _, xb2, _ = boxB
+        inter = max(0, min(xa2, xb2) - max(xa1, xb1))
+        union = (xa2 - xa1) + (xb2 - xb1) - inter
+        return inter / union if union > 0 else 0
 
-    def _assign_to_panel(detection, panels_list):
-        """Assign a detection to a panel based on center point or intersection."""
-        x1, y1, x2, y2 = detection["bbox"]
-        cx = (x1 + x2) / 2.0
-        cy = (y1 + y2) / 2.0
+    def _iou_y_overlap(boxA, boxB):
+        _, ya1, _, ya2 = boxA
+        _, yb1, _, yb2 = boxB
+        inter = max(0, min(ya2, yb2) - max(ya1, yb1))
+        min_h = min(ya2 - ya1, yb2 - yb1)
+        return inter / min_h if min_h > 0 else 0
 
-        for i, panel_box in enumerate(panels_list):
-            if _point_in_box(cx, cy, panel_box):
-                return i
+    def sort_panels_strict(panels_list):
+        if not panels_list:
+            return []
 
-        # Check if center is within a small distance (snapping)
-        # This helps with bubbles that are just barely outside a panel
-        det_w = x2 - x1
-        det_h = y2 - y1
-        det_diagonal = (det_w * det_w + det_h * det_h) ** 0.5
-        snap_threshold = det_diagonal * 0.05  # 5% of detection's diagonal
+        nodes = []
+        for i, bbox in enumerate(panels_list):
+            nodes.append(
+                {
+                    "id": i,
+                    "bbox": bbox,
+                    "center": ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2),
+                    "visited": False,
+                }
+            )
 
-        min_dist = float("inf")
-        closest_panel_idx = -1
+        sorted_indices = []
 
-        for i, panel_box in enumerate(panels_list):
-            px1, py1, px2, py2 = panel_box
-            dx = max(px1 - cx, 0, cx - px2)
-            dy = max(py1 - cy, 0, cy - py2)
-            dist = (dx * dx + dy * dy) ** 0.5
-            if dist < min_dist:
-                min_dist = dist
-                closest_panel_idx = i
+        # Roots: panels with no panel above in the same column.
+        root_nodes = []
+        for n in nodes:
+            is_root = True
+            for parent in nodes:
+                if n["id"] == parent["id"]:
+                    continue
+                is_above = parent["bbox"][3] <= (n["bbox"][1] + 50)
+                x_overlap = _iou_x(parent["bbox"], n["bbox"])
+                if is_above and x_overlap > 0.2:
+                    is_root = False
+                    break
+            if is_root:
+                root_nodes.append(n)
 
-        if min_dist <= snap_threshold:
-            return closest_panel_idx
+        if root_nodes:
+            start_node = max(root_nodes, key=lambda n: n["bbox"][2])
+        else:
+            start_node = min(nodes, key=lambda n: n["bbox"][1])
 
-        best_panel = None
-        best_intersection = 0.0
-        det_area = (x2 - x1) * (y2 - y1)
+        current = start_node
+        current["visited"] = True
+        sorted_indices.append(current["id"])
 
-        for i, panel_box in enumerate(panels_list):
-            px1, py1, px2, py2 = panel_box
-            inter_x1 = max(x1, px1)
-            inter_y1 = max(y1, py1)
-            inter_x2 = min(x2, px2)
-            inter_y2 = min(y2, py2)
+        while len(sorted_indices) < len(nodes):
+            c_box = current["bbox"]
+            candidates = [n for n in nodes if not n["visited"]]
+            if not candidates:
+                break
 
-            if inter_x2 > inter_x1 and inter_y2 > inter_y1:
-                inter_area = (inter_x2 - inter_x1) * (inter_y2 - inter_y1)
-                intersection_ratio = inter_area / det_area if det_area > 0 else 0.0
-                if intersection_ratio > best_intersection:
-                    best_intersection = intersection_ratio
-                    best_panel = i
+            col_cand = None
+            col_candidates = []
+            for cand in candidates:
+                cand_box = cand["bbox"]
+                overlap = _iou_x(c_box, cand_box)
+                is_below = cand_box[1] >= (c_box[1] + (c_box[3] - c_box[1]) * 0.5)
+                if overlap > 0.2 and is_below:
+                    dist_y = max(0, cand_box[1] - c_box[3])
+                    col_candidates.append((dist_y, cand))
 
-        # Only assign if intersection is significant (>10%)
-        if best_intersection > 0.1:
-            return best_panel
+            if col_candidates:
+                col_candidates.sort(key=lambda x: (int(x[0] / 50), -x[1]["center"][0]))
+                col_cand = col_candidates[0][1]
 
-        return None
+            row_cand = None
+            row_candidates = []
+            for cand in candidates:
+                cand_box = cand["bbox"]
+                if cand_box[2] <= (c_box[0] + 50):
+                    y_inter = max(
+                        0, min(c_box[3], cand_box[3]) - max(c_box[1], cand_box[1])
+                    )
+                    if y_inter > 0:
+                        dist_x = c_box[0] - cand_box[2]
+                        row_candidates.append((dist_x, cand))
+
+            if row_candidates:
+                row_candidates.sort(key=lambda x: x[0])
+                row_cand = row_candidates[0][1]
+
+            # Dual veto: ceiling (topological) + right-neighbor (row start).
+            if col_cand:
+                is_blocked = False
+                for other in candidates:
+                    if other["id"] == col_cand["id"]:
+                        continue
+                    is_above = other["bbox"][3] <= (col_cand["bbox"][1] + 50)
+                    x_overlap = _iou_x(other["bbox"], col_cand["bbox"])
+                    if is_above and x_overlap > 0.2:
+                        is_blocked = True
+                        break
+                    is_to_right = other["bbox"][0] > (col_cand["bbox"][0] + 20)
+                    y_overlap_ratio = _iou_y_overlap(col_cand["bbox"], other["bbox"])
+                    if is_to_right and y_overlap_ratio > 0.3:
+                        is_blocked = True
+                        break
+                if is_blocked:
+                    col_cand = None
+
+            next_node = None
+            if row_cand and not col_cand:
+                next_node = row_cand
+            elif col_cand and not row_cand:
+                next_node = col_cand
+            elif row_cand and col_cand:
+                curr_h = c_box[3] - c_box[1]
+                bottom_diff = abs(c_box[3] - row_cand["bbox"][3])
+                is_row_aligned = bottom_diff < (curr_h * 0.25)
+                next_node = row_cand if is_row_aligned else col_cand
+
+            if not next_node:
+                # Recompute roots among remaining nodes to find a new entry.
+                sub_roots = []
+                for n in candidates:
+                    is_root = True
+                    for parent in candidates:
+                        if n["id"] == parent["id"]:
+                            continue
+                        is_above = parent["bbox"][3] <= (n["bbox"][1] + 50)
+                        x_overlap = _iou_x(parent["bbox"], n["bbox"])
+                        if is_above and x_overlap > 0.2:
+                            is_root = False
+                            break
+                    if is_root:
+                        sub_roots.append(n)
+
+                if sub_roots:
+                    next_node = max(sub_roots, key=lambda n: n["bbox"][2])
+                else:
+                    next_node = min(candidates, key=lambda n: n["bbox"][1])
+
+            current = next_node
+            current["visited"] = True
+            sorted_indices.append(current["id"])
+
+        return sorted_indices
 
     if not panels:
         return _spatial_sort(detections)
 
-    # We do NOT sort panels beforehand. sorting panels by simple Y is brittle.
-    # Instead, we will sort "panel entities" together with "unassigned bubbles".
-    panel_assignments = {i: [] for i in range(len(panels))}
+    sorted_panel_indices = sort_panels_strict(panels)
+    if not sorted_panel_indices:
+        sorted_panel_indices = list(range(len(panels)))
+
+    panel_bins = {pid: [] for pid in sorted_panel_indices}
     unassigned = []
 
-    for det in detections:
-        panel_id = _assign_to_panel(det, panels)
-        if panel_id is not None:
-            det["panel_id"] = panel_id
-            panel_assignments[panel_id].append(det)
-        else:
-            det["panel_id"] = None
-            unassigned.append(det)
+    for detection in detections:
+        bx1, by1, bx2, by2 = detection["bbox"]
+        bcx, bcy = (bx1 + bx2) / 2.0, (by1 + by2) / 2.0
+        assigned = False
 
-    meta_entities = []
+        for i, pbbox in enumerate(panels):
+            px1, py1, px2, py2 = pbbox
+            if px1 <= bcx <= px2 and py1 <= bcy <= py2:
+                panel_bins.setdefault(i, []).append(detection)
+                detection["panel_id"] = i
+                assigned = True
+                break
 
-    for pid, p_bbox in enumerate(panels):
-        bubbles_in_panel = panel_assignments[pid]
-        if bubbles_in_panel:
-            sorted_bubbles = _spatial_sort(bubbles_in_panel)
-            meta_entities.append(
-                {"bbox": p_bbox, "content": sorted_bubbles, "type": "panel", "id": pid}
-            )
+        if not assigned:
+            best_dist = float("inf")
+            best_pid = -1
+            for i, pbbox in enumerate(panels):
+                px1, py1, px2, py2 = pbbox
+                dx = max(px1 - bcx, 0, bcx - px2)
+                dy = max(py1 - bcy, 0, bcy - py2)
+                dist = (dx**2 + dy**2) ** 0.5
+                if dist < best_dist:
+                    best_dist = dist
+                    best_pid = i
 
-    for det in unassigned:
-        meta_entities.append({"bbox": det["bbox"], "content": [det], "type": "bubble"})
+            if best_dist < 300:
+                panel_bins.setdefault(best_pid, []).append(detection)
+                detection["panel_id"] = best_pid
+                assigned = True
 
-    sorted_entities = _spatial_sort(meta_entities)
+        if not assigned:
+            detection["panel_id"] = None
+            unassigned.append(detection)
 
-    final_result = []
-    for entity in sorted_entities:
-        final_result.extend(entity["content"])
+    final_order = []
+    for pid in sorted_panel_indices:
+        final_order.extend(_spatial_sort(panel_bins.get(pid, [])))
 
-    return final_result
+    if unassigned:
+        final_order.extend(_spatial_sort(unassigned))
+
+    return final_order
