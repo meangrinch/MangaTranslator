@@ -566,9 +566,43 @@ def detect_speech_bubbles(
                 f"No secondary detections, processing all {len(simple_indices)} as simple bubbles",
                 verbose=verbose,
             )
+        
+        # Collect all secondary boxes that will be used for conjoined groups
+        conjoined_secondary_boxes = []
+        for _, s_indices in conjoined_indices:
+            for s_idx in s_indices:
+                conjoined_secondary_boxes.append(secondary_boxes[s_idx])
+        
+        # Filter out simple indices whose primary boxes overlap significantly with conjoined secondary boxes
+        # This prevents duplicate detection when the same bubble appears in both primary and secondary
+        filtered_simple_indices = []
+        for idx in simple_indices:
+            p_box = primary_boxes[idx]
+            is_duplicate = False
+            for s_box in conjoined_secondary_boxes:
+                # Check if primary box overlaps significantly with any secondary conjoined box
+                ioa_p_in_s = _calculate_ioa(p_box.tolist(), s_box.tolist())
+                ioa_s_in_p = _calculate_ioa(s_box.tolist(), p_box.tolist())
+                if ioa_p_in_s > IOA_OVERLAP_THRESHOLD or ioa_s_in_p > IOA_OVERLAP_THRESHOLD:
+                    is_duplicate = True
+                    log_message(
+                        f"Removing duplicate primary bubble {idx} (overlaps with conjoined secondary)",
+                        verbose=verbose,
+                    )
+                    break
+            if not is_duplicate:
+                filtered_simple_indices.append(idx)
+        
+        if len(filtered_simple_indices) < len(simple_indices):
+            removed_count = len(simple_indices) - len(filtered_simple_indices)
+            log_message(
+                f"Removed {removed_count} duplicate bubbles from simple indices",
+                verbose=verbose,
+            )
+        
         boxes_to_process = []
 
-        for idx in simple_indices:
+        for idx in filtered_simple_indices:
             boxes_to_process.append(primary_boxes[idx])
 
         for _, s_indices in conjoined_indices:
@@ -643,8 +677,25 @@ def detect_speech_bubbles(
         # Process primary boxes first in fallback to avoid duplicating secondary splits
         fallback_boxes = []
         if conjoined_detection and len(secondary_boxes) > 0 and conjoined_indices:
+            # Collect all secondary boxes used for conjoined groups
+            conjoined_secondary_boxes_fb = []
+            for _, s_indices in conjoined_indices:
+                for s_idx in s_indices:
+                    conjoined_secondary_boxes_fb.append(secondary_boxes[s_idx])
+            
+            # Filter simple_indices to remove duplicates
             for idx in simple_indices:
-                fallback_boxes.append(("primary", idx, primary_boxes[idx]))
+                p_box = primary_boxes[idx]
+                is_duplicate = False
+                for s_box in conjoined_secondary_boxes_fb:
+                    ioa_p_in_s = _calculate_ioa(p_box.tolist(), s_box.tolist())
+                    ioa_s_in_p = _calculate_ioa(s_box.tolist(), p_box.tolist())
+                    if ioa_p_in_s > IOA_OVERLAP_THRESHOLD or ioa_s_in_p > IOA_OVERLAP_THRESHOLD:
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    fallback_boxes.append(("primary", idx, primary_boxes[idx]))
+            
             for _, s_indices in conjoined_indices:
                 for s_idx in s_indices:
                     fallback_boxes.append(("secondary", s_idx, secondary_boxes[s_idx]))
