@@ -118,6 +118,19 @@ def call_openai_endpoint(
 
         if is_gpt5_series:
             payload["text"] = {"verbosity": "low"}
+
+            # temperature and top_p are only supported for GPT-5.1 with effort=none or GPT-5 with effort=minimal
+            current_effort = payload.get("reasoning_effort")
+            allow_sampling = False
+
+            if is_gpt5_1 and current_effort == "none":
+                allow_sampling = True
+            elif is_gpt5 and current_effort == "minimal":
+                allow_sampling = True
+
+            if not allow_sampling:
+                payload.pop("temperature", None)
+                payload.pop("top_p", None)
     except Exception:
         # Do not fail the request if model detection or mapping has issues
         pass
