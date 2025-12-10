@@ -20,6 +20,7 @@ from core.config import (
 from core.pipeline import batch_translate_images, translate_and_render
 from core.validation import (
     autodetect_yolo_model_path,
+    clamp_settings,
     validate_mutually_exclusive_modes,
 )
 from utils.logging import log_message
@@ -299,10 +300,10 @@ def main():
         help="Min font size for rendering text (px)",
     )
     parser.add_argument(
-        "--line-spacing",
+        "--line-spacing-mult",
         type=float,
         default=1.0,
-        help="Line spacing for rendering text (1.0 = standard)",
+        help="Line spacing multiplier for rendering text (1.0 = standard)",
     )
     parser.add_argument(
         "--no-subpixel-rendering",
@@ -808,7 +809,7 @@ def main():
             font_dir=args.font_dir,
             max_font_size=args.max_font_size,
             min_font_size=args.min_font_size,
-            line_spacing=args.line_spacing,
+            line_spacing_mult=args.line_spacing_mult,
             use_subpixel_rendering=args.use_subpixel_rendering,
             font_hinting=args.font_hinting,
             use_ligatures=args.use_ligatures,
@@ -855,6 +856,8 @@ def main():
         ),
         test_mode=args.test_mode,
     )
+
+    clamp_settings(config)
 
     # --- Execute ---
     if args.batch:

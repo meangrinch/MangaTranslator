@@ -82,7 +82,7 @@ class UIRenderingSettings:
 
     max_font_size: int = 16
     min_font_size: int = 8
-    line_spacing: float = 1.0
+    line_spacing_mult: float = 1.0
     use_subpixel_rendering: bool = True
     font_hinting: str = "none"
     use_ligatures: bool = False
@@ -219,7 +219,7 @@ class UIConfigState:
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
             "min_font_size": self.rendering.min_font_size,
-            "line_spacing": self.rendering.line_spacing,
+            "line_spacing_mult": self.rendering.line_spacing_mult,
             "use_subpixel_rendering": self.rendering.use_subpixel_rendering,
             "font_hinting": self.rendering.font_hinting,
             "use_ligatures": self.rendering.use_ligatures,
@@ -419,7 +419,9 @@ class UIConfigState:
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
                 min_font_size=data.get("min_font_size", defaults["min_font_size"]),
-                line_spacing=data.get("line_spacing", defaults["line_spacing"]),
+                line_spacing_mult=data.get(
+                    "line_spacing_mult", defaults["line_spacing_mult"]
+                ),
                 use_subpixel_rendering=data.get(
                     "use_subpixel_rendering", defaults["use_subpixel_rendering"]
                 ),
@@ -578,7 +580,7 @@ def map_ui_to_backend_config(
         font_dir=str(font_dir_path),
         max_font_size=ui_state.rendering.max_font_size,
         min_font_size=ui_state.rendering.min_font_size,
-        line_spacing_mult=ui_state.rendering.line_spacing,
+        line_spacing_mult=ui_state.rendering.line_spacing_mult,
         use_subpixel_rendering=ui_state.rendering.use_subpixel_rendering,
         font_hinting=ui_state.rendering.font_hinting,
         use_ligatures=ui_state.rendering.use_ligatures,

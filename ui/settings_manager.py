@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from core.llm_defaults import DEFAULT_LLM_PROVIDER, get_provider_sampling_defaults
+from core.validation import clamp_settings
 from utils.logging import log_message
 
 CONFIG_FILE = (
@@ -145,7 +146,7 @@ DEFAULT_SETTINGS = {
     "max_tokens": 4096,
     "max_font_size": 16,
     "min_font_size": 8,
-    "line_spacing": 1.0,
+    "line_spacing_mult": 1.0,
     "use_subpixel_rendering": True,
     "font_hinting": "none",
     "use_ligatures": False,
@@ -250,7 +251,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "font_pack",
     "max_font_size",
     "min_font_size",
-    "line_spacing",
+    "line_spacing_mult",
     "use_subpixel_rendering",
     "font_hinting",
     "use_ligatures",
@@ -379,6 +380,8 @@ def save_config(incoming_settings: Dict[str, Any]):
 
             if changed:
                 changed_setting_keys.append(key)
+
+        config_to_write = clamp_settings(config_to_write)
 
         os.makedirs(CONFIG_FILE.parent, exist_ok=True)
 
@@ -537,7 +540,7 @@ def get_saved_settings() -> Dict[str, Any]:
         else:
             settings["model_name"] = None
 
-    return settings
+    return clamp_settings(settings)
 
 
 def reset_to_defaults() -> Dict[str, Any]:
