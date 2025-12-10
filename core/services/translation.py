@@ -53,12 +53,16 @@ def _build_system_prompt_ocr(
         else "left-to-right"
     )
 
+    text_types = "dialogue text (speech bubbles)"
+    if num_osb_text > 0:
+        text_types += " or outside-bubble text (text outside speech bubbles)"
+
     return f"""
 ## ROLE
 You are an expert manga/comic OCR transcriber.
 
 ## OBJECTIVE
-Your sole purpose is to accurately transcribe the original text from a series of provided images. You must not translate, interpret, or add commentary. The images may contain either dialogue text (speech bubbles) or outside-bubble text (text outside speech bubbles).
+Your sole purpose is to accurately transcribe the original text from a series of provided images. You must not translate, interpret, or add commentary. The images will contain {text_types}.
 
 ## CORE RULES
 - **Reading Context:** The images are presented in a {direction} reading order.
@@ -84,29 +88,42 @@ Your sole purpose is to accurately transcribe the original text from a series of
 def _build_system_prompt_translation(
     output_language: str, mode: str, num_osb_text: int = 0
 ) -> str:
+    text_types = "dialogue text (speech bubbles)"
+    if num_osb_text > 0:
+        text_types += " and outside-bubble text (text outside speech bubbles)"
+
+    core_rules = """
+## CORE RULES
+- **Fidelity:** Stay faithful to the source. Do not add content, explanations, or cultural notes.
+- **Conciseness:** Keep translations idiomatic and concise.
+- **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
+- **Punctuation:** Use standard ASCII quotes and punctuation. Retain ellipses where meaningful.
+"""  # noqa
+    if num_osb_text > 0:
+        core_rules += """
+- **Outside-Bubble Text Translation:** For text categorized as outside-bubble text, determine if it is a sound effect/onomatopoeia or narration text:
+  - For sound effects/onomatopoeias, focus on capturing the feeling and visual metaphor relative to the surrounding panel. Keep these translations concise and impactful.
+  - For narration text, translate it like you would dialogue text. Do not style it.
+"""  # noqa
+
+    core_rules += """
+- **Edge Cases:** If an input line is `[OCR FAILED]` or `[NO TEXT]`, you must output it unchanged.
+"""  # noqa
+
     shared_components = f"""
 ## ROLE
 You are a professional manga localization translator and editor.
 
 ## OBJECTIVE
-Your goal is to produce natural-sounding, high-quality translations in {output_language} that are faithful to the original source's meaning, tone, and visual emphasis. You will handle both dialogue text (speech bubbles) and outside-bubble text (text outside speech bubbles).
+Your goal is to produce natural-sounding, high-quality translations in {output_language} that are faithful to the original source's meaning, tone, and visual emphasis. You will handle {text_types}.
 
 ## STYLING GUIDE
 You must use the following markdown-style markers to convey emphasis:
 - `*italic*`: Used for onomatopoeias, thoughts, flashbacks, distant sounds, or dialogue mediated by a device (e.g., phone, radio).
 - `**bold**`: Used for sound effects (SFX), shouting, timestamps, or individual emphatic words.
 - `***bold-italic***`: Used for extremely loud sounds or dialogue that also meets the criteria for italics (e.g., shouting over a radio).
-- **Outside-Bubble Text Styling:** For text outside speech bubbles, use minimal styling and focus on clarity and impact.
 
-## CORE RULES
-- **Fidelity:** Stay faithful to the source. Do not add content, explanations, or cultural notes.
-- **Conciseness:** Keep translations idiomatic and concise.
-- **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
-- **Punctuation:** Use standard ASCII quotes and punctuation. Retain ellipses where meaningful.
-- **Outside-Bubble Text Translation:** For text categorized as outside-bubble text, determine if it is a sound effect or narration text:
-  - For sound effects, focus on capturing the feeling and visual metaphor relative to the surrounding panel rather than literal phonetic sounds. Keep these translations concise and impactful.
-  - For narration text, translate it like you would dialogue text. Do not style it.
-- **Edge Cases:** If an input line is `[OCR FAILED]` or `[NO TEXT]`, you must output it unchanged.
+{core_rules}
 """  # noqa
 
     if mode == "one-step":
