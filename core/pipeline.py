@@ -764,7 +764,7 @@ def translate_and_render(
                                     raise_on_safe_error=False,
                                 )
                                 success = True
-                            except (RenderingError, FontError) as e:
+                            except Exception as e:
                                 log_message(
                                     f"Text rendering failed: {e}", verbose=verbose
                                 )
@@ -800,7 +800,7 @@ def translate_and_render(
                                             verbose=verbose,
                                         )
                                         success = True
-                                    except (RenderingError, FontError) as e2:
+                                    except Exception as e2:
                                         log_message(
                                             f"Vertical-stack fallback failed: {e2}",
                                             verbose=verbose,
@@ -821,6 +821,22 @@ def translate_and_render(
                                         else:
                                             rendered_image = pil_cleaned_image
                                             success = False
+                                else:
+                                    if "original_crop_pil" in bubble:
+                                        log_message(
+                                            f"Restoring original OSB patch for {bbox}",
+                                            verbose=verbose,
+                                            always_print=True,
+                                        )
+                                        rendered_image = pil_cleaned_image.copy()
+                                        original_patch = bubble["original_crop_pil"]
+                                        rendered_image.paste(
+                                            original_patch, (bbox[0], bbox[1])
+                                        )
+                                        success = True
+                                    else:
+                                        rendered_image = pil_cleaned_image
+                                        success = False
                         else:
                             try:
                                 rendered_image = render_text_skia(
