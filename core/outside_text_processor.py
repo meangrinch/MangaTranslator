@@ -203,21 +203,23 @@ def process_outside_text(
             unique, counts = np.unique(labels, return_counts=True)
             dominant_cluster_idx = unique[np.argmax(counts)]
 
-            # The dominant color is assumed to be the text color
-            text_color_rgb = centers[dominant_cluster_idx]
+            # Dominant cluster is usually the background (text pixels are sparse)
+            bg_color_rgb = centers[dominant_cluster_idx]
             # Use proper luminance calculation (ITU-R BT.601)
-            text_brightness = (
-                0.299 * text_color_rgb[0]
-                + 0.587 * text_color_rgb[1]
-                + 0.114 * text_color_rgb[2]
+            bg_brightness = (
+                0.299 * bg_color_rgb[0]
+                + 0.587 * bg_color_rgb[1]
+                + 0.114 * bg_color_rgb[2]
             )
-            is_dark_text = text_brightness < 128
+            is_dark_text = (
+                bg_brightness < 128
+            )  # passed downstream; renderer inverts for text color
             original_text_colors[bbox_tuple] = is_dark_text
 
             log_message(
                 f"OSB bbox {bbox_tuple}: "
-                f"{'Dark' if is_dark_text else 'Light'} text detected "
-                f"(luminance={text_brightness:.1f})",
+                f"{'Dark' if is_dark_text else 'Light'} background detected "
+                f"(luminance={bg_brightness:.1f})",
                 verbose=verbose,
             )
 
@@ -288,6 +290,54 @@ def process_outside_text(
                             oy1 = max(0, min(img_h, oy + oh))
                             composite_clip_bbox = (ox, oy, ox + ow, oy + oh)
 
+                            # Determine detected text color for this region to ensure contrast
+                            group_bg_is_dark = None
+                            if original_text_colors:
+                                votes_dark = 0
+                                votes_light = 0
+                                gx1, gy1, gx2, gy2 = ox, oy, ox + ow, oy + oh
+
+                                for (
+                                    bx1,
+                                    by1,
+                                    bx2,
+                                    by2,
+                                ), t_dark in original_text_colors.items():
+                                    # Check if center of OCR box is inside group box
+                                    bcx = (bx1 + bx2) / 2
+                                    bcy = (by1 + by2) / 2
+                                    if (
+                                        bcx >= gx1
+                                        and bcx <= gx2
+                                        and bcy >= gy1
+                                        and bcy <= gy2
+                                    ):
+                                        if t_dark:
+                                            votes_dark += 1
+                                        else:
+                                            votes_light += 1
+                                if votes_dark > 0 or votes_light > 0:
+                                    group_bg_is_dark = votes_dark >= votes_light
+
+                                    # Detected value represents background brightness
+                                    fallback_fill_color = (
+                                        (0, 0, 0)
+                                        if group_bg_is_dark
+                                        else (255, 255, 255)
+                                    )
+
+                                    t_type = "Dark" if group_bg_is_dark else "Light"
+                                    f_col = (
+                                        "White"
+                                        if fallback_fill_color == (255, 255, 255)
+                                        else "Black"
+                                    )
+                                    log_message(
+                                        f"OSB Region {i + 1}: Detected {t_type} background. "
+                                        f"Fallback fill: {f_col}.",
+                                        verbose=verbose,
+                                    )
+
                             # Expanded sampling around the original bbox to find background color
                             expansion_px = 2
                             sx1 = max(0, ox - expansion_px)
@@ -327,11 +377,13 @@ def process_outside_text(
                                     black_ratio = np.mean(
                                         np.all(border_pixels <= black_thresh, axis=1)
                                     )
-                                    fallback_fill_color = (
-                                        (255, 255, 255)
-                                        if white_ratio >= black_ratio
-                                        else (0, 0, 0)
-                                    )
+
+                                    if fallback_fill_color is None:
+                                        fallback_fill_color = (
+                                            (255, 255, 255)
+                                            if white_ratio >= black_ratio
+                                            else (0, 0, 0)
+                                        )
 
                                     force_fill = (
                                         config.outside_text.force_cv2_inpainting
