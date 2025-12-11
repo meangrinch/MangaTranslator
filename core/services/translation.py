@@ -354,9 +354,14 @@ def _build_generation_config(
         }  # top_k not supported by OpenAI
         if config.reasoning_effort:
             lm = (model_name or "").lower()
+            is_chat_variant = "chat" in lm
             is_gpt5_1 = lm.startswith("gpt-5.1")
-            if is_gpt5_1 or config.reasoning_effort != "none":
-                generation_config["reasoning_effort"] = config.reasoning_effort
+            is_gpt5_2 = lm.startswith("gpt-5.2")
+            effort = config.reasoning_effort
+            if effort == "xhigh" and not is_gpt5_2:
+                effort = "high"
+            if not is_chat_variant and (is_gpt5_1 or is_gpt5_2 or effort != "none"):
+                generation_config["reasoning_effort"] = effort
         return generation_config
 
     elif provider == "Anthropic":

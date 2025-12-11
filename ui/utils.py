@@ -416,6 +416,8 @@ def get_reasoning_effort_info_text(
     options = []
     if "auto" in choices:
         options.append("auto=model decides")
+    if "xhigh" in choices:
+        options.append("xhigh=95%")
     if "high" in choices:
         options.append("high=80%")
     if "medium" in choices:
@@ -525,10 +527,16 @@ def get_reasoning_effort_config(
         if not is_reasoning:
             return False, [], None
 
+        if "chat" in lm:
+            return False, [], None
+
         is_gpt5_1 = lm.startswith("gpt-5.1")
-        is_gpt5 = lm.startswith("gpt-5") and not is_gpt5_1
+        is_gpt5_2 = lm.startswith("gpt-5.2")
+        is_gpt5 = lm.startswith("gpt-5") and not (is_gpt5_1 or is_gpt5_2)
         if is_gpt5_1:
             return True, ["high", "medium", "low", "none"], "medium"
+        elif is_gpt5_2:
+            return True, ["xhigh", "high", "medium", "low", "none"], "medium"
         elif is_gpt5:
             return True, ["high", "medium", "low", "minimal"], "medium"
         else:
@@ -571,14 +579,14 @@ def get_reasoning_effort_config(
             if not is_reasoning:
                 return False, [], None
 
-            return True, ["high", "medium", "low", "minimal", "none"], "low"
+            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "low"
 
         is_claude_37_sonnet = "claude-3.7-sonnet" in lm
         if is_claude_37_sonnet:
             is_claude_37_sonnet_thinking = ":thinking" in lm
             if not is_claude_37_sonnet_thinking:
                 return False, [], None
-            return True, ["high", "medium", "low", "minimal"], "low"
+            return True, ["xhigh", "high", "medium", "low", "minimal"], "low"
 
         try:
             is_reasoning = openrouter_is_reasoning_model(model_name, debug=False)
@@ -586,7 +594,7 @@ def get_reasoning_effort_config(
             is_reasoning = False
 
         if is_reasoning:
-            return True, ["high", "medium", "low", "minimal", "none"], "low"
+            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "low"
 
         is_anthropic_model = "anthropic/" in lm or lm.startswith("claude-")
         if is_anthropic_model:

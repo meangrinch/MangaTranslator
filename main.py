@@ -256,10 +256,10 @@ def main():
         "--reasoning-effort",
         type=str,
         default="medium",
-        choices=["high", "medium", "low", "minimal", "none"],
+        choices=["xhigh", "high", "medium", "low", "minimal", "none"],
         help=(
             "OpenAI/Gemini 3: Controls internal reasoning effort. "
-            "`minimal` is only supported by GPT-5 series. "
+            "`xhigh` is available for GPT-5.2 (OpenAI) and `minimal` for GPT-5 series. "
             "Other providers: Controls reasoning token budget allocation relative to "
             "`max_tokens` (high=80%, medium=50%, low=20%). "
             "Use 'none' to disable thinking for certain models."

@@ -26,6 +26,8 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "gemini-2.0-flash-lite",
     ],
     "OpenAI": [
+        "gpt-5.2-2025-12-11",
+        "gpt-5.2-chat-latest",
         "gpt-5.1-2025-11-13",
         "gpt-5.1-chat-latest",
         "gpt-5-2025-08-07",
@@ -43,6 +45,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "o4-mini-2025-04-16",
         "o3-2025-04-16",
         "o1-2024-12-17",
+        "gpt-5.2-pro-2025-12-11",
         "gpt-5-pro-2025-10-06",
         "o3-pro-2025-06-10",
         "o1-pro-2025-03-19",

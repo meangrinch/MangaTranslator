@@ -92,9 +92,11 @@ def call_openai_endpoint(
 
     try:
         lower_model = (model_name or "").lower()
+        is_chat_variant = "chat" in lower_model
         is_gpt5_1 = lower_model.startswith("gpt-5.1")
-        is_gpt5 = lower_model.startswith("gpt-5") and not is_gpt5_1
-        is_gpt5_series = is_gpt5 or is_gpt5_1
+        is_gpt5_2 = lower_model.startswith("gpt-5.2")
+        is_gpt5 = lower_model.startswith("gpt-5") and not (is_gpt5_1 or is_gpt5_2)
+        is_gpt5_series = is_gpt5 or is_gpt5_1 or is_gpt5_2
         is_reasoning_capable = (
             is_gpt5_series
             or lower_model.startswith("o1")
@@ -102,28 +104,29 @@ def call_openai_endpoint(
             or lower_model.startswith("o4-mini")
         )
 
-        if is_reasoning_capable:
+        if is_reasoning_capable and not is_chat_variant:
             effort = generation_config.get("reasoning_effort")
             if effort:
-                if is_gpt5_1 and effort == "none":
+                if (is_gpt5_1 or is_gpt5_2) and effort == "none":
                     payload["reasoning_effort"] = "none"
                 elif effort != "none":
-                    if is_gpt5_1 and effort == "minimal":
-                        effort_to_send = "none"  # Fallback to "none" for GPT-5.1
-                    elif effort == "minimal" and not is_gpt5_series:
+                    effort_to_send = effort
+                    if effort_to_send == "xhigh" and not is_gpt5_2:
+                        effort_to_send = "high"
+                    if (is_gpt5_1 or is_gpt5_2) and effort_to_send == "minimal":
+                        effort_to_send = "none"
+                    elif effort_to_send == "minimal" and not is_gpt5_series:
                         effort_to_send = "low"
-                    else:
-                        effort_to_send = effort
                     payload["reasoning_effort"] = effort_to_send
 
-        if is_gpt5_series:
+        if is_gpt5_series and not is_chat_variant:
             payload["text"] = {"verbosity": "low"}
 
             # temperature and top_p are only supported for GPT-5.1 with effort=none or GPT-5 with effort=minimal
             current_effort = payload.get("reasoning_effort")
             allow_sampling = False
 
-            if is_gpt5_1 and current_effort == "none":
+            if (is_gpt5_1 or is_gpt5_2) and current_effort == "none":
                 allow_sampling = True
             elif is_gpt5 and current_effort == "minimal":
                 allow_sampling = True
