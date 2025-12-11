@@ -2,6 +2,19 @@
 
 Web application for automating the translation of manga/comic page images using AI. Targets speech bubbles and text outside of speech bubbles. Supports 54 languages and custom font pack usage.
 
+<div align="left">
+  <table>
+    <tr>
+      <th style="text-align: left">Original</th>
+      <th style="text-align: left">Translated (Default Settings)</th>
+    </tr>
+    <tr>
+      <td><img src="docs/images/example_original.jpg" width="350" /></td>
+      <td><img src="docs/images/example_translation.jpg" width="350" /></td>
+    </tr>
+  </table>
+</div>
+
 ## Features
 
 - Speech bubble detection, segmentation, cleaning (YOLO + SAM 2.1)
