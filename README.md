@@ -6,7 +6,7 @@ Web application for automating the translation of manga/comic page images using 
   <table>
     <tr>
       <th style="text-align: left">Original</th>
-      <th style="text-align: left">Translated (Default Settings)</th>
+      <th style="text-align: left">Translated</th>
     </tr>
     <tr>
       <td><img src="docs/images/example_original.jpg" width="350" /></td>
