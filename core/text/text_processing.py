@@ -217,9 +217,14 @@ def find_optimal_breaks_dp(
                 slack = max_width - line_width
                 badness = pow(slack, badness_exponent)
 
-                # Add hyphen penalty if line ends with hyphen
+                # Add hyphen penalty if line ends with hyphen (support styled markers)
                 last_token = tokens[i - 1] if i > 0 else ""
-                if last_token.endswith("-"):
+                ends_with_hyphen = last_token.endswith("-")
+                if not ends_with_hyphen:
+                    styled_match = STYLE_PATTERN.match(last_token)
+                    if styled_match:
+                        ends_with_hyphen = styled_match.group(2).endswith("-")
+                if ends_with_hyphen:
                     badness += hyphen_penalty
 
                 total_cost = min_cost[j] + badness

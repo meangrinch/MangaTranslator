@@ -6,6 +6,7 @@ import skia
 import uharfbuzz as hb
 
 from core.text.text_processing import (
+    STYLE_PATTERN,
     find_optimal_breaks_dp,
     parse_styled_segments,
     tokenize_styled_text,
@@ -220,33 +221,45 @@ def check_fit(
 
         if hyphenate_before_scaling:
             for token_text, is_styled in tokens:
-                if not is_styled:
-                    match = re.match(r"^(\W*)([\w\-]+)(\W*)$", token_text)
-                    if match:
-                        core_word_length = len(match.group(2))
-                    else:
-                        core_word_length = len(token_text)
+                marker = ""
+                core_text = token_text
 
-                    if core_word_length > hyphenation_min_word_length:
-                        word_width = calculate_styled_line_width(
-                            token_text, font_size, loaded_hb_faces, features_to_enable
-                        )
+                if is_styled:
+                    styled_match = STYLE_PATTERN.match(token_text)
+                    if not styled_match:
+                        augmented_tokens.append(token_text)
+                        continue
+                    marker = styled_match.group(1)
+                    core_text = styled_match.group(2)
 
-                        if word_width > max_render_width:
+                match = re.match(r"^(\W*)([\w\-]+)(\W*)$", core_text)
+                if match:
+                    core_word_length = len(match.group(2))
+                else:
+                    core_word_length = len(core_text)
 
-                            def width_test_func(part: str) -> bool:
-                                w = calculate_styled_line_width(
-                                    part, font_size, loaded_hb_faces, features_to_enable
-                                )
-                                return w <= max_render_width
+                if core_word_length > hyphenation_min_word_length:
+                    word_width = calculate_styled_line_width(
+                        token_text, font_size, loaded_hb_faces, features_to_enable
+                    )
 
-                            split_parts = try_hyphenate_word(
-                                token_text, hyphenation_min_word_length, width_test_func
+                    if word_width > max_render_width:
+
+                        def wrap_part(part: str) -> str:
+                            return f"{marker}{part}{marker}" if marker else part
+
+                        def width_test_func(part: str) -> bool:
+                            wrapped = wrap_part(part)
+                            w = calculate_styled_line_width(
+                                wrapped, font_size, loaded_hb_faces, features_to_enable
                             )
-                            if split_parts:
-                                augmented_tokens.extend(split_parts)
-                            else:
-                                augmented_tokens.append(token_text)
+                            return w <= max_render_width
+
+                        split_parts = try_hyphenate_word(
+                            core_text, hyphenation_min_word_length, width_test_func
+                        )
+                        if split_parts:
+                            augmented_tokens.extend(wrap_part(p) for p in split_parts)
                         else:
                             augmented_tokens.append(token_text)
                     else:
