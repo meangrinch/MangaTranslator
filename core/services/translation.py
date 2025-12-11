@@ -59,14 +59,15 @@ You are an expert manga/comic OCR transcriber.
 Your sole purpose is to accurately transcribe the original text from a series of provided images. You must not translate, interpret, or add commentary.
 
 ## CORE RULES
-- **Reading Context:** The images are presented in a {direction} reading order.
+- **Reading Context:** The image crops are presented in a {direction} reading order. Do not reorder them.
 - **Transcription Policy:** Preserve all original punctuation, ellipses, and casing. Collapse multi-line text into a single line, separated by a single space.
 - **Ignore Policy:** You must ignore image borders, speech bubble tails, watermarks, page numbers, and any decorative elements outside the text itself.
 - **Language Focus:** Transcribe only the original {lang_label}text.
 - **Ruby/Furigana Policy:** If small phonetic characters (ruby/furigana) are present, you must ignore them and transcribe only the main, larger base text.
 - **Visual Emphasis Policy:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis in your transcription using markdown-style markers: `*italic*` for slanted text, `**bold**` for bold text, `***bold-italic***` for both.
 - **Edge Cases:**
-  - If an image contains no legible text, you must return the exact token: `[NO TEXT]`.
+  - If an image only contains an ellipsis, you must return it exactly as it appears.
+  - If an image is completely empty, you must return the exact token: `[NO TEXT]`.
   - If text is present but indecipherable, you must return the exact token: `[OCR FAILED]`.
 
 ## OUTPUT SCHEMA
@@ -77,9 +78,18 @@ Your sole purpose is to accurately transcribe the original text from a series of
 """  # noqa
 
 
-def _build_system_prompt_translation(output_language: str, mode: str) -> str:
-    core_rules = """
+def _build_system_prompt_translation(
+    output_language: str, mode: str, reading_direction: str
+) -> str:
+    direction = (
+        "right-to-left"
+        if (reading_direction or "rtl").lower() == "rtl"
+        else "left-to-right"
+    )
+    input_type = "transcriptions" if mode == "two-step" else "image crops"
+    core_rules = f"""
 ## CORE RULES
+- **Reading Context:** The {input_type} are presented in a {direction} reading order. Do not reorder them.
 - **Fidelity:** Stay faithful to the source. Do not add content, explanations, or cultural notes.
 - **Conciseness:** Keep translations idiomatic and concise.
 - **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
@@ -87,7 +97,7 @@ def _build_system_prompt_translation(output_language: str, mode: str) -> str:
 - **Text Types:**
   - **Dialogue:** Translate naturally, matching the character's voice.
   - **Narration:** Translate neutrally without special styling.
-  - **Sound Effects:** Translate as an onomatopoeia, keeping it concise and impactful. Choose one that captures the feeling and visual metaphor relative to the surrounding context.
+  - **Sound Effects:** Translate into a word that captures the feeling and visual metaphor relative to the surrounding context. Keep it concise and impactful.
 - **Edge Cases:** If an input line is `[OCR FAILED]` or `[NO TEXT]`, you must output it unchanged.
 """  # noqa
 
@@ -991,6 +1001,15 @@ def call_translation_api_batch(
     is_gemini_3 = provider == "Google" and "gemini-3" in model_name.lower()
 
     base_parts = []
+    for i, img_b64 in enumerate(images_b64):
+        mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
+        bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
+        if is_gemini_3:
+            bubble_part = _add_media_resolution_to_part(
+                bubble_part, config.media_resolution_bubbles, is_gemini_3
+            )
+        base_parts.append(bubble_part)
+
     if config.send_full_page_context and full_image_b64:
         context_part = {
             "inline_data": {
@@ -1003,14 +1022,6 @@ def call_translation_api_batch(
                 context_part, config.media_resolution_context, is_gemini_3
             )
         base_parts.append(context_part)
-    for i, img_b64 in enumerate(images_b64):
-        mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
-        bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
-        if is_gemini_3:
-            bubble_part = _add_media_resolution_to_part(
-                bubble_part, config.media_resolution_bubbles, is_gemini_3
-            )
-        base_parts.append(bubble_part)
 
     try:
         if translation_mode == "two-step":
@@ -1107,6 +1118,7 @@ The target language is {output_language}. Use the appropriate translation approa
             translation_system = _build_system_prompt_translation(
                 output_language,
                 mode="two-step",
+                reading_direction=reading_direction,
             )
             translation_response_text = _call_llm_endpoint(
                 config,
@@ -1179,6 +1191,7 @@ Format: `i: <transcribed text> || <translated {output_language} text>`
             one_step_system = _build_system_prompt_translation(
                 output_language,
                 mode="one-step",
+                reading_direction=reading_direction,
             )
             response_text = _call_llm_endpoint(
                 config,
