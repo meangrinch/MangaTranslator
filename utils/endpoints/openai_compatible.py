@@ -16,7 +16,7 @@ def call_openai_compatible_endpoint(
     generation_config: Dict[str, Any],
     system_prompt: Optional[str] = None,
     debug: bool = False,
-    timeout: int = 300,
+    timeout: int = 480,
     max_retries: int = 5,
     base_delay: float = 1.0,
 ) -> Optional[str]:
