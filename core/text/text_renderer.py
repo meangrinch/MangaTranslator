@@ -79,7 +79,10 @@ def render_text_skia(
         log_message(f"Invalid bbox dimensions: {bbox}", always_print=True)
         raise RenderingError(f"Invalid bounding box dimensions: {bbox}")
 
-    clean_text = " ".join(text.split())
+    # em dash can break wrapping
+    normalized_text = text.replace("—", "-")
+
+    clean_text = " ".join(normalized_text.split())
     if not clean_text:
         return pil_image
 
