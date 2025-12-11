@@ -111,7 +111,7 @@ def _build_system_prompt_translation(
 ## CORE RULES
 - **Reading Context:** The {input_type} are presented in a {direction} reading order. Do not reorder them.
 - **Cohesion:** Treat the input lines as a continuous narrative. Ensure the translation flows logically and naturally as a cohesive whole.{cohesion_visual}
-- **Fidelity:** Do not transliterate; choose the most natural-sounding alternative based on context.
+- **Fidelity:** Do not transliterate; choose the most natural-sounding alternative based on context. It must be comprehensible in the target language.
 - **Conciseness:** Keep translations idiomatic and concise.
 - **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
 - **Punctuation:** Use standard ASCII quotes and punctuation. Retain ellipses where meaningful.
