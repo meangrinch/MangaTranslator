@@ -14,8 +14,9 @@
 - PP Handwriting
 - Dirty Finger
 
-#### Outside Speech Bubble Text
+#### OSB Text
 
+- Clementine
 - Fast Action
 - Shark Soft Bites
 - Cookies
