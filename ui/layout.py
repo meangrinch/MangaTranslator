@@ -1306,7 +1306,7 @@ def create_layout(
                                 )
                                 outside_text_osb_min_font_size = gr.Slider(
                                     5,
-                                    50,
+                                    96,
                                     value=saved_settings.get(
                                         "outside_text_osb_min_font_size", 12
                                     ),

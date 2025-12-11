@@ -33,7 +33,7 @@ SETTING_CONSTRAINTS: Dict[str, Tuple[float, float]] = {
     "outside_text_flux_num_inference_steps": (1, 30),
     "outside_text_flux_residual_diff_threshold": (0.0, 1.0),
     "outside_text_osb_max_font_size": (5, 96),
-    "outside_text_osb_min_font_size": (5, 50),
+    "outside_text_osb_min_font_size": (5, 96),
     "outside_text_osb_line_spacing": (0.5, 2.0),
     "outside_text_osb_outline_width": (0.0, 10.0),
     "jpeg_quality": (1, 100),
