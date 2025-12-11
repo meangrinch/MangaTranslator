@@ -252,6 +252,8 @@ def process_outside_text(
                     else config.outside_text.seed
                 )
 
+                flux_inpaints = 0
+                cv2_inpaints = 0
                 for i, group in enumerate(mask_groups):
                     log_message(
                         f"Inpainting outside text region {i + 1}/{len(mask_groups)}",
@@ -395,6 +397,7 @@ def process_outside_text(
 
                     if fill_color is not None:
                         current_image = apply_simple_fill(fill_color)
+                        cv2_inpaints += 1
                         continue
 
                     flux_failed = False
@@ -436,8 +439,10 @@ def process_outside_text(
                             always_print=True,
                         )
                         current_image = apply_simple_fill(fallback_color_to_use)
+                        cv2_inpaints += 1
                         continue
 
+                    flux_inpaints += 1
                     # Save to disk if more regions remain to reduce memory usage
                     if i < len(mask_groups) - 1:
                         temp_file = None
@@ -472,7 +477,7 @@ def process_outside_text(
 
                 log_message("Outside text inpainting completed", verbose=verbose)
                 log_message(
-                    f"Inpainted {len(mask_groups)} outside text regions",
+                    f"Inpainted {len(mask_groups)} outside text regions (Flux: {flux_inpaints}, CV2: {cv2_inpaints})",
                     always_print=True,
                 )
         finally:
