@@ -715,16 +715,6 @@ def clean_speech_bubbles(
                 else:
                     cleaned_image[combined_mask == 255] = color_bgr
 
-        flux_inpainted = sum(
-            1
-            for bubble_info in processed_bubbles
-            if bubble_info.get("inpainted", False)
-        )
-        cv2_filled = len(processed_bubbles) - flux_inpainted
-        log_message(
-            f"Bubble inpainting: Flux={flux_inpainted}, cv2={cv2_filled}",
-            always_print=True,
-        )
         log_message(
             f"Cleaned {len(processed_bubbles)} speech bubbles", always_print=True
         )
