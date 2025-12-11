@@ -67,19 +67,22 @@ Your sole purpose is to accurately transcribe the original text from a series of
 - **Visual Emphasis Policy:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis in your transcription using markdown-style markers: `*italic*` for slanted text, `**bold**` for bold text, `***bold-italic***` for both.
 - **Edge Cases:**
   - If an image contains a standalone ellipsis, you must return it exactly as it appears.
-  - If an image is completely void of any content, you must return the exact token: `[NO TEXT]`.
+  - If an image is completely void of any content (no text, no ellipses), you must return the exact token: `[NO TEXT]`.
   - If text is present but indecipherable, you must return the exact token: `[OCR FAILED]`.
 
 ## OUTPUT SCHEMA
 - You must return your response as a single numbered list with exactly one line per input image.
 - The numbering must correspond to the input image order (1, 2, 3...).
-- The format must be `i: <transcribed {lang_label}text>`.
+- The format must be `i: <transcribed {lang_label}text>` where `i` is the input image number.
 - Do not include section headers, explanations, or formatting outside of this list.
 """  # noqa
 
 
 def _build_system_prompt_translation(
-    output_language: str, mode: str, reading_direction: str
+    output_language: str,
+    mode: str,
+    reading_direction: str,
+    full_page_context: bool = False,
 ) -> str:
     direction = (
         "right-to-left"
@@ -88,6 +91,12 @@ def _build_system_prompt_translation(
     )
     input_type = "transcriptions" if mode == "two-step" else "image crops"
 
+    cohesion_visual = (
+        " Refer to the full-page image to resolve ambiguous context."
+        if full_page_context
+        else ""
+    )
+
     if mode == "two-step":
         edge_cases = """- **Edge Cases:**
   - If an input line contains a standalone ellipsis, you must return it exactly as it appears.
@@ -95,13 +104,14 @@ def _build_system_prompt_translation(
     else:
         edge_cases = """- **Edge Cases:**
   - If an image contains a standalone ellipsis, you must return it exactly as it appears.
-  - If an image is completely void of any content, you must return the exact token: `[NO TEXT]`.
+  - If an image is completely void of any content (no text, no ellipses), you must return the exact token: `[NO TEXT]`.
   - If text is present but indecipherable, you must return the exact token: `[OCR FAILED]`."""
 
     core_rules = f"""
 ## CORE RULES
 - **Reading Context:** The {input_type} are presented in a {direction} reading order. Do not reorder them.
-- **Fidelity:** Stay faithful to the source. Do not add content, explanations, or cultural notes.
+- **Cohesion:** Treat the input lines as a continuous narrative. Ensure the translation flows logically and naturally as a cohesive whole.{cohesion_visual}
+- **Fidelity:** Do not transliterate; choose the most natural-sounding alternative based on context.
 - **Conciseness:** Keep translations idiomatic and concise.
 - **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
 - **Punctuation:** Use standard ASCII quotes and punctuation. Retain ellipses where meaningful.
@@ -134,7 +144,7 @@ You must use the following markdown-style markers to convey emphasis:
 - You must return your response as a single numbered list with exactly one line per input image.
 - The numbering must correspond to the input image order (1, 2, 3...).
 - For each item, provide both transcription and translation in the format:
-  `i: <transcribed text> || <translated {output_language} text>`
+  `i: <transcribed text> || <translated {output_language} text>` where `i` is the input image number.
 - Do not include section headers, explanations, or formatting outside of this list.
 """
     elif mode == "two-step":
@@ -142,7 +152,7 @@ You must use the following markdown-style markers to convey emphasis:
 ## OUTPUT SCHEMA
 - You must return your response as a single numbered list with exactly one line per input text.
 - The numbering must correspond to the input order (1, 2, 3...).
-- The format must be `i: <translated {output_language} text>`.
+- The format must be `i: <translated {output_language} text>` where `i` is the input text number.
 - Do not include section headers, explanations, or formatting outside of this list.
 """  # noqa
     else:
@@ -666,10 +676,10 @@ def _parse_llm_response_unified(
     """Parse LLM response with a single numbered list."""
     if response_text is None:
         log_message(f"API call failed: {provider} returned None", always_print=True)
-        return [f"[{provider}: API failed]"] * total_elements
+        raise TranslationError(f"{provider}: API failed (returned None)")
     elif response_text == "":
         log_message(f"API call returned empty response: {provider}", always_print=True)
-        return [f"[{provider}: Empty response]"] * total_elements
+        raise TranslationError(f"{provider}: Empty response")
 
     try:
         log_message(
@@ -1130,6 +1140,9 @@ The target language is {output_language}. Use the appropriate translation approa
                 output_language,
                 mode="two-step",
                 reading_direction=reading_direction,
+                full_page_context=(
+                    config.send_full_page_context and bool(full_image_b64)
+                ),
             )
             translation_response_text = _call_llm_endpoint(
                 config,
@@ -1203,6 +1216,9 @@ Format: `i: <transcribed text> || <translated {output_language} text>`
                 output_language,
                 mode="one-step",
                 reading_direction=reading_direction,
+                full_page_context=(
+                    config.send_full_page_context and bool(full_image_b64)
+                ),
             )
             response_text = _call_llm_endpoint(
                 config,
@@ -1231,6 +1247,8 @@ Format: `i: <transcribed text> || <translated {output_language} text>`
             raise TranslationError(
                 f"Unknown translation_mode specified in config: {translation_mode}"
             )
+    except TranslationError:
+        raise
     except (ValueError, RuntimeError) as e:
         log_message(f"Translation error: {e}", always_print=True)
         return [f"[Translation Error: {e}]"] * total_elements

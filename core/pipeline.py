@@ -621,6 +621,8 @@ def translate_and_render(
                                 "forbidden",
                                 "payment",
                                 "quota",
+                                "empty response",
+                                "api failed",
                             )
                             if any(token in error_str for token in critical_tokens):
                                 raise
