@@ -66,8 +66,8 @@ Your sole purpose is to accurately transcribe the original text from a series of
 - **Ruby/Furigana Policy:** If small phonetic characters (ruby/furigana) are present, you must ignore them and transcribe only the main, larger base text.
 - **Visual Emphasis Policy:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis in your transcription using markdown-style markers: `*italic*` for slanted text, `**bold**` for bold text, `***bold-italic***` for both.
 - **Edge Cases:**
-  - If an image only contains an ellipsis, you must return it exactly as it appears.
-  - If an image is completely empty, you must return the exact token: `[NO TEXT]`.
+  - If an image contains a standalone ellipsis, you must return it exactly as it appears.
+  - If an image is completely void of any content, you must return the exact token: `[NO TEXT]`.
   - If text is present but indecipherable, you must return the exact token: `[OCR FAILED]`.
 
 ## OUTPUT SCHEMA
@@ -87,6 +87,17 @@ def _build_system_prompt_translation(
         else "left-to-right"
     )
     input_type = "transcriptions" if mode == "two-step" else "image crops"
+
+    if mode == "two-step":
+        edge_cases = """- **Edge Cases:**
+  - If an input line contains a standalone ellipsis, you must return it exactly as it appears.
+  - If an input line is the exact token `[NO TEXT]` or `[OCR FAILED]`, you must output it unchanged."""
+    else:
+        edge_cases = """- **Edge Cases:**
+  - If an image contains a standalone ellipsis, you must return it exactly as it appears.
+  - If an image is completely void of any content, you must return the exact token: `[NO TEXT]`.
+  - If text is present but indecipherable, you must return the exact token: `[OCR FAILED]`."""
+
     core_rules = f"""
 ## CORE RULES
 - **Reading Context:** The {input_type} are presented in a {direction} reading order. Do not reorder them.
@@ -98,7 +109,7 @@ def _build_system_prompt_translation(
   - **Dialogue:** Translate naturally, matching the character's voice.
   - **Narration:** Translate neutrally without special styling.
   - **Sound Effects:** Translate into a word that captures the feeling and visual metaphor relative to the surrounding context. Keep it concise and impactful.
-- **Edge Cases:** If an input line is `[OCR FAILED]` or `[NO TEXT]`, you must output it unchanged.
+{edge_cases}
 """  # noqa
 
     shared_components = f"""
