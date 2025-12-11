@@ -374,6 +374,20 @@ def sanitize_font_data(font_path: str, font_data: bytes) -> bytes:
                 del font["kern"]
                 data_was_modified = True
 
+        test_glyph_name = None
+        cmap = font.getBestCmap()
+        if cmap and ord("M") in cmap:
+            test_glyph_name = cmap[ord("M")]
+
+        if test_glyph_name and "glyf" in font and "hmtx" in font:
+            glyph = font["glyf"][test_glyph_name]
+            advance_width = font["hmtx"][test_glyph_name][0]
+            if hasattr(glyph, "xMax") and advance_width < glyph.xMax:
+                msg = f"Font {os.path.basename(font_path)} has unreliable metrics. Overriding UPM to 1000."
+                log_message(msg, always_print=True)
+                font["head"].unitsPerEm = 1000
+                data_was_modified = True
+
         if data_was_modified:
             output_bytes = io.BytesIO()
             font.save(output_bytes)
