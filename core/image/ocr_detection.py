@@ -121,6 +121,7 @@ class OutsideTextDetector:
         verbose: bool = False,
         image_override: Optional[Image.Image] = None,
         existing_bubbles: Optional[List] = None,
+        text_free_boxes: Optional[List] = None,
     ):
         """Detect non-dialogue text by subtracting YOLO speech bubbles from OCR results.
 
@@ -130,6 +131,7 @@ class OutsideTextDetector:
             confidence: Confidence threshold for primary YOLO model detections.
             conjoined_confidence: Confidence threshold for secondary YOLO model (conjoined bubble detection).
             verbose: If True, logs intermediate steps.
+            text_free_boxes: Optional list of text_free regions to use as fallback OSB detections.
 
         Returns:
             list: Detected regions outside bubbles as (bbox, confidence).
@@ -183,7 +185,7 @@ class OutsideTextDetector:
                 )
                 provided_bubble_boxes = None
 
-        text_free_boxes = []
+        text_free_boxes = list(text_free_boxes) if text_free_boxes else []
 
         if provided_bubble_boxes:
             yolo_boxes = torch.tensor(
@@ -288,34 +290,58 @@ class OutsideTextDetector:
 
         log_message("Running YOLO OSB Text...", always_print=True)
 
-        osbtext_model_path = str(self.manager.model_paths[ModelType.YOLO_OSBTEXT])
-        osbtext_cache_key = self.cache.get_yolo_cache_key(
-            image_pil, osbtext_model_path, confidence
-        )
+        osbtext_boxes = None
+        osbtext_confs = None
+        try:
+            osbtext_model_path = str(self.manager.model_paths[ModelType.YOLO_OSBTEXT])
+            osbtext_cache_key = self.cache.get_yolo_cache_key(
+                image_pil, osbtext_model_path, confidence
+            )
 
-        cached_osbtext = self.cache.get_yolo_detection(osbtext_cache_key)
+            cached_osbtext = self.cache.get_yolo_detection(osbtext_cache_key)
 
-        if cached_osbtext is not None:
-            log_message("Using cached OSBText detections", verbose=verbose)
-            osbtext_results, osbtext_boxes, osbtext_confs = cached_osbtext
-        else:
-            osbtext_model = self.manager.load_yolo_osbtext(token=self.hf_token)
-            osbtext_results = osbtext_model(
-                image_cv, conf=confidence, device=self.device, verbose=False
-            )[0]
-            osbtext_boxes = (
-                osbtext_results.boxes.xyxy
-                if osbtext_results.boxes is not None
-                else None
+            if cached_osbtext is not None:
+                log_message("Using cached OSBText detections", verbose=verbose)
+                osbtext_results, osbtext_boxes, osbtext_confs = cached_osbtext
+            else:
+                osbtext_model = self.manager.load_yolo_osbtext(token=self.hf_token)
+                osbtext_results = osbtext_model(
+                    image_cv, conf=confidence, device=self.device, verbose=False
+                )[0]
+                osbtext_boxes = (
+                    osbtext_results.boxes.xyxy
+                    if osbtext_results.boxes is not None
+                    else None
+                )
+                osbtext_confs = (
+                    osbtext_results.boxes.conf
+                    if osbtext_results.boxes is not None
+                    else None
+                )
+                self.cache.set_yolo_detection(
+                    osbtext_cache_key, (osbtext_results, osbtext_boxes, osbtext_confs)
+                )
+        except Exception as e:
+            log_message(
+                f"OSB text model unavailable: {e}. Using text_free fallback if available.",
+                always_print=True,
             )
-            osbtext_confs = (
-                osbtext_results.boxes.conf
-                if osbtext_results.boxes is not None
-                else None
-            )
-            self.cache.set_yolo_detection(
-                osbtext_cache_key, (osbtext_results, osbtext_boxes, osbtext_confs)
-            )
+            if text_free_boxes:
+                log_message(
+                    f"Using {len(text_free_boxes)} text_free boxes as OSB fallback",
+                    always_print=True,
+                )
+                osbtext_boxes = torch.tensor(
+                    text_free_boxes, device=self.device, dtype=torch.float32
+                )
+                osbtext_confs = torch.ones(
+                    len(text_free_boxes), device=self.device, dtype=torch.float32
+                )
+            else:
+                log_message(
+                    "No text_free fallback available; skipping OSB text detections",
+                    always_print=True,
+                )
 
         base_results = []
         if osbtext_boxes is not None:

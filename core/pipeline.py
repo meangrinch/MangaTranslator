@@ -167,7 +167,7 @@ def translate_and_render(
     # Detect speech bubbles first so OSB processing can respect bubble regions
     log_message("Detecting speech bubbles...", verbose=verbose)
     try:
-        bubble_data = detect_speech_bubbles(
+        bubble_data, text_free_boxes = detect_speech_bubbles(
             image_path,
             config.yolo_model_path,
             config.detection.confidence,
@@ -184,6 +184,7 @@ def translate_and_render(
     except Exception as e:
         log_message(f"Error during detection: {e}", always_print=True)
         bubble_data = []
+        text_free_boxes = []
 
     # Process outside text detection and inpainting (bubble-aware)
     pil_image_processed, outside_text_data = process_outside_text(
@@ -193,6 +194,7 @@ def translate_and_render(
         image_format,
         verbose,
         bubble_data=bubble_data,
+        text_free_boxes=text_free_boxes,
     )
     original_cv_image = pil_to_cv2(pil_image_processed)
 

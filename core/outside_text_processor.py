@@ -27,6 +27,7 @@ def process_outside_text(
     image_format: Optional[str],
     verbose: bool = False,
     bubble_data: Optional[List[Dict[str, Any]]] = None,
+    text_free_boxes: Optional[List[List[float]]] = None,
 ) -> Tuple[Image.Image, List[Dict[str, Any]]]:
     """
     Process outside text detection, inpainting, and prepare data for translation.
@@ -66,6 +67,7 @@ def process_outside_text(
             verbose=verbose,
             image_override=pil_image,
             existing_bubbles=bubble_data,
+            text_free_boxes=text_free_boxes,
         )
 
         if not outside_text_results:

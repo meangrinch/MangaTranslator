@@ -312,9 +312,10 @@ def detect_speech_bubbles(
         osb_text_hf_token (str): Optional token for gated OSB text model downloads
 
     Returns:
-        list: List of dictionaries containing detection information (bbox, class, confidence, sam_mask)
+        tuple[list, list]: (speech bubble detections, text_free boxes from secondary model)
     """
     detections = []
+    text_free_boxes: List[List[float]] = []
 
     _device = (
         device
@@ -368,14 +369,13 @@ def detect_speech_bubbles(
 
     if len(primary_boxes) == 0:
         log_message("No detections found", verbose=verbose)
-        return detections
+        return detections, text_free_boxes
 
     log_message(
         f"Detected {len(primary_boxes)} speech bubbles with YOLO", always_print=True
     )
 
     secondary_boxes = torch.tensor([])
-    text_free_boxes = []
     if use_sam2:
         try:
             secondary_model = model_manager.load_yolo_conjoined_bubble()
@@ -533,7 +533,7 @@ def detect_speech_bubbles(
             detection["sam_mask"] = _fallback_to_yolo_mask(primary_results, i, "binary")
 
             detections.append(detection)
-        return detections
+        return detections, text_free_boxes
 
     conjoined_indices = []
     simple_indices = list(range(len(primary_boxes)))
@@ -551,7 +551,7 @@ def detect_speech_bubbles(
         if cached_sam is not None:
             log_message("Using cached SAM masks", verbose=verbose)
             detections = cached_sam
-            return detections
+            return detections, text_free_boxes
 
         processor, sam_model = model_manager.load_sam2()
         if len(secondary_boxes) > 0 and conjoined_detection:
@@ -723,7 +723,8 @@ def detect_speech_bubbles(
             verbose=verbose,
         )
 
-    return detections
+        return detections, text_free_boxes
+    return detections, text_free_boxes
 
 
 def detect_panels(

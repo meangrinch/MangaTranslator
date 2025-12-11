@@ -970,7 +970,7 @@ def call_translation_api_batch(
     if osb_indices:
         osb_list_str = ", ".join(map(str, osb_indices))
         context_hints = (
-            f"\nNote: Items {osb_list_str} contain sound effects or narration. "
+            f"\nNote: Items [{osb_list_str}] contain sound effects or narration. "
             "Translate them accordingly."
         )
 
