@@ -6,7 +6,7 @@ Web application for automating the translation of manga/comic page images using 
   <table>
     <tr>
       <th style="text-align: left">Original</th>
-      <th style="text-align: left">Translated</th>
+      <th style="text-align: left">Translated (w/ a single click)</th>
     </tr>
     <tr>
       <td><img src="docs/images/example_original.jpg" width="350" /></td>
@@ -17,6 +17,7 @@ Web application for automating the translation of manga/comic page images using 
 
 ## Features
 
+- All-in-one button to detection, clean, translate, and render text. No manual editing or human intervention required.
 - Speech bubble detection, segmentation, cleaning (YOLO + SAM 2.1)
 - Outside speech bubble text detection & inpainting (YOLO + Flux Kontext)
 - LLM-powered OCR and translations (supports 54 languages)
