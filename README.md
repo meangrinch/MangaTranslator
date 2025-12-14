@@ -9,23 +9,23 @@ Web application for automating the translation of manga/comic page images using 
       <th style="text-align: left">Translated (w/ a single click)</th>
     </tr>
     <tr>
-      <td><img src="docs/images/example_original.jpg" width="350" /></td>
-      <td><img src="docs/images/example_translation.jpg" width="350" /></td>
+      <td><img src="docs/images/example_original.jpg" width="400" /></td>
+      <td><img src="docs/images/example_translation.jpg" width="400" /></td>
     </tr>
   </table>
 </div>
 
 ## Features
 
-- All-in-one button. No human intervention required.
-- Numerous options to tailor the process for your specific needs.
 - Speech bubble detection, segmentation, cleaning (YOLO + SAM 2.1)
 - Outside speech bubble text detection & inpainting (YOLO + Flux Kontext/CV2)
 - LLM-powered OCR and translations (supports 54 languages)
-- Text rendering (with custom font packs)
+- Text rendering and alignment (with custom font packs)
 - Upscaling (2x-AnimeSharpV4)
 - Single/Batch image processing with directory structure preservation and ZIP file support
 - Two interfaces: Web UI (Gradio) and CLI
+- All-in-one button; no human intervention required
+- Various options to tailor the process
 
 ## Requirements
 
@@ -210,9 +210,6 @@ pip install -r requirements.txt
 
 - License: Apache-2.0 (see [LICENSE](LICENSE))
 - Author: [grinnch](https://github.com/meangrinch)
-
-#### ML Models
-
 - YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Comic Speech Bubble Detector YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
 - SAM 2.1 (Segment Anything): [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
