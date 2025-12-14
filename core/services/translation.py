@@ -53,7 +53,7 @@ def _build_system_prompt_ocr(
 
     return f"""
 ## ROLE
-You are an expert manga/comic OCR transcriber.
+You are an expert manga OCR transcriber.
 
 ## OBJECTIVE
 Your sole purpose is to accurately transcribe the original text from a series of provided images. You must not translate, interpret, or add commentary.
@@ -67,8 +67,7 @@ Your sole purpose is to accurately transcribe the original text from a series of
 - **Visual Emphasis Policy:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis in your transcription using markdown-style markers: `*italic*` for slanted text, `**bold**` for bold text, `***bold-italic***` for both.
 - **Edge Cases:**
   - If an image contains a standalone ellipsis, you must return it exactly as it appears.
-  - If an image is completely void of any content (no text, no ellipses), you must return the exact token: `[NO TEXT]`.
-  - If text is present but indecipherable, you must return the exact token: `[OCR FAILED]`.
+  - If text is indecipherable, you must return the exact token: `[OCR FAILED]`.
 
 ## OUTPUT SCHEMA
 - You must return your response as a single numbered list with exactly one line per input image.
@@ -100,12 +99,11 @@ def _build_system_prompt_translation(
     if mode == "two-step":
         edge_cases = """- **Edge Cases:**
   - If an input line contains a standalone ellipsis, you must return it exactly as it appears.
-  - If an input line is the exact token `[NO TEXT]` or `[OCR FAILED]`, you must output it unchanged."""
+  - If an input line is the exact token `[OCR FAILED]`, you must output it unchanged."""
     else:
         edge_cases = """- **Edge Cases:**
   - If an image contains a standalone ellipsis, you must return it exactly as it appears.
-  - If an image is completely void of any content (no text, no ellipses), you must return the exact token: `[NO TEXT]`.
-  - If text is present but indecipherable, you must return the exact token: `[OCR FAILED]`."""
+  - If text is indecipherable, you must return the exact token: `[OCR FAILED]`."""
 
     core_rules = f"""
 ## CORE RULES
