@@ -27,6 +27,8 @@
 - **OSB text not inpainted/cleaned:**
   - Ensure "Enable OSB Text Detection" is enabled
   - Ensure Nunchaku is installed/hf_token is set (see Installation/Post-Install Setup)
+- **Flux Kontext too heavy/slow or OSB text hard to read:**
+  - Enable "Force CV2 Inpainting Instead of Flux"
 - **Colored/complex bubbles not preserving interior color:**
   - Enable "Use Flux Kontext to Inpaint Colored Bubbles" (requires Nunchaku/hf_token)
 - **High LLM token usage:**
