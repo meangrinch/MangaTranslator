@@ -109,14 +109,15 @@ def _build_system_prompt_translation(
 ## CORE RULES
 - **Reading Context:** The {input_type} are presented in a {direction} reading order. Do not reorder them.
 - **Cohesion:** Treat the input lines as a continuous narrative. Ensure the translation flows logically and naturally as a cohesive whole.{cohesion_visual}
-- **Fidelity:** Do not transliterate; choose the most natural-sounding alternative based on context. It must be comprehensible in the target language.
+- **Fidelity:** Focus on intent; prioritize a functional translation over a literal one.
 - **Conciseness:** Keep translations idiomatic and concise.
 - **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
 - **Punctuation:** Use standard ASCII quotes and punctuation. Retain ellipses where meaningful.
 - **Text Types:**
   - **Dialogue:** Translate naturally, matching the character's voice.
   - **Narration:** Translate neutrally without special styling.
-  - **Sound Effects:** Translate into a word that captures the feeling and visual metaphor relative to the surrounding context. Keep it concise and impactful.
+  - **Audible SFX:** Translate physical sounds (Giongo) as standard {output_language} onomatopoeia.
+  - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives; do not force a sound effect.
 {edge_cases}
 """  # noqa
 
@@ -1004,7 +1005,7 @@ def call_translation_api_batch(
     if osb_indices:
         osb_list_str = ", ".join(map(str, osb_indices))
         context_hints = (
-            f"\nNote: Items [{osb_list_str}] contain sound effects or narration. "
+            f"\nNote: Items [{osb_list_str}] contain sound effects, mimetic effects, or narration. "
             "Translate them accordingly."
         )
 
