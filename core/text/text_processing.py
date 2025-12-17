@@ -7,6 +7,36 @@ import numpy as np
 STYLE_PATTERN = re.compile(r"(\*{1,3})(.*?)(\1)")
 
 
+def is_latin_style_language(language_name: str) -> bool:
+    """
+    Determines if a language typically uses Latin script and hyphenation.
+    This is used to decide whether to apply automatic hyphenation logic.
+    """
+    latin_style_languages = {
+        "english",
+        "french",
+        "spanish",
+        "german",
+        "italian",
+        "portuguese",
+        "dutch",
+        "polish",
+        "czech",
+        "swedish",
+        "danish",
+        "norwegian",
+        "finnish",
+        "hungarian",
+        "romanian",
+        "turkish",
+        "vietnamese",
+        "indonesian",
+        "malay",
+        "tagalog",
+    }
+    return language_name.lower() in latin_style_languages
+
+
 def parse_styled_segments(text: str) -> List[Tuple[str, str]]:
     """
     Parses text with markdown-like style markers into segments.

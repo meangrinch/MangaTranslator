@@ -39,6 +39,7 @@ from .services.translation import (
     call_translation_api_batch,
     prepare_bubble_images_for_translation,
 )
+from .text.text_processing import is_latin_style_language
 from .text.text_renderer import render_text_skia
 
 if TYPE_CHECKING:
@@ -760,6 +761,13 @@ def translate_and_render(
                             vertical_stack = False
                             rotation_deg = 0.0
 
+                        # Only apply hyphenation for Latin-style languages
+                        should_hyphenate = config.rendering.hyphenate_before_scaling
+                        if not is_latin_style_language(
+                            config.translation.output_language
+                        ):
+                            should_hyphenate = False
+
                         render_config = RenderingConfig(
                             min_font_size=min_font,
                             max_font_size=max_font,
@@ -775,7 +783,7 @@ def translate_and_render(
                                 else config.rendering.font_hinting
                             ),
                             use_ligatures=use_ligs,
-                            hyphenate_before_scaling=config.rendering.hyphenate_before_scaling,
+                            hyphenate_before_scaling=should_hyphenate,
                             hyphen_penalty=config.rendering.hyphen_penalty,
                             hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
                             badness_exponent=config.rendering.badness_exponent,
