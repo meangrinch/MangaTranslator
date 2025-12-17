@@ -41,7 +41,7 @@ Web application for automating the translation of manga/comic page images using 
 
 Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases)
 
-- Default package: Download once, run `setup.bat` before first launch to install dependencies, and `update-standalone.bat` to update to the latest version. Installs `PyTorch v2.9.1+cu128`.
+- Default package: Download once, run `setup.bat` before first launch to install dependencies, and `update-standalone.bat` to update to the latest version (see [Updating](#updating)). Installs `PyTorch v2.9.1+cu128`.
 - Pre-downloaded package: Download per version, no setup required, and no included update script. Contains `PyTorch v2.9.1+cu128`.
 - Both include the Komika (for normal text), Cookies (for OSB text), and Comicka (for either) font packs
 
