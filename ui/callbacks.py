@@ -281,34 +281,42 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
     except ValidationError as e:
         raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
 
-    api_key_to_validate = ""
-    provider_selector = ui_state.provider_settings.provider
-    if provider_selector == "Google":
-        api_key_to_validate = ui_state.provider_settings.google_api_key
-    elif provider_selector == "OpenAI":
-        api_key_to_validate = ui_state.provider_settings.openai_api_key
-    elif provider_selector == "Anthropic":
-        api_key_to_validate = ui_state.provider_settings.anthropic_api_key
-    elif provider_selector == "xAI":
-        api_key_to_validate = ui_state.provider_settings.xai_api_key
-    elif provider_selector == "DeepSeek":
-        api_key_to_validate = ui_state.provider_settings.deepseek_api_key
-    elif provider_selector == "Z.ai":
-        api_key_to_validate = ui_state.provider_settings.zai_api_key
-    elif provider_selector == "Moonshot AI":
-        api_key_to_validate = ui_state.provider_settings.moonshot_api_key
-    elif provider_selector == "OpenRouter":
-        api_key_to_validate = ui_state.provider_settings.openrouter_api_key
-    elif provider_selector == "OpenAI-Compatible":
-        api_key_to_validate = ui_state.provider_settings.openai_compatible_api_key
+    # Skip API key validation if in cleaning-only or test mode
+    if not ui_state.general.cleaning_only and not ui_state.general.test_mode:
+        api_key_to_validate = ""
+        provider_selector = ui_state.provider_settings.provider
+        if provider_selector == "Google":
+            api_key_to_validate = ui_state.provider_settings.google_api_key
+        elif provider_selector == "OpenAI":
+            api_key_to_validate = ui_state.provider_settings.openai_api_key
+        elif provider_selector == "Anthropic":
+            api_key_to_validate = ui_state.provider_settings.anthropic_api_key
+        elif provider_selector == "xAI":
+            api_key_to_validate = ui_state.provider_settings.xai_api_key
+        elif provider_selector == "DeepSeek":
+            api_key_to_validate = ui_state.provider_settings.deepseek_api_key
+        elif provider_selector == "Z.ai":
+            api_key_to_validate = ui_state.provider_settings.zai_api_key
+        elif provider_selector == "Moonshot AI":
+            api_key_to_validate = ui_state.provider_settings.moonshot_api_key
+        elif provider_selector == "OpenRouter":
+            api_key_to_validate = ui_state.provider_settings.openrouter_api_key
+        elif provider_selector == "OpenAI-Compatible":
+            api_key_to_validate = ui_state.provider_settings.openai_compatible_api_key
 
-    api_valid, api_msg = utils.validate_api_key(api_key_to_validate, provider_selector)
-    if not api_valid and not (
-        provider_selector == "OpenAI-Compatible" and not api_key_to_validate
+        api_valid, api_msg = utils.validate_api_key(
+            api_key_to_validate, provider_selector
+        )
+        if not api_valid and not (
+            provider_selector == "OpenAI-Compatible" and not api_key_to_validate
+        ):
+            raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
+
+    if (
+        ui_state.provider_settings.provider == "OpenAI-Compatible"
+        and not ui_state.general.cleaning_only
+        and not ui_state.general.test_mode
     ):
-        raise gr.Error(f"{ERROR_PREFIX}{api_msg}")
-
-    if provider_selector == "OpenAI-Compatible":
         if not ui_state.provider_settings.openai_compatible_url:
             raise gr.Error(f"{ERROR_PREFIX}OpenAI-Compatible URL is required.")
         if not ui_state.provider_settings.openai_compatible_url.startswith(

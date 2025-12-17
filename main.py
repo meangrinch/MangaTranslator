@@ -697,7 +697,12 @@ def main():
         api_key_env_var = "OPENAI_COMPATIBLE_API_KEY"
         default_model = "default"
 
-    if provider != "OpenAI-Compatible" and not api_key:
+    if (
+        provider != "OpenAI-Compatible"
+        and not api_key
+        and not args.cleaning_only
+        and not args.test_mode
+    ):
         log_message(
             f"Warning: {provider} API key not provided via {api_key_arg_name} or {api_key_env_var} "
             f"environment variable. Translation will likely fail.",
