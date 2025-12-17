@@ -109,15 +109,15 @@ def _build_system_prompt_translation(
 ## CORE RULES
 - **Reading Context:** The {input_type} are presented in a {direction} reading order. Do not reorder them.
 - **Cohesion:** Treat the input lines as a continuous narrative. Ensure the translation flows logically and naturally as a cohesive whole.{cohesion_visual}
-- **Fidelity:** Focus on intent; prioritize a functional translation over a literal one.
+- **Fidelity:** Focus on intent; translate functionally rather than literally.
 - **Conciseness:** Keep translations idiomatic and concise.
 - **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
 - **Punctuation:** Use standard ASCII quotes and punctuation. Retain ellipses where meaningful.
 - **Text Types:**
   - **Dialogue:** Translate naturally, matching the character's voice.
   - **Narration:** Translate neutrally without special styling.
-  - **Audible SFX:** Translate physical sounds (Giongo) as standard {output_language} onomatopoeia.
-  - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives; do not force a sound effect.
+  - **Audible SFX:** Translate physical sounds (Giongo) as standard onomatopoeia.
+  - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives.
 {edge_cases}
 """  # noqa
 
