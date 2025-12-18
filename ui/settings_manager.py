@@ -17,6 +17,7 @@ CONFIG_FILE = (
 PROVIDER_MODELS: Dict[str, List[str]] = {
     "Google": [
         "gemini-3-pro-preview",
+        "gemini-3-flash-preview",
         "gemini-2.5-pro",
         "gemini-2.5-flash-preview-09-2025",
         "gemini-2.5-flash",
