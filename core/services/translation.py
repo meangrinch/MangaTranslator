@@ -66,7 +66,7 @@ Your sole purpose is to accurately transcribe the original text from a series of
 - **Ruby/Furigana Policy:** If small phonetic characters (ruby/furigana) are present, you must ignore them and transcribe only the main, larger base text.
 - **Visual Emphasis Policy:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis in your transcription using markdown-style markers: `*italic*` for slanted text, `**bold**` for bold text, `***bold-italic***` for both.
 - **Edge Cases:**
-  - If an image contains a standalone ellipsis, you must return it exactly as it appears.
+  - If an image contains standalone periods/ellipses, you must return it exactly as it appears.
   - If text is indecipherable, you must return the exact token: `[OCR FAILED]`.
 
 ## OUTPUT SCHEMA
@@ -98,11 +98,11 @@ def _build_system_prompt_translation(
 
     if mode == "two-step":
         edge_cases = """- **Edge Cases:**
-  - If an input line contains a standalone ellipsis, you must return it exactly as it appears.
+  - If an input line contains standalone periods/ellipses, you must return it exactly as it appears.
   - If an input line is the exact token `[OCR FAILED]`, you must output it unchanged."""
     else:
         edge_cases = """- **Edge Cases:**
-  - If an image contains a standalone ellipsis, you must return it exactly as it appears.
+  - If an image contains standalone periods/ellipses, you must return it exactly as it appears.
   - If text is indecipherable, you must return the exact token: `[OCR FAILED]`."""
 
     core_rules = f"""
@@ -111,10 +111,10 @@ def _build_system_prompt_translation(
 - **Cohesion:** Treat the input lines as a continuous narrative. Ensure the translation flows logically and naturally as a cohesive whole.{cohesion_visual}
 - **Fidelity:** Focus on intent; translate functionally rather than literally.
 - **Conciseness:** Keep translations idiomatic and concise.
-- **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis using the STYLING GUIDE. Avoid styling text that is merely decorative.
-- **Punctuation:** Use standard ASCII quotes and punctuation. Retain ellipses where meaningful.
+- **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), mirror that emphasis using the STYLING GUIDE.
+- **Punctuation:** Replace ellipses (e.g., "…") with consecutive periods (e.g., "...").
 - **Text Types:**
-  - **Dialogue:** Translate naturally, matching the character's voice.
+  - **Spoken Dialogue/Internal Monologue:** Translate naturally, matching the character's personality.
   - **Narration:** Translate neutrally without special styling.
   - **Audible SFX:** Translate physical sounds (Giongo) as standard onomatopoeia.
   - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives. Do not add a period at the end of the word.
@@ -995,19 +995,32 @@ def call_translation_api_batch(
     reading_direction = config.reading_direction
     translation_mode = config.translation_mode
 
-    # Include conditional OSB hints
+    # Include conditional bubble hints
     total_elements = len(images_b64)
+    dialogue_indices = [
+        i + 1
+        for i, meta in enumerate(bubble_metadata)
+        if not meta.get("is_outside_text", False)
+    ]
     osb_indices = [
-        i + 1 for i, meta in enumerate(bubble_metadata) if meta.get("is_outside_text")
+        i + 1
+        for i, meta in enumerate(bubble_metadata)
+        if meta.get("is_outside_text", False)
     ]
 
-    context_hints = ""
+    hints = []
+    if dialogue_indices:
+        dialogue_list_str = ", ".join(map(str, dialogue_indices))
+        hints.append(f"Items [{dialogue_list_str}] contain spoken dialogue.")
     if osb_indices:
         osb_list_str = ", ".join(map(str, osb_indices))
-        context_hints = (
-            f"\nNote: Items [{osb_list_str}] contain sound effects, mimetic effects, or narration. "
-            "Translate them accordingly."
+        hints.append(
+            f"Items [{osb_list_str}] contain sound effects, mimetic effects, narration, or internal monologues."
         )
+
+    context_hints = ""
+    if hints:
+        context_hints = "\nNote: " + " ".join(hints) + " Translate them accordingly."
 
     reading_order_desc = (
         "right-to-left, top-to-bottom"
