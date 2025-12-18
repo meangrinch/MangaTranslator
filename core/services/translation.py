@@ -117,7 +117,7 @@ def _build_system_prompt_translation(
   - **Dialogue:** Translate naturally, matching the character's voice.
   - **Narration:** Translate neutrally without special styling.
   - **Audible SFX:** Translate physical sounds (Giongo) as standard onomatopoeia.
-  - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives.
+  - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives. Do not add a period at the end of the word.
 {edge_cases}
 """  # noqa
 
