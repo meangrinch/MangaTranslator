@@ -25,7 +25,7 @@ def call_zai_endpoint(
 
     Args:
         api_key (str): Z.ai API key.
-        model_name (str): Z.ai model to use (glm-4.6, glm-4.6v, glm-4.5, glm-4.5v).
+        model_name (str): Z.ai model to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens, thinking).
         system_prompt (Optional[str]): System prompt for the model.
@@ -90,7 +90,7 @@ def call_zai_endpoint(
         user_content.append({"type": "text", "text": text_part["text"]})
         messages.append({"role": "user", "content": user_content})
     else:
-        # Text-only content for glm-4.6, glm-4.5
+        # Text-only content for non vision models
         messages.append({"role": "user", "content": text_part["text"]})
 
     payload = {

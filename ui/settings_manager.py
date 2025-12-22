@@ -73,6 +73,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "deepseek-reasoner-speciale",
     ],
     "Z.ai": [
+        "glm-4.7",
         "glm-4.6",
         "glm-4.6v",
         "glm-4.5",
