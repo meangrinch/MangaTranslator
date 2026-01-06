@@ -1,6 +1,6 @@
 ## MangaTranslator
 
-Web application for automating the translation of manga/comic page images using AI. Targets speech bubbles and text outside of speech bubbles. Supports 54 languages and custom font pack usage.
+Gradio-based web application for automating the translation of manga/comic page images using AI. Targets speech bubbles and text outside of speech bubbles. Supports 54 languages and custom font pack usage.
 
 <div align="left">
   <table>
@@ -18,7 +18,7 @@ Web application for automating the translation of manga/comic page images using 
 ## Features
 
 - Speech bubble detection, segmentation, cleaning (YOLO + SAM 2.1)
-- Outside speech bubble text detection & inpainting (YOLO + Flux Kontext/CV2)
+- Outside speech bubble text detection & inpainting (YOLO + Flux Kontext/OpenCV)
 - LLM-powered OCR and translations (supports 54 languages)
 - Text rendering and alignment (with custom font packs)
 - Upscaling (2x-AnimeSharpV4)
@@ -73,7 +73,7 @@ pip install torch==2.9.1+cu128 torchvision==0.24.1+cu128 --extra-index-url https
 pip install torch torchvision
 ```
 
-4. Install Nunchaku (optional, for inpainting outside-bubble text.)
+4. Install Nunchaku (optional, for inpainting OSB text regions with Flux Kontext; not required for OpenCV inpainting)
 
 - Nunchaku wheels are not on PyPI. Install directly from the v1.0.2 GitHub release URL, matching your OS and Python version. CUDA only.
 
@@ -122,11 +122,15 @@ fonts/
 
 ### OSB text setup (optional)
 
-- If you want to use the OSB text pipeline, you need a Hugging Face token with access to the `deepghs/AnimeText_yolo` and `black-forest-labs/FLUX.1-Kontext-dev` repositories.
-- Follow these steps to create one:
+If you want to use the OSB text pipeline, you need a Hugging Face token with access to the following repositories:
+
+- `deepghs/AnimeText_yolo`
+- `black-forest-labs/FLUX.1-Kontext-dev` (only required if using Flux Kontext)
+
+#### Steps to create a token:
 
 1. Sign in or create a Hugging Face account
-2. Visit and accept the terms on: [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo) and [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
+2. Visit and accept the terms on: [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo) (and [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev) if applicable)
 3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
 4. Add the token to the app:
    - Web UI: set `hf_token` in Config
