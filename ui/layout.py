@@ -1279,11 +1279,10 @@ def create_layout(
                                     value=saved_settings.get(
                                         "outside_text_force_cv2_inpainting", False
                                     ),
-                                    label="Force CV2 Inpainting Instead of Flux",
+                                    label="Force OpenCV Inpainting Instead of Flux",
                                     info=(
-                                        "Use OpenCV inpainting instead of Flux. "
-                                        "Generates a simple white or black background for maximum speed and "
-                                        "readability. Useful if you do not value background preservation."
+                                        "Bypasses Flux and generates a simple white/black background for maximum speed "
+                                        "and readability. Useful if you do not value background preservation."
                                     ),
                                 )
 
@@ -2064,7 +2063,7 @@ def create_layout(
             queue=False,
         )
 
-        # Force CV2 inpainting toggle -> disable Flux controls
+        # Force cv2 inpainting toggle -> disable Flux controls
         outside_text_force_cv2_inpainting.change(
             fn=lambda forced: (
                 gr.update(interactive=not forced),
