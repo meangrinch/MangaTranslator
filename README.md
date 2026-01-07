@@ -30,10 +30,9 @@ Gradio-based web application for automating the translation of manga/comic page 
 ## Requirements
 
 - Python 3.10+
-- PyTorch (CPU, CUDA, ROCm)
-- YOLO model (`.pt`) for speech bubble detection; auto-downloaded
-- Font pack with `.ttf`/`.otf`
-- Any LLM for Japanese source text; vision-capable LLM for other languages (API or local)
+- PyTorch (CPU, CUDA, ROCm, MPS)
+- Font pack with `.ttf`/`.otf` files; included with portable package
+- LLM for Japanese source text; VLM for other languages (API or local)
 
 ## Install
 
