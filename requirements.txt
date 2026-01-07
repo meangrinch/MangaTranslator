@@ -13,6 +13,7 @@ scipy>=1.10.0
 skia-python>=87.7
 spandrel>=0.3.0
 torch
-transformers>=4.56.1,<=4.56.2
+torchvision
+transformers>=4.56.2
 uharfbuzz>=0.48.0
 ultralytics>=8.3.94

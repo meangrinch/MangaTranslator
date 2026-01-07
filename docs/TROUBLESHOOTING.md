@@ -1,5 +1,59 @@
 # Troubleshooting
 
+### Portable Package Setup
+
+- **Setup script fails to detect GPU:**
+
+  - **NVIDIA:** Ensure NVIDIA drivers are installed and `nvidia-smi` is accessible from command line
+  - **AMD (Windows):** The script detects AMD GPUs automatically; ROCm must be installed separately for GPU acceleration
+  - **AMD (Linux):** Ensure ROCm is installed and `rocminfo` is accessible
+  - **macOS Apple Silicon:** MPS is automatically detected on M1/M2/M3/M4 Macs
+  - **macOS Intel:** Intel Macs run in CPU-only mode (MPS is not available)
+  - You can always choose CPU mode if GPU detection fails
+
+- **"Python not found" error (Linux/macOS):**
+
+  - Install Python 3.10 or higher:
+    - Ubuntu/Debian: `sudo apt install python3 python3-pip python3-venv`
+    - Fedora: `sudo dnf install python3 python3-pip`
+    - Arch: `sudo pacman -S python python-pip`
+    - macOS: `brew install python@3.13` or download from python.org
+
+- **"Git not found" error (Linux/macOS):**
+
+  - Install Git:
+    - Ubuntu/Debian: `sudo apt install git`
+    - Fedora: `sudo dnf install git`
+    - Arch: `sudo pacman -S git`
+    - macOS: `xcode-select --install` or `brew install git`
+
+- **PyTorch installation fails:**
+
+  - Check your internet connection
+  - Ensure you have enough disk space (~6 GB)
+  - For ROCm: Ensure ROCm is properly installed on your system
+  - Try running setup again; temporary network issues are common
+
+- **Nunchaku installation fails:**
+
+  - Nunchaku requires NVIDIA CUDA and Python 3.13
+  - If installation fails, the app will use OpenCV inpainting instead
+  - You can skip Nunchaku during setup and add it later
+
+### Portable Package Updates
+
+- **Update script fails:**
+
+  - Check your internet connection
+  - Ensure Git is installed and accessible (Linux/macOS)
+  - Try running the update script again
+  - If issues persist, re-download the portable package
+
+- **Transferring to a fresh portable package:**
+
+  - You can safely move `fonts`, `models`, and `output` directories to the new portable package
+  - You can move the `runtime` directory if you will be using the exact same setup configuration
+
 ### Layout & Text Rendering
 
 - **Incorrect reading order:**
@@ -28,7 +82,7 @@
 - **Colored/complex bubbles not preserving interior color:**
   - Enable "Use Flux Kontext to Inpaint Colored Bubbles" (requires Nunchaku/hf_token)
 
-### Translation, LLM & API Issues
+### Translation
 
 - **Poor translations/API refusals:**
   - Try "two-step" translation mode for less-capable LLMs
@@ -42,7 +96,7 @@
   - Lower "Media Resolution" (if using Gemini models)
   - Use "manga-ocr" OCR method (Japanese sources only; may perform worse than more-capable VLMs)
 
-### Inpainting & Performance (Flux/OSB)
+### Inpainting
 
 - **OSB text not inpainted/cleaned:**
   - Ensure "Enable OSB Text Detection" is enabled
@@ -50,3 +104,7 @@
   - Ensure Nunchaku is installed (if using Flux)
 - **Flux Kontext too heavy/slow or OSB text hard to read:**
   - Enable "Force OpenCV Inpainting Instead of Flux"
+- **Flux Kontext not available:**
+  - Flux Kontext requires NVIDIA CUDA and Nunchaku
+  - Not available on: AMD ROCm, Apple MPS, or CPU-only systems
+  - OpenCV inpainting is used automatically as a fallback

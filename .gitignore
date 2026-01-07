@@ -6,6 +6,8 @@ __pycache__/
 /.venv/
 /runtime/
 /deps/
+start-webui.bat
+start-webui.sh
 *.otf
 *.ttf
 *.pt
