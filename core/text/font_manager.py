@@ -41,6 +41,7 @@ class LRUCache:
 
 _font_data_cache = LRUCache(max_size=50)
 _font_features_cache = LRUCache(max_size=50)
+_font_cmap_cache = LRUCache(max_size=50)
 _font_variants_cache: Dict[str, Dict[str, Optional[Path]]] = {}
 
 # Font style detection keywords
@@ -99,6 +100,100 @@ def get_font_features(font_path: str) -> Dict[str, List[str]]:
 
     _font_features_cache.put(font_path, features)
     return features
+
+
+def get_font_cmap(font_path: str) -> set:
+    """
+    Returns the set of Unicode codepoints supported by the font.
+
+    Uses fontTools to extract the best cmap table from the font file.
+    Results are cached to avoid repeated font parsing.
+
+    Args:
+        font_path: Path to the font file.
+
+    Returns:
+        Set of integer codepoints (Unicode code points) supported by the font.
+        Returns an empty set if the font cannot be read or has no cmap.
+    """
+    cached_cmap = _font_cmap_cache.get(font_path)
+    if cached_cmap is not None:
+        return cached_cmap
+
+    supported_codepoints: set = set()
+    try:
+        font = TTFont(font_path, fontNumber=0)
+        cmap = font.getBestCmap()
+        if cmap:
+            supported_codepoints = set(cmap.keys())
+    except Exception as e:
+        log_message(
+            f"Failed to extract cmap from {os.path.basename(font_path)}: {e}",
+            always_print=True,
+        )
+
+    _font_cmap_cache.put(font_path, supported_codepoints)
+    return supported_codepoints
+
+
+def sanitize_text_for_font(text: str, font_path: str, verbose: bool = False) -> str:
+    """
+    Removes characters from text that are not supported by the font's cmap.
+
+    This prevents "tofu" characters (▯) from appearing in rendered text.
+    Style markers (*, **, ***) are preserved even if asterisk is not in the font,
+    since they are stripped during text processing and never actually rendered.
+
+    Args:
+        text: The text to sanitize.
+        font_path: Path to the font file to check against.
+        verbose: Whether to print detailed logs.
+
+    Returns:
+        Sanitized text with unsupported characters removed.
+    """
+    if not text:
+        return text
+
+    supported_codepoints = get_font_cmap(font_path)
+
+    if not supported_codepoints:
+        log_message(
+            f"Could not get cmap for {os.path.basename(font_path)}, skipping sanitization",
+            verbose=verbose,
+        )
+        return text
+
+    # Characters to always preserve (style markers used in markdown-like formatting)
+    STYLE_MARKER_CHARS = {"*"}
+    WHITESPACE_CHARS = {" ", "\t", "\n", "\r"}
+
+    removed_chars: List[str] = []
+    sanitized_chars: List[str] = []
+
+    for char in text:
+        codepoint = ord(char)
+
+        if char in STYLE_MARKER_CHARS or char in WHITESPACE_CHARS:
+            sanitized_chars.append(char)
+        elif codepoint in supported_codepoints:
+            sanitized_chars.append(char)
+        else:
+            removed_chars.append(char)
+
+    if removed_chars:
+        unique_removed = sorted(set(removed_chars), key=lambda c: ord(c))
+        char_descriptions = [f"'{c}' (U+{ord(c):04X})" for c in unique_removed[:10]]
+        if len(unique_removed) > 10:
+            char_descriptions.append(f"... and {len(unique_removed) - 10} more")
+
+        log_message(
+            f"Removed {len(removed_chars)} unsupported character(s) from text: "
+            f"{', '.join(char_descriptions)}",
+            always_print=True,
+        )
+
+    return "".join(sanitized_chars)
 
 
 def _validate_font_file(font_file: Path, verbose: bool = False) -> bool:

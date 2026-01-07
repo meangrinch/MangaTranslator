@@ -12,7 +12,11 @@ from core.text.drawing_engine import (
     pil_to_skia_surface,
     skia_surface_to_pil,
 )
-from core.text.font_manager import find_font_variants, get_font_features
+from core.text.font_manager import (
+    find_font_variants,
+    get_font_features,
+    sanitize_text_for_font,
+)
 from core.text.layout_engine import find_optimal_layout
 from core.text.text_processing import parse_styled_segments
 from utils.exceptions import FontError, ImageProcessingError, RenderingError
@@ -156,6 +160,18 @@ def render_text_skia(
         regular_font_path = font_variants.get("regular")
     except FontError as e:
         raise RenderingError(f"Font loading failed: {e}") from e
+
+    # Sanitize text to remove characters unsupported by the font
+    layout_text = sanitize_text_for_font(
+        layout_text, str(regular_font_path), verbose=verbose
+    )
+    if not layout_text.strip():
+        # All characters were removed - return original image
+        log_message(
+            "All text characters unsupported by font, skipping render",
+            always_print=True,
+        )
+        return pil_image
 
     # Load regular font resources
     try:
