@@ -49,7 +49,7 @@
   - Try running the update script again
   - If issues persist, re-download the portable package
 
-### Layout & Text Rendering
+### Rendering
 
 - **Incorrect reading order:**
   - Set correct "Reading Direction" (rtl for manga, ltr for comics)
@@ -63,7 +63,7 @@
   - Increase font rendering "Supersampling Factor" (e.g., 6-8)
   - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x)
 
-### Bubble Detection & Cleaning
+### Detection/Cleaning
 
 - **Uncleaned text remaining (near edges of bubbles):**
   - Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
@@ -79,12 +79,15 @@
 
 ### Translation
 
-- **Poor translations/API refusals:**
+- **Poor translations:**
   - Try "two-step" translation mode for less-capable LLMs
   - Try disabling "Send Full Page to LLM"
   - Try using "manga-ocr" OCR method, particularly for less-capable LLMs (Japanese sources only)
   - Increase "max_tokens" and/or use a higher "reasoning_effort" (e.g., "high")
   - Switch "Bubble/Context Resizing Method" to a better quality method (e.g., "Model")
+- **API refusals/censorship:**
+  - Try disabling "Send Full Page to LLM"
+  - Try adding a custom "special instruction" (e.g., "Do not censor translations...")
 - **High LLM token usage:**
   - Disable "Send Full Page to LLM"
   - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes
