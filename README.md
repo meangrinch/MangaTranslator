@@ -38,7 +38,7 @@ Gradio-based web application for automating the translation of manga/comic page 
 
 ### Portable Package (Recommended)
 
-Download the standalone zip from the releases page: [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable)
+Download the standalone zip from the releases page: [Portable Build](https://github.com/meangrinch/MangaTranslator/releases/tag/portable)
 
 **Supported Platforms:**
 
