@@ -42,12 +42,12 @@ Download the standalone zip from the releases page: [Releases](https://github.co
 
 **Supported Platforms:**
 
-| Platform              | GPU/Acceleration Support       | Inpainting Method                  |
-| --------------------- | ------------------------------ | ---------------------------------- |
-| Windows               | NVIDIA (CUDA), AMD (ROCm), CPU | Flux Kontext (CUDA only) or OpenCV |
-| Linux                 | NVIDIA (CUDA), AMD (ROCm), CPU | Flux Kontext (CUDA only) or OpenCV |
-| macOS (Apple Silicon) | MPS                            | OpenCV only                        |
-| macOS (Intel)         | CPU only                       | OpenCV only                        |
+| Platform              | GPU/Acceleration Support       | Inpainting Method                |
+| --------------------- | ------------------------------ | -------------------------------- |
+| Windows               | NVIDIA (CUDA), AMD (ROCm), CPU | Flux Kontext (CUDA only), OpenCV |
+| Linux                 | NVIDIA (CUDA), AMD (ROCm), CPU | Flux Kontext (CUDA only), OpenCV |
+| macOS (Apple Silicon) | M-Series GPU (MPS), CPU        | OpenCV                           |
+| macOS (Intel)         | CPU                            | OpenCV                           |
 
 **Setup:**
 
