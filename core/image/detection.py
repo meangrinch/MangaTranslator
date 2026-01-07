@@ -320,7 +320,13 @@ def detect_speech_bubbles(
     _device = (
         device
         if device is not None
-        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else torch.device(
+            "cuda"
+            if torch.cuda.is_available()
+            else "mps"
+            if torch.backends.mps.is_available()
+            else "cpu"
+        )
     )
     try:
         if image_override is not None:
@@ -750,7 +756,13 @@ def detect_panels(
     _device = (
         device
         if device is not None
-        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else torch.device(
+            "cuda"
+            if torch.cuda.is_available()
+            else "mps"
+            if torch.backends.mps.is_available()
+            else "cpu"
+        )
     )
 
     try:

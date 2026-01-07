@@ -45,11 +45,19 @@ class FluxKontextInpainter:
         self.DEVICE = (
             device
             if device is not None
-            else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            else torch.device(
+                "cuda"
+                if torch.cuda.is_available()
+                else "mps"
+                if torch.backends.mps.is_available()
+                else "cpu"
+            )
         )
         self.DTYPE = (
             torch.bfloat16
             if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+            else torch.float16
+            if self.DEVICE.type == "mps"
             else torch.float32
         )
         self.huggingface_token = huggingface_token

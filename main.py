@@ -715,11 +715,15 @@ def main():
 
     target_device = (
         torch.device("cpu")
-        if args.cpu or not torch.cuda.is_available()
-        else torch.device("cuda")
+        if args.cpu
+        else torch.device(
+            "cuda"
+            if torch.cuda.is_available()
+            else "mps" if torch.backends.mps.is_available() else "cpu"
+        )
     )
     log_message(
-        f"Using {'CPU' if target_device.type == 'cpu' else 'CUDA'} device.",
+        f"Using {target_device.type.upper()} device.",
         always_print=True,
     )
 

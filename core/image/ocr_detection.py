@@ -29,7 +29,13 @@ class OutsideTextDetector:
         self.device = (
             device
             if device is not None
-            else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            else torch.device(
+                "cuda"
+                if torch.cuda.is_available()
+                else "mps"
+                if torch.backends.mps.is_available()
+                else "cpu"
+            )
         )
         self.hf_token = hf_token
         self.manager = get_model_manager()

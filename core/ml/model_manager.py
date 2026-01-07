@@ -53,11 +53,15 @@ class ModelManager:
             if self._initialized:
                 return
 
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.device = torch.device(
+                "cuda"
+                if torch.cuda.is_available()
+                else "mps" if torch.backends.mps.is_available() else "cpu"
+            )
             self.dtype = (
                 torch.bfloat16
                 if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-                else torch.float32
+                else torch.float16 if self.device.type == "mps" else torch.float32
             )
 
             # Model storage
@@ -523,6 +527,22 @@ class ModelManager:
                 return self.models[ModelType.MANGA_OCR]
 
             log_message("Initializing manga-ocr...", verbose=verbose)
+
+            # Fix for MeCab/Fugashi on non-Windows systems
+            try:
+                import os
+
+                import unidic_lite
+
+                os.environ["MECABRC"] = os.path.join(unidic_lite.DICDIR, "mecabrc")
+            except ImportError:
+                log_message(
+                    "Warning: unidic_lite not found, skipping MeCab fix",
+                    verbose=verbose,
+                )
+            except Exception as e:
+                log_message(f"Warning: Failed to apply MeCab fix: {e}", verbose=verbose)
+
             from manga_ocr import MangaOcr
 
             # Ensure model is downloaded

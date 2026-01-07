@@ -76,7 +76,11 @@ if __name__ == "__main__":
     target_device = (
         torch.device("cpu")
         if args.cpu
-        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else torch.device(
+            "cuda"
+            if torch.cuda.is_available()
+            else "mps" if torch.backends.mps.is_available() else "cpu"
+        )
     )
 
     device_info_str = "CPU"
@@ -86,6 +90,8 @@ if __name__ == "__main__":
             device_info_str = f"CUDA ({gpu_name}, ID: 0)"
         except Exception:
             device_info_str = "CUDA (Unknown GPU Name)"
+    elif target_device.type == "mps":
+        device_info_str = "MPS (Apple Silicon)"
     print(f"Using device: {device_info_str.upper()}")
     print(f"PyTorch version: {torch.__version__}")
     print(f"MangaTranslator version: {core.__version__}")
