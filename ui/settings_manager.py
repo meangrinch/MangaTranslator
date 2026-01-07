@@ -181,6 +181,7 @@ DEFAULT_SETTINGS = {
     "auto_scale": True,
     "send_full_page_context": True,
     "special_instructions": "",
+    "adult_doujinshi_mode": False,
     "upscale_method": "model_lite",  # "model", "model_lite", "lanczos", or "none"
     "bubble_min_side_pixels": 128,
     "context_image_max_side_pixels": 1024,
@@ -253,6 +254,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "effort",
     "enable_web_search",
     "special_instructions",
+    "adult_doujinshi_mode",
     "batch_special_instructions",
     # Rendering
     "font_pack",

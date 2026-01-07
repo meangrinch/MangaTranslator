@@ -80,6 +80,7 @@ class TranslationConfig:
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
     special_instructions: Optional[str] = None
+    adult_doujinshi_mode: bool = False
     ocr_method: str = "LLM"  # "LLM" or "manga-ocr"
 
 

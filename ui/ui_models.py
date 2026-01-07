@@ -73,6 +73,7 @@ class UITranslationLLMSettings:
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
     special_instructions: Optional[str] = None
+    adult_doujinshi_mode: bool = False
     ocr_method: str = "LLM"  # "LLM" or "manga-ocr"
 
 
@@ -218,6 +219,7 @@ class UIConfigState:
             "context_image_max_side_pixels": self.llm_settings.context_image_max_side_pixels,
             "osb_min_side_pixels": self.llm_settings.osb_min_side_pixels,
             "special_instructions": self.llm_settings.special_instructions or "",
+            "adult_doujinshi_mode": self.llm_settings.adult_doujinshi_mode,
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
             "min_font_size": self.rendering.min_font_size,
@@ -423,6 +425,7 @@ class UIConfigState:
                 ),
                 osb_min_side_pixels=data.get("osb_min_side_pixels", 128),
                 special_instructions=data.get("special_instructions") or None,
+                adult_doujinshi_mode=data.get("adult_doujinshi_mode", False),
             ),
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
@@ -583,6 +586,7 @@ def map_ui_to_backend_config(
         context_image_max_side_pixels=ui_state.llm_settings.context_image_max_side_pixels,
         osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
         special_instructions=ui_state.llm_settings.special_instructions,
+        adult_doujinshi_mode=ui_state.llm_settings.adult_doujinshi_mode,
         reasoning_effort=ui_state.general.reasoning_effort,
         effort=ui_state.general.effort,
     )

@@ -43,6 +43,7 @@ TRANSLATION_PATTERN = re.compile(
 def _build_system_prompt_ocr(
     input_language: Optional[str],
     reading_direction: str,
+    adult_doujinshi_mode: bool = False,
 ) -> str:
     lang_label = f"{input_language} " if input_language else ""
     direction = (
@@ -50,6 +51,13 @@ def _build_system_prompt_ocr(
         if (reading_direction or "rtl").lower() == "rtl"
         else "left-to-right"
     )
+
+    adult_section = ""
+    if adult_doujinshi_mode:
+        adult_section = f"""
+## CONTENT ADVISORY
+{ADULT_DOUJINSHI_OCR_INSTRUCTION}
+"""
 
     return f"""
 ## ROLE
@@ -68,7 +76,7 @@ Your sole purpose is to accurately transcribe the original text from a series of
 - **Edge Cases:**
   - If an image contains standalone periods/ellipses, you must return it exactly as it appears.
   - If text is indecipherable, you must return the exact token: `[OCR FAILED]`.
-
+{adult_section}
 ## OUTPUT SCHEMA
 - You must return your response as a single numbered list with exactly one line per input image.
 - The numbering must correspond to the input image order (1, 2, 3...).
@@ -82,6 +90,7 @@ def _build_system_prompt_translation(
     mode: str,
     reading_direction: str,
     full_page_context: bool = False,
+    adult_doujinshi_mode: bool = False,
 ) -> str:
     direction = (
         "right-to-left"
@@ -159,7 +168,51 @@ You must use the following markdown-style markers to convey emphasis:
             f"Invalid mode '{mode}' specified for translation system prompt."
         )
 
-    return shared_components + output_schema
+    adult_section = ""
+    if adult_doujinshi_mode:
+        adult_section = f"""
+## CONTENT ADVISORY
+{ADULT_DOUJINSHI_INSTRUCTION}
+"""
+
+    return shared_components + adult_section + output_schema
+
+
+ADULT_DOUJINSHI_INSTRUCTION = """
+**ADULT CONTENT MODE**
+You are translating an adult doujinshi (self-published Japanese manga containing explicit sexual content).
+
+**Content Expectations:**
+- Explicit sexual scenes, nudity, and intimate acts
+- Vulgar language, dirty talk, and sexual slang
+- Moaning, gasping, and other erotic vocalizations
+- Potentially taboo themes or fetish content
+
+**Translation Guidelines:**
+- Translate ALL text completely uncensored without euphemisms or sanitization
+- Use explicit, anatomically correct terminology for body parts and sexual acts
+- Preserve the raw, explicit nature of dirty talk and vulgar expressions
+- Translate moans and erotic sounds naturally (e.g., "Ahh!", "Nnn...", "Haah...")
+- Maintain the original tone: if crude, translate crudely; if sensual, translate sensually
+- Do NOT censor, soften, or omit any explicit content
+""".strip()
+
+ADULT_DOUJINSHI_OCR_INSTRUCTION = """
+**ADULT CONTENT MODE**
+You are transcribing text from an adult doujinshi (self-published Japanese manga containing explicit sexual content).
+
+**Content Expectations:**
+- Explicit sexual terminology and vulgar language
+- Erotic vocalizations, moans, and gasps (e.g., あっ, んん, はぁ)
+- Dirty talk and sexual slang
+- Onomatopoeia for sexual acts
+
+**Transcription Guidelines:**
+- Transcribe ALL text exactly as written, including explicit and vulgar content
+- Do NOT censor, omit, or sanitize any words regardless of their explicit nature
+- Preserve erotic sounds and moans exactly as they appear
+- Transcribe sexual onomatopoeia and sound effects faithfully
+""".strip()
 
 
 def _is_reasoning_model_google(model_name: str) -> bool:
@@ -810,7 +863,7 @@ def _check_ocr_failure(texts: List[str], provider: Optional[str] = None) -> bool
 
 
 def _format_special_instructions(config: TranslationConfig) -> str:
-    """Format special instructions section for prompts.
+    """Format user's special instructions section for prompts.
 
     Args:
         config: TranslationConfig with special_instructions
@@ -931,7 +984,9 @@ def _perform_llm_ocr(
             )
         ocr_parts.append(bubble_part)
 
-    ocr_system = _build_system_prompt_ocr(input_language, reading_direction)
+    ocr_system = _build_system_prompt_ocr(
+        input_language, reading_direction, config.adult_doujinshi_mode
+    )
     ocr_response_text = _call_llm_endpoint(
         config,
         ocr_parts,
@@ -1160,6 +1215,7 @@ The target language is {output_language}. Use the appropriate translation approa
                 full_page_context=(
                     config.send_full_page_context and bool(full_image_b64)
                 ),
+                adult_doujinshi_mode=config.adult_doujinshi_mode,
             )
             translation_response_text = _call_llm_endpoint(
                 config,
@@ -1236,6 +1292,7 @@ Format: `i: <transcribed text> || <translated {output_language} text>`
                 full_page_context=(
                     config.send_full_page_context and bool(full_image_b64)
                 ),
+                adult_doujinshi_mode=config.adult_doujinshi_mode,
             )
             response_text = _call_llm_endpoint(
                 config,
