@@ -15,6 +15,7 @@ from utils.logging import log_message
 IOA_THRESHOLD = 0.50  # 50% IoA threshold for conjoined bubble detection
 SAM_MASK_THRESHOLD = 0.5  # SAM2 mask binarization threshold
 IOA_OVERLAP_THRESHOLD = 0.5  # IoA threshold for general overlap detection between boxes
+IOU_DUPLICATE_THRESHOLD = 0.7  # IoU threshold for duplicate primary detection
 
 
 def _box_contains(inner, outer) -> bool:
@@ -135,6 +136,72 @@ def _calculate_ioa(box_inner, box_outer):
 
     area_inner = (x_inner_max - x_inner_min) * (y_inner_max - y_inner_min)
     return intersection / area_inner if area_inner > 0 else 0.0
+
+
+def _calculate_iou(box_a, box_b):
+    """Calculate Intersection over Union (IoU) for two bounding boxes.
+
+    IoU = intersection_area / union_area
+
+    Args:
+        box_a: Tuple of (x0, y0, x1, y1)
+        box_b: Tuple of (x0, y0, x1, y1)
+
+    Returns:
+        float: IoU value between 0 and 1
+    """
+    inter_x_min = max(box_a[0], box_b[0])
+    inter_y_min = max(box_a[1], box_b[1])
+    inter_x_max = min(box_a[2], box_b[2])
+    inter_y_max = min(box_a[3], box_b[3])
+
+    inter_w = max(0, inter_x_max - inter_x_min)
+    inter_h = max(0, inter_y_max - inter_y_min)
+    intersection = inter_w * inter_h
+
+    area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
+    area_b = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
+    union = area_a + area_b - intersection
+
+    return intersection / union if union > 0 else 0.0
+
+
+def _deduplicate_primary_boxes(
+    boxes: torch.Tensor, confidences: torch.Tensor, threshold: float
+) -> Tuple[torch.Tensor, List[int]]:
+    """Remove duplicate primary detections using IoU-based NMS.
+
+    When two boxes have IoU > threshold, keeps the one with higher confidence.
+
+    Args:
+        boxes: Tensor of bounding boxes (N, 4)
+        confidences: Tensor of confidence scores (N,)
+        threshold: IoU threshold above which boxes are considered duplicates
+
+    Returns:
+        Tuple of (deduplicated boxes tensor, indices of kept boxes)
+    """
+    if len(boxes) <= 1:
+        return boxes, list(range(len(boxes)))
+
+    boxes_list = boxes.tolist()
+    confs_list = confidences.tolist()
+    n = len(boxes_list)
+
+    # Sort by confidence (descending)
+    indices = sorted(range(n), key=lambda i: confs_list[i], reverse=True)
+    keep = []
+
+    for i in indices:
+        is_duplicate = False
+        for k in keep:
+            if _calculate_iou(boxes_list[i], boxes_list[k]) > threshold:
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            keep.append(i)
+
+    return boxes[keep], keep
 
 
 def _categorize_detections(primary_boxes, secondary_boxes, ioa_threshold=IOA_THRESHOLD):
@@ -323,9 +390,7 @@ def detect_speech_bubbles(
         else torch.device(
             "cuda"
             if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
+            else "mps" if torch.backends.mps.is_available() else "cpu"
         )
     )
     try:
@@ -372,6 +437,18 @@ def detect_speech_bubbles(
             else torch.tensor([])
         )
         cache.set_yolo_detection(yolo_cache_key, (primary_results, primary_boxes))
+
+    # Remove duplicate primary detections using IoU-based NMS
+    if len(primary_boxes) > 1:
+        original_count = len(primary_boxes)
+        primary_boxes, _ = _deduplicate_primary_boxes(
+            primary_boxes, primary_results.boxes.conf, IOU_DUPLICATE_THRESHOLD
+        )
+        if len(primary_boxes) < original_count:
+            log_message(
+                f"Removed {original_count - len(primary_boxes)} duplicate detections",
+                verbose=verbose,
+            )
 
     if len(primary_boxes) == 0:
         log_message("No detections found", verbose=verbose)
@@ -759,9 +836,7 @@ def detect_panels(
         else torch.device(
             "cuda"
             if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
+            else "mps" if torch.backends.mps.is_available() else "cpu"
         )
     )
 
