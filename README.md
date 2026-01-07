@@ -68,6 +68,12 @@ Download the standalone zip from the releases page: [Releases](https://github.co
 
 Includes the Komika (for normal text), Cookies (for OSB text), and Comicka (for either) font packs
 
+> [!TIP]
+> In the event that you need to transfer to a fresh portable package:
+>
+> - You can safely move the `fonts`, `models`, and `output` directories to the new portable package
+> - You can likely also move the `runtime` directory over, assuming the same setup configuration is wanted
+
 ### Manual install
 
 1. Clone and enter the repo

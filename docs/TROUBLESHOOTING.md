@@ -49,11 +49,6 @@
   - Try running the update script again
   - If issues persist, re-download the portable package
 
-- **Transferring to a fresh portable package:**
-
-  - You can safely move `fonts`, `models`, and `output` directories to the new portable package
-  - You can move the `runtime` directory if you will be using the exact same setup configuration
-
 ### Layout & Text Rendering
 
 - **Incorrect reading order:**
