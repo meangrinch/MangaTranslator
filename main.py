@@ -413,6 +413,11 @@ def main():
         help="Skip translation and text rendering, output only the cleaned speech bubbles",
     )
     parser.add_argument(
+        "--upscaling-only",
+        action="store_true",
+        help="Skip detection and translation, only upscale the image",
+    )
+    parser.add_argument(
         "--test-mode",
         action="store_true",
         help="Skip translation and render placeholder text (lorem ipsum)",
@@ -637,7 +642,9 @@ def main():
 
     # --- Validate mutually exclusive flags ---
     try:
-        validate_mutually_exclusive_modes(args.cleaning_only, args.test_mode)
+        validate_mutually_exclusive_modes(
+            args.cleaning_only, args.upscaling_only, args.test_mode
+        )
     except Exception as e:
         parser.error(str(e))
 
@@ -740,6 +747,7 @@ def main():
         verbose=args.verbose,
         device=target_device,
         cleaning_only=args.cleaning_only,
+        upscaling_only=args.upscaling_only,
         detection=DetectionConfig(
             confidence=args.confidence,
             conjoined_confidence=args.conjoined_confidence,

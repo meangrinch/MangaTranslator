@@ -174,6 +174,9 @@ python main.py --input <image_path> \
 # Cleaning-only mode (no translation/text rendering)
 python main.py --input <image_path> --cleaning-only
 
+# Upscaling-only mode (no detection/translation, only upscale)
+python main.py --input <image_path> --upscaling-only --image-upscale-mode final --image-upscale-factor 2.0
+
 # Test mode (no translation; render placeholder text)
 python main.py --input <image_path> --test-mode
 
@@ -188,7 +191,7 @@ python main.py --help
 3. Choose a font pack; set source/target languages
 4. Open **Config** and set: LLM provider/model, API key or endpoint, reading direction (`rtl` for manga, `ltr` for comics)
 5. Click **Translate** / **Start Batch Translating** — outputs save to `./output/`
-6. Enable "Cleaning-only Mode" or "Test Mode" in **Other** to skip translation and/or render placeholder text
+6. Enable "Cleaning-only Mode", "Upscaling-only Mode", or "Test Mode" in **Other** to skip translation and/or render placeholder text
 
 ## Documentation
 

@@ -170,6 +170,7 @@ DEFAULT_SETTINGS = {
     "image_upscale_factor": 2.0,
     "image_upscale_model": "model_lite",
     "cleaning_only": False,
+    "upscaling_only": False,
     "test_mode": False,
     "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
     "effort": "medium",  # Claude Opus 4.5 only: Controls token spending eagerness (high/medium/low)
@@ -310,6 +311,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     # General
     "verbose",
     "cleaning_only",
+    "upscaling_only",
     "test_mode",
     # Batch
     "batch_input_language",
@@ -340,6 +342,7 @@ def save_config(incoming_settings: Dict[str, Any]):
         known_keys = set(DEFAULT_SETTINGS.keys()) | set(DEFAULT_BATCH_SETTINGS.keys())
         known_keys.add("provider_models")
         known_keys.add("cleaning_only")
+        known_keys.add("upscaling_only")
         known_keys.add("use_sam2")
         all_defaults = {**DEFAULT_SETTINGS, **DEFAULT_BATCH_SETTINGS}
         known_keys.add("openai_compatible_url")
@@ -610,6 +613,7 @@ def reset_to_defaults() -> Dict[str, Any]:
     settings["model_name"] = settings["provider_models"].get(preserved_provider)
     _apply_provider_sampling_defaults(settings, preserved_provider)
     settings["cleaning_only"] = DEFAULT_SETTINGS["cleaning_only"]
+    settings["upscaling_only"] = DEFAULT_SETTINGS["upscaling_only"]
     settings["translation_mode"] = DEFAULT_SETTINGS["translation_mode"]
 
     return settings

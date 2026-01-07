@@ -160,6 +160,7 @@ class MangaTranslatorConfig:
     verbose: bool = False
     device: Optional[torch.device] = None
     cleaning_only: bool = False
+    upscaling_only: bool = False
     test_mode: bool = False
     processing_scale: float = 1.0
 

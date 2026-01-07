@@ -100,6 +100,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         png_compression,
         verbose,
         cleaning_only_toggle,
+        upscaling_only_val,
         test_mode_toggle,
         enable_web_search_val,
         media_resolution_val,
@@ -254,6 +255,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         general=UIGeneralSettings(
             verbose=verbose,
             cleaning_only=cleaning_only_toggle,
+            upscaling_only=upscaling_only_val,
             test_mode=test_mode_toggle,
             enable_web_search=enable_web_search_val,
             media_resolution=media_resolution_val,
@@ -276,13 +278,19 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
     """Validate UI state including modes and API keys. Raises gr.Error on validation failure."""
     try:
         validate_mutually_exclusive_modes(
-            ui_state.general.cleaning_only, ui_state.general.test_mode
+            ui_state.general.cleaning_only,
+            ui_state.general.upscaling_only,
+            ui_state.general.test_mode,
         )
     except ValidationError as e:
         raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
 
-    # Skip API key validation if in cleaning-only or test mode
-    if not ui_state.general.cleaning_only and not ui_state.general.test_mode:
+    # Skip API key validation if in cleaning-only, upscaling-only, or test mode
+    if (
+        not ui_state.general.cleaning_only
+        and not ui_state.general.upscaling_only
+        and not ui_state.general.test_mode
+    ):
         api_key_to_validate = ""
         provider_selector = ui_state.provider_settings.provider
         if provider_selector == "Google":
@@ -315,6 +323,7 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
     if (
         ui_state.provider_settings.provider == "OpenAI-Compatible"
         and not ui_state.general.cleaning_only
+        and not ui_state.general.upscaling_only
         and not ui_state.general.test_mode
     ):
         if not ui_state.provider_settings.openai_compatible_url:
@@ -374,14 +383,19 @@ def _format_single_success_message(
         llm_params_str += f", Top-K={top_k_val}"
     llm_params_str += param_notes
 
-    processing_mode_str = (
-        "Cleaning Only" if backend_config.cleaning_only else "Translation"
-    )
+    if backend_config.cleaning_only:
+        processing_mode_str = "Cleaning Only"
+    elif backend_config.upscaling_only:
+        processing_mode_str = "Upscaling Only"
+    else:
+        processing_mode_str = "Translation"
 
     if backend_config.test_mode:
         model_display = "<Test Mode>"
     elif backend_config.cleaning_only:
         model_display = "<Cleaning-only Mode>"
+    elif backend_config.upscaling_only:
+        model_display = "<Upscaling-only Mode>"
     else:
         model_display = f"{model_name}{thinking_status_str}"
 
@@ -398,7 +412,7 @@ def _format_single_success_message(
         osb_font_name = Path(backend_config.outside_text.osb_font_name).name
         msg_parts.append(f"• OSB Font Pack: {osb_font_name}\n")
 
-    if not backend_config.cleaning_only:
+    if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(
             f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
         )
@@ -418,7 +432,7 @@ def _format_single_success_message(
         ]
     )
 
-    if not backend_config.cleaning_only:
+    if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(f"{llm_params_str}\n")
 
     msg_parts.append(f"• Font Pack: {font_dir_path.name}\n")
@@ -517,7 +531,7 @@ def _format_batch_success_message(
         param_notes = " (Top-K N/A)"
     llm_params_str += param_notes
 
-    if not backend_config.cleaning_only:
+    if not backend_config.cleaning_only and not backend_config.upscaling_only:
         llm_params_str = (
             f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
             + llm_params_str
@@ -527,15 +541,20 @@ def _format_batch_success_message(
     if error_count > 0:
         error_summary = f"\n• Warning: {error_count} image(s) failed to process."
 
-    processing_mode_str = (
-        "Cleaning Only" if backend_config.cleaning_only else "Translation"
-    )
+    if backend_config.cleaning_only:
+        processing_mode_str = "Cleaning Only"
+    elif backend_config.upscaling_only:
+        processing_mode_str = "Upscaling Only"
+    else:
+        processing_mode_str = "Translation"
 
     # Determine model display based on mode
     if backend_config.test_mode:
         model_display = "<Test Mode>"
     elif backend_config.cleaning_only:
         model_display = "<Cleaning-only Mode>"
+    elif backend_config.upscaling_only:
+        model_display = "<Upscaling-only Mode>"
     else:
         model_display = f"{model_name}{thinking_status_str}"
 
@@ -551,7 +570,7 @@ def _format_batch_success_message(
         osb_font_name = Path(backend_config.outside_text.osb_font_name).name
         msg_parts.append(f"• OSB Font Pack: {osb_font_name}\n")
 
-    if not backend_config.cleaning_only:
+    if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(
             f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
         )
@@ -571,7 +590,7 @@ def _format_batch_success_message(
         ]
     )
 
-    if not backend_config.cleaning_only:
+    if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(f"{llm_params_str}\n")
 
     msg_parts.append(f"• Font Pack: {font_dir_path.name}\n")
@@ -867,6 +886,7 @@ def handle_save_config_click(*args: Any) -> str:
         pngc,
         verb,
         cleaning_only_val,
+        upscaling_only_val,
         test_mode_val,
         s_in_lang,
         s_out_lang,
@@ -1016,6 +1036,7 @@ def handle_save_config_click(*args: Any) -> str:
         general=UIGeneralSettings(
             verbose=verb,
             cleaning_only=cleaning_only_val,
+            upscaling_only=upscaling_only_val,
             test_mode=test_mode_val,
             enable_web_search=enable_web_search_val,
             media_resolution=media_resolution_val,
@@ -1191,6 +1212,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.output.png_compression,
         default_ui_state.general.verbose,
         default_ui_state.general.cleaning_only,
+        default_ui_state.general.upscaling_only,
         default_ui_state.general.test_mode,
         default_ui_state.input_language,
         default_ui_state.output_language,
@@ -1360,15 +1382,35 @@ def handle_hyphenation_change(hyphenate_before_scaling: bool):
 
 
 def handle_cleaning_only_change(cleaning_only: bool):
-    """Handles changes in the cleaning-only checkbox to disable test mode if enabled."""
-    return gr.update(
-        interactive=not cleaning_only, value=False if cleaning_only else None
+    """Handles changes in the cleaning-only checkbox to disable upscaling-only and test mode if enabled."""
+    return (
+        gr.update(
+            interactive=not cleaning_only, value=False if cleaning_only else None
+        ),
+        gr.update(
+            interactive=not cleaning_only, value=False if cleaning_only else None
+        ),
+    )
+
+
+def handle_upscaling_only_change(upscaling_only: bool):
+    """Handles changes in the upscaling-only checkbox to disable cleaning-only and test mode if enabled."""
+    return (
+        gr.update(
+            interactive=not upscaling_only, value=False if upscaling_only else None
+        ),
+        gr.update(
+            interactive=not upscaling_only, value=False if upscaling_only else None
+        ),
     )
 
 
 def handle_test_mode_change(test_mode: bool):
-    """Handles changes in the test mode checkbox to disable cleaning-only if enabled."""
-    return gr.update(interactive=not test_mode, value=False if test_mode else None)
+    """Handles changes in the test mode checkbox to disable cleaning-only and upscaling-only if enabled."""
+    return (
+        gr.update(interactive=not test_mode, value=False if test_mode else None),
+        gr.update(interactive=not test_mode, value=False if test_mode else None),
+    )
 
 
 def handle_conjoined_detection_change(_conjoined_detection: bool):

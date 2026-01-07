@@ -151,6 +151,48 @@ def translate_and_render(
         pil_image_processed, config, verbose
     )
 
+    # Check for Upscaling Only Mode (skip detection, cleaning, and translation)
+    if config.upscaling_only:
+        log_message(
+            "Upscaling only mode - skipping detection and translation",
+            always_print=True,
+        )
+        final_image_to_save = pil_image_processed
+
+        if config.output.upscale_final_image:
+            log_message("Upscaling final image...", verbose=verbose, always_print=True)
+            final_image_to_save = upscale_image(
+                final_image_to_save,
+                config.output.image_upscale_factor,
+                model_type=config.output.image_upscale_model,
+                verbose=verbose,
+            )
+
+        if output_path:
+            if final_image_to_save.mode != target_mode:
+                log_message(f"Converting final image to {target_mode}", verbose=verbose)
+                final_image_to_save = final_image_to_save.convert(target_mode)
+
+            try:
+                save_image_with_compression(
+                    final_image_to_save,
+                    output_path,
+                    jpeg_quality=config.output.jpeg_quality,
+                    png_compression=config.output.png_compression,
+                    verbose=verbose,
+                )
+            except ImageProcessingError as e:
+                log_message(f"Failed to save image: {e}", always_print=True)
+                raise
+
+        end_time = time.time()
+        processing_time = end_time - start_time
+        log_message(
+            f"Processing completed in {processing_time:.2f}s", always_print=True
+        )
+
+        return final_image_to_save
+
     # Calculate dynamic processing scale based on image area relative to 1MP (if enabled)
     if config.preprocessing.auto_scale:
         width, height = pil_image_processed.size

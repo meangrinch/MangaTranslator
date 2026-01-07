@@ -138,6 +138,7 @@ class UIGeneralSettings:
 
     verbose: bool = False
     cleaning_only: bool = False
+    upscaling_only: bool = False
     test_mode: bool = False
     enable_web_search: bool = (
         False  # Enable model's built-in web search for up-to-date information.
@@ -258,6 +259,7 @@ class UIConfigState:
             "image_upscale_model": self.output.image_upscale_model,
             "verbose": self.general.verbose,
             "cleaning_only": self.general.cleaning_only,
+            "upscaling_only": self.general.upscaling_only,
             "test_mode": self.general.test_mode,
             "enable_web_search": self.general.enable_web_search,
             "media_resolution": self.general.media_resolution,
@@ -475,6 +477,9 @@ class UIConfigState:
             general=UIGeneralSettings(
                 verbose=data.get("verbose", defaults["verbose"]),
                 cleaning_only=data.get("cleaning_only", defaults["cleaning_only"]),
+                upscaling_only=data.get(
+                    "upscaling_only", defaults.get("upscaling_only", False)
+                ),
                 test_mode=data.get("test_mode", defaults.get("test_mode", False)),
                 enable_web_search=data.get(
                     "enable_web_search", defaults.get("enable_web_search", False)
@@ -659,6 +664,7 @@ def map_ui_to_backend_config(
         outside_text=outside_text_cfg,
         preprocessing=preprocessing_cfg,
         cleaning_only=ui_state.general.cleaning_only,
+        upscaling_only=ui_state.general.upscaling_only,
         test_mode=ui_state.general.test_mode,
     )
 

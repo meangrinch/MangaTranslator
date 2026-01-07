@@ -244,20 +244,24 @@ def validate_core_inputs(
     return yolo_model_path.resolve(), font_dir_path.resolve()
 
 
-def validate_mutually_exclusive_modes(cleaning_only: bool, test_mode: bool) -> None:
+def validate_mutually_exclusive_modes(
+    cleaning_only: bool, upscaling_only: bool, test_mode: bool
+) -> None:
     """
-    Validates that cleaning_only and test_mode are not both enabled.
+    Validates that cleaning_only, upscaling_only, and test_mode are mutually exclusive.
 
     Args:
         cleaning_only (bool): Whether cleaning-only mode is enabled.
+        upscaling_only (bool): Whether upscaling-only mode is enabled.
         test_mode (bool): Whether test mode is enabled.
 
     Raises:
-        ValidationError: If both modes are enabled simultaneously.
+        ValidationError: If more than one mode is enabled simultaneously.
     """
-    if cleaning_only and test_mode:
+    enabled_modes = sum([cleaning_only, upscaling_only, test_mode])
+    if enabled_modes > 1:
         raise ValidationError(
-            "Cleaning-only mode and Test mode cannot be enabled together. "
+            "Cleaning-only mode, Upscaling-only mode, and Test mode are mutually exclusive. "
             "Only one mode can be active at a time."
         )
 
@@ -272,7 +276,9 @@ def validate_config(config: MangaTranslatorConfig) -> None:
     Raises:
         ValidationError: If invalid configuration is detected.
     """
-    validate_mutually_exclusive_modes(config.cleaning_only, config.test_mode)
+    validate_mutually_exclusive_modes(
+        config.cleaning_only, config.upscaling_only, config.test_mode
+    )
 
 
 def normalize_zip_file_input(zip_input: Any) -> str:

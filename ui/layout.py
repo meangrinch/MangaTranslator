@@ -1486,7 +1486,19 @@ def create_layout(
                                 value=saved_settings.get("cleaning_only", False),
                                 label="Cleaning-only Mode",
                                 info="Skip translation and text rendering, output only the cleaned speech bubbles.",
-                                interactive=not saved_settings.get("test_mode", False),
+                                interactive=not (
+                                    saved_settings.get("test_mode", False)
+                                    or saved_settings.get("upscaling_only", False)
+                                ),
+                            )
+                            upscaling_only_toggle = gr.Checkbox(
+                                value=saved_settings.get("upscaling_only", False),
+                                label="Upscaling-only Mode",
+                                info="Skip detection and translation, only upscale the image.",
+                                interactive=not (
+                                    saved_settings.get("cleaning_only", False)
+                                    or saved_settings.get("test_mode", False)
+                                ),
                             )
                             test_mode_toggle = gr.Checkbox(
                                 value=saved_settings.get("test_mode", False),
@@ -1494,8 +1506,9 @@ def create_layout(
                                 info=(
                                     "Skip translation and render placeholder text (lorem ipsum)."
                                 ),
-                                interactive=not saved_settings.get(
-                                    "cleaning_only", False
+                                interactive=not (
+                                    saved_settings.get("cleaning_only", False)
+                                    or saved_settings.get("upscaling_only", False)
                                 ),
                             )
                         setting_groups.append(group_other)
@@ -1543,6 +1556,7 @@ def create_layout(
             png_compression,
             verbose,
             cleaning_only_toggle,
+            upscaling_only_toggle,
             test_mode_toggle,
             input_language,
             output_language,
@@ -1637,6 +1651,7 @@ def create_layout(
             png_compression,
             verbose,
             cleaning_only_toggle,
+            upscaling_only_toggle,
             test_mode_toggle,
             input_language,
             output_language,
@@ -1731,6 +1746,7 @@ def create_layout(
             png_compression,
             verbose,
             cleaning_only_toggle,
+            upscaling_only_toggle,
             test_mode_toggle,
             enable_web_search_checkbox,
             media_resolution_dropdown,
@@ -1827,6 +1843,7 @@ def create_layout(
             png_compression,
             verbose,
             cleaning_only_toggle,
+            upscaling_only_toggle,
             test_mode_toggle,
             enable_web_search_checkbox,
             media_resolution_dropdown,
@@ -2025,11 +2042,19 @@ def create_layout(
             queue=False,
         )
 
-        # Cleaning-only and Test mode mutual exclusivity handlers
+        # Cleaning-only, Upscaling-only, and Test mode mutual exclusivity handlers
         cleaning_only_toggle.change(
             fn=callbacks.handle_cleaning_only_change,
             inputs=cleaning_only_toggle,
-            outputs=test_mode_toggle,
+            outputs=[upscaling_only_toggle, test_mode_toggle],
+            queue=False,
+        )
+
+        # Upscaling-only toggle change handler
+        upscaling_only_toggle.change(
+            fn=callbacks.handle_upscaling_only_change,
+            inputs=upscaling_only_toggle,
+            outputs=[cleaning_only_toggle, test_mode_toggle],
             queue=False,
         )
 
@@ -2037,7 +2062,7 @@ def create_layout(
         test_mode_toggle.change(
             fn=callbacks.handle_test_mode_change,
             inputs=test_mode_toggle,
-            outputs=cleaning_only_toggle,
+            outputs=[cleaning_only_toggle, upscaling_only_toggle],
             queue=False,
         )
 
