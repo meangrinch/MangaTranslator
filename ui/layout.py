@@ -272,10 +272,6 @@ def create_layout(
                             lines=1,
                             max_lines=10,
                         )
-                        adult_doujinshi_mode = gr.Checkbox(
-                            value=saved_settings.get("adult_doujinshi_mode", False),
-                            label="Adult Doujinshi Mode",
-                        )
                     with gr.Column(scale=1):
                         output_image = gr.Image(
                             type="pil",
@@ -1581,7 +1577,6 @@ def create_layout(
             osb_min_side_pixels,
             hyphenate_before_scaling,
             special_instructions,
-            adult_doujinshi_mode,
             batch_special_instructions,
             hyphen_penalty,
             hyphenation_min_word_length,
@@ -1678,7 +1673,6 @@ def create_layout(
             osb_min_side_pixels,
             hyphenate_before_scaling,
             special_instructions,
-            adult_doujinshi_mode,
             batch_special_instructions,
             outside_text_enabled,
             outside_text_seed,
@@ -1799,7 +1793,6 @@ def create_layout(
             batch_output_language,
             batch_font_dropdown,
             special_instructions,
-            adult_doujinshi_mode,
             batch_special_instructions,
         ]
 
@@ -1897,7 +1890,6 @@ def create_layout(
             batch_output_language,
             batch_font_dropdown,
             special_instructions,
-            adult_doujinshi_mode,
             batch_special_instructions,
         ]
 
@@ -2186,7 +2178,6 @@ def create_layout(
                 batch_input_language,
                 batch_original_language_state,
                 send_full_page_context,
-                adult_doujinshi_mode,
                 config_model_name,
             ],
             queue=False,

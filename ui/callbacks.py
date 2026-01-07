@@ -147,7 +147,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_output_language,
         batch_font_dropdown,
         special_instructions_val,
-        adult_doujinshi_mode_val,
         batch_special_instructions_val,
     ) = args
 
@@ -230,7 +229,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             context_image_max_side_pixels=context_image_max_side_pixels_val,
             osb_min_side_pixels=osb_min_side_pixels_val,
             special_instructions=final_special_instructions,
-            adult_doujinshi_mode=adult_doujinshi_mode_val,
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_font_size,
@@ -909,7 +907,6 @@ def handle_save_config_click(*args: Any) -> str:
         osb_min_side_pixels_val,
         hyphenate_before_scaling_val,
         special_instructions_val,
-        adult_doujinshi_mode_val,
         batch_special_instructions_val,
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
@@ -1013,7 +1010,6 @@ def handle_save_config_click(*args: Any) -> str:
             context_image_max_side_pixels=context_image_max_side_pixels_val,
             osb_min_side_pixels=osb_min_side_pixels_val,
             special_instructions=special_instructions_val,
-            adult_doujinshi_mode=adult_doujinshi_mode_val,
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_fs,
@@ -1063,8 +1059,6 @@ def handle_save_config_click(*args: Any) -> str:
     settings_dict = ui_state.to_save_dict()
     # Persist send_full_page_context from the single UI value (used for both single and batch flows).
     settings_dict["send_full_page_context"] = bool(send_full_page_context_val)
-    # Persist adult_doujinshi_mode from the single UI value (used for both single and batch flows).
-    settings_dict["adult_doujinshi_mode"] = bool(adult_doujinshi_mode_val)
     message = settings_manager.save_config(settings_dict)
     return message
 
@@ -1252,7 +1246,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.llm_settings.osb_min_side_pixels,
         gr.update(value=default_ui_state.rendering.hyphenate_before_scaling),
         default_ui_state.llm_settings.special_instructions or "",
-        default_ui_state.llm_settings.adult_doujinshi_mode,
         default_ui_state.batch_special_instructions or "",
         default_ui_state.outside_text.enabled,
         default_ui_state.outside_text.seed,
@@ -1496,8 +1489,6 @@ def handle_ocr_method_change(
         updates.append(batch_saved_language)
 
         updates.append(gr.update(value=False, interactive=False))
-        # Keep adult_doujinshi_mode unchanged in manga-ocr mode
-        updates.append(gr.update())
 
         # Trigger model list refresh for providers with dynamic model lists
         if provider == "OpenRouter":
@@ -1560,10 +1551,6 @@ def handle_ocr_method_change(
         updates.append(
             gr.update(value=restored_send_full_page_context, interactive=True)
         )
-        restored_adult_doujinshi_mode = saved_settings.get(
-            "adult_doujinshi_mode", False
-        )
-        updates.append(gr.update(value=restored_adult_doujinshi_mode))
 
         # Trigger model list refresh for providers with dynamic or filtered model lists
         if provider == "OpenRouter":

@@ -235,7 +235,6 @@ class UnifiedCache:
                 if config.special_instructions
                 else None
             ),
-            "adult_doujinshi_mode": config.adult_doujinshi_mode,
             "max_tokens": config.max_tokens,
             "reasoning_effort": config.reasoning_effort,
             "effort": config.effort,
