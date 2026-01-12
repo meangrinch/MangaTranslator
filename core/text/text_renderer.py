@@ -161,19 +161,16 @@ def render_text_skia(
     except FontError as e:
         raise RenderingError(f"Font loading failed: {e}") from e
 
-    # Sanitize text to remove characters unsupported by the font
     layout_text = sanitize_text_for_font(
         layout_text, str(regular_font_path), verbose=verbose
     )
     if not layout_text.strip():
-        # All characters were removed - return original image
         log_message(
             "All text characters unsupported by font, skipping render",
             always_print=True,
         )
         return pil_image
 
-    # Load regular font resources
     try:
         _, regular_typeface, regular_hb_face = load_font_resources(
             str(regular_font_path)
@@ -181,7 +178,6 @@ def render_text_skia(
     except FontError as e:
         raise RenderingError(f"Font resource loading failed: {e}") from e
 
-    # Get font features
     available_features = get_font_features(str(regular_font_path))
     features_to_enable = {
         "kern": "kern" in available_features["GPOS"],
