@@ -204,6 +204,67 @@ def _deduplicate_primary_boxes(
     return boxes[keep], keep
 
 
+def _resolve_mask_overlaps(masks: list, boxes: list, verbose: bool = False) -> list:
+    """Resolve overlapping mask regions by carving exclusive boundaries.
+
+    For conjoined bubble masks that overlap, this function:
+    1. Finds overlapping pixel regions between mask pairs
+    2. Determines the split axis based on box arrangement
+    3. Assigns overlap pixels to the appropriate mask
+
+    Args:
+        masks: List of boolean numpy arrays (SAM output masks)
+        boxes: List of corresponding bounding boxes [x0, y0, x1, y1]
+        verbose: Whether to log operations
+
+    Returns:
+        List of resolved masks with non-overlapping regions
+    """
+    if len(masks) <= 1:
+        return masks
+
+    resolved = [mask.copy() for mask in masks]
+    n = len(resolved)
+    overlap_count = 0
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            overlap = np.logical_and(resolved[i], resolved[j])
+            if not np.any(overlap):
+                continue
+
+            overlap_count += 1
+            box_a = boxes[i] if not hasattr(boxes[i], "tolist") else boxes[i].tolist()
+            box_b = boxes[j] if not hasattr(boxes[j], "tolist") else boxes[j].tolist()
+
+            center_a = ((box_a[0] + box_a[2]) / 2, (box_a[1] + box_a[3]) / 2)
+            center_b = ((box_b[0] + box_b[2]) / 2, (box_b[1] + box_b[3]) / 2)
+            overlap_coords = np.where(overlap)
+
+            # Perpendicular bisector split via cross product
+            mid_x = (center_a[0] + center_b[0]) / 2
+            mid_y = (center_a[1] + center_b[1]) / 2
+            vec_x = center_b[0] - center_a[0]
+            vec_y = center_b[1] - center_a[1]
+
+            pixel_y = overlap_coords[0]
+            pixel_x = overlap_coords[1]
+            cross = (pixel_x - mid_x) * vec_y - (pixel_y - mid_y) * vec_x
+
+            mask_a_pixels = cross >= 0
+            mask_b_pixels = cross < 0
+
+            resolved[i][pixel_y[mask_b_pixels], pixel_x[mask_b_pixels]] = False
+            resolved[j][pixel_y[mask_a_pixels], pixel_x[mask_a_pixels]] = False
+
+    if overlap_count > 0:
+        log_message(
+            f"Resolved {overlap_count} overlapping mask region(s)", verbose=verbose
+        )
+
+    return resolved
+
+
 def _categorize_detections(primary_boxes, secondary_boxes, ioa_threshold=IOA_THRESHOLD):
     """Categorize detections into simple and conjoined bubbles.
 
@@ -661,13 +722,17 @@ def detect_speech_bubbles(
                 verbose=verbose,
             )
         boxes_to_process = []
+        conjoined_mask_ranges = []
 
         for idx in simple_indices:
             boxes_to_process.append(primary_boxes[idx])
 
         for _, s_indices in conjoined_indices:
+            start_idx = len(boxes_to_process)
             for s_idx in s_indices:
                 boxes_to_process.append(secondary_boxes[s_idx])
+            end_idx = len(boxes_to_process)
+            conjoined_mask_ranges.append((start_idx, end_idx))
 
         if boxes_to_process:
             all_boxes_tensor = torch.stack(boxes_to_process)
@@ -679,6 +744,15 @@ def detect_speech_bubbles(
                 sam_model,
                 _device,
             )
+
+            for start_idx, end_idx in conjoined_mask_ranges:
+                group_masks = all_masks[start_idx:end_idx]
+                group_boxes = boxes_to_process[start_idx:end_idx]
+                resolved_masks = _resolve_mask_overlaps(
+                    group_masks, group_boxes, verbose=verbose
+                )
+                all_masks[start_idx:end_idx] = resolved_masks
+
             all_boxes = boxes_to_process
 
             total_boxes = len(boxes_to_process)
