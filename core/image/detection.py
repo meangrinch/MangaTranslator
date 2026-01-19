@@ -7,6 +7,7 @@ import torch
 from PIL import Image
 
 from core.caching import get_cache
+from core.device import get_best_device
 from core.ml.model_manager import ModelType, get_model_manager
 from utils.exceptions import ImageProcessingError, ModelError
 from utils.logging import log_message
@@ -445,15 +446,7 @@ def detect_speech_bubbles(
     detections = []
     text_free_boxes: List[List[float]] = []
 
-    _device = (
-        device
-        if device is not None
-        else torch.device(
-            "cuda"
-            if torch.cuda.is_available()
-            else "mps" if torch.backends.mps.is_available() else "cpu"
-        )
-    )
+    _device = device if device is not None else get_best_device()
     try:
         if image_override is not None:
             image_pil = (
@@ -904,15 +897,7 @@ def detect_panels(
         list: List of tuples (x1, y1, x2, y2) representing panel bounding boxes.
               Only includes detections with class "frame".
     """
-    _device = (
-        device
-        if device is not None
-        else torch.device(
-            "cuda"
-            if torch.cuda.is_available()
-            else "mps" if torch.backends.mps.is_available() else "cpu"
-        )
-    )
+    _device = device if device is not None else get_best_device()
 
     try:
         if image_override is not None:

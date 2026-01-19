@@ -116,7 +116,11 @@ class UIOutsideTextSettings:
     page_filter_min_area_ratio: float = 0.05
     seed: int = 1  # -1 = random
     huggingface_token: str = ""
-    force_cv2_inpainting: bool = False
+    inpainting_method: str = (
+        "flux_klein_4b"  # flux_klein_9b, flux_klein_4b, flux_kontext, opencv
+    )
+    kontext_backend: str = "sdnq"  # "sdnq" (cross-platform) or "nunchaku" (CUDA)
+    flux_low_vram: bool = False  # Use sequential CPU offload for Klein/Kontext SDNQ
     flux_num_inference_steps: int = 10
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6
@@ -234,7 +238,9 @@ class UIConfigState:
             "outside_text_enabled": self.outside_text.enabled,
             "outside_text_seed": self.outside_text.seed,
             "outside_text_huggingface_token": self.outside_text.huggingface_token,
-            "outside_text_force_cv2_inpainting": self.outside_text.force_cv2_inpainting,
+            "outside_text_inpainting_method": self.outside_text.inpainting_method,
+            "outside_text_kontext_backend": self.outside_text.kontext_backend,
+            "outside_text_flux_low_vram": self.outside_text.flux_low_vram,
             "outside_text_flux_num_inference_steps": self.outside_text.flux_num_inference_steps,
             "outside_text_flux_residual_diff_threshold": self.outside_text.flux_residual_diff_threshold,
             "outside_text_osb_confidence": self.outside_text.osb_confidence,
@@ -281,9 +287,9 @@ class UIConfigState:
     def from_dict(data: Dict[str, Any]) -> "UIConfigState":
         """Creates a UIConfigState instance from a dictionary (e.g., loaded from config.json)."""
 
-        from . import (
+        from . import (  # Local import to avoid circular dependency issues
             settings_manager,
-        )  # Local import to avoid circular dependency issues
+        )
 
         defaults = settings_manager.DEFAULT_SETTINGS.copy()
         defaults.update(settings_manager.DEFAULT_BATCH_SETTINGS)
@@ -342,10 +348,15 @@ class UIConfigState:
                 ),
                 seed=data.get("outside_text_seed", 1),
                 huggingface_token=data.get("outside_text_huggingface_token", ""),
-                force_cv2_inpainting=data.get(
-                    "outside_text_force_cv2_inpainting",
-                    defaults.get("outside_text_force_cv2_inpainting", False),
+                inpainting_method=data.get(
+                    "outside_text_inpainting_method",
+                    defaults.get("outside_text_inpainting_method", "flux_klein_4b"),
                 ),
+                kontext_backend=data.get(
+                    "outside_text_kontext_backend",
+                    defaults.get("outside_text_kontext_backend", "sdnq"),
+                ),
+                flux_low_vram=data.get("outside_text_flux_low_vram", False),
                 flux_num_inference_steps=data.get(
                     "outside_text_flux_num_inference_steps", 8
                 ),
@@ -630,7 +641,9 @@ def map_ui_to_backend_config(
         page_filter_min_area_ratio=ui_state.outside_text.page_filter_min_area_ratio,
         seed=ui_state.outside_text.seed,
         huggingface_token=ui_state.outside_text.huggingface_token,
-        force_cv2_inpainting=ui_state.outside_text.force_cv2_inpainting,
+        inpainting_method=ui_state.outside_text.inpainting_method,
+        kontext_backend=ui_state.outside_text.kontext_backend,
+        flux_low_vram=ui_state.outside_text.flux_low_vram,
         flux_num_inference_steps=ui_state.outside_text.flux_num_inference_steps,
         flux_residual_diff_threshold=ui_state.outside_text.flux_residual_diff_threshold,
         osb_confidence=ui_state.outside_text.osb_confidence,

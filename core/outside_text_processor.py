@@ -14,7 +14,7 @@ from sklearn.cluster import KMeans
 
 from core.config import MangaTranslatorConfig
 from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
-from core.image.inpainting import FluxKontextInpainter
+from core.image.inpainting import FluxKleinInpainter, FluxKontextInpainter
 from core.image.ocr_detection import OutsideTextDetector, extract_text_with_manga_ocr
 from core.ml.model_manager import get_model_manager
 from utils.logging import log_message
@@ -224,16 +224,74 @@ def process_outside_text(
             )
 
         log_message("Inpainting outside text regions...", verbose=verbose)
-        inpainter = (
-            None
-            if config.outside_text.force_cv2_inpainting
-            else FluxKontextInpainter(
-                device=config.device,
-                huggingface_token=config.outside_text.huggingface_token,
-                num_inference_steps=config.outside_text.flux_num_inference_steps,
-                residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
-            )
-        )
+
+        # Create inpainter based on selected method
+        inpainting_method = config.outside_text.inpainting_method
+        inpainter = None
+
+        if inpainting_method == "flux_klein_9b":
+            try:
+                inpainter = FluxKleinInpainter(
+                    variant="9b",
+                    device=config.device,
+                    huggingface_token=config.outside_text.huggingface_token,
+                    num_inference_steps=config.outside_text.flux_num_inference_steps,
+                    low_vram=config.outside_text.flux_low_vram,
+                    verbose=verbose,
+                )
+                log_message("Using Flux.2 Klein 9B for inpainting", verbose=verbose)
+            except Exception as e:
+                log_message(
+                    f"Flux Klein 9B unavailable ({e}), falling back to OpenCV",
+                    verbose=verbose,
+                )
+
+        if inpainting_method == "flux_klein_4b":
+            try:
+                inpainter = FluxKleinInpainter(
+                    variant="4b",
+                    device=config.device,
+                    huggingface_token=config.outside_text.huggingface_token,
+                    num_inference_steps=config.outside_text.flux_num_inference_steps,
+                    low_vram=config.outside_text.flux_low_vram,
+                    verbose=verbose,
+                )
+                log_message("Using Flux.2 Klein 4B for inpainting", verbose=verbose)
+            except Exception as e:
+                log_message(
+                    f"Flux Klein 4B unavailable ({e}), falling back to OpenCV",
+                    verbose=verbose,
+                )
+
+        if inpainting_method == "flux_kontext":
+            try:
+                # Determine backend from config
+                backend = config.outside_text.kontext_backend
+                low_vram = (
+                    config.outside_text.flux_low_vram if backend == "sdnq" else False
+                )
+                inpainter = FluxKontextInpainter(
+                    device=config.device,
+                    huggingface_token=config.outside_text.huggingface_token,
+                    num_inference_steps=config.outside_text.flux_num_inference_steps,
+                    residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
+                    backend=backend,
+                    low_vram=low_vram,
+                )
+                backend_label = "SDNQ" if backend == "sdnq" else "Nunchaku"
+                log_message(
+                    f"Using Flux.1 Kontext ({backend_label}) for inpainting",
+                    verbose=verbose,
+                )
+            except Exception as e:
+                log_message(
+                    f"Flux Kontext unavailable ({e}), falling back to OpenCV",
+                    verbose=verbose,
+                )
+
+        if inpainting_method == "opencv" or inpainter is None:
+            inpainter = None
+            log_message("Using OpenCV simple fill for inpainting", verbose=verbose)
 
         mask_groups, _ = outside_detector.get_text_masks(
             str(image_path),
@@ -385,9 +443,7 @@ def process_outside_text(
                                             else (0, 0, 0)
                                         )
 
-                                    force_fill = (
-                                        config.outside_text.force_cv2_inpainting
-                                    )
+                                    force_fill = inpainting_method == "opencv"
                                     should_simple_fill = (
                                         white_ratio >= ratio_threshold
                                         or black_ratio >= ratio_threshold

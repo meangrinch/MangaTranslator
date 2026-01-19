@@ -1232,22 +1232,86 @@ def create_layout(
                                     ),
                                 )
                                 gr.Markdown("### Inpainting")
+                                outside_text_inpainting_method = gr.Radio(
+                                    value=saved_settings.get(
+                                        "outside_text_inpainting_method",
+                                        "flux_klein_4b",
+                                    ),
+                                    choices=[
+                                        ("Flux.2 Klein 9B", "flux_klein_9b"),
+                                        ("Flux.2 Klein 4B", "flux_klein_4b"),
+                                        ("Flux.1 Kontext (12B)", "flux_kontext"),
+                                        ("OpenCV", "opencv"),
+                                    ],
+                                    label="Inpainting Method",
+                                    info=(
+                                        "Klein models are faster and cross-platform, but introduce minor color shifts. "
+                                        "Kontext does not shift colors, but requires CUDA + Nunchaku. "
+                                        "4-bit quantization of each model is used."
+                                    ),
+                                )
+                                _initial_method = saved_settings.get(
+                                    "outside_text_inpainting_method", "flux_klein_4b"
+                                )
+                                _is_kontext = _initial_method == "flux_kontext"
+                                outside_text_kontext_backend = gr.Radio(
+                                    choices=[
+                                        ("SDNQ (cross-platform)", "sdnq"),
+                                        ("Nunchaku (CUDA)", "nunchaku"),
+                                    ],
+                                    value=saved_settings.get(
+                                        "outside_text_kontext_backend", "sdnq"
+                                    ),
+                                    label="Kontext Backend",
+                                    info=(
+                                        "SDNQ: cross-platform, no HF token. "
+                                        "Nunchaku: CUDA-only, faster with First Block Caching."
+                                    ),
+                                    visible=_is_kontext,
+                                )
+                                _is_klein_model = _initial_method in (
+                                    "flux_klein_9b",
+                                    "flux_klein_4b",
+                                )
+                                _initial_backend = saved_settings.get(
+                                    "outside_text_kontext_backend", "sdnq"
+                                )
+                                _show_low_vram = _is_klein_model or (
+                                    _is_kontext and _initial_backend == "sdnq"
+                                )
+                                outside_text_flux_low_vram = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_flux_low_vram", False
+                                    ),
+                                    label="Low VRAM Mode",
+                                    info="Sequential CPU offload for lower memory usage (slower).",
+                                    visible=_show_low_vram,
+                                )
                                 outside_text_flux_num_inference_steps = gr.Slider(
                                     1,
-                                    30,
+                                    (
+                                        30
+                                        if saved_settings.get(
+                                            "outside_text_inpainting_method",
+                                            "flux_klein_4b",
+                                        )
+                                        == "flux_kontext"
+                                        else 12
+                                    ),
                                     value=saved_settings.get(
-                                        "outside_text_flux_num_inference_steps", 8
+                                        "outside_text_flux_num_inference_steps", 4
                                     ),
                                     step=1,
                                     label="Steps",
                                     info=(
-                                        "Number of denoising steps for Flux. "
-                                        "15 is best for quality (diminishing returns beyond); "
-                                        "below 6 shows noticeable degradation."
+                                        "Klein: 4 is recommended (8 might yield slightly better quality). "
+                                        "Kontext: 6-15 is recommended (below 6 has significant quality loss)."
                                     ),
-                                    interactive=not saved_settings.get(
-                                        "outside_text_force_cv2_inpainting", False
-                                    ),
+                                    interactive=saved_settings.get(
+                                        "outside_text_inpainting_method",
+                                        "flux_klein_4b",
+                                    )
+                                    != "opencv",
                                 )
                                 outside_text_flux_residual_diff_threshold = gr.Slider(
                                     0.0,
@@ -1259,31 +1323,25 @@ def create_layout(
                                     step=0.01,
                                     label="Residual Diff Threshold",
                                     info=(
-                                        "First Block Caching threshold for Flux. "
+                                        "First Block Caching threshold for Flux Kontext. "
                                         "Higher = faster, but lower quality."
                                     ),
-                                    interactive=not saved_settings.get(
-                                        "outside_text_force_cv2_inpainting", False
-                                    ),
+                                    interactive=saved_settings.get(
+                                        "outside_text_inpainting_method",
+                                        "flux_klein_4b",
+                                    )
+                                    == "flux_kontext",
                                 )
                                 outside_text_seed = gr.Number(
                                     value=saved_settings.get("outside_text_seed", 1),
                                     label="Seed",
                                     info="Seed for reproducible inpainting (-1 = random)",
                                     precision=0,
-                                    interactive=not saved_settings.get(
-                                        "outside_text_force_cv2_inpainting", False
-                                    ),
-                                )
-                                outside_text_force_cv2_inpainting = gr.Checkbox(
-                                    value=saved_settings.get(
-                                        "outside_text_force_cv2_inpainting", False
-                                    ),
-                                    label="Force OpenCV Inpainting Instead of Flux",
-                                    info=(
-                                        "Bypasses Flux and generates a simple white/black background for maximum speed "
-                                        "and readability. Useful if you do not value background preservation."
-                                    ),
+                                    interactive=saved_settings.get(
+                                        "outside_text_inpainting_method",
+                                        "flux_klein_4b",
+                                    )
+                                    != "opencv",
                                 )
 
                                 gr.Markdown("### Font Rendering")
@@ -1585,7 +1643,9 @@ def create_layout(
             supersampling_factor,
             outside_text_enabled,
             outside_text_seed,
-            outside_text_force_cv2_inpainting,
+            outside_text_inpainting_method,
+            outside_text_kontext_backend,
+            outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
@@ -1676,7 +1736,9 @@ def create_layout(
             batch_special_instructions,
             outside_text_enabled,
             outside_text_seed,
-            outside_text_force_cv2_inpainting,
+            outside_text_inpainting_method,
+            outside_text_kontext_backend,
+            outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
@@ -1767,7 +1829,9 @@ def create_layout(
             supersampling_factor,
             outside_text_enabled,
             outside_text_seed,
-            outside_text_force_cv2_inpainting,
+            outside_text_inpainting_method,
+            outside_text_kontext_backend,
+            outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
@@ -1864,7 +1928,9 @@ def create_layout(
             supersampling_factor,
             outside_text_enabled,
             outside_text_seed,
-            outside_text_force_cv2_inpainting,
+            outside_text_inpainting_method,
+            outside_text_kontext_backend,
+            outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
@@ -2088,18 +2154,70 @@ def create_layout(
             queue=False,
         )
 
-        # Force cv2 inpainting toggle -> disable Flux controls
-        outside_text_force_cv2_inpainting.change(
-            fn=lambda forced: (
-                gr.update(interactive=not forced),
-                gr.update(interactive=not forced),
-                gr.update(interactive=not forced),
-            ),
-            inputs=outside_text_force_cv2_inpainting,
+        # Inpainting method change -> enable/disable controls and adjust steps range
+        def _update_inpainting_controls(
+            method: str, current_backend: str, current_steps: int
+        ):
+            """Update controls based on inpainting method selection."""
+            is_opencv = method == "opencv"
+            is_kontext = method == "flux_kontext"
+            is_klein = method in ("flux_klein_9b", "flux_klein_4b")
+
+            if is_kontext:
+                max_steps = 30
+                default_steps = 12
+            else:
+                # Klein or OpenCV - use Klein defaults (OpenCV ignores steps anyway)
+                max_steps = 12
+                default_steps = 4
+
+            show_low_vram = is_klein or (is_kontext and current_backend == "sdnq")
+            residual_interactive = is_kontext and current_backend == "nunchaku"
+
+            return (
+                gr.update(visible=is_kontext),
+                gr.update(visible=show_low_vram),
+                gr.update(
+                    interactive=(not is_opencv),
+                    maximum=max_steps,
+                    value=default_steps,
+                ),
+                gr.update(interactive=residual_interactive),
+                gr.update(interactive=(not is_opencv)),
+            )
+
+        outside_text_inpainting_method.change(
+            fn=_update_inpainting_controls,
+            inputs=[
+                outside_text_inpainting_method,
+                outside_text_kontext_backend,
+                outside_text_flux_num_inference_steps,
+            ],
             outputs=[
+                outside_text_kontext_backend,
+                outside_text_flux_low_vram,
                 outside_text_flux_num_inference_steps,
                 outside_text_flux_residual_diff_threshold,
                 outside_text_seed,
+            ],
+            queue=False,
+        )
+
+        # Kontext backend change -> update Low VRAM and Residual diff visibility
+        def _update_kontext_backend_controls(backend: str):
+            """Update controls when Kontext backend changes."""
+            is_sdnq = backend == "sdnq"
+            return (
+                gr.update(visible=is_sdnq),
+                gr.update(interactive=(not is_sdnq)),
+            )
+
+        outside_text_kontext_backend.change(
+            fn=_update_kontext_backend_controls,
+            inputs=outside_text_kontext_backend,
+            outputs=[
+                outside_text_flux_low_vram,
+                outside_text_flux_residual_diff_threshold,
             ],
             queue=False,
         )

@@ -3,6 +3,7 @@ from typing import Optional
 
 import torch
 
+from core.device import get_best_device
 from core.llm_defaults import DEFAULT_LLM_PROVIDER, get_provider_sampling_defaults
 
 
@@ -113,7 +114,11 @@ class OutsideTextConfig:
     page_filter_min_area_ratio: float = 0.05
     seed: int = 1  # -1 = random
     huggingface_token: str = ""  # Required for Flux Kontext model downloads
-    force_cv2_inpainting: bool = False
+    inpainting_method: str = (
+        "flux_klein_4b"  # flux_klein_9b, flux_klein_4b, flux_kontext, opencv
+    )
+    kontext_backend: str = "sdnq"  # "sdnq" (cross-platform) or "nunchaku" (CUDA-only)
+    flux_low_vram: bool = False  # Use sequential CPU offload for Klein/Kontext SDNQ
     flux_num_inference_steps: int = 8
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6
@@ -193,13 +198,7 @@ class MangaTranslatorConfig:
 
         # Autodetect device if not specified
         if self.device is None:
-            if torch.cuda.is_available():
-                self.device = torch.device("cuda")
-            elif torch.backends.mps.is_available():
-                self.device = torch.device("mps")
-            else:
-                self.device = torch.device("cpu")
-        pass
+            self.device = get_best_device()
 
 
 @dataclass

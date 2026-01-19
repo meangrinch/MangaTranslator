@@ -307,7 +307,6 @@ def clean_speech_bubbles(
     flux_seed: int = 1,
     osb_text_verification: bool = False,
     osb_text_hf_token: str = "",
-    force_cv2_inpainting: bool = False,
 ):
     """
     Clean speech bubbles using YOLO/SAM masks and optional Flux inpainting for colored bubbles.
@@ -329,7 +328,6 @@ def clean_speech_bubbles(
         flux_seed (int): Seed for Flux; -1 enables random per run.
         osb_text_verification (bool): When True, expand bubble boxes to fully cover OSB text detections.
         osb_text_hf_token (str): Optional token for OSB text model downloads.
-        force_cv2_inpainting (bool): If True, skip Flux inpainting even for colored bubbles and use standard fill.
 
     Returns:
         numpy.ndarray: Cleaned image with text removed.
@@ -598,7 +596,7 @@ def clean_speech_bubbles(
             colored_bubbles = [
                 b for b in processed_bubbles if b.get("is_colored", False)
             ]
-            if colored_bubbles and flux_hf_token and not force_cv2_inpainting:
+            if colored_bubbles and flux_hf_token:
                 log_message(
                     f"Inpainting {len(colored_bubbles)} colored bubbles with Flux",
                     always_print=True,
@@ -690,14 +688,9 @@ def clean_speech_bubbles(
                             except Exception:
                                 pass
             elif colored_bubbles:
-                reason = (
-                    "forced CV2 inpainting"
-                    if force_cv2_inpainting
-                    else "missing Hugging Face token"
-                )
                 log_message(
-                    f"Colored bubbles detected but Flux inpainting skipped ({reason}); "
-                    "falling back to standard fill",
+                    "Colored bubbles detected but Flux inpainting skipped "
+                    "(missing Hugging Face token); falling back to standard fill",
                     always_print=True,
                 )
 

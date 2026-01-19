@@ -623,11 +623,6 @@ def main():
         default=128,
         help="Target minimum side length for outside speech bubble upscaling",
     )
-    parser.add_argument(
-        "--osb-force-cv2-inpainting",
-        action="store_true",
-        help="Force CV2 inpainting for outside text regions instead of using Flux Kontext",
-    )
 
     parser.set_defaults(send_full_page_context=True)
     parser.set_defaults(auto_scale=True)
@@ -870,7 +865,6 @@ def main():
             osb_font_hinting=args.osb_font_hinting,
             bbox_expansion_percent=args.osb_bbox_expansion,
             text_box_proximity_ratio=args.osb_text_box_proximity_ratio,
-            force_cv2_inpainting=args.osb_force_cv2_inpainting,
         ),
         preprocessing=PreprocessingConfig(
             enabled=args.image_upscale_mode == "initial",

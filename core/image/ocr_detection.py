@@ -7,6 +7,7 @@ import torch
 from PIL import Image
 
 from core.caching import get_cache
+from core.device import get_best_device
 from core.ml.model_manager import ModelType, get_model_manager
 from utils.exceptions import ImageProcessingError
 from utils.logging import log_message
@@ -26,17 +27,7 @@ class OutsideTextDetector:
             device: PyTorch device to use. Auto-detects if None.
             hf_token: Hugging Face token for gated repo access.
         """
-        self.device = (
-            device
-            if device is not None
-            else torch.device(
-                "cuda"
-                if torch.cuda.is_available()
-                else "mps"
-                if torch.backends.mps.is_available()
-                else "cpu"
-            )
-        )
+        self.device = device if device is not None else get_best_device()
         self.hf_token = hf_token
         self.manager = get_model_manager()
         self.cache = get_cache()

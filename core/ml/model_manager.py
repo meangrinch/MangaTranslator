@@ -1,4 +1,3 @@
-import gc
 import shutil
 import threading
 import urllib.request
@@ -13,6 +12,7 @@ from spandrel import ModelLoader
 from transformers import Sam2Model, Sam2Processor
 from ultralytics import YOLO
 
+from core.device import empty_cache, get_best_device, get_best_dtype, get_device_info
 from utils.exceptions import ModelError
 from utils.logging import log_message
 
@@ -31,6 +31,9 @@ class ModelType(Enum):
     FLUX_TRANSFORMER = "flux_transformer"
     FLUX_TEXT_ENCODER = "flux_text_encoder"
     FLUX_PIPELINE = "flux_pipeline"
+    FLUX_KONTEXT_SDNQ_PIPELINE = "flux_kontext_sdnq_pipeline"
+    FLUX_KLEIN_9B_PIPELINE = "flux_klein_9b_pipeline"
+    FLUX_KLEIN_4B_PIPELINE = "flux_klein_4b_pipeline"
 
 
 class ModelManager:
@@ -53,16 +56,8 @@ class ModelManager:
             if self._initialized:
                 return
 
-            self.device = torch.device(
-                "cuda"
-                if torch.cuda.is_available()
-                else "mps" if torch.backends.mps.is_available() else "cpu"
-            )
-            self.dtype = (
-                torch.bfloat16
-                if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-                else torch.float16 if self.device.type == "mps" else torch.float32
-            )
+            self.device = get_best_device()
+            self.dtype = get_best_dtype(self.device)
 
             # Model storage
             self.models = {}
@@ -162,6 +157,17 @@ class ModelManager:
         }
         repos[ModelType.MANGA_OCR] = {
             "repo_id": "kha-white/manga-ocr-base",
+        }
+        # Flux.1 Kontext SDNQ (cross-platform, no token required)
+        repos[ModelType.FLUX_KONTEXT_SDNQ_PIPELINE] = {
+            "repo_id": "Disty0/FLUX.1-Kontext-dev-SDNQ-uint4-svd-r32",
+        }
+        # Flux.2 Klein models (SDNQ quantized, public)
+        repos[ModelType.FLUX_KLEIN_9B_PIPELINE] = {
+            "repo_id": "Disty0/FLUX.2-klein-9B-SDNQ-4bit-dynamic-svd-r32",
+        }
+        repos[ModelType.FLUX_KLEIN_4B_PIPELINE] = {
+            "repo_id": "Disty0/FLUX.2-klein-4B-SDNQ-4bit-dynamic",
         }
 
         return repos
@@ -684,6 +690,199 @@ class ModelManager:
                     f"Failed to load Flux/Nunchaku inpainting models: {e}"
                 ) from e
 
+    def load_flux_kontext_sdnq(self, low_vram: bool = False, verbose: bool = False):
+        """Load Flux.1 Kontext pipeline using SDNQ quantization (cross-platform).
+
+        Unlike the Nunchaku method, this does not require a HuggingFace token
+        and works on CUDA, ROCm, MPS, and CPU.
+
+        Args:
+            low_vram: If True, use sequential CPU offload (slower but lower VRAM)
+            verbose: Whether to print verbose logging
+
+        Returns:
+            FluxKontextPipeline instance
+        """
+        with self._lock:
+            if self.is_loaded(ModelType.FLUX_KONTEXT_SDNQ_PIPELINE):
+                return self.models[ModelType.FLUX_KONTEXT_SDNQ_PIPELINE]
+
+            log_message(
+                "Loading Flux.1 Kontext SDNQ model (cross-platform)...", verbose=verbose
+            )
+
+            try:
+                from diffusers import FluxKontextPipeline
+                from sdnq import SDNQConfig  # noqa: F401 - registers into diffusers
+                from sdnq.common import use_torch_compile as triton_is_available
+                from sdnq.loader import apply_sdnq_options_to_model
+
+                hf_info = self.model_hf_repos[ModelType.FLUX_KONTEXT_SDNQ_PIPELINE]
+                repo_id = hf_info["repo_id"]
+
+                log_message(f"Loading SDNQ pipeline from {repo_id}...", verbose=verbose)
+                pipeline = FluxKontextPipeline.from_pretrained(
+                    repo_id,
+                    torch_dtype=self.dtype,
+                    cache_dir=str(self.flux_cache_dir),
+                )
+
+                # Enable INT8 MatMul for GPU acceleration (AMD, Intel ARC, NVIDIA)
+                has_gpu = torch.cuda.is_available() or (
+                    hasattr(torch, "xpu") and torch.xpu.is_available()
+                )
+                if triton_is_available and has_gpu:
+                    log_message(
+                        "Applying SDNQ INT8 MatMul optimization...", verbose=verbose
+                    )
+                    pipeline.transformer = apply_sdnq_options_to_model(
+                        pipeline.transformer, use_quantized_matmul=True
+                    )
+                    pipeline.text_encoder_2 = apply_sdnq_options_to_model(
+                        pipeline.text_encoder_2, use_quantized_matmul=True
+                    )
+
+                if low_vram:
+                    log_message(
+                        "Using sequential CPU offload (low VRAM mode)...",
+                        verbose=verbose,
+                    )
+                    pipeline.enable_sequential_cpu_offload()
+                else:
+                    pipeline.enable_model_cpu_offload()
+
+                self.models[ModelType.FLUX_KONTEXT_SDNQ_PIPELINE] = pipeline
+                log_message(
+                    "Flux.1 Kontext SDNQ model loaded successfully.",
+                    verbose=verbose,
+                )
+                return pipeline
+
+            except ImportError as e:
+                raise ModelError(
+                    "diffusers or sdnq not installed or incompatible. "
+                    "Flux.1 Kontext SDNQ requires diffusers and sdnq."
+                ) from e
+            except Exception as e:
+                raise ModelError(
+                    f"Failed to load Flux.1 Kontext SDNQ model: {e}"
+                ) from e
+
+    def _load_flux_klein(
+        self,
+        model_type: ModelType,
+        variant: str,
+        low_vram: bool = False,
+        verbose: bool = False,
+    ):
+        """Load a Flux.2 Klein model pipeline using SDNQ quantization.
+
+        Both 4B and 9B use Disty0's SDNQ 4-bit quantized models.
+        Supports AMD, Intel ARC, and NVIDIA GPUs with INT8 MatMul optimization.
+
+        Args:
+            model_type: ModelType.FLUX_KLEIN_9B_PIPELINE or FLUX_KLEIN_4B_PIPELINE
+            variant: "9b" or "4b" for logging
+            low_vram: If True, use sequential CPU offload (slower but lower VRAM)
+            verbose: Whether to print verbose logging
+
+        Returns:
+            The loaded Flux2KleinPipeline
+        """
+        with self._lock:
+            if self.is_loaded(model_type):
+                return self.models[model_type]
+
+            log_message(
+                f"Loading Flux.2 Klein {variant.upper()} model...", verbose=verbose
+            )
+
+            try:
+                from diffusers import Flux2KleinPipeline
+                from sdnq import SDNQConfig  # noqa: F401 - registers into diffusers
+                from sdnq.common import use_torch_compile as triton_is_available
+                from sdnq.loader import apply_sdnq_options_to_model
+
+                hf_info = self.model_hf_repos[model_type]
+                repo_id = hf_info["repo_id"]
+
+                log_message(f"Loading SDNQ pipeline from {repo_id}...", verbose=verbose)
+                pipeline = Flux2KleinPipeline.from_pretrained(
+                    repo_id,
+                    torch_dtype=self.dtype,
+                    cache_dir=str(self.flux_cache_dir),
+                )
+
+                # Enable INT8 MatMul for GPU acceleration (AMD, Intel ARC, NVIDIA)
+                has_gpu = torch.cuda.is_available() or (
+                    hasattr(torch, "xpu") and torch.xpu.is_available()
+                )
+                if triton_is_available and has_gpu:
+                    log_message(
+                        "Applying SDNQ INT8 MatMul optimization...", verbose=verbose
+                    )
+                    pipeline.transformer = apply_sdnq_options_to_model(
+                        pipeline.transformer, use_quantized_matmul=True
+                    )
+                    pipeline.text_encoder = apply_sdnq_options_to_model(
+                        pipeline.text_encoder, use_quantized_matmul=True
+                    )
+
+                if low_vram:
+                    log_message(
+                        "Using sequential CPU offload (low VRAM mode)...",
+                        verbose=verbose,
+                    )
+                    pipeline.enable_sequential_cpu_offload()
+                else:
+                    pipeline.enable_model_cpu_offload()
+
+                self.models[model_type] = pipeline
+                log_message(
+                    f"Flux.2 Klein {variant.upper()} model loaded successfully.",
+                    verbose=verbose,
+                )
+                return pipeline
+
+            except ImportError as e:
+                raise ModelError(
+                    "diffusers or sdnq not installed or incompatible. Flux.2 Klein requires diffusers and sdnq."
+                ) from e
+            except Exception as e:
+                raise ModelError(
+                    f"Failed to load Flux.2 Klein {variant.upper()} model: {e}"
+                ) from e
+
+    def load_flux_klein_9b(self, low_vram: bool = False, verbose: bool = False):
+        """Load Flux.2 Klein 9B pipeline with FP8 transformer.
+
+        Note: Requires HuggingFace token with access to gated repo.
+
+        Args:
+            low_vram: If True, use sequential CPU offload (slower but lower VRAM)
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Flux2KleinPipeline instance
+        """
+        return self._load_flux_klein(
+            ModelType.FLUX_KLEIN_9B_PIPELINE, "9b", low_vram=low_vram, verbose=verbose
+        )
+
+    def load_flux_klein_4b(self, low_vram: bool = False, verbose: bool = False):
+        """Load Flux.2 Klein 4B pipeline with FP8 transformer.
+
+        Args:
+            low_vram: If True, use sequential CPU offload (slower but lower VRAM)
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Flux2KleinPipeline instance
+        """
+        return self._load_flux_klein(
+            ModelType.FLUX_KLEIN_4B_PIPELINE, "4b", low_vram=low_vram, verbose=verbose
+        )
+
     def unload_model(
         self, model_type: ModelType, force_gc: bool = True, verbose: bool = False
     ):
@@ -702,17 +901,14 @@ class ModelManager:
             del self.models[model_type]
             self.models[model_type] = None
 
-            if force_gc and torch.cuda.is_available():
-                gc.collect()
-                torch.cuda.empty_cache()
+            if force_gc:
+                empty_cache(self.device)
 
     def unload_upscale_models(self, verbose: bool = False):
         """Unload upscale models (both regular and lite)."""
         self.unload_model(ModelType.UPSCALE, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.UPSCALE_LITE, force_gc=False, verbose=verbose)
-        if torch.cuda.is_available():
-            gc.collect()
-            torch.cuda.empty_cache()
+        empty_cache(self.device)
         log_message("Upscale models unloaded.", verbose=verbose)
 
     def unload_ocr_models(self, verbose: bool = False):
@@ -760,6 +956,32 @@ class ModelManager:
         if models_unloaded:
             log_message("Flux Kontext models unloaded.", verbose=verbose)
 
+    def unload_flux_kontext_sdnq_models(self, verbose: bool = False):
+        """Unload Flux.1 Kontext SDNQ model."""
+        if self.is_loaded(ModelType.FLUX_KONTEXT_SDNQ_PIPELINE):
+            self.unload_model(
+                ModelType.FLUX_KONTEXT_SDNQ_PIPELINE, force_gc=True, verbose=verbose
+            )
+            log_message("Flux Kontext SDNQ model unloaded.", verbose=verbose)
+
+    def unload_flux_klein_models(self, verbose: bool = False):
+        """Unload all Flux.2 Klein models."""
+        models_unloaded = []
+        if self.is_loaded(ModelType.FLUX_KLEIN_9B_PIPELINE):
+            models_unloaded.append("flux_klein_9b")
+        if self.is_loaded(ModelType.FLUX_KLEIN_4B_PIPELINE):
+            models_unloaded.append("flux_klein_4b")
+
+        self.unload_model(
+            ModelType.FLUX_KLEIN_9B_PIPELINE, force_gc=False, verbose=verbose
+        )
+        self.unload_model(
+            ModelType.FLUX_KLEIN_4B_PIPELINE, force_gc=True, verbose=verbose
+        )
+
+        if models_unloaded:
+            log_message("Flux Klein models unloaded.", verbose=verbose)
+
     def unload_all(self, verbose: bool = False):
         """Unload all models and free all GPU memory."""
         with self._lock:
@@ -769,23 +991,12 @@ class ModelManager:
                     del self.models[model_type]
                     self.models[model_type] = None
 
-            if torch.cuda.is_available():
-                gc.collect()
-                torch.cuda.empty_cache()
+            empty_cache(self.device)
             log_message("All models unloaded.", verbose=verbose)
 
     def get_memory_stats(self):
         """Get current GPU memory usage statistics."""
-        if not torch.cuda.is_available():
-            return {"device": "cpu", "memory": "N/A"}
-
-        allocated = torch.cuda.memory_allocated() / 1024**3
-        reserved = torch.cuda.memory_reserved() / 1024**3
-        return {
-            "device": torch.cuda.get_device_name(0),
-            "allocated_gb": f"{allocated:.2f}",
-            "reserved_gb": f"{reserved:.2f}",
-        }
+        return get_device_info(self.device)
 
     def print_memory_stats(self):
         """Print current GPU memory usage."""

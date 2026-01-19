@@ -18,7 +18,7 @@ Gradio-based web application for automating the translation of manga/comic page 
 ## Features
 
 - Speech bubble detection, segmentation, cleaning (YOLO + SAM 2.1)
-- Outside speech bubble text detection & inpainting (YOLO + Flux Kontext/OpenCV)
+- Outside speech bubble text detection & inpainting (YOLO + Flux.2 Klein/Flux.1 Kontext/OpenCV)
 - LLM-powered OCR and translations (supports 54 languages)
 - Text rendering and alignment (with custom font packs)
 - Upscaling (2x-AnimeSharpV4)
@@ -30,7 +30,7 @@ Gradio-based web application for automating the translation of manga/comic page 
 ## Requirements
 
 - Python 3.10+
-- PyTorch (CPU, CUDA, ROCm, MPS)
+- PyTorch (CPU, CUDA, XPU, MPS)
 - Font pack with `.ttf`/`.otf` files; included with portable package
 - LLM for Japanese source text; VLM for other languages (API or local)
 
@@ -42,12 +42,15 @@ Download the standalone zip from the releases page: [Portable Build](https://git
 
 **Supported Platforms:**
 
-| Platform              | GPU/Acceleration Support       | Inpainting Method                |
-| --------------------- | ------------------------------ | -------------------------------- |
-| Windows               | NVIDIA (CUDA), AMD (ROCm), CPU | Flux Kontext (CUDA only), OpenCV |
-| Linux                 | NVIDIA (CUDA), AMD (ROCm), CPU | Flux Kontext (CUDA only), OpenCV |
-| macOS (Apple Silicon) | M-Series GPU (MPS), CPU        | OpenCV                           |
-| macOS (Intel)         | CPU                            | OpenCV                           |
+| Platform              | GPU/Acceleration Support                        | OSB Inpainting Methods                                 |
+| --------------------- | ----------------------------------------------- | ------------------------------------------------------ |
+| Windows               | NVIDIA (CUDA), AMD (CUDA), Intel ARC (XPU), CPU | Flux Klein, Flux Kontext (Nunchaku: CUDA only), OpenCV |
+| Linux                 | NVIDIA (CUDA), AMD (CUDA), Intel ARC (XPU), CPU | Flux Klein, Flux Kontext (Nunchaku: CUDA only), OpenCV |
+| macOS (Apple Silicon) | M-Series GPU (MPS), CPU                         | Flux Klein, Flux Kontext (SDNQ only), OpenCV           |
+| macOS (Intel)         | AMD GPU (MPS), CPU                              | Flux Klein, Flux Kontext (SDNQ only), OpenCV           |
+
+> [!NOTE]
+> AMD GPUs on Windows/Linux use PyTorch's CUDA interface via ROCm. Intel ARC GPUs use the XPU backend.
 
 **Setup:**
 
@@ -102,9 +105,10 @@ pip install torch==2.9.1+cu128 torchvision==0.24.1+cu128 --extra-index-url https
 pip install torch torchvision
 ```
 
-4. Install Nunchaku (optional, for inpainting OSB text regions with Flux Kontext)
+4. Install Nunchaku (optional, for Flux.1 Kontext Nunchaku backend)
 
 - Nunchaku wheels are not on PyPI. Install directly from the v1.1.0 GitHub release URL, matching your OS and Python version. CUDA only.
+- If Nunchaku is not installed, use the SDNQ backend for Kontext (cross-platform) or use Flux Klein models instead.
 
 ```bash
 # Example (Windows, Python 3.13, PyTorch 2.9.1)
@@ -154,12 +158,33 @@ fonts/
 If you want to use the OSB text pipeline, you need a Hugging Face token with access to the following repositories:
 
 - `deepghs/AnimeText_yolo`
-- `black-forest-labs/FLUX.1-Kontext-dev` (only required if using Flux Kontext)
+- `black-forest-labs/FLUX.1-Kontext-dev` (only required if using Flux Kontext with Nunchaku backend)
+
+#### OSB Inpainting Models
+
+| Model                         | VRAM (Full) | VRAM (Low-VRAM Mode) | Notes                                      |
+| ----------------------------- | ----------- | -------------------- | ------------------------------------------ |
+| Flux.2 Klein 9B (SDNQ)        | ~12 GB      | ~4 GB                | Fast, cross-platform, minor color shifts   |
+| Flux.2 Klein 4B (SDNQ)        | ~8 GB       | ~4 GB                | Fastest Flux model, minor color shifts     |
+| Flux.1 Kontext 12B (Nunchaku) | ~6 GB       | N/A                  | No color shifts, CUDA only, requires token |
+| Flux.1 Kontext 12B (SDNQ)     | ~12 GB      | ~4 GB                | No color shifts, cross-platform            |
+| OpenCV                        | 0 GB        | N/A                  | CPU-only, fastest, lower quality           |
+
+**Speed Ranking (Fastest → Slowest):**
+
+1. OpenCV
+2. Klein 4B (Full Load)
+3. Klein 9B (Full Load)
+4. Kontext SDNQ (Full Load)
+5. Klein 4B (Low VRAM)
+6. Kontext Nunchaku
+7. Klein 9B (Low VRAM)
+8. Kontext SDNQ (Low VRAM)
 
 #### Steps to create a token:
 
 1. Sign in or create a Hugging Face account
-2. Visit and accept the terms on: [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo) (and [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev) if applicable)
+2. Visit and accept the terms on: [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo) (and [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev) if using Kontext with Nunchaku)
 3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
 4. Add the token to the app:
    - Web UI: set `hf_token` in Config
@@ -244,7 +269,10 @@ pip install -r requirements.txt  # Or activate venv first if present
 - Comic Speech Bubble Detector YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
 - SAM 2.1 (Segment Anything): [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
 - FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
-- Nunchaku: [Nunchaku Tech](https://github.com/nunchaku-tech/nunchaku)
+- FLUX.2 Klein 4B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
+- FLUX.2 Klein 9B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B)
+- Nunchaku: [Nunchaku AI](https://github.com/nunchaku-ai/nunchaku)
+- SDNQ Quants: [Disty0](https://huggingface.co/Disty0)
 - 2x-AnimeSharpV4: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)
 - Manga109 YOLO: [deepghs](https://huggingface.co/deepghs/manga109_yolo)

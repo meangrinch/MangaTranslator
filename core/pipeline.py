@@ -380,7 +380,6 @@ def translate_and_render(
                     flux_seed=config.outside_text.seed,
                     osb_text_verification=config.detection.use_osb_text_verification,
                     osb_text_hf_token=config.outside_text.huggingface_token,
-                    force_cv2_inpainting=config.outside_text.force_cv2_inpainting,
                 )
             except CleaningError as e:
                 log_message(f"Cleaning failed: {e}", always_print=True)
