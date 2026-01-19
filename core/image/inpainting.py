@@ -32,7 +32,7 @@ class FluxKontextInpainter:
         self,
         device: Optional[torch.device] = None,
         huggingface_token: str = "",
-        num_inference_steps: int = 15,
+        num_inference_steps: int = 8,
         residual_diff_threshold: float = 0.15,
         backend: str = "nunchaku",
         low_vram: bool = False,

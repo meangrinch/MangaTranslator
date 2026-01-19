@@ -302,7 +302,7 @@ def clean_speech_bubbles(
     conjoined_confidence=0.35,
     inpaint_colored_bubbles: bool = False,
     flux_hf_token: str = "",
-    flux_num_inference_steps: int = 10,
+    flux_num_inference_steps: int = 8,
     flux_residual_diff_threshold: float = 0.15,
     flux_seed: int = 1,
     osb_text_verification: bool = False,

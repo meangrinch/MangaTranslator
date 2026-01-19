@@ -498,9 +498,9 @@ def main():
         type=int,
         default=8,
         help=(
-            "Number of denoising steps for Flux Kontext (1-30). "
-            "15 is best for quality (diminishing returns beyond); "
-            "below 6 shows noticeable degradation."
+            "Number of denoising steps for Flux models. "
+            "Klein: 4 is recommended (1-12). "
+            "Kontext: 6-15 is recommended (1-30). "
         ),
     )
     parser.add_argument(

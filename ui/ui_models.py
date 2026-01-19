@@ -121,7 +121,7 @@ class UIOutsideTextSettings:
     )
     kontext_backend: str = "sdnq"  # "sdnq" (cross-platform) or "nunchaku" (CUDA)
     flux_low_vram: bool = False  # Use sequential CPU offload for Klein/Kontext SDNQ
-    flux_num_inference_steps: int = 10
+    flux_num_inference_steps: int = 8
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6
     osb_font_name: str = ""  # Empty = use main font

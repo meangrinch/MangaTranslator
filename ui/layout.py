@@ -1304,8 +1304,8 @@ def create_layout(
                                     step=1,
                                     label="Steps",
                                     info=(
-                                        "Klein: 4 is recommended (8 might yield slightly better quality). "
-                                        "Kontext: 6-15 is recommended (below 6 has significant quality loss)."
+                                        "Klein: 4 is recommended. "
+                                        "Kontext: 6-15 is recommended."
                                     ),
                                     interactive=saved_settings.get(
                                         "outside_text_inpainting_method",
@@ -2165,7 +2165,7 @@ def create_layout(
 
             if is_kontext:
                 max_steps = 30
-                default_steps = 12
+                default_steps = 8
             else:
                 # Klein or OpenCV - use Klein defaults (OpenCV ignores steps anyway)
                 max_steps = 12
