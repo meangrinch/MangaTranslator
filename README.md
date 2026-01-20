@@ -66,7 +66,7 @@ Download the standalone zip from the releases page: [Portable Build](https://git
 3. The setup wizard will:
    - Detect your GPU and install the appropriate PyTorch version
    - Install all required dependencies
-   - Optionally install Nunchaku for use with the Flux.1 Kontext model (CUDA only)
+   - Optionally install Nunchaku for use with the Flux.1 Kontext model (CUDA only); others Flux models available
    - Create a launcher script (`start-webui.bat` or `start-webui.sh`)
 
 Includes the _Komika_ (normal text), _Cookies_ (OSB text), and _Comicka_ (either) font packs
@@ -75,7 +75,7 @@ Includes the _Komika_ (normal text), _Cookies_ (OSB text), and _Comicka_ (either
 > In the event that you need to transfer to a fresh portable package:
 >
 > - You can safely move the `fonts`, `models`, and `output` directories to the new portable package
-> - You _might_ be able to move the `runtime` directory over, assuming the same setup configuration is wanted
+> - You might be able to move the `runtime` directory over, assuming the same setup configuration is wanted
 
 ### Manual install
 
@@ -115,7 +115,7 @@ pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.1.0/n
 ```
 
 > [!NOTE]
-> Nunchaku is not necessary for the use of SDNQ Flux models.
+> Nunchaku is not necessary for the use of Flux models via the SDNQ backend.
 
 5. Install dependencies
 
@@ -246,6 +246,9 @@ pip install -r requirements.txt  # Or activate venv first if present
 
 - License: Apache-2.0 (see [LICENSE](LICENSE))
 - Author: [grinnch](https://github.com/meangrinch)
+<details>
+<summary><b>ML Models & Libraries</b></summary>
+
 - YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Comic Speech Bubble Detector YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
 - SAM 2.1 (Segment Anything): [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
@@ -258,3 +261,5 @@ pip install -r requirements.txt  # Or activate venv first if present
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)
 - Manga109 YOLO: [deepghs](https://huggingface.co/deepghs/manga109_yolo)
 - AnimeText YOLO: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
+
+</details>
