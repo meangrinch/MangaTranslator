@@ -68,7 +68,7 @@ def call_openai_endpoint(
             input_content.append(
                 {
                     "type": "input_image",
-                    "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                    "image_url": f"data:{mime_type};base64,{base64_image}",
                 }
             )
         else:
