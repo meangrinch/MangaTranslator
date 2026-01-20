@@ -15,17 +15,29 @@ Gradio-based web application for automating the translation of manga/comic page 
   </table>
 </div>
 
+## Table of Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Post-Install Setup](#post-install-setup)
+- [Run](#run)
+- [Documentation](#documentation)
+- [Updating](#updating)
+- [License & Credits](#license--credits)
+
 ## Features
 
-- Speech bubble detection, segmentation, cleaning (YOLO + SAM 2.1)
-- Outside speech bubble text detection & inpainting (YOLO + Flux.2 Klein/Flux.1 Kontext/OpenCV)
-- LLM-powered OCR and translations (supports 54 languages)
-- Text rendering and alignment (with custom font packs)
-- Upscaling (2x-AnimeSharpV4)
-- Single/Batch image processing with directory structure preservation and ZIP file support
-- Two interfaces: Web UI (Gradio) and CLI
-- All-in-one button; no human intervention required
-- Various options to tailor the process
+| Category        | Description                                                                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Detection**   | Speech bubble detection & segmentation via YOLO + SAM 2.1                                                        |
+| **Cleaning**    | Inpainting for speech bubbles and outside-speech-bubble (OSB) text using Flux.2 Klein, Flux.1 Kontext, or OpenCV |
+| **Translation** | LLM-powered OCR and translation supporting 54 languages                                                          |
+| **Rendering**   | Text rendering with alignment and custom font packs                                                              |
+| **Upscaling**   | 2x-AnimeSharpV4 for enhanced output quality                                                                      |
+| **Processing**  | Single/batch image processing with directory structure preservation and ZIP support                              |
+| **Interfaces**  | Web UI (Gradio) and CLI                                                                                          |
+| **Automation**  | All-in-one button; no human intervention required                                                                |
 
 ## Requirements
 
@@ -40,17 +52,10 @@ Gradio-based web application for automating the translation of manga/comic page 
 
 Download the standalone zip from the releases page: [Portable Build](https://github.com/meangrinch/MangaTranslator/releases/tag/portable)
 
-**Supported Platforms:**
+**Requirements:**
 
-| Platform              | GPU/Acceleration Support                        | OSB Inpainting Methods                                 |
-| --------------------- | ----------------------------------------------- | ------------------------------------------------------ |
-| Windows               | NVIDIA (CUDA), AMD (CUDA), Intel ARC (XPU), CPU | Flux Klein, Flux Kontext (Nunchaku: CUDA only), OpenCV |
-| Linux                 | NVIDIA (CUDA), AMD (CUDA), Intel ARC (XPU), CPU | Flux Klein, Flux Kontext (Nunchaku: CUDA only), OpenCV |
-| macOS (Apple Silicon) | M-Series GPU (MPS), CPU                         | Flux Klein, Flux Kontext (SDNQ only), OpenCV           |
-| macOS (Intel)         | AMD GPU (MPS), CPU                              | Flux Klein, Flux Kontext (SDNQ only), OpenCV           |
-
-> [!NOTE]
-> AMD GPUs on Windows/Linux use PyTorch's CUDA interface via ROCm. Intel ARC GPUs use the XPU backend.
+- **Windows:** Bundled Python/Git included; no additional requirements
+- **Linux/macOS:** Python 3.10+ and Git must be installed on your system
 
 **Setup:**
 
@@ -61,21 +66,16 @@ Download the standalone zip from the releases page: [Portable Build](https://git
 3. The setup wizard will:
    - Detect your GPU and install the appropriate PyTorch version
    - Install all required dependencies
-   - Optionally install Nunchaku for Flux Kontext inpainting (NVIDIA CUDA only)
+   - Optionally install Nunchaku for use with the Flux.1 Kontext model (CUDA only)
    - Create a launcher script (`start-webui.bat` or `start-webui.sh`)
 
-**Requirements:**
-
-- **Windows:** Bundled Python/Git included; no additional requirements
-- **Linux/macOS:** Python 3.10+ and Git must be installed on your system
-
-Includes the Komika (for normal text), Cookies (for OSB text), and Comicka (for either) font packs
+Includes the _Komika_ (normal text), _Cookies_ (OSB text), and _Comicka_ (either) font packs
 
 > [!TIP]
 > In the event that you need to transfer to a fresh portable package:
 >
 > - You can safely move the `fonts`, `models`, and `output` directories to the new portable package
-> - You can likely also move the `runtime` directory over, assuming the same setup configuration is wanted
+> - You _might_ be able to move the `runtime` directory over, assuming the same setup configuration is wanted
 
 ### Manual install
 
@@ -108,12 +108,14 @@ pip install torch torchvision
 4. Install Nunchaku (optional, for Flux.1 Kontext Nunchaku backend)
 
 - Nunchaku wheels are not on PyPI. Install directly from the v1.1.0 GitHub release URL, matching your OS and Python version. CUDA only.
-- If Nunchaku is not installed, use the SDNQ backend for Kontext (cross-platform) or use Flux Klein models instead.
 
 ```bash
 # Example (Windows, Python 3.13, PyTorch 2.9.1)
 pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.1.0/nunchaku-1.1.0+torch2.9-cp313-cp313-win_amd64.whl
 ```
+
+> [!NOTE]
+> Nunchaku is not necessary for the use of SDNQ Flux models.
 
 5. Install dependencies
 
@@ -158,28 +160,7 @@ fonts/
 If you want to use the OSB text pipeline, you need a Hugging Face token with access to the following repositories:
 
 - `deepghs/AnimeText_yolo`
-- `black-forest-labs/FLUX.1-Kontext-dev` (only required if using Flux Kontext with Nunchaku backend)
-
-#### OSB Inpainting Models
-
-| Model                         | VRAM (Full) | VRAM (Low-VRAM Mode) | Notes                                      |
-| ----------------------------- | ----------- | -------------------- | ------------------------------------------ |
-| Flux.2 Klein 9B (SDNQ)        | ~12 GB      | ~4 GB                | Fast, cross-platform, minor color shifts   |
-| Flux.2 Klein 4B (SDNQ)        | ~8 GB       | ~4 GB                | Fastest Flux model, minor color shifts     |
-| Flux.1 Kontext 12B (Nunchaku) | ~6 GB       | N/A                  | No color shifts, CUDA only, requires token |
-| Flux.1 Kontext 12B (SDNQ)     | ~12 GB      | ~4 GB                | No color shifts, cross-platform            |
-| OpenCV                        | 0 GB        | N/A                  | CPU-only, fastest, lower quality           |
-
-**Speed Ranking (Fastest → Slowest):**
-
-1. OpenCV
-2. Klein 4B (Full Load)
-3. Klein 9B (Full Load)
-4. Kontext SDNQ (Full Load)
-5. Klein 4B (Low VRAM)
-6. Kontext Nunchaku
-7. Klein 9B (Low VRAM)
-8. Kontext SDNQ (Low VRAM)
+- `black-forest-labs/FLUX.1-Kontext-dev` (only required if using Flux.1 Kontext with Nunchaku backend)
 
 #### Steps to create a token:
 
