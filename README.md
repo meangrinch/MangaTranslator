@@ -28,21 +28,19 @@ Gradio-based web application for automating the translation of manga/comic page 
 
 ## Features
 
-| Category        | Description                                                                                                      |
-| --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Detection**   | Speech bubble detection & segmentation via YOLO + SAM 2.1                                                        |
-| **Cleaning**    | Inpainting for speech bubbles and outside-speech-bubble (OSB) text using Flux.2 Klein, Flux.1 Kontext, or OpenCV |
-| **Translation** | LLM-powered OCR and translation supporting 54 languages                                                          |
-| **Rendering**   | Text rendering with alignment and custom font packs                                                              |
-| **Upscaling**   | 2x-AnimeSharpV4 for enhanced output quality                                                                      |
-| **Processing**  | Single/batch image processing with directory structure preservation and ZIP support                              |
-| **Interfaces**  | Web UI (Gradio) and CLI                                                                                          |
-| **Automation**  | All-in-one button; no human intervention required                                                                |
+- **Detection**: Speech bubble detection & segmentation (YOLO + SAM 2.1)
+- **Cleaning**: Inpaint speech bubbles and OSB text (Flux.2 Klein, Flux.1 Kontext, or OpenCV)
+- **Translation**: LLM-powered OCR & translation (54 languages)
+- **Rendering**: Text rendering with alignment and custom font packs
+- **Upscaling**: 2x-AnimeSharpV4 for enhanced output quality
+- **Processing**: Single/batch processing with directory preservation and ZIP support
+- **Interfaces**: Web UI (Gradio) and CLI
+- **Automation**: One-click translation; no intervention required
 
 ## Requirements
 
 - Python 3.10+
-- PyTorch (CPU, CUDA, XPU, MPS)
+- PyTorch (CPU, CUDA, ROCm, MPS, XPU)
 - Font pack with `.ttf`/`.otf` files; included with portable package
 - LLM for Japanese source text; VLM for other languages (API or local)
 
