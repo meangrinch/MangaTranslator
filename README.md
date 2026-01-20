@@ -63,11 +63,10 @@ Download the standalone zip from the releases page: [Portable Build](https://git
 2. Run the setup script for your platform:
    - **Windows:** Double-click `setup.bat`
    - **Linux/macOS:** Run `./setup.sh` in terminal
-3. The setup wizard will:
-   - Detect your GPU and install the appropriate PyTorch version
-   - Install all required dependencies
-   - Optionally install Nunchaku for use with the Flux.1 Kontext model (CUDA only); others Flux models available
-   - Create a launcher script (`start-webui.bat` or `start-webui.sh`)
+3. PyTorch version is automatically detected and installed based on your system
+4. Open the launcher script created in `./MangaTranslator/`:
+   - **Windows:** `start-webui.bat`
+   - **Linux/macOS:** `start-webui.sh`
 
 Includes the _Komika_ (normal text), _Cookies_ (OSB text), and _Comicka_ (either) font packs
 
