@@ -261,7 +261,7 @@ def main():
             "OpenAI/Gemini 3: Controls internal reasoning effort. "
             "`xhigh` is available for GPT-5.2 (OpenAI) and `minimal` for GPT-5 series. "
             "Other providers: Controls reasoning token budget allocation relative to "
-            "`max_tokens` (high=80%, medium=50%, low=20%). "
+            "`max_tokens` (high=80%%, medium=50%%, low=20%%). "
             "Use 'none' to disable thinking for certain models."
         ),
     )
@@ -491,8 +491,32 @@ def main():
         "--osb-huggingface-token",
         type=str,
         default=None,
-        help="HuggingFace token for Flux Kontext model downloads (overrides HUGGINGFACE_TOKEN env var)",
+        help="HuggingFace token for downloading OSB pipeline models (overrides HUGGINGFACE_TOKEN env var)",
     )
+    parser.add_argument(
+        "--osb-inpainting-method",
+        type=str,
+        choices=["flux_klein_9b", "flux_klein_4b", "flux_kontext", "opencv"],
+        default="flux_klein_4b",
+        help="Inpainting method for outside text removal.",
+    )
+    parser.add_argument(
+        "--osb-kontext-backend",
+        type=str,
+        choices=["sdnq", "nunchaku"],
+        default="sdnq",
+        help=(
+            "Backend for Flux.1 Kontext model. "
+            "'sdnq' is cross-platform (Nvidia/AMD/Intel/macOS), "
+            "'nunchaku' is CUDA-only but faster"
+        ),
+    )
+    parser.add_argument(
+        "--osb-flux-low-vram",
+        action="store_true",
+        help="Enable sequential CPU offload for Flux Klein/Kontext SDNQ models (reduces VRAM usage)",
+    )
+
     parser.add_argument(
         "--osb-flux-steps",
         type=int,
@@ -507,7 +531,7 @@ def main():
         "--osb-flux-residual-threshold",
         type=float,
         default=0.15,
-        help="Residual diff threshold for Flux inference (0.0-1.0)",
+        help="Residual diff threshold for Flux.1 Kontext inference (0.0-1.0)",
     )
     parser.add_argument(
         "--osb-seed",
@@ -851,6 +875,9 @@ def main():
             page_filter_min_area_ratio=args.osb_page_filter_min_area,
             huggingface_token=args.osb_huggingface_token
             or os.environ.get("HUGGINGFACE_TOKEN", ""),
+            inpainting_method=args.osb_inpainting_method,
+            kontext_backend=args.osb_kontext_backend,
+            flux_low_vram=args.osb_flux_low_vram,
             flux_num_inference_steps=args.osb_flux_steps,
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
             osb_confidence=args.osb_confidence,

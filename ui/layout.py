@@ -535,11 +535,11 @@ def create_layout(
                                 value=saved_settings.get(
                                     "inpaint_colored_bubbles", True
                                 ),
-                                label="Use Flux Kontext to Inpaint Colored Bubbles",
+                                label="Use Flux to Inpaint Colored Bubbles",
                                 info=(
-                                    "Use Flux Kontext for bubble cleaning when the interior is not pure white/black "
-                                    "(e.g., colored/complex). Requires a Hugging Face token "
-                                    "(hf_token and Flux settings are shared with the 'OSB Text' section)."
+                                    "Use Flux for bubble cleaning when the interior is not pure white/black "
+                                    "(e.g., colored/complex). "
+                                    "Flux settings are shared with the 'OSB Text' section."
                                 ),
                             )
                         setting_groups.append(group_cleaning)
@@ -1138,8 +1138,8 @@ def create_layout(
                                 label="HuggingFace Token (Required for certain features)",
                                 type="password",
                                 info=(
-                                    "Required for downloading OSB Text Detection (YOLO) and Flux Kontext models "
-                                    "from HuggingFace Hub."
+                                    "Required for downloading OSB Text Detection (YOLO) and Flux.1 Kontext Nunchaku "
+                                    "model from HuggingFace Hub."
                                 ),
                             )
 
@@ -1245,9 +1245,9 @@ def create_layout(
                                     ],
                                     label="Inpainting Method",
                                     info=(
-                                        "Klein models are faster and cross-platform, but introduce minor color shifts. "
-                                        "Kontext does not shift colors, but requires CUDA + Nunchaku. "
-                                        "4-bit quantization of each model is used."
+                                        "Klein models are faster and cross-platform, but may introduce minor color "
+                                        "shifts. Kontext models do not shift colors, but are larger and slower. "
+                                        "Models are downloaded in 4-bit quantization."
                                     ),
                                 )
                                 _initial_method = saved_settings.get(
@@ -1265,7 +1265,7 @@ def create_layout(
                                     label="Kontext Backend",
                                     info=(
                                         "SDNQ: cross-platform, no HF token. "
-                                        "Nunchaku: CUDA-only, faster with First Block Caching."
+                                        "Nunchaku: CUDA-only, HF token required."
                                     ),
                                     visible=_is_kontext,
                                 )
@@ -1323,7 +1323,7 @@ def create_layout(
                                     step=0.01,
                                     label="Residual Diff Threshold",
                                     info=(
-                                        "First Block Caching threshold for Flux Kontext. "
+                                        "First Block Caching threshold for Flux.1 Kontext. "
                                         "Higher = faster, but lower quality."
                                     ),
                                     interactive=saved_settings.get(
