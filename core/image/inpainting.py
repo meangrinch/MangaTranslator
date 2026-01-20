@@ -1024,6 +1024,7 @@ class FluxKleinInpainter:
         verbose: bool = False,
         strict_mask_clipping: bool = False,
         composite_clip_bbox: Optional[Tuple[int, int, int, int]] = None,
+        ocr_params: Optional[Dict] = None,
     ) -> Image.Image:
         """Inpaint a specific mask region in the image using Flux.2 Klein.
 
@@ -1036,6 +1037,7 @@ class FluxKleinInpainter:
                 original mask extent
             composite_clip_bbox: Optional (x1, y1, x2, y2) bbox to clip the final
                 composite mask to
+            ocr_params: Optional OCR parameters dict for cache key generation
 
         Returns:
             PIL.Image: The inpainted image
@@ -1099,6 +1101,53 @@ class FluxKleinInpainter:
         image_cropped_pil = image_pil.crop((x1, y1, x2, y2))
         mask_crop_np = mask_np[y1:y2, x1:x2]
 
+        # Build cache parameters
+        cache_params = {
+            "bbox": (x1, y1, width, height),
+            "padding": padding,
+            "blur": blur_radius,
+            "variant": self.variant,
+        }
+        if strict_mask_clipping:
+            cache_params["strict_clip"] = True
+        if composite_clip_bbox is not None:
+            cache_params["clip_bbox"] = tuple(composite_clip_bbox)
+        if ocr_params:
+            cache_params.update(ocr_params)
+
+        cache_key = None
+        cached_patch = None
+        if self.cache.should_use_inpaint_cache(seed):
+            # Downsample mask signature to reduce sensitivity to minor jitter
+            if mask_crop_np.size > 0:
+                sig_h = min(64, max(4, mask_crop_np.shape[0]))
+                sig_w = min(64, max(4, mask_crop_np.shape[1]))
+                mask_sig = (
+                    torch.from_numpy(mask_crop_np.astype(np.float32))
+                    .unsqueeze(0)
+                    .unsqueeze(0)
+                )
+                mask_sig = torch.nn.functional.interpolate(
+                    mask_sig, size=(sig_h, sig_w), mode="bilinear", align_corners=False
+                )
+                mask_sig_np = (mask_sig > 0.5).cpu().numpy().astype(np.uint8)[0, 0]
+            else:
+                mask_sig_np = mask_crop_np
+
+            cache_key = self.cache.get_inpaint_cache_key(
+                image_cropped_pil,
+                mask_sig_np,
+                seed,
+                self.num_inference_steps,
+                0.0,  # Klein doesn't use residual_diff_threshold
+                self.KLEIN_GUIDANCE_SCALE,
+                self.KLEIN_PROMPT,
+                cache_params,
+            )
+            cached_patch = self.cache.get_inpainted_image(cache_key)
+            if cached_patch is not None:
+                log_message("  - Using cached inpainting patch", verbose=verbose)
+
         mask_float = mask_crop_np.astype(np.float32)
         if blur_radius > 0:
             d_out = distance_transform_edt(~mask_crop_np)
@@ -1136,52 +1185,55 @@ class FluxKleinInpainter:
                 ]
                 mask_for_composite = clipped_mask
 
-        inference_image, _, _ = self._prepare_image_for_inference(
-            image_cropped_pil, verbose=verbose
-        )
-        inference_w, inference_h = inference_image.size
+        patch_pil = cached_patch
 
-        if inference_image.mode == "RGBA":
-            inference_image = inference_image.convert("RGB")
-
-        self.load_models()
-
-        if self.pipeline is None:
-            log_message(
-                f"Warning: Flux Klein {self.variant.upper()} pipeline unavailable.",
-                always_print=True,
+        if patch_pil is None:
+            inference_image, _, _ = self._prepare_image_for_inference(
+                image_cropped_pil, verbose=verbose
             )
-            return image_pil
+            inference_w, inference_h = inference_image.size
 
-        log_message("  - Running inference...", verbose=verbose)
+            if inference_image.mode == "RGBA":
+                inference_image = inference_image.convert("RGB")
 
-        with torch.inference_mode():
-            gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
-            out = self.pipeline(
-                prompt=self.KLEIN_PROMPT,
-                image=inference_image,
-                height=inference_h,
-                width=inference_w,
-                guidance_scale=self.KLEIN_GUIDANCE_SCALE,
-                num_inference_steps=self.num_inference_steps,
-                generator=gen,
+            self.load_models()
+
+            if self.pipeline is None:
+                log_message(
+                    f"Warning: Flux Klein {self.variant.upper()} pipeline unavailable.",
+                    always_print=True,
+                )
+                return image_pil
+
+            log_message("  - Running inference...", verbose=verbose)
+
+            with torch.inference_mode():
+                gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
+                out = self.pipeline(
+                    prompt=self.KLEIN_PROMPT,
+                    image=inference_image,
+                    height=inference_h,
+                    width=inference_w,
+                    guidance_scale=self.KLEIN_GUIDANCE_SCALE,
+                    num_inference_steps=self.num_inference_steps,
+                    generator=gen,
+                )
+                generated_patch_pil = out.images[0]
+
+            if (inference_w, inference_h) != (width, height):
+                patch_pil = generated_patch_pil.resize(
+                    (width, height), Image.Resampling.LANCZOS
+                )
+            else:
+                patch_pil = generated_patch_pil
+
+            patch_pil = self._match_luminance(
+                generated_pil=patch_pil,
+                original_crop_pil=image_cropped_pil,
+                mask_crop_np=mask_crop_np,
+                padded_bounds=(x1, y1, x2, y2),
+                original_bounds=(x_min, y_min, x_max, y_max),
             )
-            generated_patch_pil = out.images[0]
-
-        if (inference_w, inference_h) != (width, height):
-            patch_pil = generated_patch_pil.resize(
-                (width, height), Image.Resampling.LANCZOS
-            )
-        else:
-            patch_pil = generated_patch_pil
-
-        patch_pil = self._match_luminance(
-            generated_pil=patch_pil,
-            original_crop_pil=image_cropped_pil,
-            mask_crop_np=mask_crop_np,
-            padded_bounds=(x1, y1, x2, y2),
-            original_bounds=(x_min, y_min, x_max, y_max),
-        )
 
         dest_tensor = torch.from_numpy(
             np.asarray(image_pil, dtype=np.float32) / 255.0
@@ -1218,5 +1270,13 @@ class FluxKleinInpainter:
         composited_pil = Image.fromarray(
             (composited[0].cpu().numpy() * 255).astype("uint8")
         )
+
+        # Save to cache if generated (not from cache)
+        if (
+            self.cache.should_use_inpaint_cache(seed)
+            and cache_key is not None
+            and cached_patch is None
+        ):
+            self.cache.set_inpainted_image(cache_key, patch_pil)
 
         return composited_pil

@@ -15,7 +15,7 @@ from utils.logging import log_message
 
 from .detection import detect_speech_bubbles
 from .image_utils import pil_to_cv2
-from .inpainting import FluxKontextInpainter
+from .inpainting import FluxKleinInpainter, FluxKontextInpainter
 
 # Cleaning parameters
 GRAYSCALE_MIDPOINT = 128  # Threshold for determining black vs white bubbles
@@ -307,6 +307,9 @@ def clean_speech_bubbles(
     flux_seed: int = 1,
     osb_text_verification: bool = False,
     osb_text_hf_token: str = "",
+    inpaint_method: str = "flux_kontext",
+    kontext_backend: str = "nunchaku",
+    flux_low_vram: bool = False,
 ):
     """
     Clean speech bubbles using YOLO/SAM masks and optional Flux inpainting for colored bubbles.
@@ -611,12 +614,35 @@ def clean_speech_bubbles(
                 )
                 temp_files = []
                 try:
-                    inpainter = FluxKontextInpainter(
-                        device=device,
-                        huggingface_token=flux_hf_token,
-                        num_inference_steps=int(flux_num_inference_steps),
-                        residual_diff_threshold=float(flux_residual_diff_threshold),
-                    )
+                    if inpaint_method == "flux_klein_9b":
+                        inpainter = FluxKleinInpainter(
+                            variant="9b",
+                            device=device,
+                            huggingface_token=flux_hf_token,
+                            num_inference_steps=int(flux_num_inference_steps),
+                            low_vram=flux_low_vram,
+                            verbose=verbose,
+                        )
+                    elif inpaint_method == "flux_klein_4b":
+                        inpainter = FluxKleinInpainter(
+                            variant="4b",
+                            device=device,
+                            huggingface_token=flux_hf_token,
+                            num_inference_steps=int(flux_num_inference_steps),
+                            low_vram=flux_low_vram,
+                            verbose=verbose,
+                        )
+                    else:
+                        # Default to Flux Kontext
+                        low_vram = flux_low_vram if kontext_backend == "sdnq" else False
+                        inpainter = FluxKontextInpainter(
+                            device=device,
+                            huggingface_token=flux_hf_token,
+                            num_inference_steps=int(flux_num_inference_steps),
+                            residual_diff_threshold=float(flux_residual_diff_threshold),
+                            backend=kontext_backend,
+                            low_vram=low_vram,
+                        )
                     for idx, bubble_info in enumerate(colored_bubbles):
                         mask_np = bubble_info["mask"]
                         mask_bool = mask_np.astype(bool)
