@@ -216,7 +216,7 @@ def translate_and_render(
             config.detection.confidence,
             verbose=verbose,
             device=device,
-            use_sam2=config.detection.use_sam2,
+            sam_model=config.detection.sam_model,
             conjoined_detection=config.detection.conjoined_detection,
             conjoined_confidence=config.detection.conjoined_confidence,
             image_override=pil_image_processed,

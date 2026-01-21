@@ -415,7 +415,7 @@ def detect_speech_bubbles(
     confidence=0.6,
     verbose=False,
     device=None,
-    use_sam2: bool = True,
+    sam_model: str = "sam2",
     conjoined_detection: bool = True,
     conjoined_confidence=0.35,
     image_override: Optional[Image.Image] = None,
@@ -423,10 +423,10 @@ def detect_speech_bubbles(
     osb_text_verification: bool = False,
     osb_text_hf_token: str = "",
 ):
-    """Detect speech bubbles using dual YOLO models and SAM2.
+    """Detect speech bubbles using dual YOLO models and SAM2/SAM3.
 
     For conjoined bubbles detected by the secondary model, uses the inner bounding boxes
-    directly and processes each as a separate simple bubble through SAM2.
+    directly and processes each as a separate simple bubble through SAM.
 
     Args:
         image_path (Path): Path to the input image
@@ -434,11 +434,11 @@ def detect_speech_bubbles(
         confidence (float): Confidence threshold for primary YOLO model detections
         verbose (bool): Whether to show detailed processing information
         device (torch.device, optional): The device to run the model on. Autodetects if None.
-        use_sam2 (bool): Whether to use SAM2.1 for enhanced segmentation
+        sam_model (str): SAM model for segmentation refinement ("off", "sam2", "sam3")
         conjoined_detection (bool): Whether to enable conjoined bubble detection using secondary YOLO model
         conjoined_confidence (float): Confidence threshold for secondary YOLO model (conjoined bubble detection)
         osb_text_verification (bool): When True, expand bubble boxes to fully cover OSB text detections
-        osb_text_hf_token (str): Optional token for gated OSB text model downloads
+        osb_text_hf_token (str): Optional token for gated model downloads (SAM3, OSB text)
 
     Returns:
         tuple[list, list]: (speech bubble detections, text_free boxes from secondary model)
@@ -513,7 +513,8 @@ def detect_speech_bubbles(
     )
 
     secondary_boxes = torch.tensor([])
-    if use_sam2:
+    use_sam = sam_model in ("sam2", "sam3")
+    if use_sam:
         try:
             secondary_model = model_manager.load_yolo_conjoined_bubble()
             log_message(
@@ -648,8 +649,8 @@ def detect_speech_bubbles(
             verbose,
         )
 
-    if not use_sam2:
-        log_message("SAM2 disabled, using YOLO segmentation masks", verbose=verbose)
+    if not use_sam:
+        log_message("SAM disabled, using YOLO segmentation masks", verbose=verbose)
         for i, box in enumerate(primary_boxes):
             x0_f, y0_f, x1_f, y1_f = box.tolist()
             conf = float(primary_results.boxes.conf[i])
@@ -675,11 +676,14 @@ def detect_speech_bubbles(
     conjoined_indices = []
     simple_indices = list(range(len(primary_boxes)))
     try:
-        log_message("Applying SAM2.1 segmentation refinement", verbose=verbose)
+        sam_model_name = "SAM 3" if sam_model == "sam3" else "SAM 2.1"
+        log_message(
+            f"Applying {sam_model_name} segmentation refinement", verbose=verbose
+        )
         sam_cache_key = cache.get_sam_cache_key(
             image_pil,
             primary_boxes,
-            use_sam2,
+            sam_model,
             conjoined_detection,
             conjoined_confidence,
         )
@@ -690,7 +694,13 @@ def detect_speech_bubbles(
             detections = cached_sam
             return detections, text_free_boxes
 
-        processor, sam_model = model_manager.load_sam2()
+        # Load appropriate SAM model
+        if sam_model == "sam3":
+            processor, sam_model_instance = model_manager.load_sam3(
+                token=osb_text_hf_token, verbose=verbose
+            )
+        else:
+            processor, sam_model_instance = model_manager.load_sam2(verbose=verbose)
         if len(secondary_boxes) > 0 and conjoined_detection:
             log_message(
                 "Categorizing detections (simple vs conjoined)...", verbose=verbose
@@ -734,7 +744,7 @@ def detect_speech_bubbles(
                 all_boxes_tensor,
                 list(range(len(boxes_to_process))),
                 processor,
-                sam_model,
+                sam_model_instance,
                 _device,
             )
 
@@ -766,7 +776,9 @@ def detect_speech_bubbles(
             all_masks = []
             all_boxes = []
 
-        log_message(f"Refined {len(all_masks)} masks with SAM2", always_print=True)
+        log_message(
+            f"Refined {len(all_masks)} masks with {sam_model_name}", always_print=True
+        )
         log_message(f"Total masks generated: {len(all_masks)}", verbose=verbose)
         img_h, img_w = image_cv.shape[:2]
         for i, (mask, box) in enumerate(zip(all_masks, all_boxes)):
@@ -791,12 +803,14 @@ def detect_speech_bubbles(
             }
             detections.append(detection)
 
-        log_message("SAM2.1 segmentation completed successfully", verbose=verbose)
+        log_message(
+            f"{sam_model_name} segmentation completed successfully", verbose=verbose
+        )
         cache.set_sam_masks(sam_cache_key, detections)
 
     except Exception as e:
         log_message(
-            f"SAM2.1 segmentation failed: {e}. Falling back to YOLO segmentation masks.",
+            f"{sam_model_name} segmentation failed: {e}. Falling back to YOLO segmentation masks.",
             always_print=True,
         )
         detections = []

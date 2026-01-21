@@ -14,7 +14,7 @@ class DetectionConfig:
     confidence: float = 0.6
     conjoined_confidence: float = 0.35
     panel_confidence: float = 0.25
-    use_sam2: bool = True
+    sam_model: str = "sam2"  # "off", "sam2", or "sam3"
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
     use_osb_text_verification: bool = True

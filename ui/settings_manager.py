@@ -136,7 +136,7 @@ DEFAULT_SETTINGS = {
     "confidence": 0.6,
     "conjoined_confidence": 0.35,
     "panel_confidence": 0.25,
-    "use_sam2": True,
+    "sam_model": "sam2",  # "off", "sam2", or "sam3"
     "conjoined_detection": True,
     "use_osb_text_verification": True,
     "use_panel_sorting": True,
@@ -271,7 +271,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     # Models / Detection
     "confidence",
     "conjoined_confidence",
-    "use_sam2",
+    "sam_model",
     "conjoined_detection",
     "panel_confidence",
     "use_panel_sorting",
@@ -346,7 +346,6 @@ def save_config(incoming_settings: Dict[str, Any]):
         known_keys.add("provider_models")
         known_keys.add("cleaning_only")
         known_keys.add("upscaling_only")
-        known_keys.add("use_sam2")
         all_defaults = {**DEFAULT_SETTINGS, **DEFAULT_BATCH_SETTINGS}
         known_keys.add("openai_compatible_url")
         known_keys.add("openai_compatible_api_key")
@@ -374,7 +373,6 @@ def save_config(incoming_settings: Dict[str, Any]):
         for key in known_keys:
             if key == "provider_models":
                 continue
-
             incoming_value = incoming_settings.get(key)
             current_value_on_disk = current_config_on_disk.get(key)
             default_value = all_defaults.get(key)
@@ -440,9 +438,6 @@ def get_saved_settings() -> Dict[str, Any]:
                 if key in saved_config:
                     settings[key] = saved_config[key]
 
-            # Special handling for potentially missing keys or nested structures from older configs
-            if "use_sam2" in saved_config:
-                settings["use_sam2"] = bool(saved_config["use_sam2"])
             if "provider_models" not in settings:
                 settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
             elif not isinstance(settings["provider_models"], dict):

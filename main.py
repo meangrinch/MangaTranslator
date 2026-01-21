@@ -173,12 +173,13 @@ def main():
         help="Confidence threshold for panel detection YOLO (0.0-1.0)",
     )
     parser.add_argument(
-        "--no-sam2",
-        dest="use_sam2",
-        action="store_false",
-        help="Disable SAM 2.1 segmentation",
+        "--sam-model",
+        dest="sam_model",
+        type=str,
+        choices=["sam3", "sam2", "off"],
+        default="sam2",
+        help="Segmentation method. 'off' uses YOLO segmentation",
     )
-    parser.set_defaults(use_sam2=True)
     parser.add_argument(
         "--no-conjoined-detection",
         dest="conjoined_detection",
@@ -771,7 +772,7 @@ def main():
             confidence=args.confidence,
             conjoined_confidence=args.conjoined_confidence,
             panel_confidence=args.panel_confidence,
-            use_sam2=args.use_sam2,
+            sam_model=args.sam_model,
             conjoined_detection=args.conjoined_detection,
         ),
         cleaning=CleaningConfig(

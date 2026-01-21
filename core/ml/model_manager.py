@@ -9,7 +9,12 @@ from typing import Optional
 import torch
 from huggingface_hub import hf_hub_download, snapshot_download
 from spandrel import ModelLoader
-from transformers import Sam2Model, Sam2Processor
+from transformers import (
+    Sam2Model,
+    Sam2Processor,
+    Sam3TrackerModel,
+    Sam3TrackerProcessor,
+)
 from ultralytics import YOLO
 
 from core.device import empty_cache, get_best_device, get_best_dtype, get_device_info
@@ -27,6 +32,7 @@ class ModelType(Enum):
     YOLO_OSBTEXT = "yolo_osbtext"
     YOLO_PANEL = "yolo_panel"
     SAM2 = "sam2"
+    SAM3 = "sam3"
     MANGA_OCR = "manga_ocr"
     FLUX_TRANSFORMER = "flux_transformer"
     FLUX_TEXT_ENCODER = "flux_text_encoder"
@@ -140,6 +146,10 @@ class ModelManager:
             },
             ModelType.SAM2: {
                 "repo_id": "facebook/sam2.1-hiera-large",
+            },
+            ModelType.SAM3: {
+                "repo_id": "facebook/sam3",
+                "requires_token": True,
             },
             ModelType.FLUX_PIPELINE: {
                 "repo_id": "black-forest-labs/FLUX.1-Kontext-dev",
@@ -585,6 +595,41 @@ class ModelManager:
             log_message("SAM 2.1 model loaded.", verbose=verbose)
             return self.models[ModelType.SAM2]
 
+    def load_sam3(self, token: Optional[str] = None, verbose: bool = False):
+        """Load SAM 3 Tracker (PVS) model and processor.
+
+        SAM 3 requires a HuggingFace token with access to the gated facebook/sam3 repo.
+
+        Args:
+            token: HuggingFace token for gated model access
+            verbose: Whether to print verbose logging
+
+        Returns:
+            tuple: (processor, model) - SAM3 Tracker processor and model instances
+        """
+        with self._lock:
+            if self.is_loaded(ModelType.SAM3):
+                return self.models[ModelType.SAM3]
+
+            log_message("Loading SAM 3 Tracker model...", verbose=verbose)
+            hf_info = self.model_hf_repos[ModelType.SAM3]
+            cache_dir = "models/sam"
+
+            processor = Sam3TrackerProcessor.from_pretrained(
+                hf_info["repo_id"], cache_dir=cache_dir, token=token
+            )
+            model = Sam3TrackerModel.from_pretrained(
+                hf_info["repo_id"],
+                torch_dtype=self.dtype,
+                cache_dir=cache_dir,
+                token=token,
+            ).to(self.device)
+            model.eval()
+
+            self.models[ModelType.SAM3] = (processor, model)
+            log_message("SAM 3 Tracker model loaded.", verbose=verbose)
+            return self.models[ModelType.SAM3]
+
     def set_flux_hf_token(self, token: str):
         """Set the HuggingFace token for Flux model downloads.
 
@@ -912,7 +957,7 @@ class ModelManager:
         log_message("Upscale models unloaded.", verbose=verbose)
 
     def unload_ocr_models(self, verbose: bool = False):
-        """Unload OCR-related models (YOLO, SAM2, and manga-ocr)."""
+        """Unload OCR-related models (YOLO, SAM2/SAM3, and manga-ocr)."""
         models_unloaded = []
         if self.is_loaded(ModelType.YOLO_SPEECH_BUBBLE):
             models_unloaded.append("yolo_speech_bubble")
@@ -920,6 +965,8 @@ class ModelManager:
             models_unloaded.append("yolo_conjoined_bubble")
         if self.is_loaded(ModelType.SAM2):
             models_unloaded.append("sam2")
+        if self.is_loaded(ModelType.SAM3):
+            models_unloaded.append("sam3")
         if self.is_loaded(ModelType.YOLO_OSBTEXT):
             models_unloaded.append("yolo_osbtext")
         if self.is_loaded(ModelType.YOLO_PANEL):
@@ -932,6 +979,7 @@ class ModelManager:
             ModelType.YOLO_CONJOINED_BUBBLE, force_gc=False, verbose=verbose
         )
         self.unload_model(ModelType.SAM2, force_gc=False, verbose=verbose)
+        self.unload_model(ModelType.SAM3, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.YOLO_OSBTEXT, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.YOLO_PANEL, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.MANGA_OCR, force_gc=True, verbose=verbose)

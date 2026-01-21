@@ -125,7 +125,7 @@ class UnifiedCache:
         self,
         image: Image.Image,
         yolo_boxes: Any,
-        use_sam2: bool = True,
+        sam_model: str = "sam2",
         conjoined_detection: bool = True,
         conjoined_confidence: float = 0.35,
     ) -> str:
@@ -134,7 +134,7 @@ class UnifiedCache:
         Args:
             image: Input image
             yolo_boxes: YOLO detection boxes (tensor or list)
-            use_sam2: Whether SAM2 is enabled
+            sam_model: SAM model to use ("off", "sam2", or "sam3")
             conjoined_detection: Whether conjoined detection is enabled
             conjoined_confidence: Confidence threshold for conjoined detection
 
@@ -149,10 +149,16 @@ class UnifiedCache:
             boxes_np = np.array(yolo_boxes)
         boxes_hash = self._hash_numpy(boxes_np)
 
-        sam_model_id = "facebook/sam2.1-hiera-large"
+        # Model ID for cache key differentiation
+        model_ids = {
+            "sam2": "facebook/sam2.1-hiera-large",
+            "sam3": "facebook/sam3",
+            "off": "none",
+        }
+        sam_model_id = model_ids.get(sam_model, "none")
         model_hash = hashlib.sha256(sam_model_id.encode()).hexdigest()[:8]
         key_string = (
-            f"sam_{image_hash}_{boxes_hash}_{model_hash}_sam2{int(use_sam2)}"
+            f"sam_{image_hash}_{boxes_hash}_{model_hash}_sam{sam_model}"
             f"_conjoined{int(conjoined_detection)}"
             f"_conf{conjoined_confidence:.3f}"
         )

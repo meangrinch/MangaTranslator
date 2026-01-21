@@ -467,12 +467,13 @@ def create_layout(
                                     "use_panel_sorting", True
                                 ),
                             )
-                            use_sam2_checkbox = gr.Checkbox(
-                                value=saved_settings.get("use_sam2", True),
-                                label="Use SAM 2.1 for Segmentation",
+                            sam_model_radio = gr.Radio(
+                                choices=["sam3", "sam2", "off"],
+                                value=saved_settings.get("sam_model", "sam2"),
+                                label="Segmentation Model",
                                 info=(
-                                    "Greatly enhances bubble segmentation quality, especially for oddly shaped bubbles."
-                                    " Uses YOLO segmentation if disabled."
+                                    "Segmentation method. "
+                                    "SAM 3 requires a HF token (shared with OSB Text section)."
                                 ),
                             )
                             osb_text_verification_checkbox = gr.Checkbox(
@@ -1576,7 +1577,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            use_sam2_checkbox,
+            sam_model_radio,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1673,7 +1674,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            use_sam2_checkbox,
+            sam_model_radio,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1767,7 +1768,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            use_sam2_checkbox,
+            sam_model_radio,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1866,7 +1867,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            use_sam2_checkbox,
+            sam_model_radio,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
