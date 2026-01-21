@@ -220,3 +220,11 @@
     object-fit: contain;
     margin: auto;
 }
+
+/* --- Fix textbox overflow scrollbar issue (Gradio 5.44.1+) --- */
+#translator_special_instructions textarea,
+#batch_special_instructions textarea,
+#translator_status_message textarea,
+#batch_status_message textarea {
+    overflow-y: hidden !important;
+}

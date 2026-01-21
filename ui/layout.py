@@ -271,6 +271,7 @@ def create_layout(
                             value=saved_settings.get("special_instructions", ""),
                             lines=1,
                             max_lines=10,
+                            elem_id="translator_special_instructions",
                         )
                     with gr.Column(scale=1):
                         output_image = gr.Image(
@@ -342,6 +343,7 @@ def create_layout(
                             value=saved_settings.get("batch_special_instructions", ""),
                             lines=1,
                             max_lines=10,
+                            elem_id="batch_special_instructions",
                         )
                     with gr.Column(scale=1):
                         batch_output_gallery = gr.Gallery(

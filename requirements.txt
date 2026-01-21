@@ -1,6 +1,6 @@
 diffusers @ git+https://github.com/huggingface/diffusers.git@74654df
 fonttools>=4.56.0
-gradio>=5.23.1,<=5.44.1
+gradio>=5.44.1,<=5.50.0
 manga-ocr>=0.1.14
 numpy>=1.24.0
 opencv-contrib-python>=4.8.0
