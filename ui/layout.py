@@ -168,6 +168,22 @@ js_refresh_button_processing = """
 """
 
 
+js_reset_status_height = """
+() => {
+    setTimeout(() => {
+        const ids = ['#translator_status_message textarea', '#batch_status_message textarea'];
+        ids.forEach(selector => {
+            const el = document.querySelector(selector);
+            if (el) {
+                el.style.height = '';
+                el.style.removeProperty('height');
+            }
+        });
+    }, 100);
+}
+"""
+
+
 def create_layout(
     models_dir: Path, fonts_base_dir: Path, target_device: Any
 ) -> gr.Blocks:
@@ -280,7 +296,6 @@ def create_layout(
                             interactive=False,
                             elem_id="translator_output_image",
                         )
-                        # Assign specific ID for JS targeting
                         status_message = gr.Textbox(
                             label="Status",
                             interactive=False,
@@ -354,7 +369,6 @@ def create_layout(
                             height="auto",
                             object_fit="contain",
                         )
-                        # Assign specific ID for JS targeting
                         batch_status_message = gr.Textbox(
                             label="Status",
                             interactive=False,
@@ -2363,12 +2377,12 @@ def create_layout(
 
         # Translator Tab Button
         clear_button.click(
-            fn=lambda: (None, None, ""),
+            fn=lambda: (None, None, gr.update(value="", lines=1)),
             outputs=[input_image, output_image, status_message],
             queue=False,
-        )
+        ).then(fn=None, js=js_reset_status_height, queue=False)
         batch_clear_button.click(
-            fn=lambda: (None, None, None, ""),
+            fn=lambda: (None, None, None, gr.update(value="", lines=1)),
             outputs=[
                 input_files,
                 input_zip,
@@ -2376,7 +2390,7 @@ def create_layout(
                 batch_status_message,
             ],
             queue=False,
-        )
+        ).then(fn=None, js=js_reset_status_height, queue=False)
         translate_event = translate_button.click(
             fn=functools.partial(
                 callbacks.update_process_buttons,

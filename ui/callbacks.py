@@ -703,7 +703,9 @@ def handle_translate_click(
             processing_time,
         )
 
-        return result_image.copy(), status_msg
+        # Calculate lines for auto-expansion
+        line_count = status_msg.count("\n") + 1
+        return result_image.copy(), gr.update(value=status_msg, lines=line_count)
 
     except gr.Error as e:
         cleaned = _clean_error_message(e)
@@ -819,7 +821,9 @@ def handle_batch_click(
             results, backend_config, font_dir_path
         )
         progress(1.0, desc="Batch complete!")
-        return gallery_images, status_msg
+        # Calculate lines for auto-expansion
+        line_count = status_msg.count("\n") + 1
+        return gallery_images, gr.update(value=status_msg, lines=line_count)
 
     except gr.Error as e:
         progress(1.0, desc="Error occurred")
