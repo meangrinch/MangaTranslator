@@ -1,22 +1,32 @@
 /* --- SETTINGS LAYOUT --- */
-#settings-tab-container { padding-top: 15px; }
+#settings-tab-container {
+    padding-top: 15px;
+}
 
 /* --- NAVIGATION SIDEBAR --- */
 #settings-nav {
-    width: 15em !important; padding: 10px 5px 10px 10px !important;
-    border-right: 1px solid var(--border-color-primary); min-width: 15em !important;
-    flex-grow: 0 !important; flex-shrink: 0 !important;
+    width: 15em !important;
+    padding: 10px 5px 10px 10px !important;
+    border-right: 1px solid var(--border-color-primary);
+    min-width: 15em !important;
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important;
 }
 
 #settings-nav button.nav-button {
-    display: block !important; width: 100% !important; border: none !important;
-    background: none !important; text-align: left !important;
+    display: block !important;
+    width: 100% !important;
+    border: none !important;
+    background: none !important;
+    text-align: left !important;
     padding: 8px 10px !important;
     margin-bottom: 4px !important;
     border-radius: 4px !important;
     color: var(--body-text-color) !important;
     font-size: var(--text-lg) !important;
-    transition: background-color 0.1s ease, color 0.1s ease;
+    transition:
+        background-color 0.1s ease,
+        color 0.1s ease;
     font-weight: bold !important;
     cursor: pointer;
 }
@@ -39,7 +49,7 @@
 
 /* --- SETTINGS CONTENT --- */
 #config-content-area {
-    padding-left: 20px; 
+    padding-left: 20px;
     padding-right: 15px;
 }
 
@@ -74,8 +84,8 @@
 }
 
 /* --- Label Styling --- */
-#config-content-area .settings-group .block > label,
-#config-content-area .settings-group div.styler > label {
+#config-content-area .settings-group .block>label,
+#config-content-area .settings-group div.styler>label {
     display: block;
     font-weight: bold !important;
     font-size: var(--text-md) !important;
@@ -83,9 +93,10 @@
     margin-bottom: 0.6em !important;
     padding: 0 !important;
 }
+
 /* If labels have spans, target that */
-#config-content-area .settings-group .block > label > span:not(.has-info),
-#config-content-area .settings-group div.styler > label > span:not(.has-info) {
+#config-content-area .settings-group .block>label>span:not(.has-info),
+#config-content-area .settings-group div.styler>label>span:not(.has-info) {
     margin-bottom: 0.6em !important;
     padding: 0 !important;
 }
@@ -98,6 +109,7 @@
     border-width: 1px !important;
     box-shadow: none !important;
 }
+
 #config-content-area .settings-group .gradio-slider .wrap {
     padding: 0 !important;
 }
@@ -110,6 +122,7 @@
     border-width: none !important;
     box-shadow: none !important;
 }
+
 #config-content-area .settings-group .gradio-dropdown .wrap-inner,
 #config-content-area .settings-group .gradio-textbox .wrap-inner {
     padding: 0 !important;
@@ -123,10 +136,12 @@
     font-weight: normal !important;
     margin-bottom: 0 !important;
 }
+
 #config-content-area .settings-group .gradio-checkbox label span {
     font-weight: normal !important;
     margin-bottom: 0 !important;
 }
+
 #config-content-area .settings-group .gradio-checkbox input[type="checkbox"] {
     margin-right: 8px;
     width: 16px;
@@ -144,17 +159,20 @@
     gap: 15px;
     margin-top: 5px;
 }
-#config-content-area .settings-group .gradio-radio .radio-buttons > label {
+
+#config-content-area .settings-group .gradio-radio .radio-buttons>label {
     display: flex !important;
     align-items: center !important;
     font-weight: normal !important;
     margin-bottom: 0 !important;
     cursor: pointer;
 }
+
 #config-content-area .settings-group .gradio-radio .radio-buttons label span {
     font-weight: normal !important;
     margin-bottom: 0 !important;
 }
+
 #config-content-area .settings-group .gradio-radio input[type="radio"] {
     margin-right: 5px;
     accent-color: var(--primary-500);
@@ -170,13 +188,15 @@
     display: inline-block !important;
     width: auto !important;
     max-width: 170px !important;
-    font-size: 1.0em !important;
+    font-size: 1em !important;
     background-color: var(--neutral-100) !important;
     color: var(--neutral-800) !important;
     border: none !important;
     padding: 8px 16px !important;
     border-radius: 4px !important;
-    transition: background-color 0.2s ease, color 0.2s ease !important;
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease !important;
 }
 
 .config-button:hover {
@@ -194,7 +214,8 @@
 }
 
 /* --- STATUS MESSAGES --- */
-#config_status p, #config_status div.prose {
+#config_status p,
+#config_status div.prose {
     margin: 0;
     padding-left: 5px;
 }
