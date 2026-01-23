@@ -218,6 +218,11 @@ def main():
             "Lower helps clean edge-hugging text; higher preserves outlines."
         ),
     )
+    parser.add_argument(
+        "--inpaint-colored-bubbles",
+        action="store_true",
+        help="Use Flux model to inpaint colored bubbles",
+    )
     # Translation args
     parser.add_argument(
         "--temperature",
@@ -779,6 +784,7 @@ def main():
             thresholding_value=args.thresholding_value,
             use_otsu_threshold=use_otsu_config_val,
             roi_shrink_px=max(0, min(8, int(args.roi_shrink_px))),
+            inpaint_colored_bubbles=args.inpaint_colored_bubbles,
         ),
         translation=TranslationConfig(
             provider=provider,
