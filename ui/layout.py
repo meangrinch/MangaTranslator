@@ -1357,7 +1357,7 @@ def create_layout(
                                     label="Use Flux to Inpaint Colored Bubbles",
                                     info=(
                                         "Use Flux for bubble cleaning when the interior is not pure white/black "
-                                        "(e.g., colored/complex)."
+                                        "(e.g., colored/grayscale)."
                                     ),
                                     interactive=saved_settings.get(
                                         "outside_text_inpainting_method",

@@ -61,8 +61,8 @@
 - **Small bubbles not detected/no room for rendered text:**
   - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x), also disable "Auto Scale"
 
-- **Colored/complex bubbles not preserving interior color:**
-  - Enable "Use Flux Kontext to Inpaint Colored Bubbles" (requires Nunchaku/hf_token)
+- **Colored/grayscale bubbles not preserving interior color:**
+  - Enable "Use Flux to Inpaint Colored Bubbles"
 
 ### Translation
 
@@ -99,7 +99,7 @@
   - Use Flux.1 Kontext (SDNQ or Nunchaku) for no color shifts
 
 - **Flux.1 Kontext Nunchaku backend not available:**
-  - Nunchaku requires NVIDIA CUDA and separate installation
+  - Nunchaku requires an Nvidia GPU (CUDA) and separate installation
   - Use the SDNQ backend (cross-platform) or Flux Klein instead
 
 - **Poor inpainting quality:**

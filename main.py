@@ -221,7 +221,7 @@ def main():
     parser.add_argument(
         "--inpaint-colored-bubbles",
         action="store_true",
-        help="Use Flux model to inpaint colored bubbles",
+        help="Use Flux model to inpaint colored/grayscale bubbles",
     )
     # Translation args
     parser.add_argument(
