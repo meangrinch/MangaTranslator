@@ -304,15 +304,9 @@ def draw_layout(
 
                     hb_font_segment = hb.Font(hb_face_to_use)
                     hb_font_segment.ptem = float(final_font_size)
-                    if hb_face_to_use.upem > 0:
-                        scale_factor = final_font_size / hb_face_to_use.upem
-                        hb_scale = int(scale_factor * (2**16))
-                        hb_font_segment.scale = (hb_scale, hb_scale)
-                    else:
-                        hb_font_segment.scale = (
-                            int(final_font_size * (2**16)),
-                            int(final_font_size * (2**16)),
-                        )
+                    # Standard HarfBuzz scaling: font_size * 64 (for 26.6 fixed point coordinates)
+                    hb_scale = int(final_font_size * 64)
+                    hb_font_segment.scale = (hb_scale, hb_scale)
 
                     try:
                         infos, positions = shape_line(

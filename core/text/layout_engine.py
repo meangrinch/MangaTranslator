@@ -88,12 +88,9 @@ def calculate_styled_line_width(
 
         hb_font_segment = hb.Font(hb_face_to_use)
         hb_font_segment.ptem = float(font_size)
-        if hb_face_to_use.upem > 0:
-            scale_factor = font_size / hb_face_to_use.upem
-            hb_scale = int(scale_factor * (2**16))
-            hb_font_segment.scale = (hb_scale, hb_scale)
-        else:
-            hb_font_segment.scale = (int(font_size * (2**16)), int(font_size * (2**16)))
+        # Standard HarfBuzz scaling: font_size * 64 (for 26.6 fixed point coordinates)
+        hb_scale = int(font_size * 64)
+        hb_font_segment.scale = (hb_scale, hb_scale)
 
         _, positions = shape_line(segment_text, hb_font_segment, features)
         if not positions:
@@ -160,14 +157,8 @@ def check_fit(
         hb_font = hb.Font(regular_hb_face)
         hb_font.ptem = float(font_size)
 
-        scale_factor = 1.0
-        if regular_hb_face.upem > 0:
-            scale_factor = font_size / regular_hb_face.upem
-        else:
-            if verbose:
-                log_message("Font upem=0, using scale factor 1.0", verbose=verbose)
-
-        hb_scale = int(scale_factor * (2**16))
+        # Standard HarfBuzz scaling: font_size * 64 (for 26.6 fixed point coordinates)
+        hb_scale = int(font_size * 64)
         hb_font.scale = (hb_scale, hb_scale)
 
         skia_font_test = skia.Font(regular_typeface, font_size)
