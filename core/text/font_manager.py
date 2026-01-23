@@ -477,7 +477,12 @@ def sanitize_font_data(font_path: str, font_data: bytes) -> bytes:
         if test_glyph_name and "glyf" in font and "hmtx" in font:
             glyph = font["glyf"][test_glyph_name]
             advance_width = font["hmtx"][test_glyph_name][0]
-            if hasattr(glyph, "xMax") and advance_width < glyph.xMax:
+
+            # Check for italic style (Bit 1 of macStyle) and allow 30% overhang
+            is_italic = (font["head"].macStyle & 0b10) != 0 if "head" in font else False
+            tolerance = 1.3 if is_italic else 1.0
+
+            if hasattr(glyph, "xMax") and glyph.xMax > (advance_width * tolerance):
                 msg = f"Font {os.path.basename(font_path)} has unreliable metrics. Overriding UPM to 1000."
                 log_message(msg, always_print=True)
                 font["head"].unitsPerEm = 1000
