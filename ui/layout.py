@@ -483,12 +483,12 @@ def create_layout(
                                     "use_panel_sorting", True
                                 ),
                             )
-                            sam_model_radio = gr.Radio(
-                                choices=["sam3", "sam2", "off"],
+                            sam_model = gr.Radio(
+                                choices=["sam3", "sam2", "yolo"],
                                 value=saved_settings.get("sam_model", "sam2"),
                                 label="Segmentation Model",
                                 info=(
-                                    "Segmentation method. "
+                                    "Model to use to segment speech bubbles. "
                                     "SAM 3 requires a HF token (shared with OSB Text section)."
                                 ),
                             )
@@ -1598,7 +1598,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            sam_model_radio,
+            sam_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1695,7 +1695,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            sam_model_radio,
+            sam_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1789,7 +1789,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            sam_model_radio,
+            sam_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1888,7 +1888,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            sam_model_radio,
+            sam_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,

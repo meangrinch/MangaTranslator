@@ -136,7 +136,7 @@ DEFAULT_SETTINGS = {
     "confidence": 0.6,
     "conjoined_confidence": 0.35,
     "panel_confidence": 0.25,
-    "sam_model": "sam2",  # "off", "sam2", or "sam3"
+    "sam_model": "sam2",  # "yolo", "sam2", or "sam3"
     "conjoined_detection": True,
     "use_osb_text_verification": True,
     "use_panel_sorting": True,
