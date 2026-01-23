@@ -143,7 +143,7 @@ DEFAULT_SETTINGS = {
     "use_otsu_threshold": False,
     "thresholding_value": 190,
     "roi_shrink_px": 4,
-    "inpaint_colored_bubbles": True,
+    "inpaint_colored_bubbles": False,
     "temperature": DEFAULT_PROVIDER_SAMPLING["temperature"],
     "top_p": DEFAULT_PROVIDER_SAMPLING["top_p"],
     "top_k": DEFAULT_PROVIDER_SAMPLING["top_k"],

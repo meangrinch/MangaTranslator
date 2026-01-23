@@ -548,17 +548,7 @@ def create_layout(
                                     "Lower helps clean edge-hugging text; higher preserves outlines."
                                 ),
                             )
-                            inpaint_colored_bubbles = gr.Checkbox(
-                                value=saved_settings.get(
-                                    "inpaint_colored_bubbles", True
-                                ),
-                                label="Use Flux to Inpaint Colored Bubbles",
-                                info=(
-                                    "Use Flux for bubble cleaning when the interior is not pure white/black "
-                                    "(e.g., colored/complex). "
-                                    "Flux settings are shared with the 'OSB Text' section."
-                                ),
-                            )
+
                         setting_groups.append(group_cleaning)
 
                         # --- Translation Settings ---
@@ -1354,6 +1344,21 @@ def create_layout(
                                     label="Seed",
                                     info="Seed for reproducible inpainting (-1 = random)",
                                     precision=0,
+                                    interactive=saved_settings.get(
+                                        "outside_text_inpainting_method",
+                                        "flux_klein_4b",
+                                    )
+                                    != "opencv",
+                                )
+                                inpaint_colored_bubbles = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "inpaint_colored_bubbles", False
+                                    ),
+                                    label="Use Flux to Inpaint Colored Bubbles",
+                                    info=(
+                                        "Use Flux for bubble cleaning when the interior is not pure white/black "
+                                        "(e.g., colored/complex)."
+                                    ),
                                     interactive=saved_settings.get(
                                         "outside_text_inpainting_method",
                                         "flux_klein_4b",
@@ -2201,6 +2206,7 @@ def create_layout(
                 ),
                 gr.update(interactive=residual_interactive),
                 gr.update(interactive=(not is_opencv)),
+                gr.update(interactive=(not is_opencv)),
             )
 
         outside_text_inpainting_method.change(
@@ -2216,6 +2222,7 @@ def create_layout(
                 outside_text_flux_num_inference_steps,
                 outside_text_flux_residual_diff_threshold,
                 outside_text_seed,
+                inpaint_colored_bubbles,
             ],
             queue=False,
         )

@@ -595,7 +595,7 @@ def clean_speech_bubbles(
                 )
 
         # Optional Flux inpainting for colored bubbles (text-only mask)
-        if inpaint_colored_bubbles:
+        if inpaint_colored_bubbles and inpaint_method != "opencv":
             colored_bubbles = [
                 b for b in processed_bubbles if b.get("is_colored", False)
             ]

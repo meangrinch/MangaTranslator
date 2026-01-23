@@ -36,7 +36,7 @@ class UICleaningSettings:
     thresholding_value: int = 190
     use_otsu_threshold: bool = False
     roi_shrink_px: int = 4
-    inpaint_colored_bubbles: bool = True
+    inpaint_colored_bubbles: bool = False
 
 
 @dataclass
@@ -328,7 +328,7 @@ class UIConfigState:
                 ),
                 inpaint_colored_bubbles=data.get(
                     "inpaint_colored_bubbles",
-                    defaults.get("inpaint_colored_bubbles", True),
+                    defaults.get("inpaint_colored_bubbles", False),
                 ),
             ),
             outside_text=UIOutsideTextSettings(
