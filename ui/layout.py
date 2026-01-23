@@ -489,18 +489,17 @@ def create_layout(
                                 label="Segmentation Model",
                                 info=(
                                     "Model to use to segment speech bubbles. "
-                                    "SAM 3 requires a HF token (shared with OSB Text section)."
+                                    "SAM 3 requires a HF token (shared with 'OSB Text' section)."
                                 ),
                             )
                             osb_text_verification_checkbox = gr.Checkbox(
                                 value=saved_settings.get(
                                     "use_osb_text_verification", True
                                 ),
-                                label="Use OSB Text model for Bubble Verification",
+                                label="Use AnimeText YOLO model for Bubble Verification",
                                 info=(
-                                    "Use the OSB text YOLO model to confirm bubble detections fully cover text. "
-                                    "Requires a Hugging Face token."
-                                    "(hf_token is shared with the 'OSB Text' section)."
+                                    "Use the AnimeText YOLO model to confirm bubble detections fully cover text. "
+                                    "Requires a Hugging Face token (shared with 'OSB Text' section)."
                                 ),
                             )
                             config_reading_direction = gr.Radio(
