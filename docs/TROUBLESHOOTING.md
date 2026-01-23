@@ -42,6 +42,9 @@
 - **Text overlaps with each other:**
   - Your font is likely broken/corrupted; try using a different font (e.g., ones included with the portable package)
 
+- **Accented characters not appearing:**
+  - Use a font that supports diacritical marks (e.g., the _Roboto_ font pack included with the portable package supports Roman, Cyrillic, and Greek diacritical marks)
+
 - **Text too blurry/pixelated:**
   - Increase font rendering "Supersampling Factor" (e.g., 6-8)
   - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x)
