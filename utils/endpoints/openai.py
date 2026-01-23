@@ -108,7 +108,7 @@ def call_openai_endpoint(
             effort = generation_config.get("reasoning_effort")
             if effort:
                 if (is_gpt5_1 or is_gpt5_2) and effort == "none":
-                    payload["reasoning_effort"] = "none"
+                    payload["reasoning"] = {"effort": "none"}
                 elif effort != "none":
                     effort_to_send = effort
                     if effort_to_send == "xhigh" and not is_gpt5_2:
@@ -117,13 +117,13 @@ def call_openai_endpoint(
                         effort_to_send = "none"
                     elif effort_to_send == "minimal" and not is_gpt5_series:
                         effort_to_send = "low"
-                    payload["reasoning_effort"] = effort_to_send
+                    payload["reasoning"] = {"effort": effort_to_send}
 
         if is_gpt5_series and not is_chat_variant:
             payload["text"] = {"verbosity": "low"}
 
             # temperature and top_p are only supported for GPT-5.1 with effort=none or GPT-5 with effort=minimal
-            current_effort = payload.get("reasoning_effort")
+            current_effort = payload.get("reasoning", {}).get("effort")
             allow_sampling = False
 
             if (is_gpt5_1 or is_gpt5_2) and current_effort == "none":
