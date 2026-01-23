@@ -9,7 +9,7 @@ from .caching import UnifiedCache, get_cache
 from .image.cleaning import clean_speech_bubbles
 from .image.detection import detect_speech_bubbles
 from .image.image_utils import cv2_to_pil, pil_to_cv2, save_image_with_compression
-from .image.inpainting import FluxKontextInpainter
+from .image.inpainting import FluxKleinInpainter, FluxKontextInpainter
 from .image.ocr_detection import OutsideTextDetector
 from .ml.model_manager import ModelManager, get_model_manager
 from .pipeline import batch_translate_images, translate_and_render
@@ -17,8 +17,8 @@ from .services.translation import call_translation_api_batch
 from .image.sorting import sort_bubbles_by_reading_order
 from .text.text_renderer import render_text_skia
 
-__version__ = "1.11.2"
-__version_info__ = (1, 11, 2)
+__version__ = "1.11.3"
+__version_info__ = (1, 11, 3)
 __author__ = "grinnch"
 __copyright__ = "Copyright 2025-present grinnch"
 __license__ = "Apache-2.0"
@@ -40,4 +40,5 @@ __all__ = [
     "ModelManager",
     "OutsideTextDetector",
     "FluxKontextInpainter",
+    "FluxKleinInpainter",
 ]
