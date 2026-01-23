@@ -1145,8 +1145,8 @@ def create_layout(
                                 label="HuggingFace Token (Required for certain features)",
                                 type="password",
                                 info=(
-                                    "Required for downloading OSB Text Detection (YOLO) and Flux.1 Kontext Nunchaku "
-                                    "model from HuggingFace Hub."
+                                    "Required for downloading AnimeText YOLO (required for OSB detection), "
+                                    "Flux.1 Kontext Nunchaku, and/or SAM 3 models from HuggingFace Hub."
                                 ),
                             )
 

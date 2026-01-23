@@ -28,7 +28,7 @@ Gradio-based web application for automating the translation of manga/comic page 
 
 ## Features
 
-- **Detection**: Speech bubble detection & segmentation (YOLO + SAM 2.1)
+- **Detection**: Speech bubble detection & segmentation (YOLO + SAM 2.1/3)
 - **Cleaning**: Inpaint speech bubbles and OSB text (Flux.2 Klein, Flux.1 Kontext, or OpenCV)
 - **Translation**: LLM-powered OCR & translation (54 languages)
 - **Rendering**: Text rendering with alignment and custom font packs
@@ -66,7 +66,7 @@ Download the standalone zip from the releases page: [Portable Build](https://git
    - **Windows:** `start-webui.bat`
    - **Linux/macOS:** `start-webui.sh`
 
-Includes the _Komika_ (normal text), _Cookies_ (OSB text), and _Comicka_ (either) font packs
+Includes the _Komika_ (normal text), _Cookies_ (OSB text), _Comicka_ (either), and _Roboto_ (supports accents) font packs
 
 > [!TIP]
 > In the event that you need to transfer to a fresh portable package:
@@ -162,7 +162,10 @@ If you want to use the OSB text pipeline, you need a Hugging Face token with acc
 #### Steps to create a token:
 
 1. Sign in or create a Hugging Face account
-2. Visit and accept the terms on: [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo) (and [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev) if using Kontext with Nunchaku)
+2. Visit and accept the terms on:
+   - [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo)
+   - [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev) (optional, if using Kontext with Nunchaku)
+   - [SAM 3](https://huggingface.co/facebook/sam3) (optional, if using SAM 3 instead of SAM 2.1)
 3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
 4. Add the token to the app:
    - Web UI: set `hf_token` in Config
@@ -248,7 +251,8 @@ pip install -r requirements.txt  # Or activate venv first if present
 
 - YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Comic Speech Bubble Detector YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
-- SAM 2.1 (Segment Anything): [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
+- SAM 2.1: Segment Anything in Images and Videos: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
+- SAM 3: [Meta AI](https://huggingface.co/facebook/sam3)
 - FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
 - FLUX.2 Klein 4B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
 - FLUX.2 Klein 9B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B)
