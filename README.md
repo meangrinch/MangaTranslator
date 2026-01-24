@@ -96,19 +96,19 @@ source venv/bin/activate
 3. Install PyTorch (see: [PyTorch Install](https://pytorch.org/get-started/locally/))
 
 ```bash
-# Example (CUDA 12.8)
-pip install torch==2.9.1+cu128 torchvision==0.24.1+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
+# Example (CUDA 13.0)
+pip install torch==2.9.1+cu130 torchvision==0.24.1+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
 # Example (CPU)
 pip install torch torchvision
 ```
 
 4. Install Nunchaku (optional, for Flux.1 Kontext Nunchaku backend)
 
-- Nunchaku wheels are not on PyPI. Install directly from the v1.1.0 GitHub release URL, matching your OS and Python version. CUDA only.
+- Nunchaku wheels are not on PyPI. Install directly from the v1.2.0 GitHub release URL, matching your OS and Python version. CUDA only, and requires a 2000-series card or newer.
 
 ```bash
 # Example (Windows, Python 3.13, PyTorch 2.9.1)
-pip install https://github.com/nunchaku-tech/nunchaku/releases/download/v1.1.0/nunchaku-1.1.0+torch2.9-cp313-cp313-win_amd64.whl
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.0/nunchaku-1.2.0+torch2.9-cp313-cp313-win_amd64.whl
 ```
 
 > [!NOTE]
