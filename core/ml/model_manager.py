@@ -167,6 +167,7 @@ class ModelManager:
         }
         repos[ModelType.MANGA_OCR] = {
             "repo_id": "kha-white/manga-ocr-base",
+            "revision": "refs/pr/4",
         }
         # Flux.1 Kontext SDNQ (cross-platform, no token required)
         repos[ModelType.FLUX_KONTEXT_SDNQ_PIPELINE] = {
@@ -261,6 +262,7 @@ class ModelManager:
         repo_id: str,
         target_dir: Path,
         token: Optional[str] = None,
+        revision: Optional[str] = None,
         verbose: bool = False,
     ) -> Path:
         """Download entire repository from Hugging Face if it doesn't exist.
@@ -269,18 +271,34 @@ class ModelManager:
             repo_id: Hugging Face repository ID
             target_dir: Directory where repository should be saved
             token: Optional Hugging Face token
+            revision: Optional git revision (branch, tag, commit hash)
             verbose: Whether to print verbose logging
 
         Returns:
             Path to the downloaded repository directory
         """
-        # Check for larger model file to ensure download is complete
-        critical_file = target_dir / "pytorch_model.bin"
-        if target_dir.exists() and critical_file.exists():
+        # Check for safetensors for transformers v5+
+        safetensors_file = target_dir / "model.safetensors"
+        bin_file = target_dir / "pytorch_model.bin"
+
+        is_downloaded = False
+        if target_dir.exists():
+            if safetensors_file.exists():
+                is_downloaded = True
+            elif bin_file.exists():
+                if revision is None:
+                    is_downloaded = True
+
+        if is_downloaded:
             return target_dir
+
         target_dir.mkdir(parents=True, exist_ok=True)
         log_message(
-            f"Downloading repository {repo_id} from Hugging Face...",
+            (
+                f"Downloading repository {repo_id} (revision: {revision})..."
+                if revision
+                else f"Downloading repository {repo_id}..."
+            ),
             verbose=verbose,
         )
         try:
@@ -288,6 +306,7 @@ class ModelManager:
                 repo_id=repo_id,
                 local_dir=str(target_dir),
                 token=token,
+                revision=revision,
             )
             log_message(
                 f"Downloaded repository {repo_id} successfully.", verbose=verbose
@@ -525,7 +544,12 @@ class ModelManager:
         with self._lock:
             model_path = self.model_paths[ModelType.MANGA_OCR]
             hf_info = self.model_hf_repos[ModelType.MANGA_OCR]
-            self._ensure_hf_repo(hf_info["repo_id"], model_path, verbose=verbose)
+            self._ensure_hf_repo(
+                hf_info["repo_id"],
+                model_path,
+                revision=hf_info.get("revision"),
+                verbose=verbose,
+            )
             log_message("manga-ocr model repository ready.", verbose=verbose)
             return model_path
 
@@ -560,10 +584,21 @@ class ModelManager:
                 log_message(f"Warning: Failed to apply MeCab fix: {e}", verbose=verbose)
 
             from manga_ocr import MangaOcr
+            from transformers import logging as transformers_logging
 
             # Ensure model is downloaded
             model_path = self.load_manga_ocr(verbose=verbose)
-            manga_ocr_instance = MangaOcr(pretrained_model_name_or_path=str(model_path))
+
+            # Suppress loading warnings (specifically for position_ids mismatch in transformers v5)
+            previous_level = transformers_logging.get_verbosity()
+            transformers_logging.set_verbosity_error()
+            try:
+                manga_ocr_instance = MangaOcr(
+                    pretrained_model_name_or_path=str(model_path)
+                )
+            finally:
+                transformers_logging.set_verbosity(previous_level)
+
             self.models[ModelType.MANGA_OCR] = manga_ocr_instance
             log_message("manga-ocr initialized", verbose=verbose)
             return manga_ocr_instance
