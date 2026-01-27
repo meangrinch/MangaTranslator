@@ -57,28 +57,36 @@ def call_moonshot_endpoint(
             "Invalid 'parts' format for Moonshot: No text prompt found."
         )
 
-    content_list = []
-    content_list.append({"type": "text", "text": text_part["text"]})
+    model_lower = model_name.lower()
+    is_multimodal = "kimi-k2.5" in model_lower
 
-    for part in image_parts:
-        if (
-            "inline_data" in part
-            and "data" in part["inline_data"]
-            and "mime_type" in part["inline_data"]
-        ):
-            mime_type = part["inline_data"]["mime_type"]
-            base64_image = part["inline_data"]["data"]
-            content_list.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
-                }
-            )
+    if is_multimodal:
+        content_list = []
+        content_list.append({"type": "text", "text": text_part["text"]})
+
+        for part in image_parts:
+            if (
+                "inline_data" in part
+                and "data" in part["inline_data"]
+                and "mime_type" in part["inline_data"]
+            ):
+                mime_type = part["inline_data"]["mime_type"]
+                base64_image = part["inline_data"]["data"]
+                content_list.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                    }
+                )
+        user_content = content_list
+    else:
+        # For non-multimodal models, use a simple string for content
+        user_content = text_part["text"]
 
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": content_list})
+    messages.append({"role": "user", "content": user_content})
 
     payload = {
         "model": model_name,
