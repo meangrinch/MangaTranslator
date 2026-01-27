@@ -72,6 +72,9 @@ class TranslationConfig:
     enable_web_search: bool = (
         False  # Enable model's built-in web search for up-to-date information. OpenRouter uses its own web search tool.
     )
+    enable_code_execution: bool = (
+        False  # Enable Gemini's code execution tool for image zoom/inspection (Gemini 3 Flash only)
+    )
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)
     )

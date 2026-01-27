@@ -147,6 +147,9 @@ class UIGeneralSettings:
     enable_web_search: bool = (
         False  # Enable model's built-in web search for up-to-date information.
     )
+    enable_code_execution: bool = (
+        False  # Enable Gemini's code execution for image zoom/inspection.
+    )
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)
     )
@@ -268,6 +271,7 @@ class UIConfigState:
             "upscaling_only": self.general.upscaling_only,
             "test_mode": self.general.test_mode,
             "enable_web_search": self.general.enable_web_search,
+            "enable_code_execution": self.general.enable_code_execution,
             "media_resolution": self.general.media_resolution,
             "media_resolution_bubbles": self.general.media_resolution_bubbles,
             "media_resolution_context": self.general.media_resolution_context,
@@ -494,6 +498,10 @@ class UIConfigState:
                 enable_web_search=data.get(
                     "enable_web_search", defaults.get("enable_web_search", False)
                 ),
+                enable_code_execution=data.get(
+                    "enable_code_execution",
+                    defaults.get("enable_code_execution", False),
+                ),
                 media_resolution=data.get(
                     "media_resolution",
                     defaults.get("media_resolution", "auto"),
@@ -584,6 +592,7 @@ def map_ui_to_backend_config(
         translation_mode=ui_state.llm_settings.translation_mode,
         ocr_method=ui_state.llm_settings.ocr_method,
         enable_web_search=ui_state.general.enable_web_search,
+        enable_code_execution=ui_state.general.enable_code_execution,
         media_resolution=ui_state.general.media_resolution,
         media_resolution_bubbles=ui_state.general.media_resolution_bubbles,
         media_resolution_context=ui_state.general.media_resolution_context,

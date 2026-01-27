@@ -19,6 +19,7 @@ def call_gemini_endpoint(
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
+    enable_code_execution: bool = False,
 ) -> Optional[str]:
     """
     Calls the Google API endpoint with the provided data and handles retries.
@@ -33,6 +34,7 @@ def call_gemini_endpoint(
         max_retries (int): Maximum number of retries for rate limiting errors.
         base_delay (float): Initial delay for retries in seconds.
         enable_web_search (bool): Enable web search (Google Search) for up-to-date information.
+        enable_code_execution (bool): Enable Gemini's code execution tool for image zoom/inspection.
 
     Returns:
         Optional[str]: The raw text content from the API response if successful,
@@ -66,8 +68,13 @@ def call_gemini_endpoint(
     if system_prompt:
         payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
 
+    tools = []
     if enable_web_search:
-        payload["tools"] = [{"googleSearch": {}}]
+        tools.append({"googleSearch": {}})
+    if enable_code_execution:
+        tools.append({"code_execution": {}})
+    if tools:
+        payload["tools"] = tools
 
     for attempt in range(max_retries + 1):
         current_delay = min(

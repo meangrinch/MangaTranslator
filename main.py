@@ -436,6 +436,11 @@ def main():
         ),
     )
     parser.add_argument(
+        "--enable-code-execution",
+        action="store_true",
+        help="Enable Gemini's code execution tool for image zoom/inspection (Gemini 3 Flash only)",
+    )
+    parser.add_argument(
         "--media-resolution",
         type=str,
         choices=["auto", "high", "medium", "low"],
@@ -840,6 +845,8 @@ def main():
             reading_direction=args.reading_direction,
             translation_mode=args.translation_mode,
             enable_web_search=args.enable_web_search,
+            enable_code_execution=args.enable_code_execution,
+            media_resolution=args.media_resolution,
             media_resolution=args.media_resolution,
             media_resolution_bubbles=args.media_resolution_bubbles,
             media_resolution_context=args.media_resolution_context,

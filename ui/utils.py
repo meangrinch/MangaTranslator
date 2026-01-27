@@ -712,10 +712,21 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
             return False
         return "gemini-3" in name.lower()
 
+    def _is_gemini_3_flash_model(name: Optional[str]) -> bool:
+        if not name:
+            return False
+        lm = name.lower()
+        return "gemini-3" in lm and "flash" in lm
+
     is_gemini_3_google = (
         provider == "Google"
         and remembered_model
         and _is_gemini_3_model(remembered_model)
+    )
+    is_gemini_3_flash_google = (
+        provider == "Google"
+        and remembered_model
+        and _is_gemini_3_flash_model(remembered_model)
     )
     is_gemini_3_openrouter = (
         provider == "OpenRouter"
@@ -783,6 +794,8 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         value=effort_default_value,
     )
 
+    enable_code_execution_update = gr.update(visible=is_gemini_3_flash_google)
+
     return (
         google_visible_update,
         openai_visible_update,
@@ -800,6 +813,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         top_k_update,
         max_tokens_update,
         enable_web_search_update,
+        enable_code_execution_update,
         media_resolution_update,
         media_resolution_bubbles_update,
         media_resolution_context_update,
@@ -846,8 +860,17 @@ def update_params_for_model(
             return False
         return "gemini-3" in name.lower()
 
+    def _is_gemini_3_flash_model(name: Optional[str]) -> bool:
+        if not name:
+            return False
+        lm = name.lower()
+        return "gemini-3" in lm and "flash" in lm
+
     is_gemini_3_google = (
         provider == "Google" and model_name and _is_gemini_3_model(model_name)
+    )
+    is_gemini_3_flash_google = (
+        provider == "Google" and model_name and _is_gemini_3_flash_model(model_name)
     )
     is_gemini_3_openrouter = (
         provider == "OpenRouter" and model_name and _is_gemini_3_model(model_name)
@@ -926,11 +949,14 @@ def update_params_for_model(
         value=effort_default_value,
     )
 
+    enable_code_execution_update = gr.update(visible=is_gemini_3_flash_google)
+
     return (
         temp_update,
         top_k_update,
         max_tokens_update,
         enable_web_search_update,
+        enable_code_execution_update,
         media_resolution_update,
         media_resolution_bubbles_update,
         media_resolution_context_update,

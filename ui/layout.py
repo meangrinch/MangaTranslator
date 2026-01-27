@@ -834,20 +834,33 @@ def create_layout(
                                 elem_id="enable_web_search_checkbox",
                             )
 
+                            # Compute initial visibility for enable_code_execution
+                            _initial_enable_code_execution_visible = (
+                                config_initial_provider == "Google"
+                                and config_initial_model_name
+                                and "gemini-3" in config_initial_model_name.lower()
+                                and "flash" in config_initial_model_name.lower()
+                            )
+
+                            enable_code_execution_checkbox = gr.Checkbox(
+                                label="Enable Code Execution with Images",
+                                value=saved_settings.get(
+                                    "enable_code_execution", False
+                                ),
+                                info="Allow Gemini 3 Flash to zoom and inspect image details using code execution.",
+                                visible=_initial_enable_code_execution_visible,
+                                interactive=initial_ocr_method != "manga-ocr",
+                                elem_id="enable_code_execution_checkbox",
+                            )
+
                             # Compute initial visibility for media_resolution (Google provider only, but NOT Gemini 3)
-                            _initial_media_resolution_visible = False
-                            try:
-                                if config_initial_provider == "Google":
-                                    if (
-                                        config_initial_model_name
-                                        and "gemini-3"
-                                        in config_initial_model_name.lower()
-                                    ):
-                                        _initial_media_resolution_visible = False
-                                    else:
-                                        _initial_media_resolution_visible = True
-                            except Exception:
-                                _initial_media_resolution_visible = False
+                            _is_gemini_3 = (
+                                config_initial_model_name
+                                and "gemini-3" in config_initial_model_name.lower()
+                            )
+                            _initial_media_resolution_visible = (
+                                config_initial_provider == "Google" and not _is_gemini_3
+                            )
                             initial_media_resolution_value = saved_settings.get(
                                 "media_resolution", "auto"
                             )
@@ -862,18 +875,14 @@ def create_layout(
                             )
 
                             # Compute initial visibility for Gemini 3 specific media resolution options
-                            _initial_media_resolution_bubbles_visible = False
-                            _initial_media_resolution_context_visible = False
-                            try:
-                                if (
-                                    config_initial_provider == "Google"
-                                    and config_initial_model_name
-                                ):
-                                    if "gemini-3" in config_initial_model_name.lower():
-                                        _initial_media_resolution_bubbles_visible = True
-                                        _initial_media_resolution_context_visible = True
-                            except Exception:
-                                pass
+                            _initial_media_resolution_bubbles_visible = (
+                                config_initial_provider == "Google"
+                                and config_initial_model_name
+                                and "gemini-3" in config_initial_model_name.lower()
+                            )
+                            _initial_media_resolution_context_visible = (
+                                _initial_media_resolution_bubbles_visible
+                            )
                             initial_media_resolution_bubbles_value = saved_settings.get(
                                 "media_resolution_bubbles", "auto"
                             )
@@ -1647,6 +1656,7 @@ def create_layout(
             batch_output_language,
             batch_font_dropdown,
             enable_web_search_checkbox,
+            enable_code_execution_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -1744,6 +1754,7 @@ def create_layout(
             batch_output_language,
             batch_font_dropdown,
             enable_web_search_checkbox,
+            enable_code_execution_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -1835,6 +1846,7 @@ def create_layout(
             upscaling_only_toggle,
             test_mode_toggle,
             enable_web_search_checkbox,
+            enable_code_execution_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -1934,6 +1946,7 @@ def create_layout(
             upscaling_only_toggle,
             test_mode_toggle,
             enable_web_search_checkbox,
+            enable_code_execution_checkbox,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -2072,6 +2085,7 @@ def create_layout(
                 top_k,
                 max_tokens,
                 enable_web_search_checkbox,
+                enable_code_execution_checkbox,
                 media_resolution_dropdown,
                 media_resolution_bubbles_dropdown,
                 media_resolution_context_dropdown,
@@ -2107,6 +2121,7 @@ def create_layout(
                 top_k,
                 max_tokens,
                 enable_web_search_checkbox,
+                enable_code_execution_checkbox,
                 media_resolution_dropdown,
                 media_resolution_bubbles_dropdown,
                 media_resolution_context_dropdown,
@@ -2322,6 +2337,7 @@ def create_layout(
                 batch_input_language,
                 batch_original_language_state,
                 send_full_page_context,
+                enable_code_execution_checkbox,
                 config_model_name,
             ],
             queue=False,
