@@ -113,6 +113,10 @@ def translate_and_render(
 
     log_message(f"Using device: {device}", verbose=verbose)
 
+    # Set global HF token for model downloads
+    hf_token = config.outside_text.huggingface_token
+    get_model_manager().set_hf_token(hf_token)
+
     try:
         pil_original = Image.open(image_path)
         image_format = pil_original.format

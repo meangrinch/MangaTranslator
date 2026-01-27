@@ -1,3 +1,4 @@
+import os
 import shutil
 import threading
 import urllib.request
@@ -73,6 +74,7 @@ class ModelManager:
 
             # Flux-specific configuration
             self.flux_cache_dir = Path("./models/flux")
+            self.hf_token = None
             self.flux_hf_token = None
             self.flux_residual_diff_threshold = 0.15
 
@@ -229,11 +231,12 @@ class ModelManager:
             f"Downloading {target.name} from Hugging Face ({repo_id})...",
             verbose=verbose,
         )
+        effective_token = token if token is not None else self.hf_token
         downloaded = hf_hub_download(
             repo_id=repo_id,
             filename=filename,
             local_dir=str(target.parent),
-            token=token,
+            token=effective_token,
         )
         downloaded_path = Path(downloaded)
         if downloaded_path != target:
@@ -301,11 +304,12 @@ class ModelManager:
             ),
             verbose=verbose,
         )
+        effective_token = token if token is not None else self.hf_token
         try:
             snapshot_download(
                 repo_id=repo_id,
                 local_dir=str(target_dir),
-                token=token,
+                token=effective_token,
                 revision=revision,
             )
             log_message(
@@ -618,10 +622,13 @@ class ModelManager:
             cache_dir = "models/sam"
 
             processor = Sam2Processor.from_pretrained(
-                hf_info["repo_id"], cache_dir=cache_dir
+                hf_info["repo_id"], cache_dir=cache_dir, token=self.hf_token
             )
             model = Sam2Model.from_pretrained(
-                hf_info["repo_id"], torch_dtype=self.dtype, cache_dir=cache_dir
+                hf_info["repo_id"],
+                torch_dtype=self.dtype,
+                cache_dir=cache_dir,
+                token=self.hf_token,
             ).to(self.device)
             model.eval()
 
@@ -650,20 +657,33 @@ class ModelManager:
             hf_info = self.model_hf_repos[ModelType.SAM3]
             cache_dir = "models/sam"
 
+            effective_token = token if token is not None else self.hf_token
             processor = Sam3TrackerProcessor.from_pretrained(
-                hf_info["repo_id"], cache_dir=cache_dir, token=token
+                hf_info["repo_id"], cache_dir=cache_dir, token=effective_token
             )
             model = Sam3TrackerModel.from_pretrained(
                 hf_info["repo_id"],
                 torch_dtype=self.dtype,
                 cache_dir=cache_dir,
-                token=token,
+                token=effective_token,
             ).to(self.device)
             model.eval()
 
             self.models[ModelType.SAM3] = (processor, model)
             log_message("SAM 3 Tracker model loaded.", verbose=verbose)
             return self.models[ModelType.SAM3]
+
+    def set_hf_token(self, token: str):
+        """Set the global HuggingFace token for model downloads.
+
+        Args:
+            token: HuggingFace API token
+        """
+        self.hf_token = token if token else None
+        if self.hf_token:
+            os.environ["HF_TOKEN"] = self.hf_token
+        elif "HF_TOKEN" in os.environ:
+            del os.environ["HF_TOKEN"]
 
     def set_flux_hf_token(self, token: str):
         """Set the HuggingFace token for Flux model downloads.
@@ -744,13 +764,16 @@ class ModelManager:
 
                 # Load pipeline
                 pipeline_repo = self.model_hf_repos[ModelType.FLUX_PIPELINE]["repo_id"]
+                effective_token = (
+                    self.flux_hf_token if self.flux_hf_token else self.hf_token
+                )
                 pipeline = FluxKontextPipeline.from_pretrained(
                     pipeline_repo,
                     transformer=transformer,
                     text_encoder_2=text_encoder,
                     torch_dtype=self.dtype,
                     cache_dir=str(self.flux_cache_dir),
-                    token=self.flux_hf_token,
+                    token=effective_token,
                 ).to(self.device)
 
                 # Apply caching for faster inference
