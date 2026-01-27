@@ -29,8 +29,8 @@ def get_available_providers(ocr_method: str) -> List[str]:
     if ocr_method == "manga-ocr":
         return all_providers
     else:
-        # For LLM OCR, exclude text-only providers (DeepSeek, Moonshot AI)
-        return [p for p in all_providers if p not in ("DeepSeek", "Moonshot AI")]
+        # For LLM OCR, exclude text-only providers (DeepSeek)
+        return [p for p in all_providers if p not in ("DeepSeek",)]
 
 
 ERROR_PREFIX = "❌ Error: "
@@ -246,7 +246,7 @@ def _is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
     if not model_name:
         return False
     lm = model_name.lower()
-    return "thinking" in lm
+    return "thinking" in lm or "kimi-k2.5" in lm
 
 
 def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
@@ -395,6 +395,8 @@ def get_reasoning_effort_info_text(
         return "Controls model's internal reasoning effort."
     elif provider == "xAI":
         return "Controls model's internal reasoning effort."
+    elif provider == "Moonshot AI":
+        return "Enables or disables model thinking (high=enabled, none=disabled)."
     elif provider == "Z.ai":
         return "Enables or disables model thinking (high=enabled, none=disabled)."
     elif provider == "OpenRouter" and model_name:
@@ -570,7 +572,10 @@ def get_reasoning_effort_config(
         return True, ["high", "none"], "high"
 
     elif provider == "Moonshot AI":
-        # Moonshot AI reasoning models have always-on reasoning that cannot be controlled
+        # Moonshot AI kimi-k2.5 supports reasoning control via the 'thinking' parameter.
+        # Older models have always-on reasoning.
+        if "kimi-k2.5" in lm:
+            return True, ["high", "none"], "high"
         return False, [], None
 
     elif provider == "OpenRouter":
@@ -646,6 +651,8 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
 
     if provider == "Z.ai" and ocr_method == "LLM":
         models = [m for m in models if m in ("glm-4.5v", "glm-4.6v")]
+    elif provider == "Moonshot AI" and ocr_method == "LLM":
+        models = [m for m in models if "kimi-k2.5" in m.lower()]
 
     selected_model = (
         remembered_model
@@ -685,7 +692,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
     new_temp_value = min(default_temp, temp_max)
     temp_update = gr.update(maximum=temp_max, value=new_temp_value)
 
-    top_k_interactive = provider not in ("OpenAI", "xAI", "DeepSeek")
+    top_k_interactive = provider not in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI")
     top_k_update = gr.update(interactive=top_k_interactive, value=default_top_k)
 
     top_p_update = gr.update(value=default_top_p)
@@ -742,15 +749,10 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         visible=media_resolution_context_visible
     )
 
-    # Moonshot AI reasoning models have always-on reasoning, so hide the dropdown
-    if provider == "Moonshot AI":
-        reasoning_effort_visible = False
-        reasoning_choices = []
-        reasoning_default_value = None
-    else:
-        reasoning_effort_visible, reasoning_choices, reasoning_default_value = (
-            get_reasoning_effort_config(provider, remembered_model)
-        )
+    # Moonshot AI: reasoning effort is visible for kimi-k2.5 models
+    reasoning_effort_visible, reasoning_choices, reasoning_default_value = (
+        get_reasoning_effort_config(provider, remembered_model)
+    )
 
     reasoning_info_text = get_reasoning_effort_info_text(
         provider, remembered_model, reasoning_choices
@@ -818,7 +820,7 @@ def update_params_for_model(
 
     if provider == "Anthropic":
         temp_max = 1.0
-    elif provider == "OpenAI" or provider == "xAI" or provider == "DeepSeek":
+    elif provider in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI"):
         top_k_interactive = False
     elif provider == "OpenRouter":
         is_openai_model = model_name and (

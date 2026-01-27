@@ -22,38 +22,25 @@ def call_moonshot_endpoint(
 ) -> Optional[str]:
     """
     Calls the Moonshot AI (Kimi) API endpoint with the provided data and handles retries.
-    Moonshot uses OpenAI-compatible API format and is text-only (no image support for kimi-k2 models).
+    Moonshot uses OpenAI-compatible API format. Kimi-K2.5 supports multimodal inputs and hybrid reasoning.
 
     Args:
         api_key (str): Moonshot API key.
-        model_name (str): Moonshot model to use (e.g., kimi-k2-thinking, kimi-k2-turbo-preview).
-        parts (List[Dict[str, Any]]): List of content parts (text only, images are ignored).
-        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens).
+        model_name (str): Moonshot model to use.
+        parts (List[Dict[str, Any]]): List of content parts (text and optional images).
+        generation_config (Dict[str, Any]): Configuration for generation.
         system_prompt (Optional[str]): System prompt for the conversation.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
         base_delay (float): Initial delay for retries in seconds.
-        enable_web_search (bool): Enable Moonshot's built-in web search for up-to-date information.
+        enable_web_search (bool): Enable Moonshot's built-in web search.
 
     Returns:
-        Optional[str]: The raw text content from the API response if successful,
-                       None if an error occurs or no content is found after retries.
-
-    Raises:
-        ValueError: If API key is missing or parts format is invalid.
-        RuntimeError: If API call fails after retries for non-rate-limited HTTP errors,
-                      connection errors, or response processing fails.
+        Optional[str]: The raw text content from the API response if successful.
     """
     if not api_key:
         raise ValidationError("API key is required for Moonshot endpoint")
-
-    # Moonshot kimi-k2 models are text-only, so we only extract text parts
-    text_part = next((p for p in parts if "text" in p), None)
-    if not text_part:
-        raise ValidationError(
-            "Invalid 'parts' format for Moonshot: No text prompt found."
-        )
 
     url = "https://api.moonshot.ai/v1/chat/completions"
     headers = {
@@ -61,10 +48,37 @@ def call_moonshot_endpoint(
         "Content-Type": "application/json",
     }
 
+    # Prepare message content (multimodal support)
+    text_part = next((p for p in parts if "text" in p), None)
+    image_parts = [p for p in parts if "inline_data" in p]
+
+    if not text_part:
+        raise ValidationError(
+            "Invalid 'parts' format for Moonshot: No text prompt found."
+        )
+
+    content_list = []
+    content_list.append({"type": "text", "text": text_part["text"]})
+
+    for part in image_parts:
+        if (
+            "inline_data" in part
+            and "data" in part["inline_data"]
+            and "mime_type" in part["inline_data"]
+        ):
+            mime_type = part["inline_data"]["mime_type"]
+            base64_image = part["inline_data"]["data"]
+            content_list.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                }
+            )
+
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": text_part["text"]})
+    messages.append({"role": "user", "content": content_list})
 
     payload = {
         "model": model_name,
@@ -72,14 +86,18 @@ def call_moonshot_endpoint(
         "max_tokens": generation_config.get("max_tokens", 4096),
     }
 
-    # Temperature: Moonshot supports 0-1, default 0.6 for kimi-k2, 1.0 for kimi-k2-thinking
     temp = generation_config.get("temperature")
     if temp is not None:
-        payload["temperature"] = min(temp, 1.0)  # Moonshot caps at 1.0
+        payload["temperature"] = min(temp, 1.0)
 
     top_p = generation_config.get("top_p")
     if top_p is not None:
         payload["top_p"] = top_p
+
+    # Add 'thinking' parameter if present
+    thinking = generation_config.get("thinking")
+    if thinking:
+        payload["thinking"] = thinking
 
     # Handle web search via Moonshot's builtin_search tool
     if enable_web_search:
@@ -109,7 +127,6 @@ def call_moonshot_endpoint(
                     choice = result["choices"][0]
                     finish_reason = choice.get("finish_reason")
 
-                    # Handle content filter rejection
                     if finish_reason == "content_filter":
                         log_message(
                             "Moonshot response blocked due to content filter",

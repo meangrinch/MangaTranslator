@@ -924,7 +924,10 @@ def create_layout(
                                 step=1,
                                 label="Top K",
                                 info="Limits sampling pool to top K tokens.",
-                                interactive=(config_initial_provider != "OpenAI"),
+                                interactive=(
+                                    config_initial_provider
+                                    not in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI")
+                                ),
                                 elem_id="config_top_k",
                             )
                             max_tokens = gr.Slider(

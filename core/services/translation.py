@@ -277,6 +277,9 @@ def _build_generation_config(
             is_reasoning = is_deepseek_reasoning_model(model_name)
         elif provider == "Z.ai":
             is_reasoning = is_zai_reasoning_model(model_name)
+        elif provider == "Moonshot AI":
+            lm = (model_name or "").lower()
+            is_reasoning = "thinking" in lm or "kimi-k2.5" in lm
         max_tokens_value = 16384 if is_reasoning else 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, model_name)
@@ -416,12 +419,21 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "Moonshot AI":
-        # Moonshot AI is text-only, reasoning models have always-on reasoning
+        lm = (model_name or "").lower()
+        is_kimi_25 = "kimi-k2.5" in lm
+        is_reasoning = is_kimi_25 or "thinking" in lm
+
         generation_config = {
             "temperature": min(temperature, 1.0),  # Moonshot caps at 1.0
             "top_p": top_p,
             "max_tokens": max_tokens_value,
         }
+
+        if is_reasoning:
+            # Map reasoning_effort: "high" -> enabled, "none" -> disabled
+            reasoning_effort = config.reasoning_effort or "high"
+            thinking_type = "enabled" if reasoning_effort == "high" else "disabled"
+            generation_config["thinking"] = {"type": thinking_type}
         return generation_config
 
     elif provider == "OpenRouter":

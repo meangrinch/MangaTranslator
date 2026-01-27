@@ -1529,6 +1529,20 @@ def handle_ocr_method_change(
                 else (models[0] if models else None)
             )
             updates.append(gr.update(choices=models, value=selected_model))
+        elif provider == "Moonshot AI":
+            # For manga-ocr mode, show all Moonshot AI models (text-only models work)
+            models = settings_manager.PROVIDER_MODELS.get("Moonshot AI", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("Moonshot AI")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
         else:
             updates.append(gr.update())
     else:
@@ -1585,6 +1599,21 @@ def handle_ocr_method_change(
                 "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
             )
             remembered_model = provider_models_dict.get("Z.ai")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
+        elif provider == "Moonshot AI":
+            # For LLM OCR mode, only show Moonshot vision models
+            all_models = settings_manager.PROVIDER_MODELS.get("Moonshot AI", [])
+            models = [m for m in all_models if "kimi-k2.5" in m.lower()]
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("Moonshot AI")
             selected_model = (
                 remembered_model
                 if remembered_model in models
