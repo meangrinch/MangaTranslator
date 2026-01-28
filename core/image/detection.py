@@ -205,6 +205,40 @@ def _deduplicate_primary_boxes(
     return boxes[keep], keep
 
 
+def _remove_contained_boxes(
+    boxes: torch.Tensor, threshold: float = 0.9
+) -> torch.Tensor:
+    """Remove boxes that are fully or almost fully contained within other boxes.
+
+    Args:
+        boxes: Tensor of bounding boxes (N, 4)
+        threshold: IoA threshold above which inner boxes are considered contained
+
+    Returns:
+        Tensor of filtered bounding boxes
+    """
+    if len(boxes) <= 1:
+        return boxes
+
+    boxes_list = boxes.tolist()
+    n = len(boxes_list)
+    keep = [True] * n
+
+    for i in range(n):
+        if not keep[i]:
+            continue
+        for j in range(n):
+            if i == j or not keep[j]:
+                continue
+
+            # Check if box i is contained in box j
+            if _calculate_ioa(boxes_list[i], boxes_list[j]) > threshold:
+                keep[i] = False
+                break
+
+    return boxes[keep]
+
+
 def _resolve_mask_overlaps(masks: list, boxes: list, verbose: bool = False) -> list:
     """Resolve overlapping mask regions by carving exclusive boundaries.
 
@@ -504,6 +538,16 @@ def detect_speech_bubbles(
                 verbose=verbose,
             )
 
+    # Remove nested duplicate primary detections
+    if len(primary_boxes) > 1:
+        original_count = len(primary_boxes)
+        primary_boxes = _remove_contained_boxes(primary_boxes)
+        if len(primary_boxes) < original_count:
+            log_message(
+                f"Removed {original_count - len(primary_boxes)} contained detections",
+                verbose=verbose,
+            )
+
     if len(primary_boxes) == 0:
         log_message("No detections found", verbose=verbose)
         return detections, text_free_boxes
@@ -530,6 +574,16 @@ def detect_speech_bubbles(
                 if secondary_results.boxes is not None
                 else torch.tensor([])
             )
+
+            # Remove nested duplicate secondary detections
+            if len(secondary_boxes) > 1:
+                orig_sec_count = len(secondary_boxes)
+                secondary_boxes = _remove_contained_boxes(secondary_boxes)
+                if len(secondary_boxes) < orig_sec_count:
+                    log_message(
+                        f"Removed {orig_sec_count - len(secondary_boxes)} contained secondary detections",
+                        verbose=verbose,
+                    )
 
             # Fallback: Add bubbles detected by secondary model but missed by primary
             if len(secondary_boxes) > 0 and hasattr(secondary_model, "names"):

@@ -49,25 +49,36 @@ class OutsideTextDetector:
             x1_max <= x2_min or x2_max <= x1_min or y1_max <= y2_min or y2_max <= y1_min
         )
 
-    def box_is_inside(self, box1, box2):
-        """Check if box1 is completely inside box2.
+    def box_is_inside(self, box1, box2, threshold=0.9):
+        """Check if box1 is significantly contained inside box2 (IoA > threshold).
 
         Args:
-            box1: Bounding box in [x1, y1, x2, y2] format.
-            box2: Bounding box in [x1, y1, x2, y2] format.
+            box1: Inner bounding box [x1, y1, x2, y2].
+            box2: Outer bounding box [x1, y1, x2, y2].
+            threshold: Intersection over Area threshold (default 0.9).
 
         Returns:
-            bool: True if box1 is completely inside box2, False otherwise.
+            bool: True if box1 is contained in box2, False otherwise.
         """
         x1_min, y1_min, x1_max, y1_max = box1
         x2_min, y2_min, x2_max, y2_max = box2
 
-        return (
-            x1_min >= x2_min
-            and x1_max <= x2_max
-            and y1_min >= y2_min
-            and y1_max <= y2_max
-        )
+        inter_x_min = max(x1_min, x2_min)
+        inter_y_min = max(y1_min, y2_min)
+        inter_x_max = min(x1_max, x2_max)
+        inter_y_max = min(y1_max, y2_max)
+
+        inter_w = max(0, inter_x_max - inter_x_min)
+        inter_h = max(0, inter_y_max - inter_y_min)
+        intersection = inter_w * inter_h
+
+        area1 = (x1_max - x1_min) * (y1_max - y1_min)
+
+        if area1 <= 0:
+            return False
+
+        ioa = intersection / area1
+        return ioa > threshold
 
     def filter_nested_detections(self, results):
         """Remove detections fully contained in larger ones to avoid duplicates.
