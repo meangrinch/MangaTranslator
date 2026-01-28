@@ -673,15 +673,19 @@ class ModelManager:
             log_message("SAM 3 Tracker model loaded.", verbose=verbose)
             return self.models[ModelType.SAM3]
 
-    def set_hf_token(self, token: str):
+    def set_hf_token(self, token: str, enable_fast_download: bool = True):
         """Set the global HuggingFace token for model downloads.
 
         Args:
             token: HuggingFace API token
+            enable_fast_download: If True, enables HF_XET_HIGH_PERFORMANCE for faster downloads
         """
         self.hf_token = token if token else None
         if self.hf_token:
             os.environ["HF_TOKEN"] = self.hf_token
+            # Enable high-performance downloads with Xet (recommended in huggingface_hub)
+            if enable_fast_download:
+                os.environ["HF_XET_HIGH_PERFORMANCE"] = "1"
         elif "HF_TOKEN" in os.environ:
             del os.environ["HF_TOKEN"]
 
