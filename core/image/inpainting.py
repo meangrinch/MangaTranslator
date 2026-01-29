@@ -1242,6 +1242,20 @@ class FluxKleinInpainter:
             np.asarray(patch_pil, dtype=np.float32) / 255.0
         ).unsqueeze(0)
 
+        # Fix channel mismatch (e.g. RGBA destination vs RGB source)
+        dest_channels = dest_tensor.shape[-1]
+        src_channels = src_tensor.shape[-1]
+
+        if dest_channels > src_channels:
+            padding = torch.ones(
+                (*src_tensor.shape[:-1], dest_channels - src_channels),
+                device=src_tensor.device,
+                dtype=src_tensor.dtype,
+            )
+            src_tensor = torch.cat([src_tensor, padding], dim=-1)
+        elif src_channels > dest_channels:
+            src_tensor = src_tensor[..., :dest_channels]
+
         # Use FluxKontextInpainter's composite method (same logic)
         dest_tensor = dest_tensor.movedim(-1, 1)
         src_tensor = src_tensor.movedim(-1, 1)
