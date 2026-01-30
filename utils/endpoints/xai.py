@@ -74,16 +74,22 @@ def call_xai_endpoint(
                 user_content.append(
                     {
                         "type": "input_image",
-                        "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                        "image_url": f"data:{mime_type};base64,{base64_image}",
+                        "detail": "high",
                     }
                 )
             else:
                 log_message(f"Invalid image part format: {part}", always_print=True)
 
-        user_content.append({"type": "text", "text": text_part["text"]})
+        user_content.append({"type": "input_text", "text": text_part["text"]})
         input_messages.append({"role": "user", "content": user_content})
     else:
-        input_messages.append({"role": "user", "content": text_part["text"]})
+        input_messages.append(
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": text_part["text"]}],
+            }
+        )
 
     payload = {
         "model": model_name,
