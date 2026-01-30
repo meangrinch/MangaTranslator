@@ -874,15 +874,19 @@ def create_layout(
                                 elem_id="media_resolution_dropdown",
                             )
 
-                            # Compute initial visibility for Gemini 3 specific media resolution options
-                            _initial_media_resolution_bubbles_visible = (
-                                config_initial_provider == "Google"
-                                and config_initial_model_name
-                                and "gemini-3" in config_initial_model_name.lower()
+                            # Compute initial visibility for Gemini 3 and xAI specific media resolution options
+                            _mr_bubbles_visible, _mr_choices, _mr_info_base = (
+                                utils.get_media_resolution_config(
+                                    config_initial_provider, config_initial_model_name
+                                )
                             )
-                            _initial_media_resolution_context_visible = (
-                                _initial_media_resolution_bubbles_visible
+                            _mr_bubbles_info = _mr_info_base.replace(
+                                "process images", "process bubble images"
                             )
+                            _mr_context_info = _mr_info_base.replace(
+                                "process images", "process context (full page) images"
+                            )
+
                             initial_media_resolution_bubbles_value = saved_settings.get(
                                 "media_resolution_bubbles", "auto"
                             )
@@ -892,19 +896,19 @@ def create_layout(
 
                             media_resolution_bubbles_dropdown = gr.Radio(
                                 label="Media Resolution (Bubbles)",
-                                choices=["auto", "high", "medium", "low"],
+                                choices=_mr_choices,
                                 value=initial_media_resolution_bubbles_value,
-                                info="Resolution for Gemini 3 to process bubble images.",
-                                visible=_initial_media_resolution_bubbles_visible,
+                                info=_mr_bubbles_info,
+                                visible=_mr_bubbles_visible,
                                 elem_id="media_resolution_bubbles_dropdown",
                             )
 
                             media_resolution_context_dropdown = gr.Radio(
                                 label="Media Resolution (Context)",
-                                choices=["auto", "high", "medium", "low"],
+                                choices=_mr_choices,
                                 value=initial_media_resolution_context_value,
-                                info="Resolution for Gemini 3 to process context (full page) images.",
-                                visible=_initial_media_resolution_context_visible,
+                                info=_mr_context_info,
+                                visible=_mr_bubbles_visible,
                                 elem_id="media_resolution_context_dropdown",
                             )
 

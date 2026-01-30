@@ -78,8 +78,8 @@ class TranslationConfig:
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)
     )
-    media_resolution_bubbles: str = "auto"  # Gemini 3 models
-    media_resolution_context: str = "auto"  # Gemini 3 models
+    media_resolution_bubbles: str = "auto"  # Gemini 3 and xAI models
+    media_resolution_context: str = "auto"  # Gemini 3 and xAI models
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128

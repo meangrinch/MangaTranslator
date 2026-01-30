@@ -452,14 +452,14 @@ def main():
         type=str,
         choices=["auto", "high", "medium", "low"],
         default="auto",
-        help="Media resolution for bubble images (Gemini 3 models)",
+        help="Media resolution for bubble images (Gemini 3 and xAI models)",
     )
     parser.add_argument(
         "--media-resolution-context",
         type=str,
         choices=["auto", "high", "medium", "low"],
         default="auto",
-        help="Media resolution for context (full page) images (Gemini 3 only)",
+        help="Media resolution for context (full page) images (Gemini 3 and xAI only)",
     )
     parser.add_argument(
         "--special-instructions",
@@ -846,7 +846,6 @@ def main():
             translation_mode=args.translation_mode,
             enable_web_search=args.enable_web_search,
             enable_code_execution=args.enable_code_execution,
-            media_resolution=args.media_resolution,
             media_resolution=args.media_resolution,
             media_resolution_bubbles=args.media_resolution_bubbles,
             media_resolution_context=args.media_resolution_context,

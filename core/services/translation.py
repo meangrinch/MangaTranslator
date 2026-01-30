@@ -198,20 +198,18 @@ def _is_reasoning_model_anthropic(model_name: str) -> bool:
 def _add_media_resolution_to_part(
     part: Dict[str, Any],
     media_resolution_ui: str,
-    is_gemini_3: bool,
 ) -> Dict[str, Any]:
     """
-    Add media_resolution to an inline_data part for Gemini 3 models.
+    Add media_resolution to an inline_data part.
 
     Args:
         part: Part dictionary with inline_data
         media_resolution_ui: UI format media resolution ("auto"/"high"/"medium"/"low")
-        is_gemini_3: Whether the model is Gemini 3
 
     Returns:
-        Part dictionary with media_resolution added if Gemini 3, otherwise unchanged
+        Part dictionary with media_resolution added
     """
-    if not is_gemini_3 or "inline_data" not in part:
+    if "inline_data" not in part:
         return part
 
     media_resolution_mapping = {
@@ -388,6 +386,7 @@ def _build_generation_config(
             "temperature": temperature,
             "top_p": top_p,
             "max_tokens": max_tokens_value,
+            "media_resolution": config.media_resolution,
         }
         if is_reasoning:
             generation_config["reasoning_effort"] = config.reasoning_effort or "high"
@@ -937,9 +936,12 @@ def _perform_llm_ocr(
     for i, img_b64 in enumerate(images_b64):
         mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
         bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
-        if is_gemini_3:
+        supports_per_part_res = (
+            provider == "Google" and "gemini-3" in config.model_name.lower()
+        ) or provider == "xAI"
+        if supports_per_part_res:
             bubble_part = _add_media_resolution_to_part(
-                bubble_part, config.media_resolution_bubbles, is_gemini_3
+                bubble_part, config.media_resolution_bubbles
             )
         ocr_parts.append(bubble_part)
 
@@ -1049,14 +1051,15 @@ def call_translation_api_batch(
 
     model_name = config.model_name
     is_gemini_3 = provider == "Google" and "gemini-3" in model_name.lower()
+    supports_per_part_res = is_gemini_3 or provider == "xAI"
 
     base_parts = []
     for i, img_b64 in enumerate(images_b64):
         mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
         bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
-        if is_gemini_3:
+        if supports_per_part_res:
             bubble_part = _add_media_resolution_to_part(
-                bubble_part, config.media_resolution_bubbles, is_gemini_3
+                bubble_part, config.media_resolution_bubbles
             )
         base_parts.append(bubble_part)
 
@@ -1067,9 +1070,9 @@ def call_translation_api_batch(
                 "data": full_image_b64,
             }
         }
-        if is_gemini_3:
+        if supports_per_part_res:
             context_part = _add_media_resolution_to_part(
-                context_part, config.media_resolution_context, is_gemini_3
+                context_part, config.media_resolution_context
             )
         base_parts.append(context_part)
 
@@ -1159,9 +1162,9 @@ The target language is {output_language}. Use the appropriate translation approa
                         "data": full_image_b64,
                     }
                 }
-                if is_gemini_3:
+                if supports_per_part_res:
                     context_part = _add_media_resolution_to_part(
-                        context_part, config.media_resolution_context, is_gemini_3
+                        context_part, config.media_resolution_context
                     )
                 translation_parts.append(context_part)
 

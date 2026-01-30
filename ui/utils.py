@@ -633,6 +633,31 @@ def get_effort_config(
     return True, ["high", "medium", "low"], "medium"
 
 
+def get_media_resolution_config(
+    provider: str, model_name: Optional[str]
+) -> Tuple[bool, List[str], str]:
+    """
+    Get media resolution configuration for a provider/model combination.
+
+    Returns:
+        Tuple of (visible, choices, info_text)
+    """
+    is_gemini_3 = (
+        provider == "Google" and model_name and "gemini-3" in model_name.lower()
+    )
+
+    if is_gemini_3:
+        return (
+            True,
+            ["auto", "high", "medium", "low"],
+            "Resolution for Gemini 3 to process images.",
+        )
+    elif provider == "xAI":
+        return (True, ["auto", "high", "low"], "Resolution for Grok to process images.")
+
+    return False, [], ""
+
+
 def update_translation_ui(provider: str, _current_temp: float, ocr_method: str = "LLM"):
     """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity.
 
@@ -749,15 +774,26 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
-    # Gemini 3 specific dropdowns: visible only for Google provider Gemini 3 models
-    media_resolution_bubbles_visible = is_gemini_3_google
-    media_resolution_bubbles_update = gr.update(
-        visible=media_resolution_bubbles_visible
+    # Gemini 3 and xAI specific dropdowns
+    mr_visible, mr_choices, mr_info_base = get_media_resolution_config(
+        provider, remembered_model
     )
 
-    media_resolution_context_visible = is_gemini_3_google
+    mr_bubbles_info = mr_info_base.replace("process images", "process bubble images")
+
+    media_resolution_bubbles_update = gr.update(
+        visible=mr_visible,
+        choices=mr_choices,
+        info=mr_bubbles_info,
+    )
+
+    mr_context_info = mr_info_base.replace(
+        "process images", "process context (full page) images"
+    )
     media_resolution_context_update = gr.update(
-        visible=media_resolution_context_visible
+        visible=mr_visible,
+        choices=mr_choices,
+        info=mr_context_info,
     )
 
     # Moonshot AI: reasoning effort is visible for kimi-k2.5 models
@@ -921,15 +957,25 @@ def update_params_for_model(
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
-    # Gemini 3 specific dropdowns: visible only for Google provider Gemini 3 models
-    media_resolution_bubbles_visible = is_gemini_3_google
-    media_resolution_bubbles_update = gr.update(
-        visible=media_resolution_bubbles_visible
+    # Gemini 3 and xAI specific dropdowns
+    mr_visible, mr_choices, mr_info_base = get_media_resolution_config(
+        provider, model_name
     )
 
-    media_resolution_context_visible = is_gemini_3_google
+    mr_bubbles_info = mr_info_base.replace("process images", "process bubble images")
+    media_resolution_bubbles_update = gr.update(
+        visible=mr_visible,
+        choices=mr_choices,
+        info=mr_bubbles_info,
+    )
+
+    mr_context_info = mr_info_base.replace(
+        "process images", "process context (full page) images"
+    )
     media_resolution_context_update = gr.update(
-        visible=media_resolution_context_visible
+        visible=mr_visible,
+        choices=mr_choices,
+        info=mr_context_info,
     )
 
     is_reasoning = is_reasoning_model(provider, model_name)

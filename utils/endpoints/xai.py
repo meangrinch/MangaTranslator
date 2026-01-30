@@ -71,11 +71,30 @@ def call_xai_endpoint(
             ):
                 mime_type = part["inline_data"]["mime_type"]
                 base64_image = part["inline_data"]["data"]
+
+                # Check for per-image resolution first (from media_resolution metadata)
+                part_res = part.get("media_resolution", {}).get("level")
+                if part_res:
+                    res_map = {
+                        "MEDIA_RESOLUTION_UNSPECIFIED": "auto",
+                        "MEDIA_RESOLUTION_LOW": "low",
+                        "MEDIA_RESOLUTION_MEDIUM": "high",
+                        "MEDIA_RESOLUTION_HIGH": "high",
+                    }
+                    detail = res_map.get(part_res, "high")
+                else:
+                    media_res = (
+                        generation_config.get("media_resolution") or "auto"
+                    ).lower()
+                    detail = (
+                        media_res if media_res in ["auto", "high", "low"] else "high"
+                    )
+
                 user_content.append(
                     {
                         "type": "input_image",
                         "image_url": f"data:{mime_type};base64,{base64_image}",
-                        "detail": "high",
+                        "detail": detail,
                     }
                 )
             else:
