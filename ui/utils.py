@@ -655,7 +655,7 @@ def get_media_resolution_config(
     elif provider == "xAI":
         return (True, ["auto", "high", "low"], "Resolution for Grok to process images.")
 
-    return False, [], ""
+    return False, ["auto"], ""
 
 
 def update_translation_ui(provider: str, _current_temp: float, ocr_method: str = "LLM"):
@@ -781,19 +781,22 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
 
     mr_bubbles_info = mr_info_base.replace("process images", "process bubble images")
 
+    mr_update_kwargs = {
+        "visible": mr_visible,
+        "choices": mr_choices,
+    }
+    if not mr_visible:
+        mr_update_kwargs["value"] = "auto"
+
     media_resolution_bubbles_update = gr.update(
-        visible=mr_visible,
-        choices=mr_choices,
-        info=mr_bubbles_info,
+        info=mr_bubbles_info, **mr_update_kwargs
     )
 
     mr_context_info = mr_info_base.replace(
         "process images", "process context (full page) images"
     )
     media_resolution_context_update = gr.update(
-        visible=mr_visible,
-        choices=mr_choices,
-        info=mr_context_info,
+        info=mr_context_info, **mr_update_kwargs
     )
 
     # Moonshot AI: reasoning effort is visible for kimi-k2.5 models
