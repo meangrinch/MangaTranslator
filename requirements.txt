@@ -1,4 +1,4 @@
-diffusers @ git+https://github.com/huggingface/diffusers.git@74654df
+diffusers @ git+https://github.com/huggingface/diffusers.git@53d8a1e
 fonttools>=4.56.0
 gradio>=5.47.2,<=5.50.0
 manga-ocr>=0.1.14
