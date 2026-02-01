@@ -176,7 +176,14 @@ def call_openai_endpoint(
                                     if isinstance(text_val, str) and text_val.strip():
                                         return text_val.strip()
 
-                log_message("No text content in OpenAI response", always_print=True)
+                finish_reason = result.get("finish_reason") or "unknown"
+                log_message(
+                    f"No text content in OpenAI response. Finish reason: {finish_reason}",
+                    always_print=True,
+                )
+                log_message(
+                    f"Full response: {json.dumps(result, indent=2)}", verbose=debug
+                )
                 return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:

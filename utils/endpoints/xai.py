@@ -153,8 +153,10 @@ def call_xai_endpoint(
             try:
                 result = response.json()
 
+                finish_reason = "unknown"
                 if "output" in result and isinstance(result["output"], list):
                     for output_item in result["output"]:
+                        finish_reason = output_item.get("finish_reason", finish_reason)
                         if isinstance(output_item, dict) and "content" in output_item:
                             content = output_item["content"]
                             if isinstance(content, str) and content.strip():
@@ -173,7 +175,13 @@ def call_xai_endpoint(
                     error_msg = result.get("error", {}).get("message", "Unknown error")
                     raise TranslationError(f"xAI API returned error: {error_msg}")
 
-                log_message("No text content in xAI response", verbose=debug)
+                log_message(
+                    f"No text content in xAI response. Finish reason: {finish_reason}",
+                    always_print=True,
+                )
+                log_message(
+                    f"Full response: {json.dumps(result, indent=2)}", verbose=debug
+                )
                 return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:

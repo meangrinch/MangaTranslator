@@ -144,15 +144,7 @@ def call_zai_endpoint(
                     choice = result["choices"][0]
                     message = choice.get("message", {})
                     content = message.get("content", "")
-
-                    # Check for finish reason
                     finish_reason = choice.get("finish_reason", "")
-                    if finish_reason == "sensitive":
-                        log_message(
-                            "Z.ai response blocked due to sensitive content",
-                            always_print=True,
-                        )
-                        return None
 
                     if content and content.strip():
                         return content.strip()
@@ -163,7 +155,13 @@ def call_zai_endpoint(
                         error_msg = error_msg.get("message", "Unknown error")
                     raise TranslationError(f"Z.ai API returned error: {error_msg}")
 
-                log_message("No text content in Z.ai response", verbose=debug)
+                log_message(
+                    f"No text content in Z.ai response. Finish reason: {finish_reason}",
+                    always_print=True,
+                )
+                log_message(
+                    f"Full response: {json.dumps(result, indent=2)}", verbose=debug
+                )
                 return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:

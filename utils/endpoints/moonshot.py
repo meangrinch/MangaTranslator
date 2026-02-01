@@ -135,20 +135,18 @@ def call_moonshot_endpoint(
                     choice = result["choices"][0]
                     finish_reason = choice.get("finish_reason")
 
-                    if finish_reason == "content_filter":
-                        log_message(
-                            "Moonshot response blocked due to content filter",
-                            always_print=True,
-                        )
-                        return None
-
                     message = choice.get("message")
                     if message and "content" in message:
                         content = message["content"]
                         return content.strip() if content else ""
                     else:
                         log_message(
-                            "No message content in Moonshot response", verbose=debug
+                            f"No message content in Moonshot response. Finish reason: {finish_reason}",
+                            always_print=True,
+                        )
+                        log_message(
+                            f"Full response: {json.dumps(result, indent=2)}",
+                            verbose=debug,
                         )
                         return ""
                 else:

@@ -176,22 +176,17 @@ def call_anthropic_endpoint(
                             text_content = block.get("text", "")
                             break
 
-                    stop_reason = result.get("stop_reason")
-                    if stop_reason == "max_tokens":
-                        log_message(
-                            "Response truncated due to max_tokens limit",
-                            always_print=True,
-                        )
-                    elif stop_reason == "stop_sequence":
-                        pass
-                    elif stop_reason:
-                        log_message(f"Response finished: {stop_reason}", verbose=debug)
-
                     return text_content.strip()
 
                 else:
+                    stop_reason = result.get("stop_reason")
                     log_message(
-                        "No text content in Anthropic response", always_print=True
+                        f"No text content in Anthropic response. Stop reason: {stop_reason}",
+                        always_print=True,
+                    )
+                    log_message(
+                        f"Full response: {json.dumps(result, indent=2)}",
+                        verbose=debug,
                     )
                     return None
 
