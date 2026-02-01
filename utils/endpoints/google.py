@@ -112,11 +112,24 @@ def call_gemini_endpoint(
                     if content_parts and "text" in content_parts[0]:
                         return content_parts[0].get("text", "").strip()
                     else:
-                        log_message("No text content in response", verbose=debug)
+                        finish_reason = candidate.get("finishReason")
+                        log_message(
+                            f"No text content in response. Finish reason: {finish_reason}",
+                            always_print=True,
+                        )
+                        if debug:
+                            log_message(
+                                f"Full candidate: {json.dumps(candidate, indent=2)}",
+                                verbose=debug,
+                            )
                         return ""
 
                 else:
                     log_message("No candidates in Google response", always_print=True)
+                    log_message(
+                        f"Full response: {json.dumps(result, indent=2)}",
+                        verbose=debug,
+                    )
                     if prompt_feedback and prompt_feedback.get("blockReason"):
                         block_reason = prompt_feedback.get("blockReason")
                         return None
