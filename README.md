@@ -40,7 +40,7 @@ Gradio-based web application for automating the translation of manga/comic page 
 ## Requirements
 
 - Python 3.10+
-- PyTorch (CPU, CUDA, ROCm, MPS, XPU)
+- PyTorch (CPU, CUDA, ROCm, XPU, MPS)
 - Font pack with `.ttf`/`.otf` files; included with portable package
 - LLM for Japanese source text; VLM for other languages (API or local)
 
@@ -66,7 +66,13 @@ Download the standalone zip from the releases page: [Portable Build](https://git
    - **Windows:** `start-webui.bat`
    - **Linux/macOS:** `start-webui.sh`
 
-Includes the _Komika_ (normal text), _Cookies_ (OSB text), _Comicka_ (either), and _Roboto_ (supports accents) font packs
+Included font packs:
+
+- _Komika_ (normal text)
+- _Cookies_ (OSB text)
+- _Comicka_ (either)
+- _Roboto_ (supports accents)
+- _Noto Sans SC_ (supports Chinese Simplified)
 
 > [!TIP]
 > In the event that you need to transfer to a fresh portable package:
@@ -97,18 +103,22 @@ source venv/bin/activate
 
 ```bash
 # Example (CUDA 13.0)
-pip install torch==2.9.1+cu130 torchvision==0.24.1+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
-# Example (CPU)
-pip install torch torchvision
+pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
+# Example (ROCm 7.1)
+pip install torch==2.10.0+rocm7.1 torchvision==0.25.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
+# Example (XPU)
+pip install torch==2.10.0+xpu torchvision==0.25.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
+# Example (MPS/CPU)
+pip install torch==2.10.0 torchvision==0.25.0
 ```
 
 4. Install Nunchaku (optional, for Flux.1 Kontext Nunchaku backend)
 
-- Nunchaku wheels are not on PyPI. Install directly from the v1.2.0 GitHub release URL, matching your OS and Python version. CUDA only, and requires a 2000-series card or newer.
+- Nunchaku wheels are not on PyPI. Install directly from the v1.2.1 GitHub release URL, matching your OS and Python version. CUDA only, and requires a 2000-series card or newer.
 
 ```bash
-# Example (Windows, Python 3.13, PyTorch 2.9.1)
-pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.0/nunchaku-1.2.0+torch2.9-cp313-cp313-win_amd64.whl
+# Example (Windows, Python 3.13, PyTorch 2.10.0, CUDA 13.0)
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp313-cp313-win_amd64.whl
 ```
 
 > [!NOTE]
