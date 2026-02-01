@@ -94,14 +94,14 @@ if __name__ == "__main__":
         device_info_str = "MPS (Apple Silicon)"
     print(f"Using device: {device_info_str.upper()}")
     print(f"PyTorch version: {torch.__version__}")
-    print(f"MangaTranslator version: {core.__version__}")
+    print(f"MangaTranslator version: v{core.__version__}")
 
     def _update_notice():
         available, latest = check_for_update(
             core.__version__, repo="meangrinch/MangaTranslator", timeout=3.0
         )
         if available and latest:
-            print(f"UPDATE AVAILABLE: {latest.lstrip('v')}")
+            print(f"UPDATE AVAILABLE: v{latest.lstrip('v')}")
 
     Thread(target=_update_notice, daemon=True).start()
 
