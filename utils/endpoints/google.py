@@ -99,40 +99,35 @@ def call_gemini_endpoint(
 
                 if "candidates" in result and len(result["candidates"]) > 0:
                     candidate = result["candidates"][0]
-                    if candidate.get("finishReason") == "SAFETY":
-                        safety_ratings = candidate.get("safetyRatings", [])
-                        block_reason = "Unknown Safety Reason"
-                        if safety_ratings:
-                            block_reason = safety_ratings[0].get(
-                                "category", block_reason
-                            )
-                        return None
-
                     content_parts = candidate.get("content", {}).get("parts", [{}])
                     if content_parts and "text" in content_parts[0]:
                         return content_parts[0].get("text", "").strip()
                     else:
-                        finish_reason = candidate.get("finishReason")
+                        finish_reason = candidate.get("finishReason") or "unknown"
                         log_message(
-                            f"No text content in response. Finish reason: {finish_reason}",
+                            f"No text content in Google response. Finish reason: {finish_reason}",
                             always_print=True,
                         )
-                        if debug:
-                            log_message(
-                                f"Full candidate: {json.dumps(candidate, indent=2)}",
-                                verbose=debug,
-                            )
+                        log_message(
+                            f"Full response: {json.dumps(result, indent=2)}",
+                            verbose=debug,
+                        )
                         return ""
 
                 else:
-                    log_message("No candidates in Google response", always_print=True)
+                    block_reason = (
+                        prompt_feedback.get("blockReason")
+                        if prompt_feedback
+                        else "unknown"
+                    )
+                    log_message(
+                        f"No candidates in Google response. Block reason: {block_reason}",
+                        always_print=True,
+                    )
                     log_message(
                         f"Full response: {json.dumps(result, indent=2)}",
                         verbose=debug,
                     )
-                    if prompt_feedback and prompt_feedback.get("blockReason"):
-                        block_reason = prompt_feedback.get("blockReason")
-                        return None
                     return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
