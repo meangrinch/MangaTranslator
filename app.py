@@ -101,7 +101,7 @@ if __name__ == "__main__":
             core.__version__, repo="meangrinch/MangaTranslator", timeout=3.0
         )
         if available and latest:
-            print(f"UPDATE AVAILABLE: {latest}")
+            print(f"UPDATE AVAILABLE: {latest.lstrip('v')}")
 
     Thread(target=_update_notice, daemon=True).start()
 
