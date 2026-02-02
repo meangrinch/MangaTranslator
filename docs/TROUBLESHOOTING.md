@@ -31,6 +31,9 @@
 
 ### Rendering
 
+- **Unsupported characters being removed:**
+  - The font you are using does not support the selected target language; use a font that supports your target language
+
 - **Incorrect reading order:**
   - Set correct "Reading Direction" (rtl for manga, ltr for comics)
   - Try "two-step" mode or disabling "Send Full Page to LLM" for less-capable LLMs

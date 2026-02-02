@@ -1,6 +1,6 @@
 ## MangaTranslator
 
-Gradio-based web application for automating the translation of manga/comic page images using AI. Targets speech bubbles and text outside of speech bubbles. Supports 54 languages and custom font pack usage.
+Gradio-based web application for automating the translation of manga/comic page images using AI. Targets speech bubbles and text outside of speech bubbles. Supports 59 languages and custom font pack usage.
 
 <div align="left">
   <table>
@@ -30,7 +30,7 @@ Gradio-based web application for automating the translation of manga/comic page 
 
 - **Detection**: Speech bubble detection & segmentation (YOLO + SAM 2.1/3)
 - **Cleaning**: Inpaint speech bubbles and OSB text (Flux.2 Klein, Flux.1 Kontext, or OpenCV)
-- **Translation**: LLM-powered OCR & translation (54 languages)
+- **Translation**: LLM-powered OCR & translation (59 languages)
 - **Rendering**: Text rendering with alignment and custom font packs
 - **Upscaling**: 2x-AnimeSharpV4 for enhanced output quality
 - **Processing**: Single/batch processing with directory preservation and ZIP support
@@ -72,7 +72,7 @@ Included font packs:
 - _Cookies_ (OSB text)
 - _Comicka_ (either)
 - _Roboto_ (supports accents)
-- _Noto Sans SC_ (supports Chinese Simplified)
+- _Noto Sans SC_ (supports Simplified Chinese)
 
 > [!TIP]
 > In the event that you need to transfer to a fresh portable package:
