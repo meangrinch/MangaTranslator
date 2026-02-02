@@ -24,6 +24,7 @@ from .font_manager import (
 from .layout_engine import find_optimal_layout, shape_line
 from .text_processing import (
     find_optimal_breaks_dp,
+    is_cjk_character,
     parse_styled_segments,
     tokenize_styled_text,
     try_hyphenate_word,
@@ -42,6 +43,7 @@ __all__ = [
     "find_optimal_layout",
     "shape_line",
     "find_optimal_breaks_dp",
+    "is_cjk_character",
     "parse_styled_segments",
     "tokenize_styled_text",
     "try_hyphenate_word",

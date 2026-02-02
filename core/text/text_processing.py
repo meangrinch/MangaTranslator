@@ -37,6 +37,27 @@ def is_latin_style_language(language_name: str) -> bool:
     return language_name.lower() in latin_style_languages
 
 
+def is_cjk_character(char: str) -> bool:
+    """Check if a character is CJK (Chinese/Japanese/Korean)."""
+    if len(char) != 1:
+        return False
+    code = ord(char)
+    return (
+        (0x4E00 <= code <= 0x9FFF)  # CJK Unified Ideographs
+        or (0x3400 <= code <= 0x4DBF)  # CJK Extension A
+        or (0x20000 <= code <= 0x2CEAF)  # CJK Extension B-F
+        or (0xF900 <= code <= 0xFAFF)  # CJK Compatibility
+        or (0x3040 <= code <= 0x309F)  # Hiragana
+        or (0x30A0 <= code <= 0x30FF)  # Katakana
+        or (0x31F0 <= code <= 0x31FF)  # Katakana Extensions
+        or (0xAC00 <= code <= 0xD7AF)  # Hangul Syllables
+        or (0x1100 <= code <= 0x11FF)  # Hangul Jamo
+        or (0x3130 <= code <= 0x318F)  # Hangul Compatibility Jamo
+        or (0x3000 <= code <= 0x303F)  # CJK Symbols/Punctuation
+        or (0xFF00 <= code <= 0xFFEF)  # Fullwidth Forms
+    )
+
+
 def parse_styled_segments(text: str) -> List[Tuple[str, str]]:
     """
     Parses text with markdown-like style markers into segments.
@@ -75,15 +96,67 @@ def parse_styled_segments(text: str) -> List[Tuple[str, str]]:
     return [(txt, style) for txt, style in segments if txt]
 
 
+# Kinsoku Shori (禁則処理) - CJK line-breaking rules
+KINSOKU_NOT_AT_START = set(  # Cannot start a line
+    "、。，．！？）】」』〕〉》，．！？）］｝,.)!?;:…‥ー"
+    "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ"
+)
+KINSOKU_NOT_AT_END = set("（【「『〔〈《（［｛([")  # Cannot end a line
+
+
+def _split_with_cjk_awareness(text: str) -> List[str]:
+    """Split text into tokens. Each CJK char is a token; kinsoku rules apply."""
+    tokens: List[str] = []
+    current_token = ""
+
+    for char in text:
+        if char.isspace():
+            if current_token:
+                tokens.append(current_token)
+                current_token = ""
+        elif is_cjk_character(char):
+            if char in KINSOKU_NOT_AT_START:
+                if current_token:
+                    current_token += char
+                elif tokens:
+                    tokens[-1] += char
+                else:
+                    current_token = char
+            elif char in KINSOKU_NOT_AT_END:
+                if current_token:
+                    tokens.append(current_token)
+                current_token = char
+            else:
+                if current_token:
+                    if current_token[-1] in KINSOKU_NOT_AT_END:
+                        current_token += char
+                        tokens.append(current_token)
+                        current_token = ""
+                    else:
+                        tokens.append(current_token)
+                        current_token = ""
+                        tokens.append(char)
+                else:
+                    tokens.append(char)
+        else:
+            current_token += char
+
+    if current_token:
+        tokens.append(current_token)
+
+    return tokens
+
+
 def tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
     """
     Tokenizes text into atomic units for wrapping where styled blocks are
     preserved as single, unbreakable tokens.
 
     Returns: List[Tuple[str, bool]] where each tuple is (token_text, is_styled).
-    - Styled tokens are split into per-word tokens, each wrapped with the same markers,
-      to allow wrapping at word boundaries while preserving style.
-    - Plain text outside markers is split on whitespace into word tokens.
+    - Styled tokens are split into per-word tokens (CJK-aware), each wrapped
+      with the same markers, to allow wrapping at word/character boundaries
+      while preserving style.
+    - Plain text outside markers is split with CJK awareness into word/character tokens.
     """
     tokens: List[Tuple[str, bool]] = []
     last_end = 0
@@ -91,20 +164,20 @@ def tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
         start, end = match.span()
         if start > last_end:
             preceding = text[last_end:start]
-            for w in preceding.split():
+            for w in _split_with_cjk_awareness(preceding):
                 tokens.append((w, False))
 
         marker = match.group(1)
         content = match.group(2)
         if content:
-            for w in content.split():
+            for w in _split_with_cjk_awareness(content):
                 tokens.append((f"{marker}{w}{marker}", True))
 
         last_end = end
 
     if last_end < len(text):
         trailing = text[last_end:]
-        for w in trailing.split():
+        for w in _split_with_cjk_awareness(trailing):
             tokens.append((w, False))
 
     return tokens
@@ -195,6 +268,31 @@ def try_hyphenate_word(
     return None
 
 
+def _is_cjk_token(token: str) -> bool:
+    """Check if token consists entirely of CJK characters."""
+    match = STYLE_PATTERN.match(token)
+    content = match.group(2) if match else token
+    return len(content) > 0 and all(is_cjk_character(c) for c in content)
+
+
+def _needs_space_between(left_token: str, right_token: str) -> bool:
+    """No space needed between adjacent CJK tokens."""
+    return not (_is_cjk_token(left_token) and _is_cjk_token(right_token))
+
+
+def _join_tokens_smart(tokens: List[str]) -> str:
+    """Join tokens with smart spacing (no space between adjacent CJK tokens)."""
+    if not tokens:
+        return ""
+    result = tokens[0]
+    for i in range(1, len(tokens)):
+        if _needs_space_between(tokens[i - 1], tokens[i]):
+            result += " " + tokens[i]
+        else:
+            result += tokens[i]
+    return result
+
+
 def find_optimal_breaks_dp(
     tokens: List[str],
     max_width: float,
@@ -234,12 +332,13 @@ def find_optimal_breaks_dp(
 
         for i in range(1, N + 1):
             line_width = 0.0
-            num_spaces = 0
             for j in range(i - 1, -1, -1):
-                if num_spaces > 0:
-                    line_width += space_width
+                # Add space only if needed between this token and the previous one on the line
+                if j < i - 1:
+                    # Check if we need space between tokens[j] and tokens[j+1]
+                    if _needs_space_between(tokens[j], tokens[j + 1]):
+                        line_width += space_width
                 line_width += token_w[j]
-                num_spaces += 1
 
                 if line_width > max_width:
                     break
@@ -269,7 +368,7 @@ def find_optimal_breaks_dp(
         current_break = N
         while current_break > 0:
             prev_break = path[current_break]
-            line = " ".join(tokens[prev_break:current_break])
+            line = _join_tokens_smart(tokens[prev_break:current_break])
             lines.insert(0, line)
             current_break = prev_break
 
