@@ -156,7 +156,7 @@ class UIGeneralSettings:
     media_resolution_bubbles: str = "auto"  # Gemini 3 models
     media_resolution_context: str = "auto"  # Gemini 3 models
     reasoning_effort: Optional[str] = None
-    effort: Optional[str] = None  # Claude Opus 4.5 only: token spending eagerness
+    effort: Optional[str] = None  # Claude Opus 4.5/4.6 only: token spending eagerness
     auto_scale: bool = True
 
 

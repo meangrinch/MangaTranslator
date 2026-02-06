@@ -1122,6 +1122,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     compatible_visible = default_provider == "OpenAI-Compatible"
     (
         temp_update,
+        top_p_update,
         top_k_update,
         _,  # max_tokens_update - unused (using saved default instead)
         enable_web_search_update,
@@ -1136,6 +1137,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     )
     temp_val = temp_update.get("value", default_ui_state.llm_settings.temperature)
     temp_max = temp_update.get("maximum", 2.0)
+    top_p_interactive = top_p_update.get("interactive", True)
     top_k_interactive = top_k_update.get("interactive", True)
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
     is_reasoning = utils.is_reasoning_model(default_provider, default_model_name)
@@ -1214,7 +1216,9 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         ),
         gr.update(choices=default_models_choices, value=default_model_name),
         gr.update(value=temp_val, maximum=temp_max),
-        default_ui_state.llm_settings.top_p,
+        gr.update(
+            value=default_ui_state.llm_settings.top_p, interactive=top_p_interactive
+        ),
         gr.update(value=top_k_val, interactive=top_k_interactive),
         gr.update(value=max_tokens_val),
         gr.update(value=default_ui_state.llm_settings.translation_mode),

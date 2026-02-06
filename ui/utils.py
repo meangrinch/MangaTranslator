@@ -15,6 +15,7 @@ from utils.model_metadata import (
     is_deepseek_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_opus_45_model,
+    is_opus_46_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
 )
@@ -516,7 +517,7 @@ def get_reasoning_effort_config(
         is_gemini_3 = "gemini-3" in lm
         if is_gemini_3:
             if "flash" in lm:
-                return True, ["high", "medium", "low", "minimal"], "medium"
+                return True, ["high", "medium", "low", "minimal"], "high"
             return True, ["high", "low"], "high"
 
         is_flash = "gemini-2.5-flash" in lm
@@ -550,7 +551,11 @@ def get_reasoning_effort_config(
         is_reasoning = _is_anthropic_reasoning_model(model_name, provider)
         if not is_reasoning:
             return False, [], None
-        return True, ["high", "medium", "low", "none"], "none"
+        # Opus 4.6 uses adaptive thinking
+        if is_opus_46_model(model_name):
+            return True, ["auto", "none"], "auto"
+        # Older models use budget-based thinking
+        return True, ["high", "medium", "low", "none"], "low"
 
     elif provider == "xAI":
         is_reasoning = is_xai_reasoning_model(model_name)
@@ -619,18 +624,21 @@ def get_effort_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], Optional[str]]:
     """
-    Get effort configuration for Claude Opus 4.5 models (Anthropic provider only).
+    Get effort configuration for Claude Opus 4.5/4.6 models (Anthropic/OpenRouter).
 
     Returns:
         Tuple of (visible, choices, default_value)
     """
-    if provider != "Anthropic":
+    if provider not in ("Anthropic", "OpenRouter"):
         return False, [], None
 
-    if not is_opus_45_model(model_name):
+    if is_opus_46_model(model_name):
+        # Opus 4.6 supports "max" effort level
+        return True, ["max", "high", "medium", "low"], "medium"
+    elif is_opus_45_model(model_name):
+        return True, ["high", "medium", "low"], "medium"
+    else:
         return False, [], None
-
-    return True, ["high", "medium", "low"], "medium"
 
 
 def get_media_resolution_config(
@@ -717,10 +725,17 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
     new_temp_value = min(default_temp, temp_max)
     temp_update = gr.update(maximum=temp_max, value=new_temp_value)
 
-    top_k_interactive = provider not in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI")
+    top_k_interactive = provider not in (
+        "OpenAI",
+        "Anthropic",
+        "xAI",
+        "DeepSeek",
+        "Moonshot AI",
+    )
     top_k_update = gr.update(interactive=top_k_interactive, value=default_top_k)
 
-    top_p_update = gr.update(value=default_top_p)
+    top_p_interactive = provider != "Anthropic"
+    top_p_update = gr.update(value=default_top_p, interactive=top_p_interactive)
 
     if remembered_model:
         is_reasoning = is_reasoning_model(provider, remembered_model)
@@ -870,9 +885,12 @@ def update_params_for_model(
 
     temp_max = 2.0
     top_k_interactive = True
+    top_p_interactive = True
 
     if provider == "Anthropic":
         temp_max = 1.0
+        top_k_interactive = False
+        top_p_interactive = False
     elif provider in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI"):
         top_k_interactive = False
     elif provider == "OpenRouter":
@@ -884,6 +902,7 @@ def update_params_for_model(
         )
         if is_anthropic_model:
             temp_max = 1.0
+            top_p_interactive = False
         if is_openai_model or is_anthropic_model:
             top_k_interactive = False
     elif provider == "OpenAI-Compatible":
@@ -893,6 +912,7 @@ def update_params_for_model(
     temp_update = gr.update(maximum=temp_max, value=new_temp_value)
 
     top_k_update = gr.update(interactive=top_k_interactive)
+    top_p_update = gr.update(interactive=top_p_interactive)
 
     def _is_gemini_3_model(name: Optional[str]) -> bool:
         if not name:
@@ -1002,6 +1022,7 @@ def update_params_for_model(
 
     return (
         temp_update,
+        top_p_update,
         top_k_update,
         max_tokens_update,
         enable_web_search_update,

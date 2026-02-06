@@ -108,29 +108,42 @@ def call_anthropic_endpoint(
         "system": system_prompt,
         "messages": messages,
         "temperature": clamped_temp,
-        "top_p": generation_config.get("top_p"),
         "top_k": generation_config.get("top_k"),
         "max_tokens": generation_config.get("max_tokens", 4096),
     }
+
     try:
+        thinking_type = generation_config.get("thinking_type")
         reasoning_effort = generation_config.get("reasoning_effort")
-        if reasoning_effort and reasoning_effort != "none":
-            max_tokens_value = generation_config.get("max_tokens", 4096)
-            budget_tokens = calculate_reasoning_budget(
-                max_tokens_value, reasoning_effort
-            )
-            payload["thinking"] = {"type": "enabled", "budget_tokens": budget_tokens}
-        elif reasoning_effort == "none":
-            payload["thinking"] = {"type": "enabled", "budget_tokens": 0}
+        if thinking_type == "adaptive":
+            # Opus 4.6: Adaptive thinking - Claude decides reasoning depth
+            payload["thinking"] = {"type": "adaptive"}
+        elif thinking_type == "enabled":
+            # Older models: Budget-based thinking
+            if reasoning_effort and reasoning_effort != "none":
+                max_tokens_value = generation_config.get("max_tokens", 4096)
+                budget_tokens = calculate_reasoning_budget(
+                    max_tokens_value, reasoning_effort
+                )
+                payload["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": budget_tokens,
+                }
+            elif reasoning_effort == "none":
+                payload["thinking"] = {"type": "enabled", "budget_tokens": 0}
     except Exception:
         pass
 
-    # Claude Opus 4.5 effort parameter (controls token spending eagerness)
     try:
         effort = generation_config.get("effort")
-        if effort and effort in ("high", "medium", "low"):
+        is_opus_46 = generation_config.get("is_opus_46", False)
+        valid_efforts = (
+            ("max", "high", "medium", "low")
+            if is_opus_46
+            else ("high", "medium", "low")
+        )
+        if effort and effort in valid_efforts:
             payload["output_config"] = {"effort": effort}
-            headers["anthropic-beta"] = "effort-2025-11-24"
     except Exception:
         pass
 

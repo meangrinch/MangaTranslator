@@ -30,6 +30,7 @@ from utils.model_metadata import (
     is_deepseek_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_opus_45_model,
+    is_opus_46_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
 )
@@ -367,17 +368,26 @@ def _build_generation_config(
     elif provider == "Anthropic":
         is_reasoning = _is_reasoning_model_anthropic(model_name)
         is_opus_45 = is_opus_45_model(model_name)
+        is_opus_46 = is_opus_46_model(model_name)
         clamped_temp = min(temperature, 1.0)  # Anthropic caps at 1.0
         generation_config = {
             "temperature": clamped_temp,
-            "top_p": top_p,
             "top_k": top_k,
             "max_tokens": max_tokens_value,
         }
         if is_reasoning:
-            generation_config["reasoning_effort"] = config.reasoning_effort or "none"
-        if is_opus_45 and config.effort:
+            reasoning_effort = config.reasoning_effort or "none"
+            generation_config["reasoning_effort"] = reasoning_effort
+            # Opus 4.6 uses adaptive thinking; older models use budget-based
+            if is_opus_46:
+                if reasoning_effort == "auto":
+                    generation_config["thinking_type"] = "adaptive"
+            else:
+                if reasoning_effort != "none":
+                    generation_config["thinking_type"] = "enabled"
+        if (is_opus_45 or is_opus_46) and config.effort:
             generation_config["effort"] = config.effort
+            generation_config["is_opus_46"] = is_opus_46
         return generation_config
 
     elif provider == "xAI":
@@ -446,7 +456,7 @@ def _build_generation_config(
 
         generation_config = {
             "temperature": temperature,
-            "top_p": top_p,
+            "top_p": top_p if not is_anthropic_model else None,
             "top_k": top_k,
             "max_tokens": max_tokens_value,
         }
@@ -476,6 +486,8 @@ def _build_generation_config(
         is_grok_reasoning = is_grok_model and "non-reasoning" not in model_lower
 
         # Add metadata flags for OpenRouter endpoint to avoid re-parsing model names
+        is_opus_45 = is_opus_45_model(model_name)
+        is_opus_46 = is_opus_46_model(model_name)
         generation_config["_metadata"] = {
             "is_openai_model": is_openai_model,
             "is_anthropic_model": is_anthropic_model,
@@ -488,6 +500,8 @@ def _build_generation_config(
             "is_claude_37_sonnet_thinking": is_claude_37_sonnet_thinking,
             "is_gpt5_1": is_gpt5_1,
             "is_gpt5": is_gpt5,
+            "is_opus_45": is_opus_45,
+            "is_opus_46": is_opus_46,
         }
 
         if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
@@ -501,6 +515,10 @@ def _build_generation_config(
         elif "gemini" in model_lower or "google/" in model_lower:
             if config.reasoning_effort:
                 generation_config["reasoning_effort"] = config.reasoning_effort
+
+        # Opus 4.5/4.6 effort parameter (sent to endpoint as verbosity)
+        if (is_opus_45 or is_opus_46) and config.effort:
+            generation_config["effort"] = config.effort
 
         return generation_config
 

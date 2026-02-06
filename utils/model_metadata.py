@@ -28,7 +28,11 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
         if "chat" in model_lower:
             return 16384
     elif provider == "Anthropic":
-        if "claude-opus-4" in model_lower and "claude-opus-4-5" not in model_lower:
+        if (
+            "claude-opus-4" in model_lower
+            and "claude-opus-4-5" not in model_lower
+            and "claude-opus-4-6" not in model_lower
+        ):
             return 31744
     elif provider == "xAI":
         if "grok" in model_lower and "fast" in model_lower:
@@ -48,7 +52,11 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
             if "chat" in model_lower:
                 return 16384
         if is_anthropic_model:
-            if "claude-opus-4" in model_lower and "claude-opus-4.5" not in model_lower:
+            if (
+                "claude-opus-4" in model_lower
+                and "claude-opus-4.5" not in model_lower
+                and "claude-opus-4.6" not in model_lower
+            ):
                 return 31744
         if is_grok_model and "fast" in model_lower:
             return 29696
@@ -103,8 +111,20 @@ def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
 
 
 def is_opus_45_model(model_name: Optional[str]) -> bool:
-    """Check if an Anthropic model is Claude Opus 4.5 (supports effort parameter)."""
+    """Check if a model is Claude Opus 4.5 (supports effort parameter)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return lm.startswith("claude-opus-4-5")
+    if "claude" not in lm or "opus" not in lm:
+        return False
+    return ("4.5" in lm) or ("4-5" in lm)
+
+
+def is_opus_46_model(model_name: Optional[str]) -> bool:
+    """Check if a model is Claude Opus 4.6 (adaptive thinking, max effort)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    if "claude" not in lm or "opus" not in lm:
+        return False
+    return ("4.6" in lm) or ("4-6" in lm)

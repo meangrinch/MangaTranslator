@@ -813,7 +813,7 @@ def create_layout(
                                 choices=_initial_effort_choices,
                                 label="Effort",
                                 value=_initial_effort_value,
-                                info="Controls token spending eagerness. Claude Opus 4.5 only.",
+                                info="Controls token spending eagerness. Claude Opus 4.5/4.6 only.",
                                 visible=_initial_effort_visible,
                                 elem_id="effort_dropdown",
                             )
@@ -2127,6 +2127,7 @@ def create_layout(
             inputs=[provider_selector, config_model_name, temperature],
             outputs=[
                 temperature,
+                top_p,
                 top_k,
                 max_tokens,
                 enable_web_search_checkbox,
