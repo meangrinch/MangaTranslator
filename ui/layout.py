@@ -2468,7 +2468,7 @@ def create_layout(
                 batch_cancel_button,
             ],
             queue=False,
-        ).then(fn=None, inputs=None, outputs=None, queue=False)
+        ).then(fn=None, js=js_reset_status_height, queue=False)
 
         cancel_button.click(
             fn=callbacks.cancel_process,
@@ -2519,7 +2519,7 @@ def create_layout(
                 cancel_button,
             ],
             queue=False,
-        ).then(fn=None, inputs=None, outputs=None, queue=False)
+        ).then(fn=None, js=js_reset_status_height, queue=False)
 
         batch_cancel_button.click(
             fn=callbacks.cancel_process,

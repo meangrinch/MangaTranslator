@@ -53,6 +53,18 @@ def _clean_error_message(message: Any) -> str:
     return f"{ERROR_PREFIX}{text}"
 
 
+def _status_update(message: str) -> gr.update:
+    """Create a gr.update() for the status textbox with calculated line count.
+
+    Accounts for both explicit newlines and text wrapping (~120 chars per line).
+    """
+    line_count = 0
+    for line in message.split("\n"):
+        # Each segment takes at least 1 line, plus additional lines for wrapping
+        line_count += max(1, (len(line) + 119) // 120)
+    return gr.update(value=message, lines=line_count)
+
+
 def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
     """Build UIConfigState from UI component arguments, handling single vs batch mode differences."""
     (
@@ -705,27 +717,25 @@ def handle_translate_click(
             processing_time,
         )
 
-        # Calculate lines for auto-expansion
-        line_count = status_msg.count("\n") + 1
-        return result_image.copy(), gr.update(value=status_msg, lines=line_count)
+        return result_image.copy(), _status_update(status_msg)
 
     except gr.Error as e:
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
-        return gr.update(), cleaned
+        return gr.update(), _status_update(cleaned)
     except CancellationError:
-        return gr.update(), "Translation cancelled by user."
+        return gr.update(), _status_update("Translation cancelled by user.")
     except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
-        return gr.update(), cleaned
+        return gr.update(), _status_update(cleaned)
     except Exception as e:
         import traceback
 
         traceback.print_exc()
         cleaned = _clean_error_message(f"An unexpected error occurred: {str(e)}")
         gr.Error(cleaned)
-        return gr.update(), cleaned
+        return gr.update(), _status_update(cleaned)
 
 
 def handle_batch_click(
@@ -823,23 +833,21 @@ def handle_batch_click(
             results, backend_config, font_dir_path
         )
         progress(1.0, desc="Batch complete!")
-        # Calculate lines for auto-expansion
-        line_count = status_msg.count("\n") + 1
-        return gallery_images, gr.update(value=status_msg, lines=line_count)
+        return gallery_images, _status_update(status_msg)
 
     except gr.Error as e:
         progress(1.0, desc="Error occurred")
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
-        return gr.update(), cleaned
+        return gr.update(), _status_update(cleaned)
     except CancellationError:
         progress(1.0, desc="Cancelled")
-        return gr.update(), "Batch process cancelled by user."
+        return gr.update(), _status_update("Batch process cancelled by user.")
     except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
         progress(1.0, desc="Error occurred")
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
-        return gr.update(), cleaned
+        return gr.update(), _status_update(cleaned)
     except Exception as e:
         progress(1.0, desc="Error occurred")
         import traceback
@@ -849,7 +857,7 @@ def handle_batch_click(
             f"An unexpected error occurred during batch processing: {str(e)}"
         )
         gr.Error(cleaned)
-        return gr.update(), cleaned
+        return gr.update(), _status_update(cleaned)
 
 
 def handle_save_config_click(*args: Any) -> str:
