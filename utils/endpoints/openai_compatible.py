@@ -93,7 +93,7 @@ def call_openai_compatible_endpoint(
 
     temp = generation_config.get("temperature")
     if temp is not None:
-        payload["temperature"] = min(temp, 1.0)
+        payload["temperature"] = temp
 
     top_p = generation_config.get("top_p")
     if top_p is not None:
