@@ -98,7 +98,6 @@ def call_zai_endpoint(
         "messages": messages,
         "temperature": generation_config.get("temperature"),
         "top_p": generation_config.get("top_p"),
-        "top_k": generation_config.get("top_k"),
         "max_tokens": generation_config.get("max_tokens", 4096),
         "stream": False,
     }

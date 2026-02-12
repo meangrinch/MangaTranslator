@@ -730,6 +730,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         "Anthropic",
         "xAI",
         "DeepSeek",
+        "Z.ai",
         "Moonshot AI",
     )
     top_k_update = gr.update(interactive=top_k_interactive, value=default_top_k)

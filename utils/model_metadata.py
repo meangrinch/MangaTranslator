@@ -97,7 +97,7 @@ def is_zai_reasoning_model(model_name: Optional[str]) -> bool:
     if not model_name:
         return False
     lm = model_name.lower()
-    return lm.startswith("glm-4.")
+    return lm.startswith("glm-4.") or lm == "glm-5"
 
 
 def is_xai_reasoning_model(model_name: Optional[str]) -> bool:

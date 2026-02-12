@@ -416,7 +416,6 @@ def _build_generation_config(
         generation_config = {
             "temperature": temperature,
             "top_p": top_p,
-            "top_k": top_k,
             "max_tokens": max_tokens_value,
         }
         if is_reasoning:
