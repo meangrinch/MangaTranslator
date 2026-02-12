@@ -239,18 +239,129 @@ def _remove_contained_boxes(
     return boxes[keep]
 
 
-def _resolve_mask_overlaps(masks: list, boxes: list, verbose: bool = False) -> list:
+def _get_cached_osb_text_boxes(cache, model_manager, image_pil, confidence):
+    """Retrieve cached OSB text boxes as a numpy array, or None if unavailable."""
+    try:
+        model_path = str(model_manager.model_paths[ModelType.YOLO_OSBTEXT])
+        cache_key = cache.get_yolo_cache_key(image_pil, model_path, confidence)
+        cached = cache.get_yolo_detection(cache_key)
+        if cached is not None:
+            _, osb_boxes, _ = cached
+            if osb_boxes is not None and len(osb_boxes) > 0:
+                return (
+                    osb_boxes.detach().cpu().numpy()
+                    if hasattr(osb_boxes, "detach")
+                    else np.asarray(osb_boxes)
+                )
+    except Exception:
+        pass
+    return None
+
+
+def _match_text_boxes_to_bubbles(osb_text_boxes, boxes):
+    """Associate each OSB text box with the bubble box it overlaps most.
+
+    Returns:
+        dict mapping bubble index → list of text box arrays
+    """
+    text_boxes_for = {i: [] for i in range(len(boxes))}
+    for t_box in osb_text_boxes:
+        tx0, ty0, tx1, ty1 = t_box[:4]
+        best_idx = None
+        best_area = 0.0
+        for i, b_box in enumerate(boxes):
+            bx0, by0, bx1, by1 = (
+                b_box if not hasattr(b_box, "tolist") else b_box.tolist()
+            )
+            inter_w = max(0.0, min(bx1, tx1) - max(bx0, tx0))
+            inter_h = max(0.0, min(by1, ty1) - max(by0, ty0))
+            area = inter_w * inter_h
+            if area > best_area:
+                best_area = area
+                best_idx = i
+        if best_idx is not None and best_area > 0.0:
+            text_boxes_for[best_idx].append(t_box)
+    return text_boxes_for
+
+
+def _compute_bisector_nudge(
+    center_a, center_b, mid_x, mid_y, text_boxes_a, text_boxes_b
+):
+    """Compute offset to shift the perpendicular bisector so it doesn't cut text.
+
+    Projects text-bbox corners onto the A→B axis.  Text belonging to bubble A
+    should lie on the A-side (negative projection); if any corner projects
+    positive it intrudes past the bisector — the bisector must shift toward B
+    to clear it (and vice-versa for bubble B).
+
+    Returns:
+        (nudged_mid_x, nudged_mid_y) after applying the offset.
+    """
+    vec_x = center_b[0] - center_a[0]
+    vec_y = center_b[1] - center_a[1]
+    length = np.sqrt(vec_x**2 + vec_y**2)
+    if length < 1e-6:
+        return mid_x, mid_y
+
+    uvec_x = vec_x / length
+    uvec_y = vec_y / length
+
+    # Max intrusion of A's text past the bisector (positive = toward B)
+    shift_for_a = 0.0
+    for t_box in text_boxes_a:
+        corners = [
+            (t_box[0], t_box[1]),
+            (t_box[2], t_box[1]),
+            (t_box[0], t_box[3]),
+            (t_box[2], t_box[3]),
+        ]
+        for cx, cy in corners:
+            proj = (cx - mid_x) * uvec_x + (cy - mid_y) * uvec_y
+            if proj > shift_for_a:
+                shift_for_a = proj
+
+    # Max intrusion of B's text past the bisector (negative = toward A)
+    shift_for_b = 0.0
+    for t_box in text_boxes_b:
+        corners = [
+            (t_box[0], t_box[1]),
+            (t_box[2], t_box[1]),
+            (t_box[0], t_box[3]),
+            (t_box[2], t_box[3]),
+        ]
+        for cx, cy in corners:
+            proj = (cx - mid_x) * uvec_x + (cy - mid_y) * uvec_y
+            if proj < shift_for_b:
+                shift_for_b = proj
+
+    # shift_for_a > 0 means move bisector toward B; shift_for_b < 0 means toward A
+    offset = shift_for_a + shift_for_b  # net signed offset along A→B
+
+    return mid_x + offset * uvec_x, mid_y + offset * uvec_y
+
+
+def _resolve_mask_overlaps(
+    masks: list,
+    boxes: list,
+    verbose: bool = False,
+    osb_text_boxes: Optional[np.ndarray] = None,
+) -> list:
     """Resolve overlapping mask regions by carving exclusive boundaries.
 
     For conjoined bubble masks that overlap, this function:
     1. Finds overlapping pixel regions between mask pairs
     2. Determines the split axis based on box arrangement
-    3. Assigns overlap pixels to the appropriate mask
+    3. If OSB text boxes are provided, nudges the split line to avoid
+       cutting through detected text
+    4. Assigns overlap pixels to the appropriate mask
 
     Args:
         masks: List of boolean numpy arrays (SAM output masks)
         boxes: List of corresponding bounding boxes [x0, y0, x1, y1]
         verbose: Whether to log operations
+        osb_text_boxes: Optional (N,4) numpy array of OSB text detection boxes
+            in xyxy format.  When provided, the perpendicular bisector is
+            shifted so it does not cut through any text bbox.
 
     Returns:
         List of resolved masks with non-overlapping regions
@@ -258,9 +369,15 @@ def _resolve_mask_overlaps(masks: list, boxes: list, verbose: bool = False) -> l
     if len(masks) <= 1:
         return masks
 
+    # Pre-compute text-box-to-bubble associations once
+    text_boxes_for = None
+    if osb_text_boxes is not None and len(osb_text_boxes) > 0:
+        text_boxes_for = _match_text_boxes_to_bubbles(osb_text_boxes, boxes)
+
     resolved = [mask.copy() for mask in masks]
     n = len(resolved)
     overlap_count = 0
+    nudge_count = 0
 
     for i in range(n):
         for j in range(i + 1, n):
@@ -282,6 +399,20 @@ def _resolve_mask_overlaps(masks: list, boxes: list, verbose: bool = False) -> l
             vec_x = center_b[0] - center_a[0]
             vec_y = center_b[1] - center_a[1]
 
+            # Nudge bisector to avoid cutting through OSB text boxes
+            if text_boxes_for is not None:
+                old_mid = (mid_x, mid_y)
+                mid_x, mid_y = _compute_bisector_nudge(
+                    center_a,
+                    center_b,
+                    mid_x,
+                    mid_y,
+                    text_boxes_for.get(i, []),
+                    text_boxes_for.get(j, []),
+                )
+                if (mid_x, mid_y) != old_mid:
+                    nudge_count += 1
+
             pixel_y = overlap_coords[0]
             pixel_x = overlap_coords[1]
             cross = (pixel_x - mid_x) * vec_y - (pixel_y - mid_y) * vec_x
@@ -295,6 +426,11 @@ def _resolve_mask_overlaps(masks: list, boxes: list, verbose: bool = False) -> l
     if overlap_count > 0:
         log_message(
             f"Resolved {overlap_count} overlapping mask region(s)", verbose=verbose
+        )
+    if nudge_count > 0:
+        log_message(
+            f"Nudged bisector on {nudge_count} overlap(s) to avoid cutting text",
+            verbose=verbose,
         )
 
     return resolved
@@ -690,6 +826,7 @@ def detect_speech_bubbles(
             )
             secondary_boxes = torch.tensor([])
 
+    osb_text_boxes_np = None
     if osb_text_verification and len(primary_boxes) > 0:
         primary_boxes = _expand_boxes_with_osb_text(
             image_cv,
@@ -701,6 +838,10 @@ def detect_speech_bubbles(
             confidence,
             osb_text_hf_token,
             verbose,
+        )
+        # Retrieve cached OSB text boxes for bisector nudge during overlap resolution
+        osb_text_boxes_np = _get_cached_osb_text_boxes(
+            cache, model_manager, image_pil, confidence
         )
 
     if not use_sam:
@@ -784,12 +925,12 @@ def detect_speech_bubbles(
         for idx in simple_indices:
             boxes_to_process.append(primary_boxes[idx])
 
-        for _, s_indices in conjoined_indices:
+        for p_idx, s_indices in conjoined_indices:
             start_idx = len(boxes_to_process)
             for s_idx in s_indices:
                 boxes_to_process.append(secondary_boxes[s_idx])
             end_idx = len(boxes_to_process)
-            conjoined_mask_ranges.append((start_idx, end_idx))
+            conjoined_mask_ranges.append((start_idx, end_idx, p_idx))
 
         if boxes_to_process:
             all_boxes_tensor = torch.stack(boxes_to_process)
@@ -802,11 +943,27 @@ def detect_speech_bubbles(
                 _device,
             )
 
-            for start_idx, end_idx in conjoined_mask_ranges:
+            for start_idx, end_idx, p_idx in conjoined_mask_ranges:
                 group_masks = all_masks[start_idx:end_idx]
                 group_boxes = boxes_to_process[start_idx:end_idx]
+
+                # Scope OSB text boxes to those intersecting this group's primary bubble
+                group_osb = None
+                if osb_text_boxes_np is not None:
+                    p_box = primary_boxes[p_idx].tolist()
+                    px0, py0, px1, py1 = p_box
+                    hits = []
+                    for tb in osb_text_boxes_np:
+                        if tb[0] < px1 and tb[2] > px0 and tb[1] < py1 and tb[3] > py0:
+                            hits.append(tb)
+                    if hits:
+                        group_osb = np.array(hits)
+
                 resolved_masks = _resolve_mask_overlaps(
-                    group_masks, group_boxes, verbose=verbose
+                    group_masks,
+                    group_boxes,
+                    verbose=verbose,
+                    osb_text_boxes=group_osb,
                 )
                 all_masks[start_idx:end_idx] = resolved_masks
 
