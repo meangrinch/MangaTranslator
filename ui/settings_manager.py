@@ -366,6 +366,12 @@ def save_config(incoming_settings: Dict[str, Any]):
         if not isinstance(provider_models_to_save, dict):  # Handle potential corruption
             provider_models_to_save = DEFAULT_SETTINGS["provider_models"].copy()
 
+        # Migrate deprecated "Gemini" key → "Google"
+        if "Gemini" in provider_models_to_save:
+            provider_models_to_save.setdefault(
+                "Google", provider_models_to_save.pop("Gemini")
+            )
+
         selected_provider = incoming_settings.get("provider")
         selected_model = incoming_settings.get("model_name")
         if selected_provider and selected_model:
