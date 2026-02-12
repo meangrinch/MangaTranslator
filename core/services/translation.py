@@ -62,7 +62,7 @@ Your sole purpose is to accurately transcribe the original text from a series of
 ## CORE RULES
 - **Reading Context:** The image crops are presented in a {direction} reading order. Do not reorder them.
 - **Transcription Policy:** Preserve all original punctuation, ellipses, and casing. Collapse multi-line text into a single line, separated by a single space.
-- **Ignore Policy:** You must ignore image borders, speech bubble tails, watermarks, page numbers, and any decorative elements outside the text itself.
+- **Ignore Policy:** Ignore all non-text visual elements (borders, tails, watermarks, etc.).
 - **Language Focus:** Transcribe only the original {lang_label}text.
 - **Ruby/Furigana Policy:** If small phonetic characters (ruby/furigana) are present, you must ignore them and transcribe only the main, larger base text.
 - **Visual Emphasis Policy:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis in your transcription using markdown-style markers: `*italic*` for slanted text, `**bold**` for bold text, `***bold-italic***` for both.
@@ -118,7 +118,7 @@ def _build_system_prompt_translation(
   - **Spoken Dialogue/Internal Monologue:** Translate naturally, matching the character's personality.
   - **Narration:** Translate neutrally without special styling.
   - **Audible SFX:** Translate physical sounds (Giongo) as standard onomatopoeia.
-  - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives. Do not add a period at the end of the word.
+  - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives. Do not add a period at the end.
 {edge_cases}
 """  # noqa
 
@@ -1053,12 +1053,6 @@ def call_translation_api_batch(
     if hints:
         context_hints = "\nNote: " + " ".join(hints) + " Translate them accordingly."
 
-    reading_order_desc = (
-        "right-to-left, top-to-bottom"
-        if reading_direction == "rtl"
-        else "left-to-right, top-to-bottom"
-    )
-
     cache = get_cache()
     cache_key = cache.get_translation_cache_key(images_b64, full_image_b64, config)
     cached_translation = cache.get_translation(cache_key)
@@ -1099,7 +1093,7 @@ def call_translation_api_batch(
 
             ocr_prompt = f"""
 ## CONTEXT
-You have been provided with {total_elements} individual text images from a manga page. They are presented in their natural reading order ({reading_order_desc}).
+You have been provided with {total_elements} individual text images from a manga page.
 
 ## TASK
 Apply your OCR transcription rules to each image provided.{special_instructions_section}
@@ -1254,11 +1248,6 @@ You have been provided with {total_elements} individual text images from a manga
 For each image, you must perform two steps:
 1.  **Transcribe:** Extract the original text exactly as it appears.
 2.  **Translate:** Translate the text you just transcribed into {output_language}, applying your translation and styling rules.{special_instructions_section}
-
-## OUTPUT FORMAT
-You must return your response as a single numbered list with exactly one line per input image.
-The numbering must correspond to the input image order (1, 2, 3...).
-Format: `i: <transcribed text> || <translated {output_language} text>`
 """  # noqa
 
             one_step_system = _build_system_prompt_translation(
