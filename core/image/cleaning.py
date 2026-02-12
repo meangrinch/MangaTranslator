@@ -296,7 +296,7 @@ def clean_speech_bubbles(
     device=None,
     thresholding_value: int = 190,
     use_otsu_threshold: bool = False,
-    roi_shrink_px: int = 4,
+    roi_shrink_px: int = 5,
     verbose: bool = False,
     processing_scale: float = 1.0,
     conjoined_confidence=0.35,

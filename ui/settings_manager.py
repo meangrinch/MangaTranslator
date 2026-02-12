@@ -145,7 +145,7 @@ DEFAULT_SETTINGS = {
     "use_panel_sorting": True,
     "use_otsu_threshold": False,
     "thresholding_value": 190,
-    "roi_shrink_px": 4,
+    "roi_shrink_px": 5,
     "inpaint_colored_bubbles": False,
     "temperature": DEFAULT_PROVIDER_SAMPLING["temperature"],
     "top_p": DEFAULT_PROVIDER_SAMPLING["top_p"],

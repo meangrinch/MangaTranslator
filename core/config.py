@@ -26,7 +26,7 @@ class CleaningConfig:
 
     thresholding_value: int = 190
     use_otsu_threshold: bool = False
-    roi_shrink_px: int = 4
+    roi_shrink_px: int = 5
     inpaint_colored_bubbles: bool = False
 
 

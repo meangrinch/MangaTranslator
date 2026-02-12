@@ -35,7 +35,7 @@ class UICleaningSettings:
 
     thresholding_value: int = 190
     use_otsu_threshold: bool = False
-    roi_shrink_px: int = 4
+    roi_shrink_px: int = 5
     inpaint_colored_bubbles: bool = False
 
 
@@ -332,7 +332,7 @@ class UIConfigState:
                     "use_otsu_threshold", defaults["use_otsu_threshold"]
                 ),
                 roi_shrink_px=data.get(
-                    "roi_shrink_px", defaults.get("roi_shrink_px", 4)
+                    "roi_shrink_px", defaults.get("roi_shrink_px", 5)
                 ),
                 inpaint_colored_bubbles=data.get(
                     "inpaint_colored_bubbles",

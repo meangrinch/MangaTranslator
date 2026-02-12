@@ -544,7 +544,7 @@ def create_layout(
                             roi_shrink_px = gr.Slider(
                                 0,
                                 8,
-                                value=saved_settings.get("roi_shrink_px", 4),
+                                value=saved_settings.get("roi_shrink_px", 5),
                                 step=1,
                                 label="Shrink Threshold ROI (px)",
                                 info=(
