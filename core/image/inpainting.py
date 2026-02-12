@@ -890,91 +890,99 @@ class FluxKleinInpainter:
         self.manager.unload_flux_klein_models()
 
     def _quantize_dimension(self, dim: int) -> int:
-        """Quantize dimension to be a multiple of 16 within allowed range."""
+        """Quantize dimension to be a multiple of RESOLUTION_MULTIPLE within allowed range."""
         dim = max(self.MIN_RESOLUTION, min(self.MAX_RESOLUTION, dim))
         return (dim // self.RESOLUTION_MULTIPLE) * self.RESOLUTION_MULTIPLE
 
-    def _compute_luminance(self, image_np: np.ndarray, mask_np: np.ndarray) -> float:
-        """Compute mean luminance (LAB L channel) of masked region.
+    def _compute_luminance_stats(
+        self, image_np: np.ndarray, mask_np: np.ndarray
+    ) -> Tuple[float, float]:
+        """Compute mean and std of luminance (LAB L channel) for masked pixels.
 
         Args:
             image_np: RGB image array (H, W, 3), uint8
             mask_np: Boolean mask where True = pixels to include
 
         Returns:
-            Mean luminance value (0-255 scale, cv2 LAB)
+            (mean, std) of L channel values (0-255 scale, cv2 LAB)
         """
         if not np.any(mask_np):
-            return 127.5  # Neutral fallback
+            return 127.5, 30.0  # Neutral fallback
 
         lab = cv2.cvtColor(image_np, cv2.COLOR_RGB2LAB)
-        l_channel = lab[:, :, 0]
+        l_values = lab[:, :, 0][mask_np].astype(np.float32)
 
-        return float(np.mean(l_channel[mask_np]))
+        return float(np.mean(l_values)), float(np.std(l_values)) + 1e-6
 
     def _match_luminance(
         self,
         generated_pil: Image.Image,
         original_crop_pil: Image.Image,
         mask_crop_np: np.ndarray,
-        padded_bounds: Tuple[int, int, int, int],
-        original_bounds: Tuple[int, int, int, int],
+        verbose: bool = False,
     ) -> Image.Image:
-        """Match luminance of generated patch to original context ring.
+        """Match luminance of generated patch to original context using affine correction.
 
-        Samples luminance from the "context ring" - the area between the mask
-        bounds and the padded crop bounds, excluding the mask itself. This
-        captures the local lighting context that the inpainted region should
-        blend into.
+        Uses all non-mask pixels in the crop as context (rather than only
+        outside-bbox pixels), giving a more stable luminance reference.
+        Applies an affine remap (mean + std matching) to preserve the
+        generated patch's internal contrast while aligning brightness.
+        Correction is applied only to the masked region.
+
+        For B&W manga, also neutralizes any chroma drift in the a/b channels.
 
         Args:
             generated_pil: Generated patch from Flux Klein (at crop size)
             original_crop_pil: Original cropped region
             mask_crop_np: Boolean mask of inpaint region within crop
-            padded_bounds: (x1, y1, x2, y2) of padded bbox in original image
-            original_bounds: (x_min, y_min, x_max, y_max) of mask in original image
+            verbose: Whether to print verbose output
 
         Returns:
             Luminance-corrected generated patch
         """
+        context_mask = ~mask_crop_np
+        if not np.any(context_mask) or not np.any(mask_crop_np):
+            return generated_pil
+
         original_np = np.asarray(original_crop_pil)
         generated_np = np.asarray(generated_pil).copy()
 
-        crop_h, crop_w = mask_crop_np.shape
-        pad_x1, pad_y1, pad_x2, pad_y2 = padded_bounds
-        orig_x_min, orig_y_min, orig_x_max, orig_y_max = original_bounds
+        orig_mean, orig_std = self._compute_luminance_stats(original_np, context_mask)
+        gen_mean, gen_std = self._compute_luminance_stats(generated_np, context_mask)
 
-        ring_x1 = max(0, orig_x_min - pad_x1)
-        ring_y1 = max(0, orig_y_min - pad_y1)
-        ring_x2 = min(crop_w, orig_x_max + 1 - pad_x1)
-        ring_y2 = min(crop_h, orig_y_max + 1 - pad_y1)
-
-        context_ring_mask = np.ones((crop_h, crop_w), dtype=bool)
-        context_ring_mask[ring_y1:ring_y2, ring_x1:ring_x2] = False
-        context_ring_mask[mask_crop_np] = False
-
-        if not np.any(context_ring_mask):
+        if abs(orig_mean - gen_mean) < 1.3 and abs(orig_std - gen_std) < 2.0:
             return generated_pil
 
-        original_lum = self._compute_luminance(original_np, context_ring_mask)
-        generated_lum = self._compute_luminance(generated_np, context_ring_mask)
-
-        lum_shift = original_lum - generated_lum
-
-        # Threshold ~1.3 in 0-255 scale ≈ 0.5 in 0-100 scale
-        if abs(lum_shift) < 1.3:
-            return generated_pil
+        scale = orig_std / gen_std
+        scale = max(
+            0.5, min(2.0, scale)
+        )  # Prevent extreme stretching from degenerate distributions
 
         log_message(
-            f"  - Luminance correction: {lum_shift:+.1f} (orig={original_lum:.1f}, gen={generated_lum:.1f})",
-            verbose=True,
+            f"  - Luminance correction: mean {gen_mean:.1f}->{orig_mean:.1f}, "
+            f"std {gen_std:.1f}->{orig_std:.1f} (scale={scale:.2f})",
+            verbose=verbose,
         )
 
         lab = cv2.cvtColor(generated_np, cv2.COLOR_RGB2LAB).astype(np.float32)
-        lab[:, :, 0] = np.clip(lab[:, :, 0] + lum_shift, 0, 255)
-        lab = lab.astype(np.uint8)
-        corrected_np = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
 
+        l_masked = lab[:, :, 0][mask_crop_np]
+        lab[:, :, 0][mask_crop_np] = np.clip(
+            (l_masked - gen_mean) * scale + orig_mean, 0, 255
+        )
+
+        # Neutralize chroma drift (Klein can introduce color casts on B&W content)
+        orig_lab = cv2.cvtColor(original_np, cv2.COLOR_RGB2LAB).astype(np.float32)
+        for ch in (1, 2):
+            orig_ch_mean = float(np.mean(orig_lab[:, :, ch][context_mask]))
+            gen_ch_mean = float(np.mean(lab[:, :, ch][context_mask]))
+            ch_shift = orig_ch_mean - gen_ch_mean
+            if abs(ch_shift) > 1.0:
+                lab[:, :, ch][mask_crop_np] = np.clip(
+                    lab[:, :, ch][mask_crop_np] + ch_shift, 0, 255
+                )
+
+        corrected_np = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2RGB)
         return Image.fromarray(corrected_np)
 
     def _prepare_image_for_inference(
@@ -1231,8 +1239,7 @@ class FluxKleinInpainter:
                 generated_pil=patch_pil,
                 original_crop_pil=image_cropped_pil,
                 mask_crop_np=mask_crop_np,
-                padded_bounds=(x1, y1, x2, y2),
-                original_bounds=(x_min, y_min, x_max, y_max),
+                verbose=verbose,
             )
 
         dest_tensor = torch.from_numpy(
