@@ -991,7 +991,27 @@ def detect_speech_bubbles(
             f"Refined {len(all_masks)} masks with {sam_model_name}", always_print=True
         )
         log_message(f"Total masks generated: {len(all_masks)}", verbose=verbose)
+
         img_h, img_w = image_cv.shape[:2]
+
+        conjoined_siblings: dict[int, list[tuple]] = {}
+        for start_idx, end_idx, _ in conjoined_mask_ranges:
+            group_bboxes = []
+            for j in range(start_idx, end_idx):
+                bx = boxes_to_process[j].tolist()
+                group_bboxes.append(
+                    (
+                        int(np.floor(max(0, min(bx[0], img_w)))),
+                        int(np.floor(max(0, min(bx[1], img_h)))),
+                        int(np.ceil(max(0, min(bx[2], img_w)))),
+                        int(np.ceil(max(0, min(bx[3], img_h)))),
+                    )
+                )
+            for j in range(start_idx, end_idx):
+                conjoined_siblings[j] = [
+                    b for k, b in enumerate(group_bboxes) if k != j - start_idx
+                ]
+
         for i, (mask, box) in enumerate(zip(all_masks, all_boxes)):
             x0_f, y0_f, x1_f, y1_f = box.tolist()
 
@@ -1012,6 +1032,8 @@ def detect_speech_bubbles(
                 "class": "speech bubble",
                 "sam_mask": clipped_mask.astype(np.uint8) * 255,
             }
+            if i in conjoined_siblings:
+                detection["conjoined_neighbor_bboxes"] = conjoined_siblings[i]
             detections.append(detection)
 
         log_message(
@@ -1038,11 +1060,34 @@ def detect_speech_bubbles(
             for idx in range(len(primary_boxes)):
                 fallback_boxes.append(("primary", idx, primary_boxes[idx]))
 
+        fallback_conjoined_siblings: dict[int, list[tuple]] = {}
+        if conjoined_detection and len(secondary_boxes) > 0 and conjoined_indices:
+            fb_idx = len(simple_indices)
+            for _, s_indices in conjoined_indices:
+                group_bboxes = []
+                group_fb_indices = []
+                for s_idx in s_indices:
+                    bx = secondary_boxes[s_idx].tolist()
+                    group_bboxes.append(
+                        (
+                            int(round(bx[0])),
+                            int(round(bx[1])),
+                            int(round(bx[2])),
+                            int(round(bx[3])),
+                        )
+                    )
+                    group_fb_indices.append(fb_idx)
+                    fb_idx += 1
+                for k, gi in enumerate(group_fb_indices):
+                    fallback_conjoined_siblings[gi] = [
+                        b for j, b in enumerate(group_bboxes) if j != k
+                    ]
+
         img_h, img_w = image_cv.shape[:2]
         primary_fallback_count = 0
         secondary_fallback_count = 0
 
-        for _, (source, orig_idx, box) in enumerate(fallback_boxes):
+        for fb_i, (source, orig_idx, box) in enumerate(fallback_boxes):
             x0_f, y0_f, x1_f, y1_f = box.tolist()
 
             if source == "primary" and len(primary_results.boxes) > 0:
@@ -1089,6 +1134,10 @@ def detect_speech_bubbles(
                 "class": cls_name,
             }
             detection["sam_mask"] = sam_mask
+            if fb_i in fallback_conjoined_siblings:
+                detection["conjoined_neighbor_bboxes"] = fallback_conjoined_siblings[
+                    fb_i
+                ]
 
             detections.append(detection)
 

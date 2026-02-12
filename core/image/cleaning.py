@@ -33,6 +33,11 @@ BRIGHT_DARK_RATIO_MAX = 0.10
 DARK_BRIGHT_RATIO_MAX = 0.10
 
 
+# Adaptive shrink defaults for conjoined junction zones (at 1.0x scale)
+JUNCTION_ADJACENCY_MARGIN = 10  # Px margin around bbox intersection for junction zone
+JUNCTION_MIN_SHRINK = 1.0  # Minimal shrink applied inside junction zones
+
+
 def _normalize_mask(mask: np.ndarray) -> np.ndarray:
     """
     Ensure mask is uint8 binary (0/255).
@@ -40,6 +45,61 @@ def _normalize_mask(mask: np.ndarray) -> np.ndarray:
     if mask.dtype != np.uint8:
         mask = mask.astype(np.uint8)
     return np.where(mask > 0, 255, 0).astype(np.uint8)
+
+
+def _build_adaptive_shrink_mask(
+    roi_mask: np.ndarray,
+    roi_shrink_px: float,
+    detection_bbox: tuple,
+    neighbor_bboxes: list,
+    processing_scale: float = 1.0,
+) -> np.ndarray:
+    """
+    Shrink ROI uniformly except near conjoined neighbor edges, where only
+    JUNCTION_MIN_SHRINK is applied.  Without this, the distance-transform
+    shrink pinches off narrow junction passages and leaves remnant text.
+    """
+    adjacency_margin = max(1, int(round(JUNCTION_ADJACENCY_MARGIN * processing_scale)))
+    junction_min_shrink = max(1.0, JUNCTION_MIN_SHRINK * processing_scale)
+
+    dist_map = cv2.distanceTransform(
+        roi_mask, cv2.DIST_L2, DISTANCE_TRANSFORM_MASK_SIZE
+    )
+    shrunk = np.where(dist_map >= roi_shrink_px, 255, 0).astype(np.uint8)
+
+    x1, y1, x2, y2 = detection_bbox
+    h, w = roi_mask.shape[:2]
+
+    for other_bbox in neighbor_bboxes:
+        ox1, oy1, ox2, oy2 = other_bbox
+
+        if (
+            x1 - adjacency_margin > ox2
+            or ox1 - adjacency_margin > x2
+            or y1 - adjacency_margin > oy2
+            or oy1 - adjacency_margin > y2
+        ):
+            continue
+
+        zone_x1 = max(0, max(x1, ox1) - adjacency_margin)
+        zone_y1 = max(0, max(y1, oy1) - adjacency_margin)
+        zone_x2 = min(w, min(x2, ox2) + adjacency_margin)
+        zone_y2 = min(h, min(y2, oy2) + adjacency_margin)
+
+        if zone_x2 <= zone_x1 or zone_y2 <= zone_y1:
+            continue
+
+        junction_slice = dist_map[zone_y1:zone_y2, zone_x1:zone_x2]
+        restored = np.where(junction_slice >= junction_min_shrink, 255, 0).astype(
+            np.uint8
+        )
+        np.bitwise_or(
+            shrunk[zone_y1:zone_y2, zone_x1:zone_x2],
+            restored,
+            out=shrunk[zone_y1:zone_y2, zone_x1:zone_x2],
+        )
+
+    return shrunk
 
 
 def process_single_bubble(
@@ -57,6 +117,8 @@ def process_single_bubble(
     constraint_erosion_kernel=None,
     min_contour_area: float = MIN_CONTOUR_AREA,
     classify_colored: bool = False,
+    neighbor_bboxes: Optional[list] = None,
+    processing_scale: float = 1.0,
 ):
     """
     Process a single speech bubble mask to extract text regions and determine fill color.
@@ -140,13 +202,21 @@ def process_single_bubble(
 
         thresholded_roi = cv2.bitwise_and(thresholded_roi, roi_mask)
 
-        # Shrink ROI to avoid border artifacts
-        dist_map = cv2.distanceTransform(
-            roi_mask, cv2.DIST_L2, DISTANCE_TRANSFORM_MASK_SIZE
-        )
-        shrunk_roi_mask = np.where(dist_map >= float(roi_shrink_px), 255, 0).astype(
-            np.uint8
-        )
+        if neighbor_bboxes and detection_bbox is not None:
+            shrunk_roi_mask = _build_adaptive_shrink_mask(
+                roi_mask,
+                float(roi_shrink_px),
+                detection_bbox,
+                neighbor_bboxes,
+                processing_scale=processing_scale,
+            )
+        else:
+            dist_map = cv2.distanceTransform(
+                roi_mask, cv2.DIST_L2, DISTANCE_TRANSFORM_MASK_SIZE
+            )
+            shrunk_roi_mask = np.where(dist_map >= float(roi_shrink_px), 255, 0).astype(
+                np.uint8
+            )
         thresholded_roi = cv2.bitwise_and(thresholded_roi, shrunk_roi_mask)
 
         # Use eroded mask to avoid erasing bubble outlines
@@ -441,6 +511,8 @@ def clean_speech_bubbles(
                         constraint_erosion_kernel=constraint_erosion_kernel,
                         min_contour_area=min_contour_area,
                         classify_colored=inpaint_colored_bubbles,
+                        neighbor_bboxes=detection.get("conjoined_neighbor_bboxes"),
+                        processing_scale=processing_scale,
                     )
                 except Exception as e:
                     retry_success = False
@@ -455,6 +527,9 @@ def clean_speech_bubbles(
                                 "base_mask": base_mask,
                                 "bbox": detection.get("bbox"),
                                 "is_sam": True,
+                                "neighbor_bboxes": detection.get(
+                                    "conjoined_neighbor_bboxes"
+                                ),
                             },
                             thresholding_value,
                             roi_shrink_px,
@@ -531,6 +606,8 @@ def clean_speech_bubbles(
                         constraint_erosion_kernel=constraint_erosion_kernel,
                         min_contour_area=min_contour_area,
                         classify_colored=inpaint_colored_bubbles,
+                        neighbor_bboxes=detection.get("conjoined_neighbor_bboxes"),
+                        processing_scale=processing_scale,
                     )
 
                 except Exception as e:
@@ -546,6 +623,9 @@ def clean_speech_bubbles(
                                 "base_mask": base_mask,
                                 "bbox": detection.get("bbox"),
                                 "is_sam": False,
+                                "neighbor_bboxes": detection.get(
+                                    "conjoined_neighbor_bboxes"
+                                ),
                             },
                             thresholding_value,
                             roi_shrink_px,
@@ -828,6 +908,8 @@ def retry_cleaning_with_otsu(
             constraint_erosion_kernel=constraint_erosion_kernel,
             min_contour_area=min_contour_area,
             classify_colored=classify_colored,
+            neighbor_bboxes=bubble_info.get("neighbor_bboxes"),
+            processing_scale=processing_scale,
         )
     except CleaningError as e:
         log_message(
