@@ -101,8 +101,8 @@
   - Use OpenCV (no VRAM required)
 
 - **Minor color shifts in inpainted regions:**
-  - Flux.2 Klein models may introduce slight color/luminance changes
-  - Use Flux.1 Kontext (SDNQ or Nunchaku) for no color shifts
+  - Flux.2 Klein models may introduce slight color changes; try enabling/disabling "Luminance Correction"
+  - Use Flux.1 Kontext (SDNQ or Nunchaku) for less noticeable color shifts
 
 - **Flux.1 Kontext Nunchaku backend not available:**
   - Nunchaku requires an Nvidia GPU (CUDA) and separate installation
