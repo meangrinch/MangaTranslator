@@ -399,7 +399,7 @@ def get_reasoning_effort_info_text(
     elif provider == "Moonshot AI":
         return "Enables or disables model thinking (high=enabled, none=disabled)."
     elif provider == "Z.ai":
-        return "Enables or disables model thinking (high=enabled, none=disabled)."
+        return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "OpenRouter" and model_name:
         lm = model_name.lower()
         is_openai_reasoning = (
@@ -573,8 +573,8 @@ def get_reasoning_effort_config(
         is_reasoning = is_zai_reasoning_model(model_name)
         if not is_reasoning:
             return False, [], None
-        # Z.ai supports enabled/disabled thinking, mapped to high/none
-        return True, ["high", "none"], "high"
+        # Z.ai supports enabled/disabled thinking, mapped to auto/none
+        return True, ["auto", "none"], "auto"
 
     elif provider == "Moonshot AI":
         # Moonshot AI kimi-k2.5 supports reasoning control via the 'thinking' parameter.

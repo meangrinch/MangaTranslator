@@ -420,9 +420,9 @@ def _build_generation_config(
         }
         if is_reasoning:
             # Z.ai uses thinking parameter with {"type": "enabled"} or {"type": "disabled"}
-            # Map reasoning_effort: "high" -> enabled, "none" -> disabled
-            reasoning_effort = config.reasoning_effort or "high"
-            thinking_type = "enabled" if reasoning_effort == "high" else "disabled"
+            # Map reasoning_effort: "auto" -> enabled, "none" -> disabled
+            reasoning_effort = config.reasoning_effort or "auto"
+            thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
             generation_config["thinking"] = {"type": thinking_type}
         return generation_config
 
