@@ -9,7 +9,7 @@ SETTING_CONSTRAINTS: Dict[str, Tuple[float, float]] = {
     "conjoined_confidence": (0.1, 1.0),
     "panel_confidence": (0.05, 1.0),
     "thresholding_value": (0, 255),
-    "roi_shrink_px": (0, 8),
+    "roi_shrink_px": (0, 10),
     "temperature": (0.0, 2.0),
     "top_p": (0.0, 1.0),
     "top_k": (0, 64),

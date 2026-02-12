@@ -186,7 +186,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         cleaning=UICleaningSettings(
             thresholding_value=thresholding_value,
             use_otsu_threshold=use_otsu_threshold,
-            roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
+            roi_shrink_px=int(roi_shrink_px),
             inpaint_colored_bubbles=inpaint_colored_bubbles,
         ),
         outside_text=UIOutsideTextSettings(

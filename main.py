@@ -212,9 +212,9 @@ def main():
     parser.add_argument(
         "--roi-shrink-px",
         type=int,
-        default=4,
+        default=5,
         help=(
-            "Shrink the threshold ROI inward by N pixels (0-8) before fill. "
+            "Shrink the threshold ROI inward by N pixels (0-10) before fill. "
             "Lower helps clean edge-hugging text; higher preserves outlines."
         ),
     )
@@ -795,7 +795,7 @@ def main():
         cleaning=CleaningConfig(
             thresholding_value=args.thresholding_value,
             use_otsu_threshold=use_otsu_config_val,
-            roi_shrink_px=max(0, min(8, int(args.roi_shrink_px))),
+            roi_shrink_px=max(0, min(10, int(args.roi_shrink_px))),
             inpaint_colored_bubbles=args.inpaint_colored_bubbles,
         ),
         translation=TranslationConfig(
