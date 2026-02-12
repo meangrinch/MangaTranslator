@@ -310,6 +310,7 @@ def clean_speech_bubbles(
     inpaint_method: str = "flux_kontext",
     kontext_backend: str = "nunchaku",
     flux_low_vram: bool = False,
+    flux_luminance_correction: bool = True,
 ):
     """
     Clean speech bubbles using YOLO/SAM masks and optional Flux inpainting for colored bubbles.
@@ -621,6 +622,7 @@ def clean_speech_bubbles(
                             huggingface_token=flux_hf_token,
                             num_inference_steps=int(flux_num_inference_steps),
                             low_vram=flux_low_vram,
+                            luminance_correction=flux_luminance_correction,
                             verbose=verbose,
                         )
                     elif inpaint_method == "flux_klein_4b":
@@ -630,6 +632,7 @@ def clean_speech_bubbles(
                             huggingface_token=flux_hf_token,
                             num_inference_steps=int(flux_num_inference_steps),
                             low_vram=flux_low_vram,
+                            luminance_correction=flux_luminance_correction,
                             verbose=verbose,
                         )
                     else:

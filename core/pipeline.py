@@ -387,6 +387,7 @@ def translate_and_render(
                     inpaint_method=config.outside_text.inpainting_method,
                     kontext_backend=config.outside_text.kontext_backend,
                     flux_low_vram=config.outside_text.flux_low_vram,
+                    flux_luminance_correction=config.outside_text.flux_luminance_correction,
                 )
             except CleaningError as e:
                 log_message(f"Cleaning failed: {e}", always_print=True)

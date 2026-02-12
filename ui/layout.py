@@ -1340,6 +1340,20 @@ def create_layout(
                                     )
                                     != "opencv",
                                 )
+                                _is_klein_for_lum = saved_settings.get(
+                                    "outside_text_inpainting_method",
+                                    "flux_klein_4b",
+                                ) in ("flux_klein_9b", "flux_klein_4b")
+                                outside_text_flux_luminance_correction = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_flux_luminance_correction", True
+                                    ),
+                                    label="Luminance Correction",
+                                    info=(
+                                        "Try and match generated patch brightness to surrounding context."
+                                    ),
+                                    visible=_is_klein_for_lum,
+                                )
                                 outside_text_flux_residual_diff_threshold = gr.Slider(
                                     0.0,
                                     1.0,
@@ -1690,6 +1704,7 @@ def create_layout(
             outside_text_kontext_backend,
             outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
+            outside_text_flux_luminance_correction,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_enable_page_number_filtering,
@@ -1784,6 +1799,7 @@ def create_layout(
             outside_text_kontext_backend,
             outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
+            outside_text_flux_luminance_correction,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_enable_page_number_filtering,
@@ -1878,6 +1894,7 @@ def create_layout(
             outside_text_kontext_backend,
             outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
+            outside_text_flux_luminance_correction,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_enable_page_number_filtering,
@@ -1978,6 +1995,7 @@ def create_layout(
             outside_text_kontext_backend,
             outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
+            outside_text_flux_luminance_correction,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_enable_page_number_filtering,
@@ -2231,6 +2249,7 @@ def create_layout(
                     maximum=max_steps,
                     value=default_steps,
                 ),
+                gr.update(visible=is_klein),
                 gr.update(interactive=residual_interactive),
                 gr.update(interactive=(not is_opencv)),
                 gr.update(interactive=(not is_opencv)),
@@ -2247,6 +2266,7 @@ def create_layout(
                 outside_text_kontext_backend,
                 outside_text_flux_low_vram,
                 outside_text_flux_num_inference_steps,
+                outside_text_flux_luminance_correction,
                 outside_text_flux_residual_diff_threshold,
                 outside_text_seed,
                 inpaint_colored_bubbles,

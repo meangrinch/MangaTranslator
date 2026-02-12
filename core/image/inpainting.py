@@ -840,6 +840,7 @@ class FluxKleinInpainter:
         huggingface_token: str = "",
         num_inference_steps: int = 4,
         low_vram: bool = False,
+        luminance_correction: bool = True,
         verbose: bool = False,
     ):
         """Initialize the Flux Klein Inpainter.
@@ -850,6 +851,7 @@ class FluxKleinInpainter:
             huggingface_token: HuggingFace token (required for 9B gated repo).
             num_inference_steps: Number of denoising steps (1-12, default: 4).
             low_vram: If True, use sequential CPU offload (slower but lower VRAM).
+            luminance_correction: If True, match patch luminance to surrounding context.
             verbose: Whether to print verbose logging.
         """
         self.variant = variant.lower()
@@ -858,6 +860,7 @@ class FluxKleinInpainter:
 
         self.num_inference_steps = num_inference_steps
         self.low_vram = low_vram
+        self.luminance_correction = luminance_correction
         self.verbose = verbose
 
         self.DEVICE = device if device is not None else get_best_device()
@@ -1235,12 +1238,13 @@ class FluxKleinInpainter:
             else:
                 patch_pil = generated_patch_pil
 
-            patch_pil = self._match_luminance(
-                generated_pil=patch_pil,
-                original_crop_pil=image_cropped_pil,
-                mask_crop_np=mask_crop_np,
-                verbose=verbose,
-            )
+            if self.luminance_correction:
+                patch_pil = self._match_luminance(
+                    generated_pil=patch_pil,
+                    original_crop_pil=image_cropped_pil,
+                    mask_crop_np=mask_crop_np,
+                    verbose=verbose,
+                )
 
         dest_tensor = torch.from_numpy(
             np.asarray(image_pil, dtype=np.float32) / 255.0

@@ -539,6 +539,13 @@ def main():
         ),
     )
     parser.add_argument(
+        "--osb-no-luminance-correction",
+        dest="osb_flux_luminance_correction",
+        action="store_false",
+        help="Disable luminance correction that matches generated patch brightness to surrounding context (Klein only)",
+    )
+    parser.set_defaults(osb_flux_luminance_correction=True)
+    parser.add_argument(
         "--osb-flux-residual-threshold",
         type=float,
         default=0.15,
@@ -892,6 +899,7 @@ def main():
             kontext_backend=args.osb_kontext_backend,
             flux_low_vram=args.osb_flux_low_vram,
             flux_num_inference_steps=args.osb_flux_steps,
+            flux_luminance_correction=args.osb_flux_luminance_correction,
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
             osb_confidence=args.osb_confidence,
             seed=args.osb_seed,

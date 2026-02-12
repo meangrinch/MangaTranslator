@@ -123,6 +123,9 @@ class OutsideTextConfig:
     kontext_backend: str = "sdnq"  # "sdnq" (cross-platform) or "nunchaku" (CUDA-only)
     flux_low_vram: bool = False  # Use sequential CPU offload for Klein/Kontext SDNQ
     flux_num_inference_steps: int = 8
+    flux_luminance_correction: bool = (
+        True  # Match patch luminance to surrounding context
+    )
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6
     osb_font_name: Optional[str] = None  # None = use main font as fallback
