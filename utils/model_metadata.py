@@ -128,3 +128,15 @@ def is_opus_46_model(model_name: Optional[str]) -> bool:
     if "claude" not in lm or "opus" not in lm:
         return False
     return ("4.6" in lm) or ("4-6" in lm)
+
+
+def is_rosetta_model(model_name: Optional[str]) -> bool:
+    """Check if a model is a YanoljaNEXT Rosetta translation model.
+
+    Requires both 'rosetta' and 'yanoljanext' in the name to avoid false positives.
+    Matches e.g. 'yanoljanext-rosetta-4b-2511'.
+    """
+    if not model_name:
+        return False
+    lm = model_name.lower().replace("-", "").replace("_", "").replace(" ", "")
+    return "rosetta" in lm and "yanoljanext" in lm

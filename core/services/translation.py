@@ -1,4 +1,5 @@
 import base64
+import json
 import re
 from io import BytesIO
 from typing import Any, Dict, List, Optional
@@ -31,6 +32,7 @@ from utils.model_metadata import (
     is_openai_compatible_reasoning_model,
     is_opus_45_model,
     is_opus_46_model,
+    is_rosetta_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
 )
@@ -855,6 +857,100 @@ def _format_special_instructions(config: TranslationConfig) -> str:
     return ""
 
 
+def _build_rosetta_instruction(
+    output_language: str,
+    special_instructions: Optional[str] = None,
+) -> str:
+    """Build instruction prompt for YanoljaNEXT Rosetta translation models.
+
+    Follows the Rosetta chat template format: concise instruction with target
+    language, context, tone, optional glossary, and output format.
+    Special instructions are mapped to the Glossary field.
+    """
+    instruction = (
+        f"Translate the user's text to {output_language}. "
+        f"Keep the JSON structure and keys.\n"
+        f"Context: Manga dialogue, sound effects, and narration.\n"
+        f"Tone: Natural-sounding manga localization"
+    )
+
+    if special_instructions and special_instructions.strip():
+        glossary_lines = []
+        for line in special_instructions.strip().splitlines():
+            line = line.strip()
+            if line:
+                entry = line if line.startswith("- ") else f"- {line}"
+                glossary_lines.append(entry)
+        if glossary_lines:
+            instruction += "\nGlossary:\n" + "\n".join(glossary_lines)
+
+    instruction += (
+        "\nOutput format: JSON\n"
+        "Provide the final translation immediately without any other text."
+    )
+    return instruction
+
+
+def _build_rosetta_source_prompt(extracted_texts: List[str]) -> str:
+    """Format OCR texts as JSON for Rosetta models.
+
+    Returns a JSON object with string keys "1", "2", etc.
+    """
+    data = {str(i + 1): text for i, text in enumerate(extracted_texts)}
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _parse_rosetta_response(
+    response_text: Optional[str],
+    total_elements: int,
+    provider: str,
+    debug: bool = False,
+) -> List[str]:
+    """Parse JSON response from a Rosetta model.
+
+    Falls back to _parse_llm_response_unified if JSON parsing fails.
+    """
+    if response_text is None:
+        raise TranslationError(f"{provider}: API failed (returned None)")
+    if response_text == "":
+        raise TranslationError(f"{provider}: Empty response")
+
+    log_message(f"Raw response:\n---\n{response_text}\n---", always_print=True)
+
+    # Strip markdown code fences if present
+    cleaned = response_text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+
+    try:
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            result = []
+            for i in range(1, total_elements + 1):
+                val = parsed.get(str(i))
+                if val is not None:
+                    result.append(str(val).strip())
+                else:
+                    result.append(f"[{provider}: Missing item {i}]")
+            log_message(
+                f"Parsed {len(parsed)} items from Rosetta JSON (expected {total_elements})",
+                verbose=debug,
+            )
+            return result
+    except (json.JSONDecodeError, TypeError):
+        log_message(
+            "Rosetta response is not valid JSON, falling back to numbered-list parser",
+            verbose=debug,
+        )
+
+    return _parse_llm_response_unified(response_text, total_elements, provider, debug)
+
+
 def _perform_manga_ocr(
     images_b64: List[str],
     bubble_metadata: List[Dict[str, Any]],
@@ -1179,14 +1275,27 @@ The target language is {output_language}. Use the appropriate translation approa
                     )
                 translation_parts.append(context_part)
 
-            translation_system = _build_system_prompt_translation(
-                output_language,
-                mode="two-step",
-                reading_direction=reading_direction,
-                full_page_context=(
-                    config.send_full_page_context and bool(full_image_b64)
-                ),
-            )
+            use_rosetta = is_rosetta_model(model_name)
+            if use_rosetta:
+                log_message(
+                    "YanoljaNEXT Rosetta model detected — using Rosetta prompt format",
+                    always_print=True,
+                )
+                translation_system = _build_rosetta_instruction(
+                    output_language,
+                    config.special_instructions,
+                )
+                translation_prompt = _build_rosetta_source_prompt(formatted_texts)
+                translation_parts = []  # text-only model, no image parts
+            else:
+                translation_system = _build_system_prompt_translation(
+                    output_language,
+                    mode="two-step",
+                    reading_direction=reading_direction,
+                    full_page_context=(
+                        config.send_full_page_context and bool(full_image_b64)
+                    ),
+                )
             translation_response_text = _call_llm_endpoint(
                 config,
                 translation_parts,
@@ -1194,12 +1303,20 @@ The target language is {output_language}. Use the appropriate translation approa
                 debug,
                 system_prompt=translation_system,
             )
-            final_translations = _parse_llm_response_unified(
-                translation_response_text,
-                total_elements,
-                provider + "-Translate",
-                debug,
-            )
+            if use_rosetta:
+                final_translations = _parse_rosetta_response(
+                    translation_response_text,
+                    total_elements,
+                    provider + "-Translate",
+                    debug,
+                )
+            else:
+                final_translations = _parse_llm_response_unified(
+                    translation_response_text,
+                    total_elements,
+                    provider + "-Translate",
+                    debug,
+                )
 
             if final_translations is None:
                 log_message("Translation API call failed", always_print=True)

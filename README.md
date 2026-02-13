@@ -162,6 +162,9 @@ fonts/
 - Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
 - OpenAI-compatible default URL: `http://localhost:1234/v1`
 
+> [!NOTE]
+> YanoljaNEXT-Rosetta models (e.g., `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`) are automatically detected when used via the OpenAI-Compatible provider and receive optimized prompting. These are text-only models and require two-step + manga-ocr. The Special Instructions field is mapped to Rosetta's translation glossary (one entry per line, e.g., `Yanolja NEXT -> 야놀자넥스트`).
+
 ### OSB text setup (optional)
 
 If you want to use the OSB text pipeline, you need a Hugging Face token with access to the following repositories:
