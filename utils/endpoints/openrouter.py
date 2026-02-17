@@ -171,12 +171,12 @@ def call_openrouter_endpoint(
     if top_k is not None and not is_openai_model and not is_anthropic_model:
         payload["top_k"] = top_k
 
-    # Opus 4.5/4.6 effort via verbosity parameter
+    # Claude 4.5/4.6 effort via verbosity parameter
     is_opus_45 = metadata.get("is_opus_45", False)
-    is_opus_46 = metadata.get("is_opus_46", False)
+    is_46 = metadata.get("is_46_model", False)
     effort = generation_config.get("effort")
 
-    if effort and (is_opus_46 or is_opus_45):
+    if effort and (is_46 or is_opus_45):
         payload["verbosity"] = effort
 
     reasoning_config = {}
@@ -188,8 +188,8 @@ def call_openrouter_endpoint(
     except Exception:
         is_reasoning_model = False
 
-    # For Opus 4.6, reasoning.effort is ignored and adaptive thinking is used by default
-    if reasoning_effort and is_reasoning_model and not is_opus_46:
+    # For Claude 4.6 models, reasoning.effort is ignored and adaptive thinking is used by default
+    if reasoning_effort and is_reasoning_model and not is_46:
         reasoning_config["effort"] = reasoning_effort
 
     if reasoning_config:

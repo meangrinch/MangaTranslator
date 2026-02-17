@@ -12,10 +12,10 @@ from utils.exceptions import ValidationError
 from utils.logging import log_message
 from utils.model_metadata import (
     get_max_tokens_cap,
+    is_46_model,
     is_deepseek_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_opus_45_model,
-    is_opus_46_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
 )
@@ -471,14 +471,12 @@ def _is_anthropic_reasoning_model(
             "claude-opus-4" in lm
             or "claude-sonnet-4" in lm
             or "claude-haiku-4.5" in lm
-            or "claude-3.7-sonnet" in lm
         )
     else:
         return (
             lm.startswith("claude-opus-4")
             or lm.startswith("claude-sonnet-4")
             or lm.startswith("claude-haiku-4-5")
-            or lm.startswith("claude-3-7-sonnet")
         )
 
 
@@ -551,8 +549,8 @@ def get_reasoning_effort_config(
         is_reasoning = _is_anthropic_reasoning_model(model_name, provider)
         if not is_reasoning:
             return False, [], None
-        # Opus 4.6 uses adaptive thinking
-        if is_opus_46_model(model_name):
+        # Claude 4.6 models use adaptive thinking
+        if is_46_model(model_name):
             return True, ["auto", "none"], "auto"
         # Older models use budget-based thinking
         return True, ["high", "medium", "low", "none"], "low"
@@ -593,13 +591,6 @@ def get_reasoning_effort_config(
 
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "low"
 
-        is_claude_37_sonnet = "claude-3.7-sonnet" in lm
-        if is_claude_37_sonnet:
-            is_claude_37_sonnet_thinking = ":thinking" in lm
-            if not is_claude_37_sonnet_thinking:
-                return False, [], None
-            return True, ["xhigh", "high", "medium", "low", "minimal"], "low"
-
         try:
             is_reasoning = openrouter_is_reasoning_model(model_name, debug=False)
         except Exception:
@@ -624,7 +615,7 @@ def get_effort_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], Optional[str]]:
     """
-    Get effort configuration for Claude Opus 4.5/4.6 models (Anthropic/OpenRouter).
+    Get effort configuration for Claude Opus/Sonnet 4.6 and Opus 4.5 models (Anthropic/OpenRouter).
 
     Returns:
         Tuple of (visible, choices, default_value)
@@ -632,8 +623,8 @@ def get_effort_config(
     if provider not in ("Anthropic", "OpenRouter"):
         return False, [], None
 
-    if is_opus_46_model(model_name):
-        # Opus 4.6 supports "max" effort level
+    if is_46_model(model_name):
+        # Claude 4.6 models support "max" effort level
         return True, ["max", "high", "medium", "low"], "medium"
     elif is_opus_45_model(model_name):
         return True, ["high", "medium", "low"], "medium"
@@ -1297,7 +1288,6 @@ def format_thinking_status(
             lm.startswith("claude-opus-4")
             or lm.startswith("claude-sonnet-4")
             or lm.startswith("claude-haiku-4-5")
-            or lm.startswith("claude-3-7-sonnet")
         ):
             effort = reasoning_effort or "none"
             if effort == "none":

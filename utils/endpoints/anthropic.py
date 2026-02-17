@@ -136,10 +136,10 @@ def call_anthropic_endpoint(
 
     try:
         effort = generation_config.get("effort")
-        is_opus_46 = generation_config.get("is_opus_46", False)
+        is_46 = generation_config.get("is_46_model", False)
         valid_efforts = (
             ("max", "high", "medium", "low")
-            if is_opus_46
+            if is_46
             else ("high", "medium", "low")
         )
         if effort and effort in valid_efforts:

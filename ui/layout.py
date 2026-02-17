@@ -813,7 +813,7 @@ def create_layout(
                                 choices=_initial_effort_choices,
                                 label="Effort",
                                 value=_initial_effort_value,
-                                info="Controls token spending eagerness. Claude Opus 4.5/4.6 only.",
+                                info="Controls token spending eagerness. Opus 4.5/4.6, Sonnet 4.6 only.",
                                 visible=_initial_effort_visible,
                                 elem_id="effort_dropdown",
                             )

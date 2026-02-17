@@ -19,7 +19,6 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "gemini-3-pro-preview",
         "gemini-3-flash-preview",
         "gemini-2.5-pro",
-        "gemini-2.5-flash-preview-09-2025",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite-preview-09-2025",
         "gemini-2.5-flash-lite",
@@ -42,7 +41,6 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "gpt-4o-2024-08-06",
         "gpt-4o-2024-05-13",
         "gpt-4o-mini-2024-07-18",
-        "chatgpt-4o-latest",
         "o4-mini-2025-04-16",
         "o3-2025-04-16",
         "o1-2024-12-17",
@@ -52,14 +50,14 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "o1-pro-2025-03-19",
     ],
     "Anthropic": [
-        "claude-opus-4-6-20260101",
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
         "claude-opus-4-5-20251101",
         "claude-sonnet-4-5-20250929",
         "claude-haiku-4-5-20251001",
         "claude-opus-4-1-20250805",
         "claude-opus-4-20250514",
         "claude-sonnet-4-20250514",
-        "claude-3-7-sonnet-20250219",
     ],
     "xAI": [
         "grok-4-1-fast-reasoning",
@@ -175,7 +173,7 @@ DEFAULT_SETTINGS = {
     "upscaling_only": False,
     "test_mode": False,
     "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
-    "effort": "medium",  # Claude Opus 4.5/4.6 only: Controls token spending eagerness (high/medium/low)
+    "effort": "medium",  # Claude Opus 4.5, Opus/Sonnet 4.6 only: Controls token spending eagerness (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "enable_code_execution": False,  # Enable Gemini's code execution for image zoom/inspection.
     "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)

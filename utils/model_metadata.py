@@ -130,6 +130,21 @@ def is_opus_46_model(model_name: Optional[str]) -> bool:
     return ("4.6" in lm) or ("4-6" in lm)
 
 
+def is_sonnet_46_model(model_name: Optional[str]) -> bool:
+    """Check if a model is Claude Sonnet 4.6 (adaptive thinking, max effort)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    if "claude" not in lm or "sonnet" not in lm:
+        return False
+    return ("4.6" in lm) or ("4-6" in lm)
+
+
+def is_46_model(model_name: Optional[str]) -> bool:
+    """Check if a model is any Claude 4.6 variant (Opus or Sonnet)."""
+    return is_opus_46_model(model_name) or is_sonnet_46_model(model_name)
+
+
 def is_rosetta_model(model_name: Optional[str]) -> bool:
     """Check if a model is a YanoljaNEXT Rosetta translation model.
 

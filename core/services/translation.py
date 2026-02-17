@@ -28,10 +28,10 @@ from utils.exceptions import TranslationError
 from utils.logging import log_message
 from utils.model_metadata import (
     get_max_tokens_cap,
+    is_46_model,
     is_deepseek_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_opus_45_model,
-    is_opus_46_model,
     is_rosetta_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
@@ -193,7 +193,6 @@ def _is_reasoning_model_anthropic(model_name: str) -> bool:
         "claude-opus-4",
         "claude-sonnet-4",
         "claude-haiku-4-5",
-        "claude-3-7-sonnet",
     ]
     return any(lm.startswith(p) for p in reasoning_prefixes)
 
@@ -370,7 +369,7 @@ def _build_generation_config(
     elif provider == "Anthropic":
         is_reasoning = _is_reasoning_model_anthropic(model_name)
         is_opus_45 = is_opus_45_model(model_name)
-        is_opus_46 = is_opus_46_model(model_name)
+        is_46 = is_46_model(model_name)
         clamped_temp = min(temperature, 1.0)  # Anthropic caps at 1.0
         generation_config = {
             "temperature": clamped_temp,
@@ -380,16 +379,16 @@ def _build_generation_config(
         if is_reasoning:
             reasoning_effort = config.reasoning_effort or "none"
             generation_config["reasoning_effort"] = reasoning_effort
-            # Opus 4.6 uses adaptive thinking; older models use budget-based
-            if is_opus_46:
+            # Claude 4.6 models use adaptive thinking; older models use budget-based
+            if is_46:
                 if reasoning_effort == "auto":
                     generation_config["thinking_type"] = "adaptive"
             else:
                 if reasoning_effort != "none":
                     generation_config["thinking_type"] = "enabled"
-        if (is_opus_45 or is_opus_46) and config.effort:
+        if (is_opus_45 or is_46) and config.effort:
             generation_config["effort"] = config.effort
-            generation_config["is_opus_46"] = is_opus_46
+            generation_config["is_46_model"] = is_46
         return generation_config
 
     elif provider == "xAI":
@@ -471,24 +470,17 @@ def _build_generation_config(
         is_gpt5_1 = is_openai_model and "gpt-5.1" in model_lower
         is_gpt5 = is_openai_model and "gpt-5" in model_lower and not is_gpt5_1
         # For OpenRouter, Anthropic models use dots (4.5) not hyphens (4-5)
-        # Claude 3.7 Sonnet :thinking variant is reasoning-capable, non-thinking is not
-        is_claude_37_sonnet_thinking = (
-            is_anthropic_model
-            and "claude-3.7-sonnet" in model_lower
-            and ":thinking" in model_lower
-        )
         is_anthropic_reasoning = is_anthropic_model and (
             "claude-opus-4" in model_lower
             or "claude-sonnet-4" in model_lower
             or "claude-haiku-4.5" in model_lower
-            or is_claude_37_sonnet_thinking
         )
         # For OpenRouter, Grok models don't have "reasoning" in the name (e.g., "grok-4.1-fast")
         is_grok_reasoning = is_grok_model and "non-reasoning" not in model_lower
 
         # Add metadata flags for OpenRouter endpoint to avoid re-parsing model names
         is_opus_45 = is_opus_45_model(model_name)
-        is_opus_46 = is_opus_46_model(model_name)
+        is_46 = is_46_model(model_name)
         generation_config["_metadata"] = {
             "is_openai_model": is_openai_model,
             "is_anthropic_model": is_anthropic_model,
@@ -498,11 +490,10 @@ def _build_generation_config(
             "is_openai_reasoning": is_openai_reasoning,
             "is_anthropic_reasoning": is_anthropic_reasoning,
             "is_grok_reasoning": is_grok_reasoning,
-            "is_claude_37_sonnet_thinking": is_claude_37_sonnet_thinking,
             "is_gpt5_1": is_gpt5_1,
             "is_gpt5": is_gpt5,
             "is_opus_45": is_opus_45,
-            "is_opus_46": is_opus_46,
+            "is_46_model": is_46,
         }
 
         if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
@@ -517,8 +508,8 @@ def _build_generation_config(
             if config.reasoning_effort:
                 generation_config["reasoning_effort"] = config.reasoning_effort
 
-        # Opus 4.5/4.6 effort parameter (sent to endpoint as verbosity)
-        if (is_opus_45 or is_opus_46) and config.effort:
+        # Opus 4.5/4.6, Sonnet 4.6 effort parameter
+        if (is_opus_45 or is_46) and config.effort:
             generation_config["effort"] = config.effort
 
         return generation_config
