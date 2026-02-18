@@ -691,25 +691,24 @@ def translate_and_render(
                                 for _ in sorted_bubble_data
                             ]
 
+                        _provider_tag = f"[{config.translation.provider}:"
                         valid_translations = [
                             t
                             for t in translated_texts
                             if t
                             and not t.startswith("[Translation Error")
                             and not t.startswith("API Error")
+                            and not t.startswith(_provider_tag)
                             and t.strip()
                             not in {
                                 "[OCR FAILED]",
                                 "[Empty response / no content]",
-                                f"[{config.translation.provider}: API call failed/blocked]",
-                                f"[{config.translation.provider}: OCR call failed/blocked]",
-                                f"[{config.translation.provider}: Failed to parse response]",
                             }
                         ]
 
                         if bubble_images_b64 and not valid_translations:
                             raise TranslationError(
-                                "Total translation failure: All bubbles failed."
+                                "All bubbles failed."
                             )
 
                 # Render Translations
@@ -743,13 +742,11 @@ def translate_and_render(
                             or text.startswith("API Error")
                             or text.startswith("[Translation Error]")
                             or text.startswith("[Translation Error:")
+                            or text.startswith(_provider_tag)
                             or text.strip()
                             in {
                                 "[OCR FAILED]",
                                 "[Empty response / no content]",
-                                f"[{config.translation.provider}: API call failed/blocked]",
-                                f"[{config.translation.provider}: OCR call failed/blocked]",
-                                f"[{config.translation.provider}: Failed to parse response]",
                             }
                         ):
                             entry_type = "outside text" if is_outside_text else "bubble"
