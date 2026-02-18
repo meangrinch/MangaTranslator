@@ -468,9 +468,7 @@ def _is_anthropic_reasoning_model(
     if provider == "OpenRouter":
         # OpenRouter uses dots (4.5) not hyphens (4-5)
         return (
-            "claude-opus-4" in lm
-            or "claude-sonnet-4" in lm
-            or "claude-haiku-4.5" in lm
+            "claude-opus-4" in lm or "claude-sonnet-4" in lm or "claude-haiku-4.5" in lm
         )
     else:
         return (
@@ -1129,7 +1127,10 @@ def fetch_and_update_openrouter_models(
 
 
 def fetch_and_update_compatible_models(
-    url: str, api_key: Optional[str], current_model: Optional[str] = None
+    url: str,
+    api_key: Optional[str],
+    current_model: Optional[str] = None,
+    force_refresh: bool = False,
 ):
     """Fetches models from a generic OpenAI-Compatible endpoint and updates dropdown.
 
@@ -1137,6 +1138,7 @@ def fetch_and_update_compatible_models(
         url: Base URL of the OpenAI-Compatible endpoint.
         api_key: Optional API key for the endpoint.
         current_model: Currently selected model in the dropdown to preserve when available.
+        force_refresh: If True, bypass cache and re-fetch models from the endpoint.
     """
     global COMPATIBLE_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
@@ -1147,7 +1149,8 @@ def fetch_and_update_compatible_models(
         return gr.update(choices=[], value=None)
 
     if (
-        COMPATIBLE_MODEL_CACHE.get("url") == url
+        not force_refresh
+        and COMPATIBLE_MODEL_CACHE.get("url") == url
         and COMPATIBLE_MODEL_CACHE.get("models") is not None
     ):
         log_message(f"Using cached models from {url}", verbose=verbose)

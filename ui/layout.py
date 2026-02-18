@@ -2122,7 +2122,7 @@ def create_layout(
             queue=False,
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.
             fn=lambda prov, url, key, ocr_method: (
-                utils.fetch_and_update_compatible_models(url, key)
+                utils.fetch_and_update_compatible_models(url, key, force_refresh=True)
                 if prov == "OpenAI-Compatible"
                 else (
                     utils.fetch_and_update_openrouter_models(ocr_method=ocr_method)
