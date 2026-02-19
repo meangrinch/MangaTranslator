@@ -514,6 +514,8 @@ def get_reasoning_effort_config(
         if is_gemini_3:
             if "flash" in lm:
                 return True, ["high", "medium", "low", "minimal"], "high"
+            if "gemini-3.1" in lm:
+                return True, ["high", "medium", "low"], "high"
             return True, ["high", "low"], "high"
 
         is_flash = "gemini-2.5-flash" in lm
