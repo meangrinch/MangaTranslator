@@ -1118,6 +1118,7 @@ class FluxKleinInpainter:
             "padding": padding,
             "blur": blur_radius,
             "variant": self.variant,
+            "lum_corr": self.luminance_correction,
         }
         if strict_mask_clipping:
             cache_params["strict_clip"] = True

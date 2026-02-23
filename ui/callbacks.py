@@ -1472,6 +1472,15 @@ def handle_confidence_threshold_change(_confidence: float):
     return None
 
 
+def handle_luminance_correction_change(_enabled: bool):
+    """Handles changes in the flux luminance correction checkbox to clear inpaint cache."""
+    from core.caching import get_cache
+
+    cache = get_cache()
+    cache.clear_inpaint_cache()
+    return None
+
+
 def handle_ocr_method_change(
     ocr_method: str,
     input_language: str,

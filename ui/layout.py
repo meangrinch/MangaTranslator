@@ -2293,6 +2293,13 @@ def create_layout(
             queue=False,
         )
 
+        outside_text_flux_luminance_correction.change(
+            fn=callbacks.handle_luminance_correction_change,
+            inputs=outside_text_flux_luminance_correction,
+            outputs=None,
+            queue=False,
+        )
+
         # Conjoined detection change handler - clears SAM cache
         conjoined_detection_checkbox.change(
             fn=callbacks.handle_conjoined_detection_change,
