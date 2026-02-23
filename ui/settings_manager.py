@@ -166,7 +166,7 @@ DEFAULT_SETTINGS = {
     "verbose": False,
     "jpeg_quality": 95,
     "png_compression": 2,
-    "output_format": "auto",
+    "output_format": "png",
     "image_upscale_mode": "off",
     "image_upscale_factor": 2.0,
     "image_upscale_model": "model_lite",

@@ -98,7 +98,7 @@ class UIRenderingSettings:
 class UIOutputSettings:
     """UI state for output settings."""
 
-    output_format: str = "auto"
+    output_format: str = "png"
     jpeg_quality: int = 95
     png_compression: int = 2
     image_upscale_mode: str = "off"  # "off", "initial", "final"

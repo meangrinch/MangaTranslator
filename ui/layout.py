@@ -1501,7 +1501,7 @@ def create_layout(
                             output_format = gr.Radio(
                                 choices=["auto", "png", "jpeg"],
                                 label="Image Output Format",
-                                value=saved_settings.get("output_format", "auto"),
+                                value=saved_settings.get("output_format", "png"),
                                 info="'auto' uses the same format as the input image (defaults to PNG if unknown).",
                             )
                             jpeg_quality = gr.Slider(
@@ -1511,7 +1511,7 @@ def create_layout(
                                 step=1,
                                 label="JPEG Quality",
                                 info="Higher levels result in better quality, but larger file sizes.",
-                                interactive=saved_settings.get("output_format", "auto")
+                                interactive=saved_settings.get("output_format", "png")
                                 != "png",
                             )
                             png_compression = gr.Slider(
@@ -1524,7 +1524,7 @@ def create_layout(
                                     "Uses OxiPNG. Higher levels result in smaller file sizes, "
                                     "but slower processing times."
                                 ),
-                                interactive=saved_settings.get("output_format", "auto")
+                                interactive=saved_settings.get("output_format", "png")
                                 != "jpeg",
                             )
                             gr.Markdown("### Upscaling")

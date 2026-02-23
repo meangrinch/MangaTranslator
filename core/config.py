@@ -148,7 +148,7 @@ class OutputConfig:
 
     jpeg_quality: int = 95
     png_compression: int = 2
-    output_format: str = "auto"
+    output_format: str = "png"
     upscale_final_image: bool = False
     image_upscale_factor: float = 2.0
     image_upscale_model: str = "model_lite"  # "model" or "model_lite"

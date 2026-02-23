@@ -386,7 +386,7 @@ def main():
         "--output-format",
         type=str,
         choices=["auto", "png", "jpeg"],
-        default="auto",
+        default="png",
         help="Output image format (auto uses input format)",
     )
     parser.add_argument(
