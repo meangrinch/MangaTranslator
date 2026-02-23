@@ -355,7 +355,7 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
                 f"{ERROR_PREFIX}Invalid OpenAI-Compatible URL format. Must start with http:// or https://",
             )
 
-    if ui_state.outside_text.enabled and ui_state.outside_text.huggingface_token:
+    if ui_state.outside_text.enabled:
         hf_valid, hf_msg = utils.validate_huggingface_token(
             ui_state.outside_text.huggingface_token
         )

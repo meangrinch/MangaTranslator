@@ -499,10 +499,10 @@ def main():
         help="Enable outside speech bubble text detection and removal",
     )
     parser.add_argument(
-        "--osb-huggingface-token",
+        "--osb-hf-token",
         type=str,
         default=None,
-        help="HuggingFace token for downloading OSB pipeline models (overrides HUGGINGFACE_TOKEN env var)",
+        help="HuggingFace token for downloading OSB pipeline models (overrides HF_TOKEN env var)",
     )
     parser.add_argument(
         "--osb-inpainting-method",
@@ -894,7 +894,7 @@ def main():
             page_filter_margin_threshold=args.osb_page_filter_margin,
             page_filter_min_area_ratio=args.osb_page_filter_min_area,
             huggingface_token=args.osb_huggingface_token
-            or os.environ.get("HUGGINGFACE_TOKEN", ""),
+            or os.environ.get("HF_TOKEN", ""),
             inpainting_method=args.osb_inpainting_method,
             kontext_backend=args.osb_kontext_backend,
             flux_low_vram=args.osb_flux_low_vram,

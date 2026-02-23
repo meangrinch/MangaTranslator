@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
@@ -59,6 +60,28 @@ def get_available_font_packs(fonts_base_dir: Path) -> Tuple[List[str], Optional[
 
 def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     """Validate API key format based on provider."""
+    env_var_map = {
+        "Google": "GOOGLE_API_KEY",
+        "OpenAI": "OPENAI_API_KEY",
+        "Anthropic": "ANTHROPIC_API_KEY",
+        "xAI": "XAI_API_KEY",
+        "OpenRouter": "OPENROUTER_API_KEY",
+        "DeepSeek": "DEEPSEEK_API_KEY",
+        "Moonshot AI": "MOONSHOT_API_KEY",
+        "Z.ai": "ZAI_API_KEY",
+        "OpenAI-Compatible": "OPENAI_COMPATIBLE_API_KEY",
+    }
+    env_var_name = env_var_map.get(provider)
+
+    # Use environment variable if field is empty
+    if not api_key:
+        if provider == "Google":
+            api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get(
+                "GEMINI_API_KEY", ""
+            )
+        elif env_var_name:
+            api_key = os.environ.get(env_var_name, "")
+
     if not api_key and provider != "OpenAI-Compatible":
         return False, f"{provider} API key is required"
     elif not api_key and provider == "OpenAI-Compatible":
@@ -92,6 +115,9 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
 
 def validate_huggingface_token(token: str) -> tuple[bool, str]:
     """Validate HuggingFace token format."""
+    if not token:
+        token = os.environ.get("HF_TOKEN", "")
+
     if not token:
         return True, "HuggingFace token is optional and not provided."
 

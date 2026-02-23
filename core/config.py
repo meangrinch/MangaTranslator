@@ -180,7 +180,9 @@ class MangaTranslatorConfig:
         import os
 
         if not self.translation.google_api_key:
-            self.translation.google_api_key = os.environ.get("GOOGLE_API_KEY", "")
+            self.translation.google_api_key = os.environ.get(
+                "GOOGLE_API_KEY"
+            ) or os.environ.get("GEMINI_API_KEY", "")
         if not self.translation.openai_api_key:
             self.translation.openai_api_key = os.environ.get("OPENAI_API_KEY", "")
         if not self.translation.anthropic_api_key:
@@ -189,6 +191,8 @@ class MangaTranslatorConfig:
             self.translation.xai_api_key = os.environ.get("XAI_API_KEY", "")
         if not self.translation.deepseek_api_key:
             self.translation.deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not self.translation.zai_api_key:
+            self.translation.zai_api_key = os.environ.get("ZAI_API_KEY", "")
         if not self.translation.moonshot_api_key:
             self.translation.moonshot_api_key = os.environ.get("MOONSHOT_API_KEY", "")
         if not self.translation.openrouter_api_key:
@@ -201,6 +205,8 @@ class MangaTranslatorConfig:
             self.translation.openai_compatible_api_key = os.environ.get(
                 "OPENAI_COMPATIBLE_API_KEY", ""
             )
+        if not self.outside_text.huggingface_token:
+            self.outside_text.huggingface_token = os.environ.get("HF_TOKEN", "")
 
         # Autodetect device if not specified
         if self.device is None:

@@ -1166,7 +1166,8 @@ def create_layout(
                                 type="password",
                                 info=(
                                     "Required for downloading AnimeText YOLO (required for OSB detection), "
-                                    "Flux.1 Kontext Nunchaku, and/or SAM 3 models from HuggingFace Hub."
+                                    "Flux.1 Kontext Nunchaku, and/or SAM 3 models from HuggingFace Hub. "
+                                    "Can also set via HF_TOKEN env var."
                                 ),
                             )
 
