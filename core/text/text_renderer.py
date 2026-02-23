@@ -39,6 +39,7 @@ def render_text_skia(
     bubble_id: Optional[str] = None,
     rotation_deg: float = 0.0,
     vertical_stack: bool = False,
+    text_color_rgb: Optional[Tuple[int, int, int]] = None,
 ) -> Image.Image:
     """
     Fits and renders text within a bounding box using Skia and HarfBuzz.
@@ -252,7 +253,9 @@ def render_text_skia(
 
     # Determine text color contrast based on sampled background brightness
     text_color = skia.ColorBLACK
-    if bubble_color_bgr is not None:
+    if text_color_rgb is not None:
+        text_color = skia.Color(text_color_rgb[0], text_color_rgb[1], text_color_rgb[2])
+    elif bubble_color_bgr is not None:
         try:
             # bubble_color_bgr may be a grayscale proxy; treat as BGR
             bg_brightness = (

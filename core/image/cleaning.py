@@ -119,6 +119,7 @@ def process_single_bubble(
     classify_colored: bool = False,
     neighbor_bboxes: Optional[list] = None,
     processing_scale: float = 1.0,
+    image_bgr: Optional[np.ndarray] = None,
 ):
     """
     Process a single speech bubble mask to extract text regions and determine fill color.
@@ -134,9 +135,16 @@ def process_single_bubble(
         verbose (bool): Whether to print verbose messages
         detection_bbox: Bounding box for logging (optional)
         is_sam (bool): Whether this is a SAM mask (for logging)
+        dilation_kernel: Kernel for dilation
+        constraint_erosion_kernel: Kernel for erosion
+        min_contour_area: Min area for contours
+        classify_colored: Whether to classify colored bubbles
+        neighbor_bboxes: Neighboring bboxes for shrink logic
+        processing_scale: Processing scale multiplier
+        image_bgr (numpy.ndarray): BGR image for text color sampling
 
     Returns:
-        tuple: (final_mask, fill_color_bgr, is_colored, sample_color_bgr, text_bbox)
+        tuple: (final_mask, fill_color_bgr, is_colored, sample_color_bgr, text_bbox, text_color_bgr)
 
     Raises:
         CleaningError: If processing fails
@@ -340,12 +348,41 @@ def process_single_bubble(
                             f"dark_ratio={dark_ratio:.2f})",
                             verbose=verbose,
                         )
+
+                text_color_bgr = None
+                if image_bgr is not None:
+                    text_mask = cv2.bitwise_and(
+                        cv2.bitwise_not(thresholded_roi), shrunk_roi_mask
+                    )
+                    sample_mask = cv2.erode(
+                        text_mask, np.ones((3, 3), np.uint8), iterations=1
+                    )
+                    text_pixels_bgr = image_bgr[sample_mask == 255]
+                    # Fallback if erosion obliterates thin text
+                    if text_pixels_bgr.size == 0:
+                        text_pixels_bgr = image_bgr[text_mask == 255]
+
+                    if text_pixels_bgr.size > 0:
+                        sampled_bgr = tuple(
+                            np.median(text_pixels_bgr, axis=0).astype(int)
+                        )
+                        hsv = cv2.cvtColor(
+                            np.uint8([[sampled_bgr]]), cv2.COLOR_BGR2HSV
+                        )[0][0]
+                        if hsv[1] < 25:
+                            text_color_bgr = (
+                                (0, 0, 0) if hsv[2] < 128 else (255, 255, 255)
+                            )
+                        else:
+                            text_color_bgr = sampled_bgr
+
                 return (
                     final_mask,
                     fill_color_bgr,
                     is_colored_bubble,
                     sample_color_bgr,
                     text_bbox,
+                    text_color_bgr,
                 )
 
         raise CleaningError("Failed to process bubble mask")
@@ -482,6 +519,7 @@ def clean_speech_bubbles(
             is_colored_bubble = False
             sample_color_bgr: Optional[tuple[int, int, int]] = None
             text_bbox: Optional[tuple[int, int, int, int]] = None
+            text_color_bgr: Optional[tuple[int, int, int]] = None
             base_mask = None
             is_sam_mask = False
 
@@ -496,6 +534,7 @@ def clean_speech_bubbles(
                         is_colored_bubble,
                         sample_color_bgr,
                         text_bbox,
+                        text_color_bgr,
                     ) = process_single_bubble(
                         base_mask,
                         img_gray,
@@ -513,6 +552,7 @@ def clean_speech_bubbles(
                         classify_colored=inpaint_colored_bubbles,
                         neighbor_bboxes=detection.get("conjoined_neighbor_bboxes"),
                         processing_scale=processing_scale,
+                        image_bgr=image,
                     )
                 except Exception as e:
                     retry_success = False
@@ -543,6 +583,7 @@ def clean_speech_bubbles(
                             sample_color_bgr = retry_res["color"]
                             is_colored_bubble = retry_res["is_colored"]
                             text_bbox = retry_res["text_bbox"]
+                            text_color_bgr = retry_res.get("text_color_bgr")
                             retry_success = True
                             log_message(
                                 f"Otsu retry successful for {detection.get('bbox')}",
@@ -591,6 +632,7 @@ def clean_speech_bubbles(
                         is_colored_bubble,
                         sample_color_bgr,
                         text_bbox,
+                        text_color_bgr,
                     ) = process_single_bubble(
                         base_mask,
                         img_gray,
@@ -608,6 +650,7 @@ def clean_speech_bubbles(
                         classify_colored=inpaint_colored_bubbles,
                         neighbor_bboxes=detection.get("conjoined_neighbor_bboxes"),
                         processing_scale=processing_scale,
+                        image_bgr=image,
                     )
 
                 except Exception as e:
@@ -639,6 +682,7 @@ def clean_speech_bubbles(
                             sample_color_bgr = retry_res["color"]
                             is_colored_bubble = retry_res["is_colored"]
                             text_bbox = retry_res["text_bbox"]
+                            text_color_bgr = retry_res.get("text_color_bgr")
                             retry_success = True
                             log_message(
                                 f"Otsu retry successful for {detection.get('bbox')}",
@@ -666,6 +710,7 @@ def clean_speech_bubbles(
                         "bbox": detection.get("bbox"),
                         "is_colored": is_colored_bubble,
                         "text_bbox": text_bbox,
+                        "text_color_bgr": text_color_bgr,
                         "is_sam": is_sam_mask,
                         "inpainted": False,
                     }
@@ -910,6 +955,7 @@ def retry_cleaning_with_otsu(
             classify_colored=classify_colored,
             neighbor_bboxes=bubble_info.get("neighbor_bboxes"),
             processing_scale=processing_scale,
+            image_bgr=image_bgr,
         )
     except CleaningError as e:
         log_message(
@@ -933,6 +979,7 @@ def retry_cleaning_with_otsu(
         is_colored_bubble,
         sample_color_bgr,
         text_bbox,
+        text_color_bgr,
     ) = result
 
     bubble_color = sample_color_bgr if sample_color_bgr else fill_color_bgr
@@ -949,5 +996,6 @@ def retry_cleaning_with_otsu(
         "bbox": bubble_info.get("bbox"),
         "is_colored": is_colored_bubble,
         "text_bbox": text_bbox,
+        "text_color_bgr": text_color_bgr,
         "is_sam": bubble_info.get("is_sam", False),
     }

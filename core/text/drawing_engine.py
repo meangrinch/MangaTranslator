@@ -186,17 +186,18 @@ def draw_layout(
 
         outline_paint = None
         if outline_width > 0:
-            # Use opposite color for outline to ensure visibility
-            if text_color == skia.ColorBLACK:
-                outline_color = skia.ColorWHITE
-            else:
-                outline_color = skia.ColorBLACK
+            r = skia.ColorGetR(text_color)
+            g = skia.ColorGetG(text_color)
+            b = skia.ColorGetB(text_color)
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
+            outline_color = skia.ColorBLACK if lum >= 80 else skia.ColorWHITE
 
             outline_paint = skia.Paint(
                 AntiAlias=True,
                 Color=outline_color,
                 Style=skia.Paint.kStroke_Style,
                 StrokeWidth=outline_width,
+                StrokeJoin=skia.Paint.kRound_Join,
             )
 
         block_start_x = target_center_x - final_max_line_width / 2.0

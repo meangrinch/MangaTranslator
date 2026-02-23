@@ -314,6 +314,7 @@ def process_outside_text(
                     else config.outside_text.seed
                 )
 
+                extracted_text_colors = {}
                 flux_inpaints = 0
                 cv2_inpaints = 0
                 for i, group in enumerate(mask_groups):
@@ -427,6 +428,76 @@ def process_outside_text(
                                     border_pixels = crop_np[local_mask]
 
                                 if border_pixels is not None and border_pixels.size > 0:
+                                    # Calculate text color using LAB contrast thresholding
+                                    bg_rgb = np.median(border_pixels, axis=0).astype(
+                                        np.uint8
+                                    )
+                                    bg_lab = cv2.cvtColor(
+                                        np.uint8([[bg_rgb]]), cv2.COLOR_RGB2LAB
+                                    )[0][0]
+
+                                    crop_rgb = np.array(
+                                        pil_image.crop(
+                                            (ox, oy, ox + ow, oy + oh)
+                                        ).convert("RGB")
+                                    )
+                                    crop_lab = cv2.cvtColor(
+                                        crop_rgb, cv2.COLOR_RGB2LAB
+                                    ).astype(np.float32)
+                                    dist_map = np.linalg.norm(
+                                        crop_lab - bg_lab.astype(np.float32), axis=2
+                                    )
+
+                                    robust_max_dist = np.percentile(dist_map, 95)
+                                    CONTRAST_THRESHOLD = max(30, robust_max_dist * 0.6)
+                                    contrast_mask = (
+                                        dist_map > CONTRAST_THRESHOLD
+                                    ).astype(np.uint8) * 255
+
+                                    kernel_3 = np.ones((3, 3), np.uint8)
+                                    contrast_mask = cv2.morphologyEx(
+                                        contrast_mask, cv2.MORPH_CLOSE, kernel_3
+                                    )
+                                    contrast_mask = cv2.erode(
+                                        contrast_mask,
+                                        np.ones((2, 2), np.uint8),
+                                        iterations=1,
+                                    )
+
+                                    contours, _ = cv2.findContours(
+                                        contrast_mask,
+                                        cv2.RETR_EXTERNAL,
+                                        cv2.CHAIN_APPROX_SIMPLE,
+                                    )
+                                    clean_mask = np.zeros_like(contrast_mask)
+                                    MIN_COMPONENT_AREA = 4
+                                    for cnt in contours:
+                                        if cv2.contourArea(cnt) >= MIN_COMPONENT_AREA:
+                                            cv2.drawContours(
+                                                clean_mask, [cnt], -1, 255, cv2.FILLED
+                                            )
+
+                                    text_pixels_rgb = crop_rgb[clean_mask == 255]
+                                    if len(text_pixels_rgb) >= 10:
+                                        text_color_rgb = tuple(
+                                            np.median(text_pixels_rgb, axis=0).astype(
+                                                int
+                                            )
+                                        )
+                                        hsv = cv2.cvtColor(
+                                            np.uint8([[text_color_rgb]]),
+                                            cv2.COLOR_RGB2HSV,
+                                        )[0][0]
+                                        if hsv[1] < 25:
+                                            text_color_rgb = (
+                                                (0, 0, 0)
+                                                if hsv[2] < 128
+                                                else (255, 255, 255)
+                                            )
+                                        extracted_text_colors[composite_clip_bbox] = (
+                                            text_color_rgb
+                                        )
+
                                     white_thresh = 250
                                     black_thresh = 5
                                     ratio_threshold = 0.95
@@ -676,6 +747,7 @@ def process_outside_text(
                             "image_b64": image_b64,
                             "mime_type": mime_type,
                             "is_dark_text": original_text_colors.get(bbox_tuple, True),
+                            "text_color_rgb": extracted_text_colors.get(bbox_tuple),
                             "aspect_ratio": aspect_ratio,
                             "original_crop_pil": original_crop_pil,
                         }

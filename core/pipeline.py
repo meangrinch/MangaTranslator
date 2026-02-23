@@ -567,6 +567,7 @@ def translate_and_render(
                     if "image_b64" in bubble and "mime_type" in bubble
                 ]
                 translated_texts = []
+                _provider_tag = f"[{config.translation.provider}:"
                 if not bubble_images_b64:
                     log_message("No valid bubbles after sorting", always_print=True)
                 else:
@@ -691,7 +692,6 @@ def translate_and_render(
                                 for _ in sorted_bubble_data
                             ]
 
-                        _provider_tag = f"[{config.translation.provider}:"
                         valid_translations = [
                             t
                             for t in translated_texts
@@ -707,9 +707,7 @@ def translate_and_render(
                         ]
 
                         if bubble_images_b64 and not valid_translations:
-                            raise TranslationError(
-                                "All bubbles failed."
-                            )
+                            raise TranslationError("All bubbles failed.")
 
                 # Render Translations
                 bubble_render_info_map = {
@@ -720,6 +718,7 @@ def translate_and_render(
                         "is_sam": info.get("is_sam", False),
                         "is_colored": info.get("is_colored", False),
                         "text_bbox": info.get("text_bbox"),
+                        "text_color_bgr": info.get("text_color_bgr"),
                     }
                     for info in processed_bubbles_info
                     if "bbox" in info and "color" in info and "mask" in info
@@ -773,11 +772,8 @@ def translate_and_render(
                             use_ligs = config.outside_text.osb_use_ligatures
                             # Outside text was inpainted, no mask needed
                             cleaned_mask = None
-                            # Use the detected text color from outside_text_processor
                             is_dark_text = bubble.get("is_dark_text", True)
-                            # Set bubble_color_bgr to mimic the original text color
-                            # Dark text → dark background value → white rendering
-                            # Light text → light background value → black rendering
+                            text_color_rgb = bubble.get("text_color_rgb", None)
                             bubble_color_bgr = (
                                 (50, 50, 50) if is_dark_text else (255, 255, 255)
                             )
@@ -799,11 +795,19 @@ def translate_and_render(
                             cleaned_mask = None
                             base_mask = None
                             is_sam_mask = False
+                            text_color_rgb = None
                             if render_info:
                                 bubble_color_bgr = render_info["color"]
                                 cleaned_mask = render_info.get("mask")
                                 base_mask = render_info.get("base_mask")
                                 is_sam_mask = render_info.get("is_sam", False)
+                                text_color_bgr_val = render_info.get("text_color_bgr")
+                                if text_color_bgr_val:
+                                    text_color_rgb = (
+                                        text_color_bgr_val[2],
+                                        text_color_bgr_val[1],
+                                        text_color_bgr_val[0],
+                                    )
                             # No rotation/stacking for regular bubbles
                             vertical_stack = False
                             rotation_deg = 0.0
@@ -855,6 +859,7 @@ def translate_and_render(
                                     bubble_id=str(i + 1),
                                     rotation_deg=rotation_deg,
                                     vertical_stack=vertical_stack,
+                                    text_color_rgb=text_color_rgb,
                                     raise_on_safe_error=False,
                                 )
                                 success = True
@@ -887,6 +892,7 @@ def translate_and_render(
                                             bubble_id=str(i + 1),
                                             rotation_deg=forced_stack_rotation,
                                             vertical_stack=True,
+                                            text_color_rgb=text_color_rgb,
                                             raise_on_safe_error=False,
                                         )
                                         log_message(
@@ -945,6 +951,7 @@ def translate_and_render(
                                     bubble_id=str(i + 1),
                                     rotation_deg=rotation_deg,
                                     vertical_stack=vertical_stack,
+                                    text_color_rgb=text_color_rgb,
                                     raise_on_safe_error=True,
                                 )
                                 success = True
@@ -972,6 +979,11 @@ def translate_and_render(
                                             ),
                                             "text_bbox": (
                                                 render_info.get("text_bbox")
+                                                if render_info
+                                                else None
+                                            ),
+                                            "text_color_bgr": (
+                                                render_info.get("text_color_bgr")
                                                 if render_info
                                                 else None
                                             ),
