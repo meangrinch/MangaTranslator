@@ -174,7 +174,7 @@ DEFAULT_SETTINGS = {
     "upscaling_only": False,
     "test_mode": False,
     "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
-    "effort": "medium",  # Claude Opus 4.5, Opus/Sonnet 4.6 only: Controls token spending eagerness (high/medium/low)
+    "effort": "medium",  # Opus 4.5/4.6, Sonnet 4.6 only: token spending eagerness (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "enable_code_execution": False,  # Enable Gemini's code execution for image zoom/inspection.
     "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
