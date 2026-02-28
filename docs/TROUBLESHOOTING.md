@@ -75,7 +75,9 @@
 - **Poor translations:**
   - Try "two-step" translation mode for less-capable LLMs
   - Try disabling "Send Full Page to LLM"
-  - Try using "manga-ocr" OCR method, particularly for less-capable LLMs (Japanese sources only)
+  - Try using a local OCR method, particularly for less-capable LLMs:
+    - "manga-ocr": Japanese sources only
+    - "paddleocr-vl": non-Japanese sources
   - Increase "max_tokens" and/or use a higher "reasoning_effort" (e.g., "high")
   - Switch "Bubble/Context Resizing Method" to a better quality method (e.g., "Model")
 
@@ -87,7 +89,7 @@
   - Disable "Send Full Page to LLM"
   - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes
   - Lower "Media Resolution" (if using Gemini models)
-  - Use "manga-ocr" OCR method (Japanese sources only; may perform worse than more-capable VLMs)
+  - Use "manga-ocr/paddleocr-vl" OCR method (may perform worse than more-capable VLMs)
 
 ### Inpainting
 

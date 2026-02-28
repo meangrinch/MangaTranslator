@@ -18,6 +18,7 @@ start-webui.sh
 /models/upscale/
 /models/yolo/
 /models/manga-ocr-base/
+/models/paddleocr-vl/
 /output/
 .DS_Store
 Thumbs.db

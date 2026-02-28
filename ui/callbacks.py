@@ -1583,6 +1583,79 @@ def handle_ocr_method_change(
             updates.append(gr.update(choices=models, value=selected_model))
         else:
             updates.append(gr.update())
+    elif ocr_method == "paddleocr-vl":
+        # Restrict to PaddleOCR-VL-1.5 supported languages; keep current if supported
+        paddle_langs = layout.PADDLE_OCR_VL_LANGUAGES
+        if input_language in paddle_langs:
+            saved_language = original_language_state
+            selected_lang = input_language
+        else:
+            saved_language = input_language
+            selected_lang = (
+                "Japanese" if "Japanese" in paddle_langs else paddle_langs[0]
+            )
+
+        updates.append(
+            gr.update(value=selected_lang, choices=paddle_langs, interactive=True)
+        )
+        updates.append(saved_language)
+
+        if batch_input_language in paddle_langs:
+            batch_saved_language = batch_original_language_state
+            batch_selected_lang = batch_input_language
+        else:
+            batch_saved_language = batch_input_language
+            batch_selected_lang = (
+                "Japanese" if "Japanese" in paddle_langs else paddle_langs[0]
+            )
+
+        updates.append(
+            gr.update(value=batch_selected_lang, choices=paddle_langs, interactive=True)
+        )
+        updates.append(batch_saved_language)
+
+        updates.append(gr.update(value=False, interactive=False))
+        updates.append(gr.update(value=False, interactive=False))
+
+        # Model list refresh — same as manga-ocr (enables text-only providers)
+        if provider == "OpenRouter":
+            model_update = utils.fetch_and_update_openrouter_models(
+                ocr_method="manga-ocr", current_model=current_model
+            )
+            updates.append(model_update)
+        elif provider == "OpenAI-Compatible":
+            model_update = utils.fetch_and_update_compatible_models(
+                openai_compatible_url, openai_compatible_api_key, current_model
+            )
+            updates.append(model_update)
+        elif provider == "Z.ai":
+            models = settings_manager.PROVIDER_MODELS.get("Z.ai", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("Z.ai")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
+        elif provider == "Moonshot AI":
+            models = settings_manager.PROVIDER_MODELS.get("Moonshot AI", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("Moonshot AI")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
+        else:
+            updates.append(gr.update())
     else:
         restored_language = (
             original_language_state if original_language_state else input_language
@@ -1671,7 +1744,7 @@ def handle_translation_mode_change(translation_mode: str, current_ocr_method: st
     import gradio as gr
 
     if translation_mode == "one-step":
-        if current_ocr_method == "manga-ocr":
+        if current_ocr_method in ("manga-ocr", "paddleocr-vl"):
             return gr.update(value="LLM", interactive=False)
         else:
             return gr.update(interactive=False)

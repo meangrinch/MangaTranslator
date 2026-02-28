@@ -295,19 +295,21 @@ class UnifiedCache:
         )
 
     def get_manga_ocr_cache_key(
-        self, images_b64: List[str], total_elements: int
+        self, images_b64: List[str], total_elements: int, prefix: str = "mocr_"
     ) -> Optional[str]:
-        """Compute cache key for manga-ocr results.
+        """Compute cache key for local OCR results (manga-ocr or paddleocr-vl).
 
         Args:
             images_b64: List of base64-encoded cropped images.
             total_elements: Expected number of OCR outputs.
+            prefix: Key prefix to distinguish between OCR models (default "mocr_" for manga-ocr;
+                    use "pocr_" for paddleocr-vl to avoid cross-model cache collisions).
 
         Returns:
             str: Cache key (always deterministic)
         """
         images_hash = hashlib.sha256("".join(images_b64).encode()).hexdigest()[:16]
-        key_string = f"mocr_{images_hash}_n{total_elements}"
+        key_string = f"{prefix}{images_hash}_n{total_elements}"
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     def get_manga_ocr_result(self, cache_key: Optional[str]) -> Optional[list]:

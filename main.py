@@ -277,7 +277,7 @@ def main():
         default="medium",
         choices=["high", "medium", "low"],
         help=(
-            "Claude Opus 4.5 only: Controls token spending eagerness when responding. "
+            "Opus 4.5/4.6, Sonnet 4.6 only: Controls token spending eagerness when responding. "
             "Separate from 'max_tokens' and 'reasoning_effort'."
         ),
     )
@@ -285,10 +285,10 @@ def main():
         "--ocr-method",
         type=str,
         default="LLM",
-        choices=["LLM", "manga-ocr"],
+        choices=["LLM", "manga-ocr", "paddleocr-vl"],
         help=(
             "Determines whether to use a vision-capable LLM or a local OCR model for OCR. "
-            "'manga-ocr' only supports Japanese, enables text-only LLMs for translation, "
+            "Local OCR options enable text-only LLMs for translation "
             "and must be used in 'two-step' translation mode."
         ),
     )

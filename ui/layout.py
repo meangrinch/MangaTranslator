@@ -84,6 +84,14 @@ TARGET_LANGUAGES = ["English"] + [
     lang for lang in _ALPHABETICAL_LANGUAGES if lang != "English"
 ]
 
+# Languages supported by PaddleOCR-VL-1.5 (53 of the 59 in _ALPHABETICAL_LANGUAGES)
+_PADDLE_OCR_VL_UNSUPPORTED = frozenset(
+    ["Armenian", "Georgian", "Gujarati", "Hebrew", "Kannada", "Punjabi"]
+)
+PADDLE_OCR_VL_LANGUAGES = [
+    lang for lang in _ALPHABETICAL_LANGUAGES if lang not in _PADDLE_OCR_VL_UNSUPPORTED
+]
+
 js_credits = """
 function() {
     const footer = document.querySelector('footer');
@@ -582,12 +590,12 @@ def create_layout(
                                 ),
                             )
                             ocr_method_radio = gr.Radio(
-                                choices=["LLM", "manga-ocr"],
+                                choices=["LLM", "manga-ocr", "paddleocr-vl"],
                                 label="OCR Method",
                                 value=initial_ocr_method,
                                 info=(
                                     "Determines whether to use a vision-capable LLM or a local OCR model for OCR. "
-                                    "'manga-ocr' only supports Japanese, enables text-only LLMs for translation, "
+                                    "Local OCR options enable text-only LLMs for translation "
                                     "and must be used in 'two-step' translation mode."
                                 ),
                                 elem_id="ocr_method_radio",
@@ -854,7 +862,8 @@ def create_layout(
                                 ),
                                 info="Allow Gemini 3 Flash to zoom and inspect image details using code execution.",
                                 visible=_initial_enable_code_execution_visible,
-                                interactive=initial_ocr_method != "manga-ocr",
+                                interactive=initial_ocr_method
+                                not in ("manga-ocr", "paddleocr-vl"),
                                 elem_id="enable_code_execution_checkbox",
                             )
 
@@ -968,7 +977,8 @@ def create_layout(
                                     "Include full page image as context. Might improve translation quality. "
                                     "Disable if refusals/using less-capable models or to reduce token usage."
                                 ),
-                                interactive=initial_ocr_method != "manga-ocr",
+                                interactive=initial_ocr_method
+                                not in ("manga-ocr", "paddleocr-vl"),
                             )
                             upscale_method = gr.Radio(
                                 choices=[

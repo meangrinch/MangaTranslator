@@ -11,7 +11,10 @@ from PIL import Image
 from core.caching import get_cache
 from core.config import TranslationConfig, calculate_reasoning_budget
 from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
-from core.image.ocr_detection import extract_text_with_manga_ocr
+from core.image.ocr_detection import (
+    extract_text_with_manga_ocr,
+    extract_text_with_paddle_ocr_vl,
+)
 from utils.endpoints import (
     call_anthropic_endpoint,
     call_deepseek_endpoint,
@@ -1008,6 +1011,76 @@ def _perform_manga_ocr(
     return extracted_texts
 
 
+def _perform_paddle_ocr_vl(
+    images_b64: List[str],
+    bubble_metadata: List[Dict[str, Any]],
+    debug: bool = False,
+) -> List[str]:
+    """Perform OCR using PaddleOCR-VL-1.5 model.
+
+    Args:
+        images_b64: List of base64-encoded images
+        bubble_metadata: List of metadata dicts for text elements
+        debug: Whether to print verbose logging
+
+    Returns:
+        List of extracted text strings, or early return with failure list
+    """
+    total_elements = len(images_b64)
+    log_message("Using PaddleOCR-VL-1.5 for text extraction", verbose=debug)
+
+    cache = get_cache()
+    cache_key = cache.get_manga_ocr_cache_key(
+        images_b64, total_elements, prefix="pocr_"
+    )
+    cached_ocr = cache.get_manga_ocr_result(cache_key)
+    if cached_ocr is not None:
+        if len(cached_ocr) == total_elements:
+            log_message("Using cached PaddleOCR-VL-1.5 results", verbose=debug)
+            return cached_ocr
+        log_message(
+            "Discarding PaddleOCR-VL-1.5 cache due to length mismatch", verbose=debug
+        )
+
+    pil_images = _prepare_images_for_ocr(images_b64, verbose=debug)
+    extracted_texts = extract_text_with_paddle_ocr_vl(pil_images, verbose=debug)
+
+    formatted_texts = []
+    for i, text in enumerate(extracted_texts):
+        if text == "[OCR FAILED]" or not text:
+            formatted_texts.append(text if text else "[OCR FAILED]")
+        else:
+            formatted_texts.append(text)
+
+    extracted_texts = formatted_texts
+
+    _format_ocr_results(extracted_texts, bubble_metadata)
+
+    if len(extracted_texts) != total_elements:
+        msg = (
+            f"Warning: extracted_texts length ({len(extracted_texts)}) "
+            f"doesn't match total_elements ({total_elements})"
+        )
+        log_message(msg, always_print=True)
+        while len(extracted_texts) < total_elements:
+            extracted_texts.append("[OCR FAILED]")
+        extracted_texts = extracted_texts[:total_elements]
+
+    if not extracted_texts:
+        log_message("PaddleOCR-VL-1.5 returned empty results", verbose=debug)
+        failure_results = ["[OCR FAILED]"] * total_elements
+        cache.set_manga_ocr_result(cache_key, failure_results, debug)
+        return failure_results
+
+    if _check_ocr_failure(extracted_texts):
+        log_message("PaddleOCR-VL-1.5 returned only failures", verbose=debug)
+        cache.set_manga_ocr_result(cache_key, extracted_texts, debug)
+        return extracted_texts
+
+    cache.set_manga_ocr_result(cache_key, extracted_texts, debug)
+    return extracted_texts
+
+
 def _perform_llm_ocr(
     config: TranslationConfig,
     images_b64: List[str],
@@ -1194,6 +1267,12 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
                     bubble_metadata,
                     debug,
                 )
+            elif config.ocr_method == "paddleocr-vl":
+                extracted_texts = _perform_paddle_ocr_vl(
+                    images_b64,
+                    bubble_metadata,
+                    debug,
+                )
             else:
                 extracted_texts = _perform_llm_ocr(
                     config,
@@ -1227,7 +1306,7 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
             full_page_context = (
                 "A full-page image is also provided for visual and narrative context."
                 if (
-                    config.ocr_method != "manga-ocr"
+                    config.ocr_method not in ("manga-ocr", "paddleocr-vl")
                     and config.send_full_page_context
                     and full_image_b64
                 )
@@ -1250,7 +1329,7 @@ The target language is {output_language}. Use the appropriate translation approa
 
             translation_parts = []
             if (
-                config.ocr_method != "manga-ocr"
+                config.ocr_method not in ("manga-ocr", "paddleocr-vl")
                 and config.send_full_page_context
                 and full_image_b64
             ):

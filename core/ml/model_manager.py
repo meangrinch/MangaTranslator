@@ -35,6 +35,7 @@ class ModelType(Enum):
     SAM2 = "sam2"
     SAM3 = "sam3"
     MANGA_OCR = "manga_ocr"
+    PADDLE_OCR_VL = "paddle_ocr_vl"
     FLUX_TRANSFORMER = "flux_transformer"
     FLUX_TEXT_ENCODER = "flux_text_encoder"
     FLUX_PIPELINE = "flux_pipeline"
@@ -104,6 +105,7 @@ class ModelManager:
                 model_dir / "yolo" / "manga109_v2023.12.07_l_yolov11.pt"
             ),
             ModelType.MANGA_OCR: (model_dir / "manga-ocr-base"),
+            ModelType.PADDLE_OCR_VL: (model_dir / "paddleocr-vl"),
         }
 
     def _init_model_urls(self):
@@ -170,6 +172,9 @@ class ModelManager:
         repos[ModelType.MANGA_OCR] = {
             "repo_id": "kha-white/manga-ocr-base",
             "revision": "refs/pr/4",
+        }
+        repos[ModelType.PADDLE_OCR_VL] = {
+            "repo_id": "PaddlePaddle/PaddleOCR-VL-1.5",
         }
         # Flux.1 Kontext SDNQ (cross-platform, no token required)
         repos[ModelType.FLUX_KONTEXT_SDNQ_PIPELINE] = {
@@ -607,6 +612,80 @@ class ModelManager:
             log_message("manga-ocr initialized", verbose=verbose)
             return manga_ocr_instance
 
+    def load_paddle_ocr_vl(self, verbose: bool = False) -> Path:
+        """Ensure PaddleOCR-VL-1.5 model repository is downloaded.
+
+        Args:
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Path to the downloaded PaddleOCR-VL-1.5 model directory
+        """
+        with self._lock:
+            model_path = self.model_paths[ModelType.PADDLE_OCR_VL]
+            hf_info = self.model_hf_repos[ModelType.PADDLE_OCR_VL]
+            self._ensure_hf_repo(
+                hf_info["repo_id"],
+                model_path,
+                revision=hf_info.get("revision"),
+                verbose=verbose,
+            )
+            log_message("PaddleOCR-VL-1.5 model repository ready.", verbose=verbose)
+            return model_path
+
+    def get_paddle_ocr_vl(self, verbose: bool = False):
+        """Get PaddleOCR-VL-1.5 (processor, model) tuple, loading if necessary.
+
+        Args:
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Tuple of (AutoProcessor, AutoModelForImageTextToText)
+        """
+        with self._lock:
+            if self.is_loaded(ModelType.PADDLE_OCR_VL):
+                return self.models[ModelType.PADDLE_OCR_VL]
+
+            log_message("Initializing PaddleOCR-VL-1.5...", verbose=verbose)
+
+            from transformers import AutoModelForImageTextToText, AutoProcessor
+
+            model_path = self.load_paddle_ocr_vl(verbose=verbose)
+            model_path_str = str(model_path)
+            token = self.hf_token or os.environ.get("HF_TOKEN")
+
+            processor = AutoProcessor.from_pretrained(model_path_str, token=token)
+
+            # Prefer flash_attention_2 on CUDA, fall back to sdpa on Windows/CPU
+            dtype = self.dtype if self.device.type == "cuda" else None
+            for attn_impl in ("flash_attention_2", "sdpa", "eager"):
+                try:
+                    model = (
+                        AutoModelForImageTextToText.from_pretrained(
+                            model_path_str,
+                            torch_dtype=dtype,
+                            attn_implementation=attn_impl,
+                            token=token,
+                        )
+                        .to(self.device)
+                        .eval()
+                    )
+                    log_message(
+                        f"PaddleOCR-VL-1.5 loaded with {attn_impl}", verbose=verbose
+                    )
+                    break
+                except (ImportError, ValueError, RuntimeError):
+                    if attn_impl == "eager":
+                        raise
+                    log_message(
+                        f"PaddleOCR-VL-1.5: {attn_impl} unavailable, trying fallback",
+                        verbose=verbose,
+                    )
+
+            self.models[ModelType.PADDLE_OCR_VL] = (processor, model)
+            log_message("PaddleOCR-VL-1.5 initialized.", verbose=verbose)
+            return self.models[ModelType.PADDLE_OCR_VL]
+
     def load_sam2(self, verbose: bool = False):
         """Load SAM 2.1 model and processor.
 
@@ -1035,6 +1114,8 @@ class ModelManager:
             models_unloaded.append("yolo_panel")
         if self.is_loaded(ModelType.MANGA_OCR):
             models_unloaded.append("manga_ocr")
+        if self.is_loaded(ModelType.PADDLE_OCR_VL):
+            models_unloaded.append("paddle_ocr_vl")
 
         self.unload_model(ModelType.YOLO_SPEECH_BUBBLE, force_gc=False, verbose=verbose)
         self.unload_model(
@@ -1045,6 +1126,7 @@ class ModelManager:
         self.unload_model(ModelType.YOLO_OSBTEXT, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.YOLO_PANEL, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.MANGA_OCR, force_gc=True, verbose=verbose)
+        self.unload_model(ModelType.PADDLE_OCR_VL, force_gc=True, verbose=verbose)
 
         if models_unloaded:
             log_message("OCR models unloaded.", verbose=verbose)

@@ -65,7 +65,7 @@ class TranslationConfig:
         None  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
     )
     effort: Optional[str] = (
-        None  # Claude Opus 4.5 only: Controls token spending eagerness (high/medium/low)
+        None  # Opus 4.5/4.6, Sonnet 4.6 only: token spending eagerness (high/medium/low)
     )
     send_full_page_context: bool = True
     upscale_method: str = "model_lite"  # "model", "model_lite", "lanczos", or "none"
@@ -84,7 +84,7 @@ class TranslationConfig:
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
     special_instructions: Optional[str] = None
-    ocr_method: str = "LLM"  # "LLM" or "manga-ocr"
+    ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl"
 
 
 @dataclass
