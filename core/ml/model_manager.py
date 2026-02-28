@@ -654,7 +654,9 @@ class ModelManager:
             model_path_str = str(model_path)
             token = self.hf_token or os.environ.get("HF_TOKEN")
 
-            processor = AutoProcessor.from_pretrained(model_path_str, token=token)
+            processor = AutoProcessor.from_pretrained(
+                model_path_str, token=token, use_fast=True
+            )
 
             # Prefer flash_attention_2 on CUDA, fall back to sdpa on Windows/CPU
             dtype = self.dtype if self.device.type == "cuda" else None
