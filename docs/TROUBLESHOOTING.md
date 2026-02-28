@@ -70,6 +70,9 @@
 - **Colored/grayscale bubbles not preserving interior color:**
   - Enable "Use Flux to Inpaint Colored Bubbles"
 
+- **Poor segmentation of speech bubbles:**
+  - Try switching to `sam3` (requires hf_token)
+
 ### Translation
 
 - **Poor translations:**
