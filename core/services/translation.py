@@ -1050,7 +1050,8 @@ def _perform_paddle_ocr_vl(
         if text == "[OCR FAILED]" or not text:
             formatted_texts.append(text if text else "[OCR FAILED]")
         else:
-            formatted_texts.append(text)
+            # Collapse newlines hallucinated by PaddleOCR-VL
+            formatted_texts.append(" ".join(text.split()))
 
     extracted_texts = formatted_texts
 
