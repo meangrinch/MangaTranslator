@@ -72,7 +72,6 @@ def process_outside_text(
 
         if not outside_text_results:
             log_message("No outside text regions found", verbose=verbose)
-            outside_detector.unload_models()
             return pil_image, []
 
         img_w, img_h = pil_image.size
@@ -690,28 +689,30 @@ def process_outside_text(
 
             if osb_upscale_method == "model":
                 model_manager = get_model_manager()
-                with model_manager.upscale_context() as upscale_model:
-                    final_text_pil = process_bubble_image_cached(
-                        outside_text_image_pil,
-                        upscale_model,
-                        config.device,
-                        config.translation.osb_min_side_pixels,
-                        "min",
-                        "model",
-                        verbose,
-                    )
+                upscale_model = model_manager.load_upscale(verbose=verbose)
+                final_text_pil = process_bubble_image_cached(
+                    outside_text_image_pil,
+                    upscale_model,
+                    config.device,
+                    config.translation.osb_min_side_pixels,
+                    "min",
+                    "model",
+                    verbose,
+                )
+                model_manager.clear_cache()
             elif osb_upscale_method == "model_lite":
                 model_manager = get_model_manager()
-                with model_manager.upscale_lite_context() as upscale_model:
-                    final_text_pil = process_bubble_image_cached(
-                        outside_text_image_pil,
-                        upscale_model,
-                        config.device,
-                        config.translation.osb_min_side_pixels,
-                        "min",
-                        "model_lite",
-                        verbose,
-                    )
+                upscale_model = model_manager.load_upscale_lite(verbose=verbose)
+                final_text_pil = process_bubble_image_cached(
+                    outside_text_image_pil,
+                    upscale_model,
+                    config.device,
+                    config.translation.osb_min_side_pixels,
+                    "min",
+                    "model_lite",
+                    verbose,
+                )
+                model_manager.clear_cache()
             elif osb_upscale_method == "lanczos":
                 w, h = outside_text_image_pil.size
                 min_side = min(w, h)

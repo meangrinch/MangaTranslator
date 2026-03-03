@@ -263,51 +263,31 @@ def translate_and_render(
                 "none" if config.test_mode else config.translation.upscale_method
             )
 
-            if context_upscale_method == "model":
-                # Use upscaling model for full page context
+            if context_upscale_method in ("model", "model_lite"):
                 model_manager = get_model_manager()
-                with model_manager.upscale_context() as upscale_model:
-                    context_image_pil = upscale_image_to_dimension(
-                        upscale_model,
-                        context_image_pil,
-                        effective_context_max_side,
-                        config.device,
-                        "max",
-                        "model",
-                        verbose,
-                    )
-                    # Resize to exact target dimension (downscale if needed)
-                    context_image_pil = resize_to_max_side(
-                        context_image_pil,
-                        effective_context_max_side,
-                        verbose=verbose,
-                    )
-                    log_message(
-                        "Upscaled full image for context with model", verbose=verbose
-                    )
-            elif context_upscale_method == "model_lite":
-                # Use upscaling lite model for full page context
-                model_manager = get_model_manager()
-                with model_manager.upscale_lite_context() as upscale_model:
-                    context_image_pil = upscale_image_to_dimension(
-                        upscale_model,
-                        context_image_pil,
-                        effective_context_max_side,
-                        config.device,
-                        "max",
-                        "model_lite",
-                        verbose,
-                    )
-                    # Resize to exact target dimension (downscale if needed)
-                    context_image_pil = resize_to_max_side(
-                        context_image_pil,
-                        effective_context_max_side,
-                        verbose=verbose,
-                    )
-                    log_message(
-                        "Upscaled full image for context with lite model",
-                        verbose=verbose,
-                    )
+                if context_upscale_method == "model":
+                    upscale_model = model_manager.load_upscale(verbose=verbose)
+                else:
+                    upscale_model = model_manager.load_upscale_lite(verbose=verbose)
+                context_image_pil = upscale_image_to_dimension(
+                    upscale_model,
+                    context_image_pil,
+                    effective_context_max_side,
+                    config.device,
+                    "max",
+                    context_upscale_method,
+                    verbose,
+                )
+                context_image_pil = resize_to_max_side(
+                    context_image_pil,
+                    effective_context_max_side,
+                    verbose=verbose,
+                )
+                model_manager.clear_cache()
+                log_message(
+                    f"Upscaled full image for context with {context_upscale_method}",
+                    verbose=verbose,
+                )
             elif context_upscale_method == "lanczos":
                 # Use LANCZOS resampling
                 context_image_pil = resize_to_max_side(
@@ -459,28 +439,24 @@ def translate_and_render(
             )
 
             model_manager = get_model_manager()
-            # Use appropriate context manager based on upscale_method
+            upscale_model = None
             if bubble_upscale_method == "model":
-                context_manager = model_manager.upscale_context()
+                upscale_model = model_manager.load_upscale(verbose=verbose)
             elif bubble_upscale_method == "model_lite":
-                context_manager = model_manager.upscale_lite_context()
-            else:
-                # For lanczos/none, create a dummy context manager that yields None
-                from contextlib import nullcontext
+                upscale_model = model_manager.load_upscale_lite(verbose=verbose)
 
-                context_manager = nullcontext(None)
-
-            with context_manager as upscale_model:
-                bubble_data = prepare_bubble_images_for_translation(
-                    bubble_data,
-                    original_cv_image,
-                    upscale_model,
-                    config.device,
-                    mime_type,
-                    config.translation.bubble_min_side_pixels,
-                    bubble_upscale_method,
-                    verbose,
-                )
+            bubble_data = prepare_bubble_images_for_translation(
+                bubble_data,
+                original_cv_image,
+                upscale_model,
+                config.device,
+                mime_type,
+                config.translation.bubble_min_side_pixels,
+                bubble_upscale_method,
+                verbose,
+            )
+            if upscale_model is not None:
+                model_manager.clear_cache()
 
             if bubble_upscale_method != "none":
                 log_message(

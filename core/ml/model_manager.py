@@ -2,7 +2,6 @@ import os
 import shutil
 import threading
 import urllib.request
-from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -1133,8 +1132,8 @@ class ModelManager:
         if models_unloaded:
             log_message("OCR models unloaded.", verbose=verbose)
 
-    def unload_flux_models(self, verbose: bool = False):
-        """Unload all Flux Kontext models."""
+    def unload_flux_kontext_models(self, verbose: bool = False):
+        """Unload all Flux.1 Kontext models."""
         models_unloaded = []
         if self.is_loaded(ModelType.FLUX_TRANSFORMER):
             models_unloaded.append("flux_transformer")
@@ -1148,7 +1147,7 @@ class ModelManager:
         self.unload_model(ModelType.FLUX_PIPELINE, force_gc=True, verbose=verbose)
 
         if models_unloaded:
-            log_message("Flux Kontext models unloaded.", verbose=verbose)
+            log_message("Flux.1 Kontext models unloaded.", verbose=verbose)
 
     def unload_flux_kontext_sdnq_models(self, verbose: bool = False):
         """Unload Flux.1 Kontext SDNQ model."""
@@ -1156,7 +1155,7 @@ class ModelManager:
             self.unload_model(
                 ModelType.FLUX_KONTEXT_SDNQ_PIPELINE, force_gc=True, verbose=verbose
             )
-            log_message("Flux Kontext SDNQ model unloaded.", verbose=verbose)
+            log_message("Flux.1 Kontext SDNQ model unloaded.", verbose=verbose)
 
     def unload_flux_klein_models(self, verbose: bool = False):
         """Unload all Flux.2 Klein models."""
@@ -1174,7 +1173,7 @@ class ModelManager:
         )
 
         if models_unloaded:
-            log_message("Flux Klein models unloaded.", verbose=verbose)
+            log_message("Flux.2 Klein models unloaded.", verbose=verbose)
 
     def unload_all(self, verbose: bool = False):
         """Unload all models and free all GPU memory."""
@@ -1204,47 +1203,9 @@ class ModelManager:
                 always_print=True,
             )
 
-    @contextmanager
-    def upscale_context(self, verbose: bool = False):
-        """Context manager for upscale model - auto-loads and unloads."""
-        try:
-            self.load_upscale(verbose=verbose)
-            yield self.models[ModelType.UPSCALE]
-        finally:
-            self.unload_upscale_models(verbose=verbose)
-
-    @contextmanager
-    def upscale_lite_context(self, verbose: bool = False):
-        """Context manager for upscale lite model - auto-loads and unloads."""
-        try:
-            self.load_upscale_lite(verbose=verbose)
-            yield self.models[ModelType.UPSCALE_LITE]
-        finally:
-            self.unload_upscale_models(verbose=verbose)
-
-    @contextmanager
-    def ocr_context(self, hf_token=None, verbose: bool = False):
-        """Context manager for OCR models - auto-loads and unloads.
-
-        Args:
-            hf_token: Hugging Face token for gated repo access
-            verbose: Whether to print verbose logging
-        """
-        try:
-            yolo = self.load_yolo_speech_bubble(verbose=verbose)
-            yolo_osbtext = self.load_yolo_osbtext(token=hf_token, verbose=verbose)
-            yield yolo, yolo_osbtext
-        finally:
-            self.unload_ocr_models(verbose=verbose)
-
-    @contextmanager
-    def flux_context(self, verbose: bool = False):
-        """Context manager for Flux models - auto-loads and unloads."""
-        try:
-            transformer, text_encoder, pipeline = self.load_flux_models(verbose=verbose)
-            yield transformer, text_encoder, pipeline
-        finally:
-            self.unload_flux_models(verbose=verbose)
+    def clear_cache(self):
+        """Release unused GPU memory from PyTorch's CUDA cache."""
+        empty_cache(self.device)
 
 
 # Global singleton instance

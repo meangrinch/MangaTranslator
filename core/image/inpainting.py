@@ -114,7 +114,7 @@ class FluxKontextInpainter:
             )
 
     def unload_models(self):
-        """Unload Flux models via model manager to free up memory."""
+        """Unload Flux.1 Kontext models via model manager to free up memory."""
         self.pipeline = None
         self.transformer = None
         self.text_encoder_2 = None
@@ -122,7 +122,7 @@ class FluxKontextInpainter:
         if self.backend == "sdnq":
             self.manager.unload_flux_kontext_sdnq_models()
         else:
-            self.manager.unload_flux_models()
+            self.manager.unload_flux_kontext_models()
 
     def convert_mask_to_tensor(self, mask_np):
         """Convert a numpy mask to the tensor format expected by the pipeline.
@@ -888,7 +888,7 @@ class FluxKleinInpainter:
             )
 
     def unload_models(self):
-        """Unload Flux Klein models via model manager to free up memory."""
+        """Unload Flux.2 Klein models via model manager to free up memory."""
         self.pipeline = None
         self.manager.unload_flux_klein_models()
 
