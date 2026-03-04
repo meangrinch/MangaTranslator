@@ -774,7 +774,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         if not name:
             return False
         lm = name.lower()
-        return "gemini-3" in lm and "flash" in lm
+        return "gemini-3" in lm and "flash" in lm and "flash-lite" not in lm
 
     is_gemini_3_google = (
         provider == "Google"
@@ -941,7 +941,7 @@ def update_params_for_model(
         if not name:
             return False
         lm = name.lower()
-        return "gemini-3" in lm and "flash" in lm
+        return "gemini-3" in lm and "flash" in lm and "flash-lite" not in lm
 
     is_gemini_3_google = (
         provider == "Google" and model_name and _is_gemini_3_model(model_name)

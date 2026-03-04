@@ -17,7 +17,7 @@ CONFIG_FILE = (
 PROVIDER_MODELS: Dict[str, List[str]] = {
     "Google": [
         "gemini-3.1-pro-preview",
-        "gemini-3-pro-preview",
+        "gemini-3.1-flash-lite-preview",
         "gemini-3-flash-preview",
         "gemini-2.5-pro",
         "gemini-2.5-flash",
@@ -27,6 +27,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "gemini-2.0-flash-lite",
     ],
     "OpenAI": [
+        "gpt-5.3-chat-latest",
         "gpt-5.2-2025-12-11",
         "gpt-5.2-chat-latest",
         "gpt-5.1-2025-11-13",

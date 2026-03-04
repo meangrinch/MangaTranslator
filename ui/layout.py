@@ -853,6 +853,8 @@ def create_layout(
                                 and config_initial_model_name
                                 and "gemini-3" in config_initial_model_name.lower()
                                 and "flash" in config_initial_model_name.lower()
+                                and "flash-lite"
+                                not in config_initial_model_name.lower()
                             )
 
                             enable_code_execution_checkbox = gr.Checkbox(
