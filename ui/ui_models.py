@@ -162,6 +162,9 @@ class UIGeneralSettings:
     effort: Optional[str] = (
         None  # Opus 4.5/4.6, Sonnet 4.6 only: token spending eagerness
     )
+    verbosity: Optional[str] = (
+        None  # GPT-5 series only: controls response verbosity (high/medium/low)
+    )
     auto_scale: bool = True
 
 
@@ -283,6 +286,7 @@ class UIConfigState:
             "media_resolution_context": self.general.media_resolution_context,
             "reasoning_effort": self.general.reasoning_effort,
             "effort": self.general.effort,
+            "verbosity": self.general.verbosity,
             "auto_scale": self.general.auto_scale,
             "input_language": self.input_language,
             "output_language": self.output_language,
@@ -527,6 +531,7 @@ class UIConfigState:
                     "reasoning_effort", defaults.get("reasoning_effort")
                 ),
                 effort=data.get("effort", defaults.get("effort", "medium")),
+                verbosity=data.get("verbosity", defaults.get("verbosity", "low")),
                 auto_scale=data.get("auto_scale", defaults.get("auto_scale", True)),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
@@ -613,6 +618,7 @@ def map_ui_to_backend_config(
         special_instructions=ui_state.llm_settings.special_instructions,
         reasoning_effort=ui_state.general.reasoning_effort,
         effort=ui_state.general.effort,
+        verbosity=ui_state.general.verbosity,
     )
 
     rendering_cfg = RenderingConfig(

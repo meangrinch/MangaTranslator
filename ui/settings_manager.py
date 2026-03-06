@@ -27,6 +27,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "gemini-2.0-flash-lite",
     ],
     "OpenAI": [
+        "gpt-5.4-2026-03-05",
         "gpt-5.3-chat-latest",
         "gpt-5.2-2025-12-11",
         "gpt-5.2-chat-latest",
@@ -46,6 +47,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "o4-mini-2025-04-16",
         "o3-2025-04-16",
         "o1-2024-12-17",
+        "gpt-5.4-pro-2026-03-05",
         "gpt-5.2-pro-2025-12-11",
         "gpt-5-pro-2025-10-06",
         "o3-pro-2025-06-10",
@@ -176,6 +178,7 @@ DEFAULT_SETTINGS = {
     "test_mode": False,
     "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
     "effort": "medium",  # Opus 4.5/4.6, Sonnet 4.6 only: token spending eagerness (high/medium/low)
+    "verbosity": "low",  # GPT-5 series only: controls response verbosity (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "enable_code_execution": False,  # Enable Gemini's code execution for image zoom/inspection.
     "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
@@ -257,6 +260,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "send_full_page_context",
     "reasoning_effort",
     "effort",
+    "verbosity",
     "enable_web_search",
     "special_instructions",
     "batch_special_instructions",

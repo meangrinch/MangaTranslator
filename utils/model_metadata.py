@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 
@@ -74,6 +75,55 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
             return 16384
 
     return None
+
+
+def is_gpt5_series(model_name: Optional[str]) -> bool:
+    """Check if a model is any GPT-5 variant (5, 5.1, 5.2, 5.3, 5.4, etc.)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return lm.startswith("gpt-5") or "/gpt-5" in lm
+
+
+def is_gpt5_chat_variant(model_name: Optional[str]) -> bool:
+    """Check if a GPT-5 model is a chat variant (non-reasoning)."""
+    return is_gpt5_series(model_name) and "chat" in (model_name or "").lower()
+
+
+def is_gpt5_pro(model_name: Optional[str]) -> bool:
+    """Check if a GPT-5 model is a pro variant."""
+    return is_gpt5_series(model_name) and "-pro" in (model_name or "").lower()
+
+
+_GPT5_GEN_RE = re.compile(r"gpt-(5(?:\.\d+)?)", re.IGNORECASE)
+
+
+def get_gpt5_generation(model_name: Optional[str]) -> Optional[str]:
+    """Extract the GPT-5 generation string.
+
+    Returns '5', '5.1', '5.2', '5.3', '5.4', etc. or None if not a GPT-5 model.
+    """
+    if not model_name:
+        return None
+    m = _GPT5_GEN_RE.search(model_name)
+    return m.group(1) if m else None
+
+
+def is_openai_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if an OpenAI model is reasoning-capable (GPT-5 series, o1, o3, o4-mini)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return (
+        lm.startswith("gpt-5")
+        or "/gpt-5" in lm
+        or lm.startswith("o1")
+        or "/o1" in lm
+        or lm.startswith("o3")
+        or "/o3" in lm
+        or lm.startswith("o4-mini")
+        or "/o4-mini" in lm
+    )
 
 
 def is_openai_compatible_reasoning_model(model_name: Optional[str]) -> bool:

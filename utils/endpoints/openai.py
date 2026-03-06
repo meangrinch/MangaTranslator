@@ -6,6 +6,7 @@ import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
+from utils.model_metadata import get_gpt5_generation, is_gpt5_series
 
 
 def call_openai_endpoint(
@@ -78,10 +79,8 @@ def call_openai_endpoint(
     payload = {
         "model": model_name,
         "input": [{"role": "user", "content": input_content}],
-        "temperature": (
-            generation_config.get("temperature") if model_name != "o4-mini" else 1.0
-        ),
-        "top_p": generation_config.get("top_p") if model_name != "o4-mini" else None,
+        "temperature": generation_config.get("temperature"),
+        "top_p": generation_config.get("top_p"),
         "max_output_tokens": generation_config.get("max_output_tokens", 4096),
     }
     if system_prompt:
@@ -93,12 +92,10 @@ def call_openai_endpoint(
     try:
         lower_model = (model_name or "").lower()
         is_chat_variant = "chat" in lower_model
-        is_gpt5_1 = lower_model.startswith("gpt-5.1")
-        is_gpt5_2 = lower_model.startswith("gpt-5.2")
-        is_gpt5 = lower_model.startswith("gpt-5") and not (is_gpt5_1 or is_gpt5_2)
-        is_gpt5_series = is_gpt5 or is_gpt5_1 or is_gpt5_2
+        is_gpt5 = is_gpt5_series(model_name)
+        gen = get_gpt5_generation(model_name)
         is_reasoning_capable = (
-            is_gpt5_series
+            is_gpt5
             or lower_model.startswith("o1")
             or lower_model.startswith("o3")
             or lower_model.startswith("o4-mini")
@@ -107,35 +104,39 @@ def call_openai_endpoint(
         if is_reasoning_capable and not is_chat_variant:
             effort = generation_config.get("reasoning_effort")
             if effort:
-                if (is_gpt5_1 or is_gpt5_2) and effort == "none":
+                xhigh_capable = gen in ("5.2", "5.3", "5.4")
+                none_capable = gen is not None and gen != "5"
+
+                if none_capable and effort == "none":
                     payload["reasoning"] = {"effort": "none"}
                 elif effort != "none":
                     effort_to_send = effort
-                    if effort_to_send == "xhigh" and not is_gpt5_2:
+                    if effort_to_send == "xhigh" and not xhigh_capable:
                         effort_to_send = "high"
-                    if (is_gpt5_1 or is_gpt5_2) and effort_to_send == "minimal":
+                    if none_capable and effort_to_send == "minimal":
                         effort_to_send = "none"
-                    elif effort_to_send == "minimal" and not is_gpt5_series:
+                    elif effort_to_send == "minimal" and not is_gpt5:
                         effort_to_send = "low"
                     payload["reasoning"] = {"effort": effort_to_send}
 
-        if is_gpt5_series and not is_chat_variant:
-            payload["text"] = {"verbosity": "low"}
+        if is_gpt5 and not is_chat_variant:
+            verbosity = generation_config.get("verbosity", "low")
+            payload["text"] = {"verbosity": verbosity}
 
-            # temperature and top_p are only supported for GPT-5.1 with effort=none or GPT-5 with effort=minimal
+            # temp/top_p only allowed when effort is "none" (gpt-5.1+) or "minimal" (base gpt-5)
             current_effort = payload.get("reasoning", {}).get("effort")
-            allow_sampling = False
-
-            if (is_gpt5_1 or is_gpt5_2) and current_effort == "none":
-                allow_sampling = True
-            elif is_gpt5 and current_effort == "minimal":
-                allow_sampling = True
-
+            allow_sampling = (
+                gen is not None and gen != "5" and current_effort == "none"
+            ) or (gen == "5" and current_effort == "minimal")
             if not allow_sampling:
                 payload.pop("temperature", None)
                 payload.pop("top_p", None)
+
+        elif is_reasoning_capable and not is_chat_variant:
+            # Non-GPT-5 reasoning models (o1, o3, o4-mini) don't support temp/top_p
+            payload.pop("temperature", None)
+            payload.pop("top_p", None)
     except Exception:
-        # Do not fail the request if model detection or mapping has issues
         pass
 
     for attempt in range(max_retries + 1):

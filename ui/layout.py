@@ -826,6 +826,35 @@ def create_layout(
                                 elem_id="effort_dropdown",
                             )
 
+                            # Verbosity dropdown (GPT-5 series only)
+                            (
+                                _initial_verbosity_visible,
+                                _initial_verbosity_choices,
+                                _initial_verbosity_default,
+                            ) = utils.get_verbosity_config(
+                                config_initial_provider, config_initial_model_name
+                            )
+                            _initial_verbosity_value = saved_settings.get("verbosity")
+                            if _initial_verbosity_value is None:
+                                _initial_verbosity_value = _initial_verbosity_default
+                            elif (
+                                _initial_verbosity_choices
+                                and _initial_verbosity_value
+                                not in _initial_verbosity_choices
+                            ):
+                                _initial_verbosity_value = _initial_verbosity_default
+                            elif not _initial_verbosity_choices:
+                                _initial_verbosity_value = None
+
+                            verbosity_dropdown = gr.Radio(
+                                choices=_initial_verbosity_choices,
+                                label="Verbosity",
+                                value=_initial_verbosity_value,
+                                info="Controls response verbosity. GPT-5 series only.",
+                                visible=_initial_verbosity_visible,
+                                elem_id="verbosity_dropdown",
+                            )
+
                             _initial_enable_web_search_visible = (
                                 config_initial_provider
                                 not in ("OpenAI-Compatible", "DeepSeek")
@@ -1698,6 +1727,7 @@ def create_layout(
             media_resolution_context_dropdown,
             reasoning_effort_dropdown,
             effort_dropdown,
+            verbosity_dropdown,
             send_full_page_context,
             upscale_method,
             bubble_min_side_pixels,
@@ -1797,6 +1827,7 @@ def create_layout(
             media_resolution_context_dropdown,
             reasoning_effort_dropdown,
             effort_dropdown,
+            verbosity_dropdown,
             config_status,
             send_full_page_context,
             upscale_method,
@@ -1890,6 +1921,7 @@ def create_layout(
             media_resolution_context_dropdown,
             reasoning_effort_dropdown,
             effort_dropdown,
+            verbosity_dropdown,
             send_full_page_context,
             upscale_method,
             bubble_min_side_pixels,
@@ -1991,6 +2023,7 @@ def create_layout(
             media_resolution_context_dropdown,
             reasoning_effort_dropdown,
             effort_dropdown,
+            verbosity_dropdown,
             send_full_page_context,
             upscale_method,
             bubble_min_side_pixels,
@@ -2131,6 +2164,7 @@ def create_layout(
                 media_resolution_context_dropdown,
                 reasoning_effort_dropdown,
                 effort_dropdown,
+                verbosity_dropdown,
             ],
             queue=False,
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.
@@ -2168,7 +2202,16 @@ def create_layout(
                 media_resolution_context_dropdown,
                 reasoning_effort_dropdown,
                 effort_dropdown,
+                verbosity_dropdown,
             ],
+            queue=False,
+        )
+
+        # Reasoning effort change → update temp/top_p slider interactivity
+        reasoning_effort_dropdown.change(
+            fn=callbacks.handle_reasoning_effort_change,
+            inputs=[provider_selector, config_model_name, reasoning_effort_dropdown],
+            outputs=[temperature, top_p],
             queue=False,
         )
 

@@ -171,13 +171,17 @@ def call_openrouter_endpoint(
     if top_k is not None and not is_openai_model and not is_anthropic_model:
         payload["top_k"] = top_k
 
-    # Claude 4.5/4.6 effort via verbosity parameter
+    # OpenRouter verbosity parameter: used by both Claude (effort) and GPT-5 (verbosity)
     is_opus_45 = metadata.get("is_opus_45", False)
     is_46 = metadata.get("is_46_model", False)
     effort = generation_config.get("effort")
 
+    is_gpt5_model = metadata.get("is_gpt5_model", False)
+
     if effort and (is_46 or is_opus_45):
         payload["verbosity"] = effort
+    elif is_gpt5_model and generation_config.get("verbosity"):
+        payload["verbosity"] = generation_config["verbosity"]
 
     reasoning_config = {}
     reasoning_effort = generation_config.get("reasoning_effort")

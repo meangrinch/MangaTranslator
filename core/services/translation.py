@@ -30,10 +30,16 @@ from utils.endpoints import (
 from utils.exceptions import TranslationError
 from utils.logging import log_message
 from utils.model_metadata import (
+    get_gpt5_generation,
     get_max_tokens_cap,
     is_46_model,
     is_deepseek_reasoning_model,
+    is_gpt5_chat_variant,
+    is_gpt5_series,
     is_openai_compatible_reasoning_model,
+)
+from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
+from utils.model_metadata import (
     is_opus_45_model,
     is_rosetta_model,
     is_xai_reasoning_model,
@@ -180,13 +186,7 @@ def _is_reasoning_model_google(model_name: str) -> bool:
 
 def _is_reasoning_model_openai(model_name: str) -> bool:
     """Check if an OpenAI model is reasoning-capable."""
-    lm = (model_name or "").lower()
-    return (
-        lm.startswith("gpt-5")
-        or lm.startswith("o1")
-        or lm.startswith("o3")
-        or lm.startswith("o4-mini")
-    )
+    return _is_openai_reasoning_meta(model_name)
 
 
 def _is_reasoning_model_anthropic(model_name: str) -> bool:
@@ -358,15 +358,17 @@ def _build_generation_config(
             "max_output_tokens": max_tokens_value,
         }  # top_k not supported by OpenAI
         if config.reasoning_effort:
-            lm = (model_name or "").lower()
-            is_chat_variant = "chat" in lm
-            is_gpt5_1 = lm.startswith("gpt-5.1")
-            is_gpt5_2 = lm.startswith("gpt-5.2")
+            gen = get_gpt5_generation(model_name)
+            is_chat = is_gpt5_chat_variant(model_name)
+            xhigh_capable = gen in ("5.2", "5.3", "5.4")
             effort = config.reasoning_effort
-            if effort == "xhigh" and not is_gpt5_2:
+            if effort == "xhigh" and not xhigh_capable:
                 effort = "high"
-            if not is_chat_variant and (is_gpt5_1 or is_gpt5_2 or effort != "none"):
+            none_capable = gen is not None and gen != "5"
+            if not is_chat and (none_capable or effort != "none"):
                 generation_config["reasoning_effort"] = effort
+        if is_gpt5_series(model_name) and not is_gpt5_chat_variant(model_name):
+            generation_config["verbosity"] = config.verbosity or "low"
         return generation_config
 
     elif provider == "Anthropic":
@@ -470,6 +472,7 @@ def _build_generation_config(
             or "o3" in model_lower
             or "o4-mini" in model_lower
         )
+        is_gpt5_model = is_openai_model and is_gpt5_series(model_name)
         is_gpt5_1 = is_openai_model and "gpt-5.1" in model_lower
         is_gpt5 = is_openai_model and "gpt-5" in model_lower and not is_gpt5_1
         # For OpenRouter, Anthropic models use dots (4.5) not hyphens (4-5)
@@ -495,6 +498,7 @@ def _build_generation_config(
             "is_grok_reasoning": is_grok_reasoning,
             "is_gpt5_1": is_gpt5_1,
             "is_gpt5": is_gpt5,
+            "is_gpt5_model": is_gpt5_model,
             "is_opus_45": is_opus_45,
             "is_46_model": is_46,
         }
@@ -514,6 +518,10 @@ def _build_generation_config(
         # Opus 4.5/4.6, Sonnet 4.6 effort parameter
         if (is_opus_45 or is_46) and config.effort:
             generation_config["effort"] = config.effort
+
+        # GPT-5 series verbosity
+        if is_gpt5_model and not is_gpt5_chat_variant(model_name):
+            generation_config["verbosity"] = config.verbosity or "low"
 
         return generation_config
 

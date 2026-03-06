@@ -12,10 +12,14 @@ from utils.endpoints import openrouter_is_reasoning_model
 from utils.exceptions import ValidationError
 from utils.logging import log_message
 from utils.model_metadata import (
+    get_gpt5_generation,
     get_max_tokens_cap,
     is_46_model,
     is_deepseek_reasoning_model,
+    is_gpt5_chat_variant,
+    is_gpt5_series,
     is_openai_compatible_reasoning_model,
+    is_openai_reasoning_model,
     is_opus_45_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
@@ -468,20 +472,11 @@ def get_reasoning_effort_info_text(
 
 
 def _is_openai_reasoning_model(model_name: Optional[str]) -> bool:
-    """Check if an OpenAI model is reasoning-capable."""
-    if not model_name:
-        return False
-    lm = model_name.lower()
-    return (
-        lm.startswith("gpt-5")
-        or "/gpt-5" in lm
-        or lm.startswith("o1")
-        or "/o1" in lm
-        or lm.startswith("o3")
-        or "/o3" in lm
-        or lm.startswith("o4-mini")
-        or "/o4-mini" in lm
-    )
+    """Check if an OpenAI model is reasoning-capable.
+
+    Delegates to the centralized helper in model_metadata.
+    """
+    return is_openai_reasoning_model(model_name)
 
 
 def _is_anthropic_reasoning_model(
@@ -552,24 +547,30 @@ def get_reasoning_effort_config(
             return True, ["auto", "high", "medium", "low", "minimal"], "auto"
 
     elif provider == "OpenAI":
-        is_reasoning = _is_openai_reasoning_model(model_name)
-        if not is_reasoning:
+        if not is_openai_reasoning_model(model_name):
             return False, [], None
 
         if "chat" in lm:
             return False, [], None
 
-        is_gpt5_1 = lm.startswith("gpt-5.1")
-        is_gpt5_2 = lm.startswith("gpt-5.2")
-        is_gpt5 = lm.startswith("gpt-5") and not (is_gpt5_1 or is_gpt5_2)
-        if is_gpt5_1:
-            return True, ["high", "medium", "low", "none"], "medium"
-        elif is_gpt5_2:
-            return True, ["xhigh", "high", "medium", "low", "none"], "medium"
-        elif is_gpt5:
-            return True, ["high", "medium", "low", "minimal"], "medium"
-        else:
+        gen = get_gpt5_generation(model_name)
+
+        if "-pro" in lm:
+            if gen in ("5.4", "5.2"):
+                return True, ["xhigh", "high", "medium"], "medium"
+            if gen == "5":
+                return True, ["high"], "high"
             return True, ["high", "medium", "low"], "medium"
+
+        if gen in ("5.2", "5.3", "5.4"):
+            return True, ["xhigh", "high", "medium", "low", "none"], "medium"
+        if gen == "5.1":
+            return True, ["high", "medium", "low", "none"], "medium"
+        if gen == "5":
+            return True, ["high", "medium", "low", "minimal"], "medium"
+
+        # o1, o3, o4-mini
+        return True, ["high", "medium", "low"], "medium"
 
     elif provider == "Anthropic":
         is_reasoning = _is_anthropic_reasoning_model(model_name, provider)
@@ -658,6 +659,46 @@ def get_effort_config(
         return False, [], None
 
 
+def get_verbosity_config(
+    provider: str, model_name: Optional[str]
+) -> Tuple[bool, List[str], Optional[str]]:
+    """
+    Get verbosity configuration for GPT-5 series models (OpenAI/OpenRouter).
+
+    Returns:
+        Tuple of (visible, choices, default_value)
+    """
+    if provider not in ("OpenAI", "OpenRouter"):
+        return False, [], None
+
+    if is_gpt5_series(model_name) and not is_gpt5_chat_variant(model_name):
+        return True, ["high", "medium", "low"], "low"
+
+    return False, [], None
+
+
+def get_sampling_interactivity_for_effort(
+    provider: str, model_name: Optional[str], reasoning_effort: Optional[str] = None
+) -> Tuple[bool, bool]:
+    """Whether temp/top_p sliders should be interactive given the current reasoning effort.
+
+    For GPT-5 series (non-chat): only allowed when effort is 'none' or 'minimal'.
+    For other OpenAI reasoning models (o1, o3, o4-mini): never allowed.
+    Returns (temp_interactive, top_p_interactive).
+    """
+    if provider not in ("OpenAI", "OpenRouter"):
+        return True, True
+
+    if not is_openai_reasoning_model(model_name) or is_gpt5_chat_variant(model_name):
+        return True, True
+
+    if is_gpt5_series(model_name):
+        allow = reasoning_effort in ("none", "minimal")
+        return allow, allow
+
+    return False, False
+
+
 def get_media_resolution_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], str]:
@@ -740,7 +781,6 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
 
     temp_max = 1.0 if provider == "Anthropic" else 2.0
     new_temp_value = min(default_temp, temp_max)
-    temp_update = gr.update(maximum=temp_max, value=new_temp_value)
 
     top_k_interactive = provider not in (
         "OpenAI",
@@ -750,9 +790,17 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         "Z.ai",
         "Moonshot AI",
     )
-    top_k_update = gr.update(interactive=top_k_interactive, value=default_top_k)
-
     top_p_interactive = provider != "Anthropic"
+    temp_interactive, sampling_ok = get_sampling_interactivity_for_effort(
+        provider, remembered_model
+    )
+    if not sampling_ok:
+        top_p_interactive = False
+
+    temp_update = gr.update(
+        maximum=temp_max, value=new_temp_value, interactive=temp_interactive
+    )
+    top_k_update = gr.update(interactive=top_k_interactive, value=default_top_k)
     top_p_update = gr.update(value=default_top_p, interactive=top_p_interactive)
 
     if remembered_model:
@@ -868,6 +916,16 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
 
     enable_code_execution_update = gr.update(visible=is_gemini_3_flash_google)
 
+    # Verbosity dropdown (GPT-5 series only)
+    verbosity_visible, verbosity_choices, verbosity_default_value = (
+        get_verbosity_config(provider, remembered_model)
+    )
+    verbosity_update = gr.update(
+        visible=verbosity_visible,
+        choices=verbosity_choices,
+        value=verbosity_default_value,
+    )
+
     return (
         google_visible_update,
         openai_visible_update,
@@ -891,6 +949,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         media_resolution_context_update,
         reasoning_effort_visible_update,
         effort_update,
+        verbosity_update,
     )
 
 
@@ -926,8 +985,16 @@ def update_params_for_model(
     elif provider == "OpenAI-Compatible":
         pass
 
+    temp_interactive, sampling_ok = get_sampling_interactivity_for_effort(
+        provider, model_name
+    )
+    if not sampling_ok:
+        top_p_interactive = False
+
     new_temp_value = min(current_temp, temp_max)
-    temp_update = gr.update(maximum=temp_max, value=new_temp_value)
+    temp_update = gr.update(
+        maximum=temp_max, value=new_temp_value, interactive=temp_interactive
+    )
 
     top_k_update = gr.update(interactive=top_k_interactive)
     top_p_update = gr.update(interactive=top_p_interactive)
@@ -1038,6 +1105,16 @@ def update_params_for_model(
 
     enable_code_execution_update = gr.update(visible=is_gemini_3_flash_google)
 
+    # Verbosity dropdown (GPT-5 series only)
+    verbosity_visible, verbosity_choices, verbosity_default_value = (
+        get_verbosity_config(provider, model_name)
+    )
+    verbosity_update = gr.update(
+        visible=verbosity_visible,
+        choices=verbosity_choices,
+        value=verbosity_default_value,
+    )
+
     return (
         temp_update,
         top_p_update,
@@ -1050,6 +1127,7 @@ def update_params_for_model(
         media_resolution_context_update,
         reasoning_effort_update,
         effort_update,
+        verbosity_update,
     )
 
 

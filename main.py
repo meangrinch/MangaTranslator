@@ -282,6 +282,16 @@ def main():
         ),
     )
     parser.add_argument(
+        "--verbosity",
+        type=str,
+        default="low",
+        choices=["high", "medium", "low"],
+        help=(
+            "GPT-5 series only: Controls response verbosity. "
+            "Separate from 'max_tokens' and 'reasoning_effort'."
+        ),
+    )
+    parser.add_argument(
         "--ocr-method",
         type=str,
         default="LLM",
@@ -858,6 +868,7 @@ def main():
             media_resolution_context=args.media_resolution_context,
             reasoning_effort=args.reasoning_effort,
             effort=args.effort,
+            verbosity=args.verbosity,
             send_full_page_context=args.send_full_page_context,
             upscale_method=args.upscale_method,
             bubble_min_side_pixels=args.bubble_min_side_pixels,

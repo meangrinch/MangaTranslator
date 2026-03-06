@@ -67,6 +67,9 @@ class TranslationConfig:
     effort: Optional[str] = (
         None  # Opus 4.5/4.6, Sonnet 4.6 only: token spending eagerness (high/medium/low)
     )
+    verbosity: Optional[str] = (
+        None  # GPT-5 series only: controls response verbosity (high/medium/low)
+    )
     send_full_page_context: bool = True
     upscale_method: str = "model_lite"  # "model", "model_lite", "lanczos", or "none"
     enable_web_search: bool = (

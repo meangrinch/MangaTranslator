@@ -121,6 +121,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         media_resolution_context_val,
         reasoning_effort_val,
         effort_val,
+        verbosity_val,
         send_full_page_context_val,
         upscale_method_val,
         bubble_min_side_pixels_val,
@@ -283,6 +284,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             media_resolution_context=media_resolution_context_val,
             reasoning_effort=reasoning_effort_val,
             effort=effort_val,
+            verbosity=verbosity_val,
             auto_scale=auto_scale_val,
         ),
         input_language=final_input_language,
@@ -921,6 +923,7 @@ def handle_save_config_click(*args: Any) -> str:
         media_resolution_context_val,
         reasoning_effort_val,
         effort_val,
+        verbosity_val,
         send_full_page_context_val,
         upscale_method_val,
         bubble_min_side_pixels_val,
@@ -1072,6 +1075,7 @@ def handle_save_config_click(*args: Any) -> str:
             media_resolution_context=media_resolution_context_val,
             reasoning_effort=reasoning_effort_val,
             effort=effort_val,
+            verbosity=verbosity_val,
             auto_scale=auto_scale_val,
         ),
         input_language=s_in_lang,
@@ -1144,6 +1148,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         media_resolution_context_update,
         reasoning_effort_update,
         effort_update,
+        verbosity_update,
     ) = utils.update_params_for_model(
         default_provider, default_model_name, default_ui_state.llm_settings.temperature
     )
@@ -1169,6 +1174,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     )
     effort_visible = effort_update.get("visible", False)
     effort_val = effort_update.get("value", default_ui_state.general.effort)
+    verbosity_visible = verbosity_update.get("visible", False)
+    verbosity_val = verbosity_update.get("value", default_ui_state.general.verbosity)
 
     return [
         default_ui_state.detection.confidence,
@@ -1276,6 +1283,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         ),
         gr.update(value=reasoning_effort_val, visible=reasoning_visible),
         gr.update(value=effort_val, visible=effort_visible),
+        gr.update(value=verbosity_val, visible=verbosity_visible),
         "Settings reset to defaults (API keys preserved).",
         gr.update(value=default_ui_state.llm_settings.send_full_page_context),
         gr.update(value=default_ui_state.llm_settings.upscale_method),
@@ -1375,6 +1383,16 @@ def handle_model_change(provider: str, model_name: Optional[str], current_temp: 
     cache.clear_translation_cache()
     cache.clear_manga_ocr_cache()
     return utils.update_params_for_model(provider, model_name, current_temp)
+
+
+def handle_reasoning_effort_change(
+    provider: str, model_name: Optional[str], reasoning_effort: Optional[str]
+):
+    """Updates temp/top_p slider interactivity when reasoning effort changes."""
+    temp_ok, top_p_ok = utils.get_sampling_interactivity_for_effort(
+        provider, model_name, reasoning_effort
+    )
+    return gr.update(interactive=temp_ok), gr.update(interactive=top_p_ok)
 
 
 def handle_app_load(provider: str, url: str, key: Optional[str]):
