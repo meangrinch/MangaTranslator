@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
 import cv2
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from core.caching import get_cache
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
     from ui.cancellation import CancellationManager
 
 
-ENABLE_COMPONENT_ORDER_DEBUG = False
+ENABLE_COMPONENT_ORDER_DEBUG = True
 
 
 def get_image_encoding_params(pil_image_format: Optional[str]) -> Tuple[str, str]:
@@ -120,10 +121,45 @@ def _draw_centered_index(draw, bbox, value, font, color):
         )
 
 
+def _normalize_debug_mask(mask, image_size):
+    """Normalize a debug mask into a full-image boolean array."""
+    if mask is None:
+        return None
+
+    try:
+        mask_array = np.asarray(mask)
+    except Exception:
+        return None
+
+    if mask_array.ndim == 3:
+        mask_array = mask_array[..., 0]
+
+    if mask_array.ndim != 2:
+        return None
+
+    width, height = image_size
+    if mask_array.shape != (height, width):
+        return None
+
+    return mask_array > 0
+
+
+def _apply_mask_debug_overlay(canvas, mask, color=(255, 0, 0, 84)):
+    """Alpha-composite a semi-transparent mask overlay onto the debug canvas."""
+    normalized_mask = _normalize_debug_mask(mask, canvas.size)
+    if normalized_mask is None or not np.any(normalized_mask):
+        return
+
+    overlay = np.zeros((canvas.size[1], canvas.size[0], 4), dtype=np.uint8)
+    overlay[normalized_mask] = color
+    canvas.alpha_composite(Image.fromarray(overlay, mode="RGBA"))
+
+
 def _write_component_order_debug_image(
     image_size,
     sorted_items,
     panels,
+    bubble_masks,
     reading_direction,
     image_path,
     output_path,
@@ -134,7 +170,7 @@ def _write_component_order_debug_image(
     if width <= 0 or height <= 0:
         return
 
-    canvas = Image.new("RGB", (width, height), (238, 238, 238))
+    canvas = Image.new("RGBA", (width, height), (238, 238, 238, 255))
     draw = ImageDraw.Draw(canvas)
 
     panel_color = (32, 63, 255)
@@ -148,6 +184,15 @@ def _write_component_order_debug_image(
     panel_order = (
         sort_panels_by_reading_order(panels, reading_direction) if panels else []
     )
+
+    for item in sorted_items:
+        if item.get("is_outside_text", False):
+            continue
+        bbox = tuple(int(round(v)) for v in item.get("bbox", (0, 0, 0, 0)))
+        _apply_mask_debug_overlay(
+            canvas, bubble_masks.get(bbox) if bubble_masks else None
+        )
+
     for panel_index, panel_id in enumerate(panel_order, start=1):
         panel_bbox = tuple(int(round(v)) for v in panels[panel_id])
         draw.rectangle(panel_bbox, outline=panel_color, width=3)
@@ -164,7 +209,7 @@ def _write_component_order_debug_image(
     base_path = Path(output_path) if output_path else Path(image_path)
     debug_path = base_path.parent / f"{base_path.stem}.component-order-debug.png"
     debug_path.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(debug_path, format="PNG")
+    canvas.convert("RGB").save(debug_path, format="PNG")
     log_message(
         f"Wrote component-order debug image: {debug_path}",
         verbose=verbose,
@@ -682,11 +727,33 @@ def translate_and_render(
                     all_text_data, reading_direction, panels=panels
                 )
                 if ENABLE_COMPONENT_ORDER_DEBUG:
+                    bubble_debug_masks = {}
+                    for bubble in sorted_bubble_data:
+                        if bubble.get("is_outside_text", False):
+                            continue
+                        bbox = tuple(int(round(v)) for v in bubble.get("bbox", ()))
+                        if len(bbox) != 4:
+                            continue
+                        mask = bubble.get("sam_mask")
+                        if mask is not None:
+                            bubble_debug_masks[bbox] = mask
+
+                    for info in processed_bubbles_info:
+                        bbox = tuple(int(round(v)) for v in info.get("bbox", ()))
+                        if len(bbox) != 4:
+                            continue
+                        mask = info.get("mask")
+                        if mask is None:
+                            mask = info.get("base_mask")
+                        if mask is not None:
+                            bubble_debug_masks[bbox] = mask
+
                     try:
                         _write_component_order_debug_image(
                             pil_image_processed.size,
                             sorted_bubble_data,
                             debug_panels,
+                            bubble_debug_masks,
                             reading_direction,
                             image_path,
                             output_path,
