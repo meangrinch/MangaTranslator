@@ -223,7 +223,12 @@ class OutsideTextDetector:
             else:
                 yolo_model = self.manager.load_yolo_speech_bubble(yolo_model_path)
                 yolo_results = yolo_model(
-                    image_cv, conf=confidence, device=self.device, verbose=False
+                    image_cv,
+                    conf=confidence,
+                    device=self.device,
+                    verbose=False,
+                    imgsz=640,
+                    retina_masks=True,
                 )[0]
                 yolo_boxes = (
                     yolo_results.boxes.xyxy
@@ -247,6 +252,8 @@ class OutsideTextDetector:
                     conf=conjoined_confidence,
                     device=self.device,
                     verbose=False,
+                    imgsz=1024,
+                    retina_masks=True,
                 )[0]
 
                 sec_boxes = (
@@ -314,7 +321,12 @@ class OutsideTextDetector:
             else:
                 osbtext_model = self.manager.load_yolo_osbtext(token=self.hf_token)
                 osbtext_results = osbtext_model(
-                    image_cv, conf=confidence, device=self.device, verbose=False
+                    image_cv,
+                    conf=confidence,
+                    device=self.device,
+                    verbose=False,
+                    imgsz=640,
+                    retina_masks=True,
                 )[0]
                 osbtext_boxes = (
                     osbtext_results.boxes.xyxy

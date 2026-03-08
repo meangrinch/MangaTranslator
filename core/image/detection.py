@@ -51,7 +51,12 @@ def _expand_boxes_with_osb_text(
         else:
             osb_model = model_manager.load_yolo_osbtext(token=hf_token)
             osb_results = osb_model(
-                image_cv, conf=confidence, device=device, verbose=False
+                image_cv,
+                conf=confidence,
+                device=device,
+                verbose=False,
+                imgsz=640,
+                retina_masks=True,
             )[0]
             osb_boxes = (
                 osb_results.boxes.xyxy
@@ -560,13 +565,21 @@ def _fallback_to_yolo_mask(primary_results, i, mask_type="points"):
         elif mask_type == "binary":
             mask_tensor = masks.data[i]
             orig_h, orig_w = primary_results.orig_shape
-            mask_resized = torch.nn.functional.interpolate(
-                mask_tensor.float().unsqueeze(0).unsqueeze(0),
-                size=(orig_h, orig_w),
-                mode="bilinear",
-                align_corners=False,
-            ).squeeze()
-            binary_mask = (mask_resized > SAM_MASK_THRESHOLD).cpu().numpy()
+
+            # Only interpolate if the mask doesn't already match the original shape (e.g. if retina_masks=False)
+            if mask_tensor.shape[-2:] != (orig_h, orig_w):
+                mask_tensor = (
+                    torch.nn.functional.interpolate(
+                        mask_tensor.float().unsqueeze(0).unsqueeze(0),
+                        size=(orig_h, orig_w),
+                        mode="bilinear",
+                        align_corners=False,
+                    )
+                    .squeeze(0)
+                    .squeeze(0)
+                )
+
+            binary_mask = (mask_tensor > SAM_MASK_THRESHOLD).cpu().numpy()
             return binary_mask.astype(np.uint8) * 255
         else:
             return None
@@ -653,7 +666,12 @@ def detect_speech_bubbles(
         primary_results, primary_boxes = cached_yolo
     else:
         primary_results = primary_model(
-            image_cv, conf=confidence, device=_device, verbose=False
+            image_cv,
+            conf=confidence,
+            device=_device,
+            verbose=False,
+            imgsz=640,
+            retina_masks=True,
         )[0]
         primary_boxes = (
             primary_results.boxes.xyxy
@@ -703,7 +721,12 @@ def detect_speech_bubbles(
             )
 
             secondary_results = secondary_model(
-                image_cv, conf=conjoined_confidence, device=_device, verbose=False
+                image_cv,
+                conf=conjoined_confidence,
+                device=_device,
+                verbose=False,
+                imgsz=1024,
+                retina_masks=True,
             )[0]
             secondary_boxes = (
                 secondary_results.boxes.xyxy
@@ -1201,9 +1224,14 @@ def detect_panels(
         raise ModelError(f"Error loading panel model: {e}")
 
     try:
-        results = panel_model(image_cv, conf=confidence, device=_device, verbose=False)[
-            0
-        ]
+        results = panel_model(
+            image_cv,
+            conf=confidence,
+            device=_device,
+            verbose=False,
+            imgsz=640,
+            retina_masks=True,
+        )[0]
         boxes = results.boxes.xyxy if results.boxes is not None else torch.tensor([])
         classes = results.boxes.cls if results.boxes is not None else torch.tensor([])
 
