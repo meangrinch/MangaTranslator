@@ -141,7 +141,7 @@ DEFAULT_SETTINGS = {
     "confidence": 0.6,
     "conjoined_confidence": 0.35,
     "panel_confidence": 0.25,
-    "sam_model": "sam2",  # "yolo", "sam2", or "sam3"
+    "seg_model": "sam2",  # "yolo", "sam2", or "sam3"
     "conjoined_detection": True,
     "use_osb_text_verification": True,
     "use_panel_sorting": True,
@@ -280,7 +280,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     # Models / Detection
     "confidence",
     "conjoined_confidence",
-    "sam_model",
+    "seg_model",
     "conjoined_detection",
     "panel_confidence",
     "use_panel_sorting",

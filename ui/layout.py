@@ -496,9 +496,9 @@ def create_layout(
                                     "use_panel_sorting", True
                                 ),
                             )
-                            sam_model = gr.Radio(
+                            seg_model = gr.Radio(
                                 choices=["sam3", "sam2", "yolo"],
-                                value=saved_settings.get("sam_model", "sam2"),
+                                value=saved_settings.get("seg_model", "sam2"),
                                 label="Segmentation Model",
                                 info=(
                                     "Model to use to segment speech bubbles. "
@@ -1674,7 +1674,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            sam_model,
+            seg_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1774,7 +1774,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            sam_model,
+            seg_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1871,7 +1871,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            sam_model,
+            seg_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1973,7 +1973,7 @@ def create_layout(
             confidence,
             conjoined_confidence,
             panel_confidence,
-            sam_model,
+            seg_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,

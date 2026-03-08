@@ -23,7 +23,7 @@ class UIDetectionSettings:
     confidence: float = 0.6
     conjoined_confidence: float = 0.35
     panel_confidence: float = 0.25
-    sam_model: str = "sam2"  # "yolo", "sam2", or "sam3"
+    seg_model: str = "sam2"  # "yolo", "sam2", or "sam3"
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
     use_osb_text_verification: bool = True
@@ -200,7 +200,7 @@ class UIConfigState:
             "confidence": self.detection.confidence,
             "conjoined_confidence": self.detection.conjoined_confidence,
             "panel_confidence": self.detection.panel_confidence,
-            "sam_model": self.detection.sam_model,
+            "seg_model": self.detection.seg_model,
             "conjoined_detection": self.detection.conjoined_detection,
             "use_panel_sorting": self.detection.use_panel_sorting,
             "use_osb_text_verification": self.detection.use_osb_text_verification,
@@ -317,6 +317,7 @@ class UIConfigState:
                 panel_confidence=data.get(
                     "panel_confidence", defaults.get("panel_confidence", 0.25)
                 ),
+                seg_model=data.get("seg_model", defaults.get("seg_model", "sam2")),
                 conjoined_detection=data.get(
                     "conjoined_detection",
                     defaults.get("conjoined_detection", True),
@@ -569,7 +570,7 @@ def map_ui_to_backend_config(
         panel_confidence=ui_state.detection.panel_confidence,
     )
     detection_cfg.conjoined_confidence = ui_state.detection.conjoined_confidence
-    detection_cfg.sam_model = ui_state.detection.sam_model
+    detection_cfg.seg_model = ui_state.detection.seg_model
     detection_cfg.conjoined_detection = ui_state.detection.conjoined_detection
     detection_cfg.use_panel_sorting = ui_state.detection.use_panel_sorting
     detection_cfg.use_osb_text_verification = (
