@@ -726,20 +726,20 @@ def handle_translate_click(
     except gr.Error as e:
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
-        return gr.update(), _status_update(cleaned)
+        return None, _status_update(cleaned)
     except CancellationError:
-        return gr.update(), _status_update("Translation cancelled by user.")
+        return None, _status_update("Translation cancelled by user.")
     except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
-        return gr.update(), _status_update(cleaned)
+        return None, _status_update(cleaned)
     except Exception as e:
         import traceback
 
         traceback.print_exc()
         cleaned = _clean_error_message(f"An unexpected error occurred: {str(e)}")
         gr.Error(cleaned)
-        return gr.update(), _status_update(cleaned)
+        return None, _status_update(cleaned)
 
 
 def handle_batch_click(
@@ -843,15 +843,15 @@ def handle_batch_click(
         progress(1.0, desc="Error occurred")
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
-        return gr.update(), _status_update(cleaned)
+        return None, _status_update(cleaned)
     except CancellationError:
         progress(1.0, desc="Cancelled")
-        return gr.update(), _status_update("Batch process cancelled by user.")
+        return None, _status_update("Batch process cancelled by user.")
     except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
         progress(1.0, desc="Error occurred")
         cleaned = _clean_error_message(e)
         gr.Error(cleaned)
-        return gr.update(), _status_update(cleaned)
+        return None, _status_update(cleaned)
     except Exception as e:
         progress(1.0, desc="Error occurred")
         import traceback
@@ -861,7 +861,7 @@ def handle_batch_click(
             f"An unexpected error occurred during batch processing: {str(e)}"
         )
         gr.Error(cleaned)
-        return gr.update(), _status_update(cleaned)
+        return None, _status_update(cleaned)
 
 
 def handle_save_config_click(*args: Any) -> str:
