@@ -253,7 +253,6 @@ class OutsideTextDetector:
                     device=self.device,
                     verbose=False,
                     imgsz=1024,
-                    retina_masks=True,
                 )[0]
 
                 sec_boxes = (
@@ -326,7 +325,6 @@ class OutsideTextDetector:
                     device=self.device,
                     verbose=False,
                     imgsz=640,
-                    retina_masks=True,
                 )[0]
                 osbtext_boxes = (
                     osbtext_results.boxes.xyxy

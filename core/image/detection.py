@@ -56,7 +56,6 @@ def _expand_boxes_with_osb_text(
                 device=device,
                 verbose=False,
                 imgsz=640,
-                retina_masks=True,
             )[0]
             osb_boxes = (
                 osb_results.boxes.xyxy
@@ -738,7 +737,6 @@ def detect_speech_bubbles(
                 device=_device,
                 verbose=False,
                 imgsz=1024,
-                retina_masks=True,
             )[0]
             secondary_boxes = (
                 secondary_results.boxes.xyxy
@@ -1261,7 +1259,6 @@ def detect_panels(
             device=_device,
             verbose=False,
             imgsz=640,
-            retina_masks=True,
         )[0]
         boxes = results.boxes.xyxy if results.boxes is not None else torch.tensor([])
         classes = results.boxes.cls if results.boxes is not None else torch.tensor([])
