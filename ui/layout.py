@@ -1194,11 +1194,6 @@ def create_layout(
                             visible=False, elem_classes="settings-group"
                         ) as group_outside_text:
                             gr.Markdown("### Outside Speech Bubble Text")
-                            outside_text_enabled = gr.Checkbox(
-                                value=saved_settings.get("outside_text_enabled", False),
-                                label="Enable OSB Text Detection",
-                                info="Detect, inpaint, and translate text outside speech bubbles.",
-                            )
                             outside_text_huggingface_token = gr.Textbox(
                                 value=saved_settings.get(
                                     "outside_text_huggingface_token", ""
@@ -1210,6 +1205,11 @@ def create_layout(
                                     "Flux.1 Kontext Nunchaku, and/or SAM 3 models from HuggingFace Hub. "
                                     "Can also set via HF_TOKEN env var."
                                 ),
+                            )
+                            outside_text_enabled = gr.Checkbox(
+                                value=saved_settings.get("outside_text_enabled", False),
+                                label="Enable OSB Text Detection",
+                                info="Detect, inpaint, and translate text outside speech bubbles.",
                             )
 
                             # Wrap all settings except the enable checkbox and token in a Column with visibility control
