@@ -211,19 +211,25 @@ def _deduplicate_primary_boxes(
 
 
 def _remove_contained_boxes(
-    boxes: torch.Tensor, threshold: float = 0.9
-) -> torch.Tensor:
+    boxes: torch.Tensor,
+    indices: Optional[List[Tuple[str, int]]] = None,
+    threshold: float = 0.9,
+) -> Tuple[torch.Tensor, List[Tuple[str, int]]]:
     """Remove boxes that are fully or almost fully contained within other boxes.
 
     Args:
         boxes: Tensor of bounding boxes (N, 4)
+        indices: Source/index mapping for each box position
         threshold: IoA threshold above which inner boxes are considered contained
 
     Returns:
-        Tensor of filtered bounding boxes
+        Tuple of filtered bounding boxes and retained source/index mappings
     """
+    if indices is None:
+        indices = [("primary", i) for i in range(len(boxes))]
+
     if len(boxes) <= 1:
-        return boxes
+        return boxes, indices
 
     boxes_list = boxes.tolist()
     n = len(boxes_list)
@@ -241,7 +247,8 @@ def _remove_contained_boxes(
                 keep[i] = False
                 break
 
-    return boxes[keep]
+    kept_indices = [indices[i] for i, keep_box in enumerate(keep) if keep_box]
+    return boxes[keep], kept_indices
 
 
 def _get_cached_osb_text_boxes(cache, model_manager, image_pil, confidence):
@@ -680,12 +687,15 @@ def detect_speech_bubbles(
         )
         cache.set_yolo_detection(yolo_cache_key, (primary_results, primary_boxes))
 
+    primary_sources = [("primary", idx) for idx in range(len(primary_boxes))]
+
     # Remove duplicate primary detections using IoU-based NMS
     if len(primary_boxes) > 1:
         original_count = len(primary_boxes)
-        primary_boxes, _ = _deduplicate_primary_boxes(
+        primary_boxes, keep_indices = _deduplicate_primary_boxes(
             primary_boxes, primary_results.boxes.conf, IOU_DUPLICATE_THRESHOLD
         )
+        primary_sources = [primary_sources[idx] for idx in keep_indices]
         if len(primary_boxes) < original_count:
             log_message(
                 f"Removed {original_count - len(primary_boxes)} duplicate detections",
@@ -695,7 +705,9 @@ def detect_speech_bubbles(
     # Remove nested duplicate primary detections
     if len(primary_boxes) > 1:
         original_count = len(primary_boxes)
-        primary_boxes = _remove_contained_boxes(primary_boxes)
+        primary_boxes, primary_sources = _remove_contained_boxes(
+            primary_boxes, primary_sources
+        )
         if len(primary_boxes) < original_count:
             log_message(
                 f"Removed {original_count - len(primary_boxes)} contained detections",
@@ -733,11 +745,16 @@ def detect_speech_bubbles(
                 if secondary_results.boxes is not None
                 else torch.tensor([])
             )
+            secondary_sources = [
+                ("secondary", idx) for idx in range(len(secondary_boxes))
+            ]
 
             # Remove nested duplicate secondary detections
             if len(secondary_boxes) > 1:
                 orig_sec_count = len(secondary_boxes)
-                secondary_boxes = _remove_contained_boxes(secondary_boxes)
+                secondary_boxes, secondary_sources = _remove_contained_boxes(
+                    secondary_boxes, secondary_sources
+                )
                 if len(secondary_boxes) < orig_sec_count:
                     log_message(
                         f"Removed {orig_sec_count - len(secondary_boxes)} contained secondary detections",
@@ -759,17 +776,20 @@ def detect_speech_bubbles(
                 # Collect text_free boxes regardless of OSB setting
                 if text_free_id is not None:
                     for i, s_box in enumerate(secondary_boxes):
-                        if int(secondary_cls[i]) == text_free_id:
+                        _, secondary_idx = secondary_sources[i]
+                        if int(secondary_cls[secondary_idx]) == text_free_id:
                             text_free_boxes.append(s_box.tolist())
 
                 if text_bubble_id is not None:
                     new_boxes = []
+                    new_box_sources = []
                     primary_boxes_list = (
                         primary_boxes.tolist() if len(primary_boxes) > 0 else []
                     )
 
                     for i, s_box in enumerate(secondary_boxes):
-                        if int(secondary_cls[i]) != text_bubble_id:
+                        _, secondary_idx = secondary_sources[i]
+                        if int(secondary_cls[secondary_idx]) != text_bubble_id:
                             continue
 
                         s_box_list = s_box.tolist()
@@ -789,6 +809,7 @@ def detect_speech_bubbles(
 
                         if not is_covered:
                             new_boxes.append(s_box)
+                            new_box_sources.append(secondary_sources[i])
 
                     if new_boxes:
                         log_message(
@@ -802,6 +823,7 @@ def detect_speech_bubbles(
                             )
                         else:
                             primary_boxes = new_boxes_tensor
+                        primary_sources.extend(new_box_sources)
 
             # Remove text_free detections (route to OSB if enabled, discard otherwise)
             if text_free_boxes and len(primary_boxes) > 0:
@@ -838,8 +860,10 @@ def detect_speech_bubbles(
                     ]
                     if keep_indices:
                         primary_boxes = primary_boxes[keep_indices]
+                        primary_sources = [primary_sources[i] for i in keep_indices]
                     else:
                         primary_boxes = torch.tensor([])
+                        primary_sources = []
 
         except Exception as e:
             log_message(
@@ -848,6 +872,7 @@ def detect_speech_bubbles(
                 verbose=verbose,
             )
             secondary_boxes = torch.tensor([])
+            secondary_sources = []
 
     osb_text_boxes_np = None
     if osb_text_verification and len(primary_boxes) > 0:
@@ -871,8 +896,9 @@ def detect_speech_bubbles(
         log_message("SAM disabled, using YOLO segmentation masks", verbose=verbose)
         for i, box in enumerate(primary_boxes):
             x0_f, y0_f, x1_f, y1_f = box.tolist()
-            conf = float(primary_results.boxes.conf[i])
-            cls_id = int(primary_results.boxes.cls[i])
+            _, primary_idx = primary_sources[i]
+            conf = float(primary_results.boxes.conf[primary_idx])
+            cls_id = int(primary_results.boxes.cls[primary_idx])
             cls_name = primary_model.names[cls_id]
 
             detection = {
@@ -886,7 +912,9 @@ def detect_speech_bubbles(
                 "class": cls_name,
             }
 
-            detection["sam_mask"] = _fallback_to_yolo_mask(primary_results, i, "binary")
+            detection["sam_mask"] = _fallback_to_yolo_mask(
+                primary_results, primary_idx, "binary"
+            )
 
             detections.append(detection)
         return detections, text_free_boxes
@@ -1075,13 +1103,16 @@ def detect_speech_bubbles(
         fallback_boxes = []
         if conjoined_detection and len(secondary_boxes) > 0 and conjoined_indices:
             for idx in simple_indices:
-                fallback_boxes.append(("primary", idx, primary_boxes[idx]))
+                source, orig_idx = primary_sources[idx]
+                fallback_boxes.append((source, orig_idx, primary_boxes[idx]))
             for _, s_indices in conjoined_indices:
                 for s_idx in s_indices:
-                    fallback_boxes.append(("secondary", s_idx, secondary_boxes[s_idx]))
+                    source, orig_idx = secondary_sources[s_idx]
+                    fallback_boxes.append((source, orig_idx, secondary_boxes[s_idx]))
         elif len(primary_boxes) > 0:
             for idx in range(len(primary_boxes)):
-                fallback_boxes.append(("primary", idx, primary_boxes[idx]))
+                source, orig_idx = primary_sources[idx]
+                fallback_boxes.append((source, orig_idx, primary_boxes[idx]))
 
         fallback_conjoined_siblings: dict[int, list[tuple]] = {}
         if conjoined_detection and len(secondary_boxes) > 0 and conjoined_indices:
