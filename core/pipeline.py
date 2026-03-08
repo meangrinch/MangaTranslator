@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
 
 import cv2
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from core.caching import get_cache
 from core.config import MangaTranslatorConfig, PreprocessingConfig, RenderingConfig
@@ -32,7 +32,7 @@ from .image.image_utils import (
     upscale_image,
     upscale_image_to_dimension,
 )
-from .image.sorting import sort_bubbles_by_reading_order
+from .image.sorting import sort_bubbles_by_reading_order, sort_panels_by_reading_order
 from .ml.model_manager import get_model_manager
 from .outside_text_processor import process_outside_text
 from .services.translation import (
@@ -46,11 +46,130 @@ if TYPE_CHECKING:
     from ui.cancellation import CancellationManager
 
 
+ENABLE_COMPONENT_ORDER_DEBUG = False
+
+
 def get_image_encoding_params(pil_image_format: Optional[str]) -> Tuple[str, str]:
     """Returns (mime_type, cv2_ext) for a given PIL image format."""
     if pil_image_format and pil_image_format.upper() == "PNG":
         return "image/png", ".png"
     return "image/jpeg", ".jpg"
+
+
+def _load_debug_font(size: int):
+    """Load a bold-ish font for the debug overlay, falling back safely."""
+    font_candidates = [
+        "arialbd.ttf",
+        "arial.ttf",
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+    ]
+    for candidate in font_candidates:
+        try:
+            return ImageFont.truetype(candidate, size=size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _draw_dashed_rectangle(draw, bbox, color, width=2, dash=12, gap=7):
+    """Draw a dashed rectangle matching the requested debug style."""
+    x0, y0, x1, y1 = [int(v) for v in bbox]
+    if x1 <= x0 or y1 <= y0:
+        return
+
+    def _draw_dashed_line(start, end, horizontal=True):
+        if horizontal:
+            fixed = start[1]
+            pos = start[0]
+            limit = end[0]
+            while pos < limit:
+                seg_end = min(pos + dash, limit)
+                draw.line((pos, fixed, seg_end, fixed), fill=color, width=width)
+                pos += dash + gap
+        else:
+            fixed = start[0]
+            pos = start[1]
+            limit = end[1]
+            while pos < limit:
+                seg_end = min(pos + dash, limit)
+                draw.line((fixed, pos, fixed, seg_end), fill=color, width=width)
+                pos += dash + gap
+
+    _draw_dashed_line((x0, y0), (x1, y0), horizontal=True)
+    _draw_dashed_line((x0, y1), (x1, y1), horizontal=True)
+    _draw_dashed_line((x0, y0), (x0, y1), horizontal=False)
+    _draw_dashed_line((x1, y0), (x1, y1), horizontal=False)
+
+
+def _draw_centered_index(draw, bbox, value, font, color):
+    """Draw the index at the visual center of the box."""
+    x0, y0, x1, y1 = bbox
+    cx = int(round((x0 + x1) / 2))
+    cy = int(round((y0 + y1) / 2))
+    label = str(value)
+    try:
+        draw.text((cx, cy), label, fill=color, font=font, anchor="mm")
+    except TypeError:
+        left, top, right, bottom = draw.textbbox((0, 0), label, font=font)
+        draw.text(
+            (cx - (right - left) / 2, cy - (bottom - top) / 2),
+            label,
+            fill=color,
+            font=font,
+        )
+
+
+def _write_component_order_debug_image(
+    image_size,
+    sorted_items,
+    panels,
+    reading_direction,
+    image_path,
+    output_path,
+    verbose=False,
+):
+    """Write a debug PNG showing panel order and merged text-element order."""
+    width, height = image_size
+    if width <= 0 or height <= 0:
+        return
+
+    canvas = Image.new("RGB", (width, height), (238, 238, 238))
+    draw = ImageDraw.Draw(canvas)
+
+    panel_color = (32, 63, 255)
+    osb_color = (255, 0, 255)
+    bubble_color = (34, 160, 34)
+    index_color = (255, 0, 0)
+
+    font_size = max(14, min(width, height) // 28)
+    font = _load_debug_font(font_size)
+
+    panel_order = (
+        sort_panels_by_reading_order(panels, reading_direction) if panels else []
+    )
+    for panel_index, panel_id in enumerate(panel_order, start=1):
+        panel_bbox = tuple(int(round(v)) for v in panels[panel_id])
+        draw.rectangle(panel_bbox, outline=panel_color, width=3)
+        _draw_centered_index(draw, panel_bbox, panel_index, font, index_color)
+
+    for item_index, item in enumerate(sorted_items, start=1):
+        bbox = tuple(int(round(v)) for v in item.get("bbox", (0, 0, 0, 0)))
+        if item.get("is_outside_text", False):
+            draw.rectangle(bbox, outline=osb_color, width=2)
+        else:
+            _draw_dashed_rectangle(draw, bbox, bubble_color, width=2)
+        _draw_centered_index(draw, bbox, item_index, font, index_color)
+
+    base_path = Path(output_path) if output_path else Path(image_path)
+    debug_path = base_path.parent / f"{base_path.stem}.component-order-debug.png"
+    debug_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(debug_path, format="PNG")
+    log_message(
+        f"Wrote component-order debug image: {debug_path}",
+        verbose=verbose,
+        always_print=True,
+    )
 
 
 def _resolve_pre_upscale_factor(
@@ -496,9 +615,40 @@ def translate_and_render(
                     verbose=verbose,
                 )
 
-                # Detect panels if panel-aware sorting is enabled
                 panels = None
-                if config.detection.use_panel_sorting:
+                debug_panels = None
+                if ENABLE_COMPONENT_ORDER_DEBUG:
+                    try:
+                        log_message(
+                            "Detecting panels for ordering debug...",
+                            verbose=verbose,
+                        )
+                        debug_panels = detect_panels(
+                            image_path,
+                            confidence=config.detection.panel_confidence,
+                            device=config.device,
+                            verbose=verbose,
+                        )
+                        if debug_panels:
+                            log_message(
+                                f"Detected {len(debug_panels)} panels",
+                                always_print=True,
+                            )
+                        else:
+                            log_message(
+                                "No panels detected",
+                                verbose=verbose,
+                            )
+                    except Exception as e:
+                        log_message(
+                            f"Panel detection failed: {e}. Using global sorting.",
+                            always_print=True,
+                        )
+                        debug_panels = None
+
+                    if config.detection.use_panel_sorting:
+                        panels = debug_panels
+                elif config.detection.use_panel_sorting:
                     try:
                         log_message(
                             "Detecting panels for panel-aware sorting...",
@@ -531,6 +681,22 @@ def translate_and_render(
                 sorted_bubble_data = sort_bubbles_by_reading_order(
                     all_text_data, reading_direction, panels=panels
                 )
+                if ENABLE_COMPONENT_ORDER_DEBUG:
+                    try:
+                        _write_component_order_debug_image(
+                            pil_image_processed.size,
+                            sorted_bubble_data,
+                            debug_panels,
+                            reading_direction,
+                            image_path,
+                            output_path,
+                            verbose=verbose,
+                        )
+                    except Exception as e:
+                        log_message(
+                            f"Failed to write component-order debug image: {e}",
+                            always_print=True,
+                        )
 
                 bubble_images_b64 = [
                     bubble["image_b64"]

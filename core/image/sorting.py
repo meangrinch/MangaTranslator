@@ -1,6 +1,179 @@
 from typing import Any, Dict, List
 
 
+def sort_panels_by_reading_order(panels, reading_direction="rtl"):
+    """Return panel indices in reading order using the same logic as bubble sorting."""
+    if not panels:
+        return []
+
+    rtl = (reading_direction or "rtl").lower() == "rtl"
+
+    def _iou_x(boxA, boxB):
+        xa1, _, xa2, _ = boxA
+        xb1, _, xb2, _ = boxB
+        inter = max(0, min(xa2, xb2) - max(xa1, xb1))
+        union = (xa2 - xa1) + (xb2 - xb1) - inter
+        return inter / union if union > 0 else 0
+
+    def _iou_y_overlap(boxA, boxB):
+        _, ya1, _, ya2 = boxA
+        _, yb1, _, yb2 = boxB
+        inter = max(0, min(ya2, yb2) - max(ya1, yb1))
+        min_h = min(ya2 - ya1, yb2 - yb1)
+        return inter / min_h if min_h > 0 else 0
+
+    nodes = []
+    for i, bbox in enumerate(panels):
+        nodes.append(
+            {
+                "id": i,
+                "bbox": bbox,
+                "center": ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2),
+                "visited": False,
+            }
+        )
+
+    sorted_indices = []
+
+    # Roots: panels with no panel above in the same column.
+    root_nodes = []
+    for node in nodes:
+        is_root = True
+        for parent in nodes:
+            if node["id"] == parent["id"]:
+                continue
+            is_above = parent["bbox"][3] <= (node["bbox"][1] + 50)
+            x_overlap = _iou_x(parent["bbox"], node["bbox"])
+            if is_above and x_overlap > 0.2:
+                is_root = False
+                break
+        if is_root:
+            root_nodes.append(node)
+
+    if root_nodes:
+        current = (
+            max(root_nodes, key=lambda n: n["bbox"][2])
+            if rtl
+            else min(root_nodes, key=lambda n: n["bbox"][0])
+        )
+    else:
+        current = min(nodes, key=lambda n: n["bbox"][1])
+
+    current["visited"] = True
+    sorted_indices.append(current["id"])
+
+    while len(sorted_indices) < len(nodes):
+        c_box = current["bbox"]
+        candidates = [n for n in nodes if not n["visited"]]
+        if not candidates:
+            break
+
+        col_cand = None
+        col_candidates = []
+        for cand in candidates:
+            cand_box = cand["bbox"]
+            overlap = _iou_x(c_box, cand_box)
+            is_below = cand_box[1] >= (c_box[1] + (c_box[3] - c_box[1]) * 0.5)
+            if overlap > 0.2 and is_below:
+                dist_y = max(0, cand_box[1] - c_box[3])
+                col_candidates.append((dist_y, cand))
+
+        if col_candidates:
+            col_candidates.sort(
+                key=lambda x: (
+                    int(x[0] / 50),
+                    -x[1]["center"][0] if rtl else x[1]["center"][0],
+                )
+            )
+            col_cand = col_candidates[0][1]
+
+        row_cand = None
+        row_candidates = []
+        for cand in candidates:
+            cand_box = cand["bbox"]
+            if rtl:
+                is_row_neighbor = cand_box[2] <= (c_box[0] + 50)
+                dist_x = c_box[0] - cand_box[2]
+            else:
+                is_row_neighbor = cand_box[0] >= (c_box[2] - 50)
+                dist_x = cand_box[0] - c_box[2]
+
+            if is_row_neighbor:
+                y_inter = max(
+                    0, min(c_box[3], cand_box[3]) - max(c_box[1], cand_box[1])
+                )
+                if y_inter > 0:
+                    row_candidates.append((dist_x, cand))
+
+        if row_candidates:
+            row_candidates.sort(key=lambda x: x[0])
+            row_cand = row_candidates[0][1]
+
+        # Dual veto: ceiling (topological) + right-neighbor (row start)
+        if col_cand:
+            is_blocked = False
+            for other in candidates:
+                if other["id"] == col_cand["id"]:
+                    continue
+                is_above = other["bbox"][3] <= (col_cand["bbox"][1] + 50)
+                x_overlap = _iou_x(other["bbox"], col_cand["bbox"])
+                if is_above and x_overlap > 0.2:
+                    is_blocked = True
+                    break
+                if rtl:
+                    has_block_neighbor = other["bbox"][0] > (col_cand["bbox"][0] + 20)
+                else:
+                    has_block_neighbor = other["bbox"][2] < (col_cand["bbox"][2] - 20)
+                y_overlap_ratio = _iou_y_overlap(col_cand["bbox"], other["bbox"])
+                if has_block_neighbor and y_overlap_ratio > 0.3:
+                    is_blocked = True
+                    break
+            if is_blocked:
+                col_cand = None
+
+        next_node = None
+        if row_cand and not col_cand:
+            next_node = row_cand
+        elif col_cand and not row_cand:
+            next_node = col_cand
+        elif row_cand and col_cand:
+            curr_h = c_box[3] - c_box[1]
+            bottom_diff = abs(c_box[3] - row_cand["bbox"][3])
+            is_row_aligned = bottom_diff < (curr_h * 0.25)
+            next_node = row_cand if is_row_aligned else col_cand
+
+        if not next_node:
+            # Recompute roots among remaining nodes to find a new entry.
+            sub_roots = []
+            for node in candidates:
+                is_root = True
+                for parent in candidates:
+                    if node["id"] == parent["id"]:
+                        continue
+                    is_above = parent["bbox"][3] <= (node["bbox"][1] + 50)
+                    x_overlap = _iou_x(parent["bbox"], node["bbox"])
+                    if is_above and x_overlap > 0.2:
+                        is_root = False
+                        break
+                if is_root:
+                    sub_roots.append(node)
+
+            if sub_roots:
+                next_node = (
+                    max(sub_roots, key=lambda n: n["bbox"][2])
+                    if rtl
+                    else min(sub_roots, key=lambda n: n["bbox"][0])
+                )
+            else:
+                next_node = min(candidates, key=lambda n: n["bbox"][1])
+
+        current = next_node
+        current["visited"] = True
+        sorted_indices.append(current["id"])
+
+    return sorted_indices
+
+
 def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=None):
     """
     Hybrid Algorithm (veto system):
@@ -131,184 +304,10 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
         return ordered_items
 
     # Macro layout: panel graph with root detection and dual veto for Z-flow.
-    def _iou_x(boxA, boxB):
-        xa1, _, xa2, _ = boxA
-        xb1, _, xb2, _ = boxB
-        inter = max(0, min(xa2, xb2) - max(xa1, xb1))
-        union = (xa2 - xa1) + (xb2 - xb1) - inter
-        return inter / union if union > 0 else 0
-
-    def _iou_y_overlap(boxA, boxB):
-        _, ya1, _, ya2 = boxA
-        _, yb1, _, yb2 = boxB
-        inter = max(0, min(ya2, yb2) - max(ya1, yb1))
-        min_h = min(ya2 - ya1, yb2 - yb1)
-        return inter / min_h if min_h > 0 else 0
-
-    def sort_panels_strict(panels_list, rtl=True):
-        if not panels_list:
-            return []
-
-        nodes = []
-        for i, bbox in enumerate(panels_list):
-            nodes.append(
-                {
-                    "id": i,
-                    "bbox": bbox,
-                    "center": ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2),
-                    "visited": False,
-                }
-            )
-
-        sorted_indices = []
-
-        # Roots: panels with no panel above in the same column.
-        root_nodes = []
-        for n in nodes:
-            is_root = True
-            for parent in nodes:
-                if n["id"] == parent["id"]:
-                    continue
-                is_above = parent["bbox"][3] <= (n["bbox"][1] + 50)
-                x_overlap = _iou_x(parent["bbox"], n["bbox"])
-                if is_above and x_overlap > 0.2:
-                    is_root = False
-                    break
-            if is_root:
-                root_nodes.append(n)
-
-        if root_nodes:
-            start_node = (
-                max(root_nodes, key=lambda n: n["bbox"][2])
-                if rtl
-                else min(root_nodes, key=lambda n: n["bbox"][0])
-            )
-        else:
-            start_node = min(nodes, key=lambda n: n["bbox"][1])
-
-        current = start_node
-        current["visited"] = True
-        sorted_indices.append(current["id"])
-
-        while len(sorted_indices) < len(nodes):
-            c_box = current["bbox"]
-            candidates = [n for n in nodes if not n["visited"]]
-            if not candidates:
-                break
-
-            col_cand = None
-            col_candidates = []
-            for cand in candidates:
-                cand_box = cand["bbox"]
-                overlap = _iou_x(c_box, cand_box)
-                is_below = cand_box[1] >= (c_box[1] + (c_box[3] - c_box[1]) * 0.5)
-                if overlap > 0.2 and is_below:
-                    dist_y = max(0, cand_box[1] - c_box[3])
-                    col_candidates.append((dist_y, cand))
-
-            if col_candidates:
-                col_candidates.sort(
-                    key=lambda x: (
-                        int(x[0] / 50),
-                        -x[1]["center"][0] if rtl else x[1]["center"][0],
-                    )
-                )
-                col_cand = col_candidates[0][1]
-
-            row_cand = None
-            row_candidates = []
-            for cand in candidates:
-                cand_box = cand["bbox"]
-                if rtl:
-                    is_row_neighbor = cand_box[2] <= (c_box[0] + 50)
-                    dist_x = c_box[0] - cand_box[2]
-                else:
-                    is_row_neighbor = cand_box[0] >= (c_box[2] - 50)
-                    dist_x = cand_box[0] - c_box[2]
-
-                if is_row_neighbor:
-                    y_inter = max(
-                        0, min(c_box[3], cand_box[3]) - max(c_box[1], cand_box[1])
-                    )
-                    if y_inter > 0:
-                        row_candidates.append((dist_x, cand))
-
-            if row_candidates:
-                row_candidates.sort(key=lambda x: x[0])
-                row_cand = row_candidates[0][1]
-
-            # Dual veto: ceiling (topological) + right-neighbor (row start).
-            if col_cand:
-                is_blocked = False
-                for other in candidates:
-                    if other["id"] == col_cand["id"]:
-                        continue
-                    is_above = other["bbox"][3] <= (col_cand["bbox"][1] + 50)
-                    x_overlap = _iou_x(other["bbox"], col_cand["bbox"])
-                    if is_above and x_overlap > 0.2:
-                        is_blocked = True
-                        break
-                    if rtl:
-                        has_block_neighbor = other["bbox"][0] > (
-                            col_cand["bbox"][0] + 20
-                        )
-                    else:
-                        has_block_neighbor = other["bbox"][2] < (
-                            col_cand["bbox"][2] - 20
-                        )
-                    y_overlap_ratio = _iou_y_overlap(col_cand["bbox"], other["bbox"])
-                    if has_block_neighbor and y_overlap_ratio > 0.3:
-                        is_blocked = True
-                        break
-                if is_blocked:
-                    col_cand = None
-
-            next_node = None
-            if row_cand and not col_cand:
-                next_node = row_cand
-            elif col_cand and not row_cand:
-                next_node = col_cand
-            elif row_cand and col_cand:
-                curr_h = c_box[3] - c_box[1]
-                bottom_diff = abs(c_box[3] - row_cand["bbox"][3])
-                is_row_aligned = bottom_diff < (curr_h * 0.25)
-                next_node = row_cand if is_row_aligned else col_cand
-
-            if not next_node:
-                # Recompute roots among remaining nodes to find a new entry.
-                sub_roots = []
-                for n in candidates:
-                    is_root = True
-                    for parent in candidates:
-                        if n["id"] == parent["id"]:
-                            continue
-                        is_above = parent["bbox"][3] <= (n["bbox"][1] + 50)
-                        x_overlap = _iou_x(parent["bbox"], n["bbox"])
-                        if is_above and x_overlap > 0.2:
-                            is_root = False
-                            break
-                    if is_root:
-                        sub_roots.append(n)
-
-                if sub_roots:
-                    next_node = (
-                        max(sub_roots, key=lambda n: n["bbox"][2])
-                        if rtl
-                        else min(sub_roots, key=lambda n: n["bbox"][0])
-                    )
-                else:
-                    next_node = min(candidates, key=lambda n: n["bbox"][1])
-
-            current = next_node
-            current["visited"] = True
-            sorted_indices.append(current["id"])
-
-        return sorted_indices
-
     if not panels:
         return _spatial_sort(detections)
 
-    sorted_panel_indices = sort_panels_strict(panels, rtl)
+    sorted_panel_indices = sort_panels_by_reading_order(panels, reading_direction)
     if not sorted_panel_indices:
         sorted_panel_indices = list(range(len(panels)))
 
