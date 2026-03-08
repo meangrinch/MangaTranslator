@@ -138,9 +138,7 @@ def call_anthropic_endpoint(
         effort = generation_config.get("effort")
         is_46 = generation_config.get("is_46_model", False)
         valid_efforts = (
-            ("max", "high", "medium", "low")
-            if is_46
-            else ("high", "medium", "low")
+            ("max", "high", "medium", "low") if is_46 else ("high", "medium", "low")
         )
         if effort and effort in valid_efforts:
             payload["output_config"] = {"effort": effort}
@@ -225,9 +223,7 @@ def call_anthropic_endpoint(
                         f"Rate limited after {max_retries + 1} attempts: {error_text}"
                     )
                 elif status_code == 400:
-                    error_reason += (
-                        " (Check model name, API key, payload, or max_tokens)"
-                    )
+                    error_reason += " (Check payload)"
                 elif status_code == 401:
                     error_reason += " (Check API key)"
                 elif status_code == 403:

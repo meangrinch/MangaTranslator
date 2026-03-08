@@ -175,7 +175,7 @@ def call_openai_compatible_endpoint(
                         f"Rate limited after {max_retries + 1} attempts: {error_text}"
                     )
                 elif status_code == 400:
-                    error_reason += " (Check model name and payload)"
+                    error_reason += " (Check payload)"
                 elif status_code == 401:
                     error_reason += " (Check API key if provided)"
                 elif status_code == 403:
