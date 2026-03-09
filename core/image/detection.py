@@ -32,9 +32,6 @@ SYNTHETIC_CONJOINED_IOA_THRESHOLD = (
 AXIS_DOMINANCE_RATIO = (
     3.0  # Center-offset ratio to classify a box pair as axis-aligned (~18° cone)
 )
-TEXT_SAFE_SPLIT_MARGIN_RATIO = (
-    0.25  # Allow split to clip up to this fraction from a text box edge
-)
 
 
 def _box_contains(inner, outer) -> bool:
@@ -686,7 +683,8 @@ def _split_overlap_zone_with_line(
             lower_bound = raw_lower_bound
             upper_bound = raw_upper_bound
 
-        def _tighten_bounds(text_boxes, center_dist, lower, upper):
+        def _tighten_strict(text_boxes, center_dist, lower, upper):
+            """Constrain using ALL inset-box corners (strictest protection)."""
             if abs(center_dist) < 1e-6:
                 return lower, upper
 
@@ -698,10 +696,25 @@ def _split_overlap_zone_with_line(
             if not corner_distances:
                 return lower, upper
 
-            # Only constrain with corners on the text's own side of the
-            # midline (d=0).  Corners that have crossed into sibling
-            # territory represent tiny intrusions that cannot be protected
-            # and would otherwise make the bounds infeasible.
+            if center_dist > 0:
+                upper = min(upper, min(corner_distances))
+            else:
+                lower = max(lower, max(corner_distances))
+            return lower, upper
+
+        def _tighten_own_side(text_boxes, center_dist, lower, upper):
+            """Constrain using only corners on the text's own side."""
+            if abs(center_dist) < 1e-6:
+                return lower, upper
+
+            corner_distances = []
+            for t_box in text_boxes:
+                for cx, cy in _get_nudge_box_corners(t_box):
+                    corner_distances.append(_signed_distance(cx, cy))
+
+            if not corner_distances:
+                return lower, upper
+
             if center_dist > 0:
                 own_side = [d for d in corner_distances if d > 0]
                 if own_side:
@@ -712,40 +725,50 @@ def _split_overlap_zone_with_line(
                     lower = max(lower, max(own_side))
             return lower, upper
 
+        def _pick_offset(lower, upper):
+            """Choose the best offset from a feasible range."""
+            if lower <= 0.0 <= upper:
+                mid = (lower + upper) / 2.0
+                return 0.0 if abs(mid) < 1e-6 else mid
+            return upper if upper < 0.0 else lower
+
+        def _split_respects_text(off):
+            """Reject if the split bisects any text box (2+ corners on wrong side)."""
+            for t_box, member_dist in [
+                *[(tb, center_a_dist) for tb in text_boxes_a],
+                *[(tb, center_b_dist) for tb in text_boxes_b],
+            ]:
+                dists = [
+                    _signed_distance(cx, cy) for cx, cy in _get_nudge_box_corners(t_box)
+                ]
+                if member_dist > 0:
+                    wrong = sum(1 for d in dists if d < off)
+                else:
+                    wrong = sum(1 for d in dists if d > off)
+                if wrong >= 2:
+                    return False
+            return True
+
         center_a_dist = _signed_distance(center_a[0], center_a[1])
         center_b_dist = _signed_distance(center_b[0], center_b[1])
-        lower_bound, upper_bound = _tighten_bounds(
-            text_boxes_a, center_a_dist, lower_bound, upper_bound
-        )
-        lower_bound, upper_bound = _tighten_bounds(
-            text_boxes_b, center_b_dist, lower_bound, upper_bound
-        )
 
-        if lower_bound > upper_bound:
-            return None
+        # Tier 1: strict corner-based constraints (best text protection).
+        lo, hi = lower_bound, upper_bound
+        lo, hi = _tighten_strict(text_boxes_a, center_a_dist, lo, hi)
+        lo, hi = _tighten_strict(text_boxes_b, center_b_dist, lo, hi)
 
-        if lower_bound <= 0.0 <= upper_bound:
-            midpoint_offset = (lower_bound + upper_bound) / 2.0
-            offset = 0.0 if abs(midpoint_offset) < 1e-6 else midpoint_offset
-        elif upper_bound < 0.0:
-            offset = upper_bound
+        if lo <= hi:
+            offset = _pick_offset(lo, hi)
         else:
-            offset = lower_bound
+            # Tier 2: own-side corners + post-validation.
+            lo, hi = lower_bound, upper_bound
+            lo, hi = _tighten_own_side(text_boxes_a, center_a_dist, lo, hi)
+            lo, hi = _tighten_own_side(text_boxes_b, center_b_dist, lo, hi)
 
-        # Post-validation: reject if the offset cuts through the interior
-        # of any text box.  Allow edge-clipping (corners that barely
-        # straddle the midline) by insetting the rejection zone.
-        for t_box in list(text_boxes_a) + list(text_boxes_b):
-            dists = [
-                _signed_distance(cx, cy) for cx, cy in _get_nudge_box_corners(t_box)
-            ]
-            d_min, d_max = min(dists), max(dists)
-            span = d_max - d_min
-            if span < 1e-6:
-                continue
-            margin = span * TEXT_SAFE_SPLIT_MARGIN_RATIO
-            if (d_min + margin) <= offset <= (d_max - margin):
+            candidate_off = _pick_offset(lo, hi) if lo <= hi else None
+            if lo > hi or not _split_respects_text(candidate_off):
                 return None
+            offset = candidate_off
 
     def _classify_pixels(split_offset: float):
         side_a = _signed_distance(center_a[0], center_a[1]) - split_offset
@@ -1003,12 +1026,14 @@ def _split_conjoined_mask(
                 continue
 
             overlap_count += 1
+            tba = text_boxes_for.get(i, []) if text_boxes_for else None
+            tbb = text_boxes_for.get(j, []) if text_boxes_for else None
             split_i, split_j = _split_overlap_zone_with_box_diagonal(
                 overlap_zone,
                 group_boxes[i],
                 group_boxes[j],
-                text_boxes_a=text_boxes_for.get(i, []) if text_boxes_for else None,
-                text_boxes_b=text_boxes_for.get(j, []) if text_boxes_for else None,
+                text_boxes_a=tba,
+                text_boxes_b=tbb,
                 group_arrangement=group_arrangement,
             )
 
