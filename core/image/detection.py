@@ -17,6 +17,24 @@ IOA_THRESHOLD = 0.50  # 50% IoA threshold for conjoined bubble detection
 SAM_MASK_THRESHOLD = 0.5  # SAM2 mask binarization threshold
 IOA_OVERLAP_THRESHOLD = 0.5  # IoA threshold for general overlap detection between boxes
 IOU_DUPLICATE_THRESHOLD = 0.7  # IoU threshold for duplicate primary detection
+OSB_TEXT_MATCH_IOA_THRESHOLD = (
+    0.2  # Minimum text-box overlap ratio for bubble assignment
+)
+AMBIGUOUS_TEXT_MATCH_RATIO = (
+    0.85  # Skip nudge boxes that match sibling bubbles nearly equally
+)
+TEXT_NUDGE_BOX_INSET_RATIO = 0.08  # Use text-core box, not full detector padding
+OVERLAP_NUDGE_INSET_RATIO = 0.08  # Keep nudged diagonal away from overlap-zone edges
+MIN_OVERLAP_SPLIT_SHARE = 0.08  # Minimum share of overlap zone kept by each child
+SYNTHETIC_CONJOINED_IOA_THRESHOLD = (
+    0.15  # Primary bbox overlap signaling a split conjoined bubble
+)
+AXIS_DOMINANCE_RATIO = (
+    3.0  # Center-offset ratio to classify a box pair as axis-aligned (~18° cone)
+)
+TEXT_SAFE_SPLIT_MARGIN_RATIO = (
+    0.25  # Allow split to clip up to this fraction from a text box edge
+)
 
 
 def _box_contains(inner, outer) -> bool:
@@ -24,6 +42,90 @@ def _box_contains(inner, outer) -> bool:
     ix0, iy0, ix1, iy1 = inner
     ox0, oy0, ox1, oy1 = outer
     return ix0 >= ox0 and iy0 >= oy0 and ix1 <= ox1 and iy1 <= oy1
+
+
+def _box_intersection_area(box_a, box_b) -> float:
+    """Return the intersection area between two xyxy boxes."""
+    x0 = max(box_a[0], box_b[0])
+    y0 = max(box_a[1], box_b[1])
+    x1 = min(box_a[2], box_b[2])
+    y1 = min(box_a[3], box_b[3])
+    return max(0.0, x1 - x0) * max(0.0, y1 - y0)
+
+
+def _box_area(box) -> float:
+    """Return the area of an xyxy box."""
+    return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+
+
+def _point_in_box(point_x: float, point_y: float, box) -> bool:
+    """Return True if a point lies inside an xyxy box."""
+    return box[0] <= point_x <= box[2] and box[1] <= point_y <= box[3]
+
+
+def _mask_to_bbox(mask, fallback_box=None) -> tuple[int, int, int, int]:
+    """Convert a binary mask to an xyxy bbox, falling back when empty."""
+    mask_array = np.asarray(mask) > 0
+    coords = np.where(mask_array)
+    if coords[0].size == 0 or coords[1].size == 0:
+        if fallback_box is None:
+            return (0, 0, 0, 0)
+        x0_f, y0_f, x1_f, y1_f = (
+            fallback_box.tolist() if hasattr(fallback_box, "tolist") else fallback_box
+        )
+        return (
+            int(round(x0_f)),
+            int(round(y0_f)),
+            int(round(x1_f)),
+            int(round(y1_f)),
+        )
+
+    y_coords, x_coords = coords
+    return (
+        int(x_coords.min()),
+        int(y_coords.min()),
+        int(x_coords.max()) + 1,
+        int(y_coords.max()) + 1,
+    )
+
+
+def _text_box_meaningfully_matches_box(t_box, b_box) -> bool:
+    """Return True when a text box meaningfully belongs to a bubble box."""
+    intersection = _box_intersection_area(t_box, b_box)
+    if intersection <= 0.0:
+        return False
+
+    text_area = _box_area(t_box)
+    if text_area <= 0.0:
+        return False
+
+    text_center_x = (t_box[0] + t_box[2]) / 2.0
+    text_center_y = (t_box[1] + t_box[3]) / 2.0
+    text_ioa = intersection / text_area
+    return text_ioa >= OSB_TEXT_MATCH_IOA_THRESHOLD or _point_in_box(
+        text_center_x, text_center_y, b_box
+    )
+
+
+def _get_nudge_box_corners(t_box) -> list[tuple[float, float]]:
+    """Return a slightly inset box so detector padding does not overconstrain nudges."""
+    x0, y0, x1, y1 = [float(v) for v in t_box[:4]]
+    width = max(0.0, x1 - x0)
+    height = max(0.0, y1 - y0)
+    inset_x = min(
+        max(1.0, width * TEXT_NUDGE_BOX_INSET_RATIO),
+        max(0.0, width / 2.0 - 0.5),
+    )
+    inset_y = min(
+        max(1.0, height * TEXT_NUDGE_BOX_INSET_RATIO),
+        max(0.0, height / 2.0 - 0.5),
+    )
+    return [
+        (x0 + inset_x, y0 + inset_y),
+        (x1 - inset_x, y0 + inset_y),
+        (x0 + inset_x, y1 - inset_y),
+        (x1 - inset_x, y1 - inset_y),
+    ]
 
 
 def _expand_boxes_with_osb_text(
@@ -76,19 +178,11 @@ def _expand_boxes_with_osb_text(
         osb_np = osb_boxes.detach().cpu().numpy()
 
         for t_box in osb_np:
-            tx0, ty0, tx1, ty1 = t_box
             best_idx = None
             best_intersection = 0.0
 
             for i, b_box in enumerate(pb_np):
-                bx0, by0, bx1, by1 = b_box
-                inter_x0 = max(bx0, tx0)
-                inter_y0 = max(by0, ty0)
-                inter_x1 = min(bx1, tx1)
-                inter_y1 = min(by1, ty1)
-                inter_w = max(0.0, inter_x1 - inter_x0)
-                inter_h = max(0.0, inter_y1 - inter_y0)
-                intersection = inter_w * inter_h
+                intersection = _box_intersection_area(t_box, b_box)
                 if intersection > best_intersection:
                     best_intersection = intersection
                     best_idx = i
@@ -96,15 +190,18 @@ def _expand_boxes_with_osb_text(
             if best_idx is None or best_intersection <= 0.0:
                 continue
 
+            if not _text_box_meaningfully_matches_box(t_box, pb_np[best_idx]):
+                continue
+
             if _box_contains(t_box, pb_np[best_idx]):
                 continue
 
-            bx0, by0, bx1, by1 = pb_np[best_idx]
+            b = pb_np[best_idx]
             pb_np[best_idx] = [
-                min(bx0, tx0),
-                min(by0, ty0),
-                max(bx1, tx1),
-                max(by1, ty1),
+                min(b[0], t_box[0]),
+                min(b[1], t_box[1]),
+                max(b[2], t_box[2]),
+                max(b[3], t_box[3]),
             ]
 
         return torch.tensor(
@@ -116,58 +213,17 @@ def _expand_boxes_with_osb_text(
 
 
 def _calculate_ioa(box_inner, box_outer):
-    """Calculate Intersection over Area (IoA) for two bounding boxes.
-
-    IoA = intersection_area / area_of_inner_box
-
-    Args:
-        box_inner: Tuple or list of (x0, y0, x1, y1) for the inner box
-        box_outer: Tuple or list of (x0, y0, x1, y1) for the outer box
-
-    Returns:
-        float: IoA value between 0 and 1
-    """
-    x_inner_min, y_inner_min, x_inner_max, y_inner_max = box_inner
-    x_outer_min, y_outer_min, x_outer_max, y_outer_max = box_outer
-
-    inter_x_min = max(x_inner_min, x_outer_min)
-    inter_y_min = max(y_inner_min, y_outer_min)
-    inter_x_max = min(x_inner_max, x_outer_max)
-    inter_y_max = min(y_inner_max, y_outer_max)
-
-    inter_w = max(0, inter_x_max - inter_x_min)
-    inter_h = max(0, inter_y_max - inter_y_min)
-    intersection = inter_w * inter_h
-
-    area_inner = (x_inner_max - x_inner_min) * (y_inner_max - y_inner_min)
-    return intersection / area_inner if area_inner > 0 else 0.0
+    """IoA = intersection_area / area_of_inner_box."""
+    area_inner = _box_area(box_inner)
+    if area_inner <= 0:
+        return 0.0
+    return _box_intersection_area(box_inner, box_outer) / area_inner
 
 
 def _calculate_iou(box_a, box_b):
-    """Calculate Intersection over Union (IoU) for two bounding boxes.
-
-    IoU = intersection_area / union_area
-
-    Args:
-        box_a: Tuple of (x0, y0, x1, y1)
-        box_b: Tuple of (x0, y0, x1, y1)
-
-    Returns:
-        float: IoU value between 0 and 1
-    """
-    inter_x_min = max(box_a[0], box_b[0])
-    inter_y_min = max(box_a[1], box_b[1])
-    inter_x_max = min(box_a[2], box_b[2])
-    inter_y_max = min(box_a[3], box_b[3])
-
-    inter_w = max(0, inter_x_max - inter_x_min)
-    inter_h = max(0, inter_y_max - inter_y_min)
-    intersection = inter_w * inter_h
-
-    area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
-    area_b = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
-    union = area_a + area_b - intersection
-
+    """IoU = intersection_area / union_area."""
+    intersection = _box_intersection_area(box_a, box_b)
+    union = _box_area(box_a) + _box_area(box_b) - intersection
     return intersection / union if union > 0 else 0.0
 
 
@@ -277,174 +333,24 @@ def _match_text_boxes_to_bubbles(osb_text_boxes, boxes):
     """
     text_boxes_for = {i: [] for i in range(len(boxes))}
     for t_box in osb_text_boxes:
-        tx0, ty0, tx1, ty1 = t_box[:4]
-        best_idx = None
-        best_area = 0.0
+        meaningful_matches = []
         for i, b_box in enumerate(boxes):
-            bx0, by0, bx1, by1 = (
-                b_box if not hasattr(b_box, "tolist") else b_box.tolist()
-            )
-            inter_w = max(0.0, min(bx1, tx1) - max(bx0, tx0))
-            inter_h = max(0.0, min(by1, ty1) - max(by0, ty0))
-            area = inter_w * inter_h
-            if area > best_area:
-                best_area = area
-                best_idx = i
-        if best_idx is not None and best_area > 0.0:
-            text_boxes_for[best_idx].append(t_box)
-    return text_boxes_for
-
-
-def _compute_bisector_nudge(
-    center_a, center_b, mid_x, mid_y, text_boxes_a, text_boxes_b
-):
-    """Compute offset to shift the perpendicular bisector so it doesn't cut text.
-
-    Projects text-bbox corners onto the A→B axis.  Text belonging to bubble A
-    should lie on the A-side (negative projection); if any corner projects
-    positive it intrudes past the bisector — the bisector must shift toward B
-    to clear it (and vice-versa for bubble B).
-
-    Returns:
-        (nudged_mid_x, nudged_mid_y) after applying the offset.
-    """
-    vec_x = center_b[0] - center_a[0]
-    vec_y = center_b[1] - center_a[1]
-    length = np.sqrt(vec_x**2 + vec_y**2)
-    if length < 1e-6:
-        return mid_x, mid_y
-
-    uvec_x = vec_x / length
-    uvec_y = vec_y / length
-
-    # Max intrusion of A's text past the bisector (positive = toward B)
-    shift_for_a = 0.0
-    for t_box in text_boxes_a:
-        corners = [
-            (t_box[0], t_box[1]),
-            (t_box[2], t_box[1]),
-            (t_box[0], t_box[3]),
-            (t_box[2], t_box[3]),
-        ]
-        for cx, cy in corners:
-            proj = (cx - mid_x) * uvec_x + (cy - mid_y) * uvec_y
-            if proj > shift_for_a:
-                shift_for_a = proj
-
-    # Max intrusion of B's text past the bisector (negative = toward A)
-    shift_for_b = 0.0
-    for t_box in text_boxes_b:
-        corners = [
-            (t_box[0], t_box[1]),
-            (t_box[2], t_box[1]),
-            (t_box[0], t_box[3]),
-            (t_box[2], t_box[3]),
-        ]
-        for cx, cy in corners:
-            proj = (cx - mid_x) * uvec_x + (cy - mid_y) * uvec_y
-            if proj < shift_for_b:
-                shift_for_b = proj
-
-    # shift_for_a > 0 means move bisector toward B; shift_for_b < 0 means toward A
-    offset = shift_for_a + shift_for_b  # net signed offset along A→B
-
-    return mid_x + offset * uvec_x, mid_y + offset * uvec_y
-
-
-def _resolve_mask_overlaps(
-    masks: list,
-    boxes: list,
-    verbose: bool = False,
-    osb_text_boxes: Optional[np.ndarray] = None,
-) -> list:
-    """Resolve overlapping mask regions by carving exclusive boundaries.
-
-    For conjoined bubble masks that overlap, this function:
-    1. Finds overlapping pixel regions between mask pairs
-    2. Determines the split axis based on box arrangement
-    3. If OSB text boxes are provided, nudges the split line to avoid
-       cutting through detected text
-    4. Assigns overlap pixels to the appropriate mask
-
-    Args:
-        masks: List of boolean numpy arrays (SAM output masks)
-        boxes: List of corresponding bounding boxes [x0, y0, x1, y1]
-        verbose: Whether to log operations
-        osb_text_boxes: Optional (N,4) numpy array of OSB text detection boxes
-            in xyxy format.  When provided, the perpendicular bisector is
-            shifted so it does not cut through any text bbox.
-
-    Returns:
-        List of resolved masks with non-overlapping regions
-    """
-    if len(masks) <= 1:
-        return masks
-
-    # Pre-compute text-box-to-bubble associations once
-    text_boxes_for = None
-    if osb_text_boxes is not None and len(osb_text_boxes) > 0:
-        text_boxes_for = _match_text_boxes_to_bubbles(osb_text_boxes, boxes)
-
-    resolved = [mask.copy() for mask in masks]
-    n = len(resolved)
-    overlap_count = 0
-    nudge_count = 0
-
-    for i in range(n):
-        for j in range(i + 1, n):
-            overlap = np.logical_and(resolved[i], resolved[j])
-            if not np.any(overlap):
+            box_list = b_box if not hasattr(b_box, "tolist") else b_box.tolist()
+            area = _box_intersection_area(t_box[:4], box_list)
+            if area <= 0.0:
                 continue
+            if _text_box_meaningfully_matches_box(t_box[:4], box_list):
+                meaningful_matches.append((i, area))
 
-            overlap_count += 1
-            box_a = boxes[i] if not hasattr(boxes[i], "tolist") else boxes[i].tolist()
-            box_b = boxes[j] if not hasattr(boxes[j], "tolist") else boxes[j].tolist()
-
-            center_a = ((box_a[0] + box_a[2]) / 2, (box_a[1] + box_a[3]) / 2)
-            center_b = ((box_b[0] + box_b[2]) / 2, (box_b[1] + box_b[3]) / 2)
-            overlap_coords = np.where(overlap)
-
-            # Perpendicular bisector split via cross product
-            mid_x = (center_a[0] + center_b[0]) / 2
-            mid_y = (center_a[1] + center_b[1]) / 2
-            vec_x = center_b[0] - center_a[0]
-            vec_y = center_b[1] - center_a[1]
-
-            # Nudge bisector to avoid cutting through OSB text boxes
-            if text_boxes_for is not None:
-                old_mid = (mid_x, mid_y)
-                mid_x, mid_y = _compute_bisector_nudge(
-                    center_a,
-                    center_b,
-                    mid_x,
-                    mid_y,
-                    text_boxes_for.get(i, []),
-                    text_boxes_for.get(j, []),
-                )
-                if (mid_x, mid_y) != old_mid:
-                    nudge_count += 1
-
-            pixel_y = overlap_coords[0]
-            pixel_x = overlap_coords[1]
-            cross = (pixel_x - mid_x) * vec_y - (pixel_y - mid_y) * vec_x
-
-            mask_a_pixels = cross >= 0
-            mask_b_pixels = cross < 0
-
-            resolved[i][pixel_y[mask_b_pixels], pixel_x[mask_b_pixels]] = False
-            resolved[j][pixel_y[mask_a_pixels], pixel_x[mask_a_pixels]] = False
-
-    if overlap_count > 0:
-        log_message(
-            f"Resolved {overlap_count} overlapping mask region(s)", verbose=verbose
+        meaningful_matches.sort(key=lambda item: item[1], reverse=True)
+        ambiguous = (
+            len(meaningful_matches) > 1
+            and meaningful_matches[1][1] / meaningful_matches[0][1]
+            >= AMBIGUOUS_TEXT_MATCH_RATIO
         )
-    if nudge_count > 0:
-        log_message(
-            f"Nudged bisector on {nudge_count} overlap(s) to avoid cutting text",
-            verbose=verbose,
-        )
-
-    return resolved
+        if meaningful_matches and not ambiguous:
+            text_boxes_for[meaningful_matches[0][0]].append(t_box)
+    return text_boxes_for
 
 
 def _categorize_detections(primary_boxes, secondary_boxes, ioa_threshold=IOA_THRESHOLD):
@@ -503,6 +409,78 @@ def _categorize_detections(primary_boxes, secondary_boxes, ioa_threshold=IOA_THR
             primary_simple_indices.append(i)
 
     return conjoined_indices, primary_simple_indices
+
+
+def _detect_overlapping_primaries(
+    primary_boxes,
+    simple_indices,
+    ioa_threshold=SYNTHETIC_CONJOINED_IOA_THRESHOLD,
+    verbose=False,
+):
+    """Detect primary boxes that significantly overlap each other, indicating
+    the primary YOLO model split a conjoined bubble into per-section bboxes.
+
+    Uses union-find for transitive grouping (A↔B + B↔C → {A,B,C}).
+
+    Returns:
+        synthetic_groups: list of sorted member-index lists (each len ≥ 2)
+        updated_simple_indices: simple_indices with grouped members removed
+    """
+    if len(simple_indices) < 2:
+        return [], simple_indices
+
+    parent_map: dict[int, int] = {}
+
+    def find(x):
+        while parent_map.get(x, x) != x:
+            parent_map[x] = parent_map.get(parent_map[x], parent_map[x])
+            x = parent_map[x]
+        return x
+
+    def union(x, y):
+        rx, ry = find(x), find(y)
+        if rx != ry:
+            parent_map[ry] = rx
+
+    has_overlap = False
+    for a_pos in range(len(simple_indices)):
+        for b_pos in range(a_pos + 1, len(simple_indices)):
+            idx_a = simple_indices[a_pos]
+            idx_b = simple_indices[b_pos]
+            box_a = primary_boxes[idx_a].tolist()
+            box_b = primary_boxes[idx_b].tolist()
+
+            if (
+                _calculate_ioa(box_a, box_b) > ioa_threshold
+                or _calculate_ioa(box_b, box_a) > ioa_threshold
+            ):
+                union(idx_a, idx_b)
+                has_overlap = True
+
+    if not has_overlap:
+        return [], simple_indices
+
+    group_map: dict[int, list[int]] = {}
+    for idx in simple_indices:
+        root = find(idx)
+        group_map.setdefault(root, []).append(idx)
+
+    synthetic_groups = [
+        sorted(members) for members in group_map.values() if len(members) >= 2
+    ]
+    if not synthetic_groups:
+        return [], simple_indices
+
+    grouped_set = {idx for grp in synthetic_groups for idx in grp}
+    updated_simple = [idx for idx in simple_indices if idx not in grouped_set]
+
+    total_members = sum(len(g) for g in synthetic_groups)
+    log_message(
+        f"Detected {len(synthetic_groups)} synthetic conjoined group(s) "
+        f"from {total_members} overlapping primary detections",
+        always_print=True,
+    )
+    return synthetic_groups, updated_simple
 
 
 def _process_simple_bubbles(
@@ -596,6 +574,650 @@ def _fallback_to_yolo_mask(primary_results, i, mask_type="points"):
             always_print=True,
         )
         return None
+
+
+def _build_rect_mask_from_box(box, img_h: int, img_w: int) -> np.ndarray:
+    """Create a full-image rectangular mask from a bounding box."""
+    x0_f, y0_f, x1_f, y1_f = box.tolist() if hasattr(box, "tolist") else box
+    x0 = int(np.floor(max(0, min(x0_f, img_w))))
+    y0 = int(np.floor(max(0, min(y0_f, img_h))))
+    x1 = int(np.ceil(max(0, min(x1_f, img_w))))
+    y1 = int(np.ceil(max(0, min(y1_f, img_h))))
+
+    mask = np.zeros((img_h, img_w), dtype=np.uint8)
+    if x1 > x0 and y1 > y0:
+        mask[y0:y1, x0:x1] = 255
+    return mask
+
+
+def _get_group_osb_text_boxes(
+    osb_text_boxes: Optional[np.ndarray], primary_box
+) -> Optional[np.ndarray]:
+    """Scope OSB text boxes to those intersecting a primary bubble box."""
+    if osb_text_boxes is None or len(osb_text_boxes) == 0:
+        return None
+
+    px0, py0, px1, py1 = (
+        primary_box.tolist() if hasattr(primary_box, "tolist") else primary_box
+    )
+    hits = []
+    for tb in osb_text_boxes:
+        if tb[0] < px1 and tb[2] > px0 and tb[1] < py1 and tb[3] > py0:
+            hits.append(tb)
+    return np.array(hits) if hits else None
+
+
+def _seed_mask_from_box(parent_mask: np.ndarray, box) -> np.ndarray:
+    """Create a seed mask by clipping the parent mask to a child bounding box."""
+    img_h, img_w = parent_mask.shape
+    box_mask = _build_rect_mask_from_box(box, img_h, img_w) > 0
+    seed_mask = np.logical_and(parent_mask, box_mask)
+    if np.any(seed_mask):
+        return seed_mask
+
+    if not np.any(parent_mask):
+        return seed_mask
+
+    x0_f, y0_f, x1_f, y1_f = box.tolist() if hasattr(box, "tolist") else box
+    center_x = (x0_f + x1_f) / 2.0
+    center_y = (y0_f + y1_f) / 2.0
+
+    parent_coords = np.column_stack(np.where(parent_mask))
+    if parent_coords.size == 0:
+        return seed_mask
+
+    distances = (parent_coords[:, 1] - center_x) ** 2 + (
+        parent_coords[:, 0] - center_y
+    ) ** 2
+    nearest_y, nearest_x = parent_coords[int(np.argmin(distances))]
+    seed_mask[nearest_y, nearest_x] = True
+    return seed_mask
+
+
+def _split_overlap_zone_with_line(
+    overlap_mask: np.ndarray,
+    center_a: tuple[float, float],
+    center_b: tuple[float, float],
+    line_start: tuple[float, float],
+    line_end: tuple[float, float],
+    text_boxes_a: Optional[list] = None,
+    text_boxes_b: Optional[list] = None,
+    require_text_safe_split: bool = False,
+) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """Split an overlap zone along a line, optionally requiring a text-safe offset."""
+    line_vec_x = line_end[0] - line_start[0]
+    line_vec_y = line_end[1] - line_start[1]
+    line_length = np.hypot(line_vec_x, line_vec_y)
+    if line_length < 1e-6:
+        return None
+
+    normal_x = line_vec_y / line_length
+    normal_y = -line_vec_x / line_length
+
+    def _signed_distance(point_x, point_y):
+        return (point_x - line_start[0]) * normal_x + (
+            point_y - line_start[1]
+        ) * normal_y
+
+    pixel_y, pixel_x = np.where(overlap_mask)
+    if len(pixel_x) == 0:
+        return None
+
+    pixel_dist = _signed_distance(pixel_x, pixel_y)
+    dx = center_b[0] - center_a[0]
+    dy = center_b[1] - center_a[1]
+    text_boxes_a = text_boxes_a or []
+    text_boxes_b = text_boxes_b or []
+    require_text_safe_split = (
+        require_text_safe_split and bool(text_boxes_a) and bool(text_boxes_b)
+    )
+
+    offset = 0.0
+    if require_text_safe_split:
+        raw_lower_bound = float(np.min(pixel_dist))
+        raw_upper_bound = float(np.max(pixel_dist))
+        nudge_inset = max(
+            1.0, (raw_upper_bound - raw_lower_bound) * OVERLAP_NUDGE_INSET_RATIO
+        )
+        lower_bound = raw_lower_bound + nudge_inset
+        upper_bound = raw_upper_bound - nudge_inset
+
+        if lower_bound > upper_bound:
+            lower_bound = raw_lower_bound
+            upper_bound = raw_upper_bound
+
+        def _tighten_bounds(text_boxes, center_dist, lower, upper):
+            if abs(center_dist) < 1e-6:
+                return lower, upper
+
+            corner_distances = []
+            for t_box in text_boxes:
+                for cx, cy in _get_nudge_box_corners(t_box):
+                    corner_distances.append(_signed_distance(cx, cy))
+
+            if not corner_distances:
+                return lower, upper
+
+            # Only constrain with corners on the text's own side of the
+            # midline (d=0).  Corners that have crossed into sibling
+            # territory represent tiny intrusions that cannot be protected
+            # and would otherwise make the bounds infeasible.
+            if center_dist > 0:
+                own_side = [d for d in corner_distances if d > 0]
+                if own_side:
+                    upper = min(upper, min(own_side))
+            else:
+                own_side = [d for d in corner_distances if d < 0]
+                if own_side:
+                    lower = max(lower, max(own_side))
+            return lower, upper
+
+        center_a_dist = _signed_distance(center_a[0], center_a[1])
+        center_b_dist = _signed_distance(center_b[0], center_b[1])
+        lower_bound, upper_bound = _tighten_bounds(
+            text_boxes_a, center_a_dist, lower_bound, upper_bound
+        )
+        lower_bound, upper_bound = _tighten_bounds(
+            text_boxes_b, center_b_dist, lower_bound, upper_bound
+        )
+
+        if lower_bound > upper_bound:
+            return None
+
+        if lower_bound <= 0.0 <= upper_bound:
+            midpoint_offset = (lower_bound + upper_bound) / 2.0
+            offset = 0.0 if abs(midpoint_offset) < 1e-6 else midpoint_offset
+        elif upper_bound < 0.0:
+            offset = upper_bound
+        else:
+            offset = lower_bound
+
+        # Post-validation: reject if the offset cuts through the interior
+        # of any text box.  Allow edge-clipping (corners that barely
+        # straddle the midline) by insetting the rejection zone.
+        for t_box in list(text_boxes_a) + list(text_boxes_b):
+            dists = [
+                _signed_distance(cx, cy) for cx, cy in _get_nudge_box_corners(t_box)
+            ]
+            d_min, d_max = min(dists), max(dists)
+            span = d_max - d_min
+            if span < 1e-6:
+                continue
+            margin = span * TEXT_SAFE_SPLIT_MARGIN_RATIO
+            if (d_min + margin) <= offset <= (d_max - margin):
+                return None
+
+    def _classify_pixels(split_offset: float):
+        side_a = _signed_distance(center_a[0], center_a[1]) - split_offset
+        side_b = _signed_distance(center_b[0], center_b[1]) - split_offset
+        pixel_side = pixel_dist - split_offset
+
+        if side_a == side_b:
+            signed_projection = (pixel_x - (center_a[0] + center_b[0]) / 2.0) * dx + (
+                pixel_y - (center_a[1] + center_b[1]) / 2.0
+            ) * dy
+            mask_a_pixels = signed_projection <= 0
+            mask_b_pixels = signed_projection > 0
+        else:
+            if side_a < side_b:
+                mask_a_pixels = pixel_side <= 0
+                mask_b_pixels = pixel_side > 0
+            else:
+                mask_a_pixels = pixel_side >= 0
+                mask_b_pixels = pixel_side < 0
+
+        return mask_a_pixels, mask_b_pixels
+
+    mask_a_pixels, mask_b_pixels = _classify_pixels(offset)
+    if require_text_safe_split and offset != 0.0:
+        total_overlap_pixels = len(pixel_x)
+        min_pixels = max(
+            1, int(np.ceil(total_overlap_pixels * MIN_OVERLAP_SPLIT_SHARE))
+        )
+        if (
+            np.count_nonzero(mask_a_pixels) < min_pixels
+            or np.count_nonzero(mask_b_pixels) < min_pixels
+        ):
+            return None
+
+    mask_a = np.zeros_like(overlap_mask, dtype=bool)
+    mask_b = np.zeros_like(overlap_mask, dtype=bool)
+    mask_a[pixel_y[mask_a_pixels], pixel_x[mask_a_pixels]] = True
+    mask_b[pixel_y[mask_b_pixels], pixel_x[mask_b_pixels]] = True
+    return mask_a, mask_b
+
+
+def _detect_group_arrangement(group_boxes: list) -> Optional[str]:
+    """Determine if all boxes in a group are arranged along a single axis.
+
+    Returns "horizontal" when every pair of box centres has a dominant
+    horizontal offset (|dx| > AXIS_DOMINANCE_RATIO * |dy|), "vertical" when
+    the dominant offset is vertical, or None for mixed/diagonal layouts.
+    """
+    if len(group_boxes) < 2:
+        return None
+
+    def _center(box):
+        b = box.tolist() if hasattr(box, "tolist") else box
+        return (b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0
+
+    arrangement: Optional[str] = None
+    for i in range(len(group_boxes)):
+        ci = _center(group_boxes[i])
+        for j in range(i + 1, len(group_boxes)):
+            cj = _center(group_boxes[j])
+            dx = abs(cj[0] - ci[0])
+            dy = abs(cj[1] - ci[1])
+
+            if dx > AXIS_DOMINANCE_RATIO * max(dy, 1e-6):
+                pair_arr = "horizontal"
+            elif dy > AXIS_DOMINANCE_RATIO * max(dx, 1e-6):
+                pair_arr = "vertical"
+            else:
+                return None
+
+            if arrangement is None:
+                arrangement = pair_arr
+            elif arrangement != pair_arr:
+                return None
+
+    return arrangement
+
+
+def _split_overlap_zone_with_box_diagonal(
+    overlap_mask: np.ndarray,
+    box_a,
+    box_b,
+    text_boxes_a: Optional[list] = None,
+    text_boxes_b: Optional[list] = None,
+    group_arrangement: Optional[str] = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Split an overlap zone, choosing axis-aligned or diagonal lines.
+
+    When *group_arrangement* is ``"horizontal"`` or ``"vertical"`` (all group
+    members share that axis), the corresponding axis-aligned split is tried
+    first.  Otherwise the diagonal is preferred, matching the previous default.
+    """
+    box_a = box_a.tolist() if hasattr(box_a, "tolist") else box_a
+    box_b = box_b.tolist() if hasattr(box_b, "tolist") else box_b
+
+    ox0 = max(box_a[0], box_b[0])
+    oy0 = max(box_a[1], box_b[1])
+    ox1 = min(box_a[2], box_b[2])
+    oy1 = min(box_a[3], box_b[3])
+
+    if ox1 <= ox0 or oy1 <= oy0 or not np.any(overlap_mask):
+        return np.zeros_like(overlap_mask, dtype=bool), np.zeros_like(
+            overlap_mask, dtype=bool
+        )
+
+    center_a = ((box_a[0] + box_a[2]) / 2.0, (box_a[1] + box_a[3]) / 2.0)
+    center_b = ((box_b[0] + box_b[2]) / 2.0, (box_b[1] + box_b[3]) / 2.0)
+    dx = center_b[0] - center_a[0]
+    dy = center_b[1] - center_a[1]
+
+    # Same-sign diagonal offsets mean the boxes are NW/SE or SE/NW relative to
+    # each other, so the desired split is the overlap anti-diagonal. Otherwise,
+    # use the main diagonal.
+    if dx * dy >= 0:
+        line_start = (ox1, oy0)
+        line_end = (ox0, oy1)
+    else:
+        line_start = (ox0, oy0)
+        line_end = (ox1, oy1)
+
+    overlap_mid_x = (ox0 + ox1) / 2.0
+    overlap_mid_y = (oy0 + oy1) / 2.0
+    diag_line = (line_start, line_end)
+    h_line = ((ox0, overlap_mid_y), (ox1, overlap_mid_y))
+    v_line = ((overlap_mid_x, oy0), (overlap_mid_x, oy1))
+
+    # Horizontal arrangement → boxes side-by-side → vertical split preferred.
+    # Vertical arrangement   → boxes stacked      → horizontal split preferred.
+    if group_arrangement == "horizontal":
+        split_candidates = [v_line, diag_line, h_line]
+    elif group_arrangement == "vertical":
+        split_candidates = [h_line, diag_line, v_line]
+    else:
+        split_candidates = [diag_line, h_line, v_line]
+
+    text_boxes_a = text_boxes_a or []
+    text_boxes_b = text_boxes_b or []
+    if text_boxes_a and text_boxes_b:
+        for candidate_start, candidate_end in split_candidates:
+            split_masks = _split_overlap_zone_with_line(
+                overlap_mask,
+                center_a,
+                center_b,
+                candidate_start,
+                candidate_end,
+                text_boxes_a=text_boxes_a,
+                text_boxes_b=text_boxes_b,
+                require_text_safe_split=True,
+            )
+            if split_masks is not None:
+                return split_masks
+
+    # Non-text-safe fallback: try preferred candidate first, then diagonal.
+    preferred_start, preferred_end = split_candidates[0]
+    fallback_lines = [(preferred_start, preferred_end)]
+    if (preferred_start, preferred_end) != (line_start, line_end):
+        fallback_lines.append((line_start, line_end))
+    for fallback_start, fallback_end in fallback_lines:
+        split_masks = _split_overlap_zone_with_line(
+            overlap_mask,
+            center_a,
+            center_b,
+            fallback_start,
+            fallback_end,
+            text_boxes_a=text_boxes_a,
+            text_boxes_b=text_boxes_b,
+            require_text_safe_split=False,
+        )
+        if split_masks is not None:
+            return split_masks
+
+    return np.zeros_like(overlap_mask, dtype=bool), np.zeros_like(
+        overlap_mask, dtype=bool
+    )
+
+
+def _expand_resolved_masks_within_parent(
+    parent_mask: np.ndarray,
+    resolved_masks: list[np.ndarray],
+) -> list[np.ndarray]:
+    """Grow resolved seed masks to cover the remaining parent-mask pixels."""
+    if len(resolved_masks) == 0:
+        return []
+
+    assigned = np.zeros_like(parent_mask, dtype=bool)
+    seed_masks = []
+    distance_maps = []
+
+    for mask in resolved_masks:
+        seed = np.asarray(mask, dtype=bool)
+        seed_masks.append(seed)
+        assigned |= seed
+
+        if np.any(seed):
+            inv_seed = np.where(seed, 0, 1).astype(np.uint8)
+            distance_maps.append(
+                cv2.distanceTransform(inv_seed, cv2.DIST_L2, 5).astype(np.float32)
+            )
+        else:
+            distance_maps.append(np.full(parent_mask.shape, np.inf, dtype=np.float32))
+
+    remaining = np.logical_and(parent_mask, ~assigned)
+    if not np.any(remaining):
+        return [seed.astype(np.uint8) * 255 for seed in seed_masks]
+
+    nearest_seed = np.argmin(np.stack(distance_maps, axis=0), axis=0)
+    expanded_masks = []
+    for idx, seed in enumerate(seed_masks):
+        expanded = seed.copy()
+        expanded[np.logical_and(remaining, nearest_seed == idx)] = True
+        expanded_masks.append(expanded.astype(np.uint8) * 255)
+
+    return expanded_masks
+
+
+def _split_conjoined_mask(
+    primary_mask,
+    group_boxes: list,
+    verbose: bool = False,
+    osb_text_boxes: Optional[np.ndarray] = None,
+) -> list[np.ndarray]:
+    """Partition one mask into per-secondary masks for a conjoined group."""
+    if primary_mask is None or len(group_boxes) == 0:
+        return []
+
+    base_mask = np.asarray(primary_mask) > 0
+    if not np.any(base_mask):
+        return [np.zeros_like(primary_mask, dtype=np.uint8) for _ in group_boxes]
+
+    if len(group_boxes) == 1:
+        return [base_mask.astype(np.uint8) * 255]
+
+    img_h, img_w = base_mask.shape
+    box_masks = [
+        _build_rect_mask_from_box(box, img_h, img_w) > 0 for box in group_boxes
+    ]
+    resolved_masks = [np.logical_and(base_mask, box_mask) for box_mask in box_masks]
+    text_boxes_for = None
+    if osb_text_boxes is not None and len(osb_text_boxes) > 0:
+        text_boxes_for = _match_text_boxes_to_bubbles(osb_text_boxes, group_boxes)
+
+    for idx, mask in enumerate(resolved_masks):
+        if not np.any(mask):
+            resolved_masks[idx] = _seed_mask_from_box(base_mask, group_boxes[idx])
+
+    group_arrangement = _detect_group_arrangement(group_boxes)
+
+    overlap_count = 0
+    for i in range(len(group_boxes)):
+        for j in range(i + 1, len(group_boxes)):
+            overlap_zone = np.logical_and(
+                base_mask, np.logical_and(box_masks[i], box_masks[j])
+            )
+            if not np.any(overlap_zone):
+                continue
+
+            overlap_count += 1
+            split_i, split_j = _split_overlap_zone_with_box_diagonal(
+                overlap_zone,
+                group_boxes[i],
+                group_boxes[j],
+                text_boxes_a=text_boxes_for.get(i, []) if text_boxes_for else None,
+                text_boxes_b=text_boxes_for.get(j, []) if text_boxes_for else None,
+                group_arrangement=group_arrangement,
+            )
+
+            resolved_masks[i][overlap_zone] = False
+            resolved_masks[j][overlap_zone] = False
+            resolved_masks[i] = np.logical_or(resolved_masks[i], split_i)
+            resolved_masks[j] = np.logical_or(resolved_masks[j], split_j)
+
+    if overlap_count > 0:
+        log_message(
+            f"Resolved {overlap_count} YOLO conjoined overlap zone(s)",
+            verbose=verbose,
+        )
+
+    return _expand_resolved_masks_within_parent(base_mask, resolved_masks)
+
+
+def _get_detection_metadata(
+    source: str,
+    orig_idx: int,
+    primary_results,
+    primary_model,
+    secondary_results,
+    conjoined_confidence: float,
+):
+    """Return confidence/class metadata for a detection source."""
+    if (
+        source == "primary"
+        and primary_results is not None
+        and len(primary_results.boxes) > 0
+    ):
+        safe_idx = min(orig_idx, len(primary_results.boxes.conf) - 1)
+        conf = float(primary_results.boxes.conf[safe_idx])
+        cls_id = int(primary_results.boxes.cls[safe_idx])
+        return conf, primary_model.names[cls_id]
+
+    if (
+        source == "secondary"
+        and secondary_results is not None
+        and len(secondary_results.boxes) > 0
+    ):
+        safe_idx = min(orig_idx, len(secondary_results.boxes.conf) - 1)
+        conf = float(secondary_results.boxes.conf[safe_idx])
+        cls_id = int(secondary_results.boxes.cls[safe_idx])
+        cls_name = (
+            secondary_results.names.get(cls_id, "speech_bubble")
+            if hasattr(secondary_results, "names")
+            else "speech_bubble"
+        )
+        return conf, cls_name
+
+    return conjoined_confidence, "speech_bubble"
+
+
+def _build_segmentation_detections(
+    primary_boxes,
+    grouping_primary_boxes,
+    primary_sources,
+    primary_results,
+    primary_model,
+    secondary_boxes,
+    secondary_sources,
+    secondary_results,
+    simple_indices,
+    conjoined_indices,
+    img_h: int,
+    img_w: int,
+    conjoined_confidence: float,
+    osb_text_boxes_np: Optional[np.ndarray] = None,
+    verbose: bool = False,
+    sam_masks: Optional[list] = None,
+    synthetic_conjoined_groups: Optional[list] = None,
+):
+    """Build final detections from masks, including conjoined-mask partitioning."""
+    detections = []
+
+    for idx in simple_indices:
+        source, orig_idx = primary_sources[idx]
+        box = primary_boxes[idx]
+        conf, cls_name = _get_detection_metadata(
+            source,
+            orig_idx,
+            primary_results,
+            primary_model,
+            secondary_results,
+            conjoined_confidence,
+        )
+
+        sam_mask = None
+        if sam_masks is not None and sam_masks[idx] is not None:
+            sam_mask = sam_masks[idx]
+        elif source == "primary":
+            sam_mask = _fallback_to_yolo_mask(primary_results, orig_idx, "binary")
+
+        if sam_mask is None:
+            sam_mask = _build_rect_mask_from_box(box, img_h, img_w)
+
+        x0_f, y0_f, x1_f, y1_f = box.tolist()
+        detections.append(
+            {
+                "bbox": (
+                    int(round(x0_f)),
+                    int(round(y0_f)),
+                    int(round(x1_f)),
+                    int(round(y1_f)),
+                ),
+                "confidence": conf,
+                "class": cls_name,
+                "sam_mask": sam_mask,
+            }
+        )
+
+    for p_idx, s_indices in conjoined_indices:
+        parent_source, parent_orig_idx = primary_sources[p_idx]
+        parent_box = primary_boxes[p_idx]
+        grouping_parent_box = grouping_primary_boxes[p_idx]
+        parent_mask = None
+
+        if sam_masks is not None and sam_masks[p_idx] is not None:
+            parent_mask = sam_masks[p_idx]
+        elif parent_source == "primary":
+            parent_mask = _fallback_to_yolo_mask(
+                primary_results, parent_orig_idx, "binary"
+            )
+
+        if parent_mask is None:
+            parent_mask = _build_rect_mask_from_box(parent_box, img_h, img_w)
+
+        group_boxes = [secondary_boxes[s_idx] for s_idx in s_indices]
+        group_osb = _get_group_osb_text_boxes(osb_text_boxes_np, grouping_parent_box)
+        split_masks = _split_conjoined_mask(
+            parent_mask,
+            group_boxes,
+            verbose=verbose,
+            osb_text_boxes=group_osb,
+        )
+
+        group_bboxes = [
+            _mask_to_bbox(split_masks[idx], fallback_box=group_boxes[idx])
+            for idx in range(len(group_boxes))
+        ]
+
+        for local_idx, s_idx in enumerate(s_indices):
+            source, orig_idx = secondary_sources[s_idx]
+            box = secondary_boxes[s_idx]
+            conf, cls_name = _get_detection_metadata(
+                source,
+                orig_idx,
+                primary_results,
+                primary_model,
+                secondary_results,
+                conjoined_confidence,
+            )
+            detection = {
+                "bbox": group_bboxes[local_idx],
+                "confidence": conf,
+                "class": cls_name,
+                "sam_mask": split_masks[local_idx],
+            }
+            detection["conjoined_neighbor_bboxes"] = [
+                bbox for idx, bbox in enumerate(group_bboxes) if idx != local_idx
+            ]
+            detections.append(detection)
+
+    # Synthetic conjoined groups (primary-only, no parent YOLO detection)
+    for sg in synthetic_conjoined_groups or []:
+        parent_mask = sg.get("parent_mask")
+        parent_box = sg["parent_box"]
+        member_indices = sg["member_indices"]
+
+        if parent_mask is None:
+            parent_mask = _build_rect_mask_from_box(parent_box, img_h, img_w)
+
+        group_boxes = [grouping_primary_boxes[idx] for idx in member_indices]
+        group_osb = _get_group_osb_text_boxes(osb_text_boxes_np, parent_box)
+        split_masks = _split_conjoined_mask(
+            parent_mask,
+            group_boxes,
+            verbose=verbose,
+            osb_text_boxes=group_osb,
+        )
+
+        group_bboxes = [
+            _mask_to_bbox(split_masks[local_idx], fallback_box=group_boxes[local_idx])
+            for local_idx in range(len(group_boxes))
+        ]
+
+        for local_idx, p_idx in enumerate(member_indices):
+            source, orig_idx = primary_sources[p_idx]
+            conf, cls_name = _get_detection_metadata(
+                source,
+                orig_idx,
+                primary_results,
+                primary_model,
+                secondary_results,
+                conjoined_confidence,
+            )
+            detection = {
+                "bbox": group_bboxes[local_idx],
+                "confidence": conf,
+                "class": cls_name,
+                "sam_mask": split_masks[local_idx],
+                "conjoined_neighbor_bboxes": [
+                    bbox for idx, bbox in enumerate(group_bboxes) if idx != local_idx
+                ],
+            }
+            detections.append(detection)
+
+    return detections
 
 
 def detect_speech_bubbles(
@@ -722,8 +1344,10 @@ def detect_speech_bubbles(
     )
 
     secondary_boxes = torch.tensor([])
+    secondary_sources = []
+    secondary_results = None
     use_sam = seg_model in ("sam2", "sam3")
-    if use_sam:
+    if conjoined_detection:
         try:
             secondary_model = model_manager.load_yolo_conjoined_bubble()
             log_message(
@@ -759,7 +1383,8 @@ def detect_speech_bubbles(
                         verbose=verbose,
                     )
 
-            # Fallback: Add bubbles detected by secondary model but missed by primary
+            # Filter secondary detections to text_bubble for conjoined processing,
+            # while still collecting text_free boxes for OSB routing.
             if len(secondary_boxes) > 0 and hasattr(secondary_model, "names"):
                 text_bubble_id = None
                 text_free_id = None
@@ -771,14 +1396,26 @@ def detect_speech_bubbles(
 
                 secondary_cls = secondary_results.boxes.cls
 
-                # Collect text_free boxes regardless of OSB setting
-                if text_free_id is not None:
-                    for i, s_box in enumerate(secondary_boxes):
-                        _, secondary_idx = secondary_sources[i]
-                        if int(secondary_cls[secondary_idx]) == text_free_id:
-                            text_free_boxes.append(s_box.tolist())
+                filtered_boxes = []
+                filtered_sources = []
+                for i, s_box in enumerate(secondary_boxes):
+                    _, secondary_idx = secondary_sources[i]
+                    cls_id = int(secondary_cls[secondary_idx])
+                    if text_free_id is not None and cls_id == text_free_id:
+                        text_free_boxes.append(s_box.tolist())
+                        continue
+                    if text_bubble_id is None or cls_id == text_bubble_id:
+                        filtered_boxes.append(s_box)
+                        filtered_sources.append(secondary_sources[i])
 
-                if text_bubble_id is not None:
+                secondary_boxes = (
+                    torch.stack(filtered_boxes)
+                    if filtered_boxes
+                    else secondary_boxes[:0]
+                )
+                secondary_sources = filtered_sources
+
+                if len(secondary_boxes) > 0:
                     new_boxes = []
                     new_box_sources = []
                     primary_boxes_list = (
@@ -786,10 +1423,6 @@ def detect_speech_bubbles(
                     )
 
                     for i, s_box in enumerate(secondary_boxes):
-                        _, secondary_idx = secondary_sources[i]
-                        if int(secondary_cls[secondary_idx]) != text_bubble_id:
-                            continue
-
                         s_box_list = s_box.tolist()
 
                         is_covered = False
@@ -872,6 +1505,11 @@ def detect_speech_bubbles(
             secondary_boxes = torch.tensor([])
             secondary_sources = []
 
+    if len(primary_boxes) == 0:
+        return detections, text_free_boxes
+
+    grouping_primary_boxes = primary_boxes.clone()
+
     osb_text_boxes_np = None
     if osb_text_verification and len(primary_boxes) > 0:
         primary_boxes = _expand_boxes_with_osb_text(
@@ -890,35 +1528,74 @@ def detect_speech_bubbles(
             cache, model_manager, image_pil, confidence
         )
 
-    if not use_sam:
-        log_message("SAM disabled, using YOLO segmentation masks", verbose=verbose)
-        for i, box in enumerate(primary_boxes):
-            x0_f, y0_f, x1_f, y1_f = box.tolist()
-            _, primary_idx = primary_sources[i]
-            conf = float(primary_results.boxes.conf[primary_idx])
-            cls_id = int(primary_results.boxes.cls[primary_idx])
-            cls_name = primary_model.names[cls_id]
-
-            detection = {
-                "bbox": (
-                    int(round(x0_f)),
-                    int(round(y0_f)),
-                    int(round(x1_f)),
-                    int(round(y1_f)),
-                ),
-                "confidence": conf,
-                "class": cls_name,
-            }
-
-            detection["sam_mask"] = _fallback_to_yolo_mask(
-                primary_results, primary_idx, "binary"
-            )
-
-            detections.append(detection)
-        return detections, text_free_boxes
-
     conjoined_indices = []
     simple_indices = list(range(len(primary_boxes)))
+    if len(secondary_boxes) > 0 and conjoined_detection:
+        log_message("Categorizing detections (simple vs conjoined)...", verbose=verbose)
+        conjoined_indices, simple_indices = _categorize_detections(
+            grouping_primary_boxes, secondary_boxes, ioa_threshold=IOA_THRESHOLD
+        )
+        log_message(
+            f"Found {len(simple_indices)} simple bubbles and {len(conjoined_indices)} conjoined groups",
+            verbose=verbose,
+        )
+        if len(conjoined_indices) > 0:
+            log_message(
+                f"Detected {len(conjoined_indices)} conjoined speech bubbles with second YOLO",
+                always_print=True,
+            )
+    else:
+        log_message(
+            f"No secondary detections, processing all {len(simple_indices)} as simple bubbles",
+            verbose=verbose,
+        )
+
+    # Detect primary boxes that overlap each other — likely per-section bboxes
+    # for a conjoined bubble that the primary YOLO failed to capture as one box.
+    synthetic_conjoined_groups: list[dict] = []
+    if len(simple_indices) > 1:
+        synth_groups, simple_indices = _detect_overlapping_primaries(
+            grouping_primary_boxes, simple_indices, verbose=verbose
+        )
+        for member_indices in synth_groups:
+            member_stack = grouping_primary_boxes[member_indices]
+            parent_box = torch.cat(
+                [
+                    member_stack[:, :2].min(dim=0).values,
+                    member_stack[:, 2:].max(dim=0).values,
+                ]
+            )
+            synthetic_conjoined_groups.append(
+                {
+                    "member_indices": member_indices,
+                    "parent_box": parent_box,
+                    "parent_mask": None,
+                }
+            )
+
+    if not use_sam:
+        log_message("SAM disabled, using YOLO segmentation masks", verbose=verbose)
+        img_h, img_w = image_cv.shape[:2]
+        detections = _build_segmentation_detections(
+            primary_boxes,
+            grouping_primary_boxes,
+            primary_sources,
+            primary_results,
+            primary_model,
+            secondary_boxes,
+            secondary_sources,
+            secondary_results,
+            simple_indices,
+            conjoined_indices,
+            img_h,
+            img_w,
+            conjoined_confidence,
+            osb_text_boxes_np=osb_text_boxes_np,
+            verbose=verbose,
+            synthetic_conjoined_groups=synthetic_conjoined_groups,
+        )
+        return detections, text_free_boxes
+
     try:
         sam_model_name = "SAM 3" if seg_model == "sam3" else "SAM 2.1"
         log_message(
@@ -945,45 +1622,51 @@ def detect_speech_bubbles(
             )
         else:
             processor, sam_model_instance = model_manager.load_sam2(verbose=verbose)
-        if len(secondary_boxes) > 0 and conjoined_detection:
-            log_message(
-                "Categorizing detections (simple vs conjoined)...", verbose=verbose
-            )
-            conjoined_indices, simple_indices = _categorize_detections(
-                primary_boxes, secondary_boxes, ioa_threshold=IOA_THRESHOLD
-            )
-            log_message(
-                f"Found {len(simple_indices)} simple bubbles and {len(conjoined_indices)} conjoined groups",
-                verbose=verbose,
-            )
-            if len(conjoined_indices) > 0:
-                log_message(
-                    f"Detected {len(conjoined_indices)} conjoined speech bubbles with second YOLO",
-                    always_print=True,
-                )
-        else:
-            conjoined_indices = []
-            simple_indices = list(range(len(primary_boxes)))
-            log_message(
-                f"No secondary detections, processing all {len(simple_indices)} as simple bubbles",
-                verbose=verbose,
-            )
         boxes_to_process = []
-        conjoined_mask_ranges = []
+        process_indices = []
 
         for idx in simple_indices:
             boxes_to_process.append(primary_boxes[idx])
+            process_indices.append(idx)
 
         for p_idx, s_indices in conjoined_indices:
-            start_idx = len(boxes_to_process)
-            for s_idx in s_indices:
-                boxes_to_process.append(secondary_boxes[s_idx])
-            end_idx = len(boxes_to_process)
-            conjoined_mask_ranges.append((start_idx, end_idx, p_idx))
+            boxes_to_process.append(primary_boxes[p_idx])
+            process_indices.append(p_idx)
 
+        # Append synthetic conjoined parent boxes to the same SAM batch
+        synth_start_idx = len(boxes_to_process)
+        for sg in synthetic_conjoined_groups:
+            boxes_to_process.append(sg["parent_box"])
+
+        img_h, img_w = image_cv.shape[:2]
+        sam_masks_for_yolo = [None] * len(primary_boxes)
         if boxes_to_process:
             all_boxes_tensor = torch.stack(boxes_to_process)
-            all_masks = _process_simple_bubbles(
+
+            total_boxes = len(boxes_to_process)
+            simple_count = len(simple_indices)
+            conjoined_parent_count = len(conjoined_indices)
+            synth_parent_count = len(synthetic_conjoined_groups)
+
+            parts = []
+            if simple_count:
+                parts.append(f"{simple_count} simple")
+            if conjoined_parent_count:
+                parts.append(f"{conjoined_parent_count} conjoined parents")
+            if synth_parent_count:
+                parts.append(f"{synth_parent_count} synthetic conjoined parents")
+            if len(parts) > 1:
+                log_message(
+                    f"Processing {total_boxes} bubbles " f"({' + '.join(parts)})...",
+                    verbose=verbose,
+                )
+            else:
+                log_message(
+                    f"Processing {total_boxes} simple bubbles...",
+                    verbose=verbose,
+                )
+
+            all_masks_bool = _process_simple_bubbles(
                 image_pil,
                 all_boxes_tensor,
                 list(range(len(boxes_to_process))),
@@ -992,98 +1675,51 @@ def detect_speech_bubbles(
                 _device,
             )
 
-            for start_idx, end_idx, p_idx in conjoined_mask_ranges:
-                group_masks = all_masks[start_idx:end_idx]
-                group_boxes = boxes_to_process[start_idx:end_idx]
+            for i, (mask_bool, box) in enumerate(zip(all_masks_bool, boxes_to_process)):
+                x0_f, y0_f, x1_f, y1_f = box.tolist()
+                x0 = int(np.floor(max(0, min(x0_f, img_w))))
+                y0 = int(np.floor(max(0, min(y0_f, img_h))))
+                x1 = int(np.ceil(max(0, min(x1_f, img_w))))
+                y1 = int(np.ceil(max(0, min(y1_f, img_h))))
 
-                # Scope OSB text boxes to those intersecting this group's primary bubble
-                group_osb = None
-                if osb_text_boxes_np is not None:
-                    p_box = primary_boxes[p_idx].tolist()
-                    px0, py0, px1, py1 = p_box
-                    hits = []
-                    for tb in osb_text_boxes_np:
-                        if tb[0] < px1 and tb[2] > px0 and tb[1] < py1 and tb[3] > py0:
-                            hits.append(tb)
-                    if hits:
-                        group_osb = np.array(hits)
+                if x1 > x0 and y1 > y0:
+                    bbox_mask = np.zeros((img_h, img_w), dtype=bool)
+                    bbox_mask[y0:y1, x0:x1] = True
+                    mask_bool = np.logical_and(mask_bool, bbox_mask)
 
-                resolved_masks = _resolve_mask_overlaps(
-                    group_masks,
-                    group_boxes,
-                    verbose=verbose,
-                    osb_text_boxes=group_osb,
-                )
-                all_masks[start_idx:end_idx] = resolved_masks
+                clipped_mask = mask_bool.astype(np.uint8) * 255
 
-            all_boxes = boxes_to_process
+                if i < synth_start_idx:
+                    sam_masks_for_yolo[process_indices[i]] = clipped_mask
+                else:
+                    sg_idx = i - synth_start_idx
+                    synthetic_conjoined_groups[sg_idx]["parent_mask"] = clipped_mask
 
-            total_boxes = len(boxes_to_process)
-            simple_count = len(simple_indices)
-            conjoined_count = sum(len(s_indices) for _, s_indices in conjoined_indices)
-
-            if conjoined_indices:
-                log_message(
-                    f"Processing {total_boxes} bubbles ({simple_count} simple + "
-                    f"{conjoined_count} from conjoined groups)...",
-                    verbose=verbose,
-                )
-            else:
-                log_message(
-                    f"Processing {total_boxes} simple bubbles...", verbose=verbose
-                )
-        else:
-            all_masks = []
-            all_boxes = []
-
-        log_message(
-            f"Refined {len(all_masks)} masks with {sam_model_name}", always_print=True
-        )
-        log_message(f"Total masks generated: {len(all_masks)}", verbose=verbose)
+            log_message(
+                f"Generated {len(all_masks_bool)} primary masks with {sam_model_name}",
+                always_print=True,
+            )
 
         img_h, img_w = image_cv.shape[:2]
-
-        conjoined_siblings: dict[int, list[tuple]] = {}
-        for start_idx, end_idx, _ in conjoined_mask_ranges:
-            group_bboxes = []
-            for j in range(start_idx, end_idx):
-                bx = boxes_to_process[j].tolist()
-                group_bboxes.append(
-                    (
-                        int(np.floor(max(0, min(bx[0], img_w)))),
-                        int(np.floor(max(0, min(bx[1], img_h)))),
-                        int(np.ceil(max(0, min(bx[2], img_w)))),
-                        int(np.ceil(max(0, min(bx[3], img_h)))),
-                    )
-                )
-            for j in range(start_idx, end_idx):
-                conjoined_siblings[j] = [
-                    b for k, b in enumerate(group_bboxes) if k != j - start_idx
-                ]
-
-        for i, (mask, box) in enumerate(zip(all_masks, all_boxes)):
-            x0_f, y0_f, x1_f, y1_f = box.tolist()
-
-            x0 = int(np.floor(max(0, min(x0_f, img_w))))
-            y0 = int(np.floor(max(0, min(y0_f, img_h))))
-            x1 = int(np.ceil(max(0, min(x1_f, img_w))))
-            y1 = int(np.ceil(max(0, min(y1_f, img_h))))
-
-            if x1 <= x0 or y1 <= y0:
-                continue
-            bbox_mask = np.zeros((img_h, img_w), dtype=bool)
-            bbox_mask[y0:y1, x0:x1] = True
-            clipped_mask = np.logical_and(mask, bbox_mask)
-
-            detection = {
-                "bbox": (x0, y0, x1, y1),
-                "confidence": 1.0,  # Masks from SAM are high confidence
-                "class": "speech bubble",
-                "sam_mask": clipped_mask.astype(np.uint8) * 255,
-            }
-            if i in conjoined_siblings:
-                detection["conjoined_neighbor_bboxes"] = conjoined_siblings[i]
-            detections.append(detection)
+        detections = _build_segmentation_detections(
+            primary_boxes,
+            grouping_primary_boxes,
+            primary_sources,
+            primary_results,
+            primary_model,
+            secondary_boxes,
+            secondary_sources,
+            secondary_results,
+            simple_indices,
+            conjoined_indices,
+            img_h,
+            img_w,
+            conjoined_confidence,
+            osb_text_boxes_np=osb_text_boxes_np,
+            verbose=verbose,
+            sam_masks=sam_masks_for_yolo,
+            synthetic_conjoined_groups=synthetic_conjoined_groups,
+        )
 
         log_message(
             f"{sam_model_name} segmentation completed successfully", verbose=verbose
@@ -1095,107 +1731,28 @@ def detect_speech_bubbles(
             f"{sam_model_name} segmentation failed: {e}. Falling back to YOLO segmentation masks.",
             always_print=True,
         )
-        detections = []
-
-        # Process primary boxes first in fallback to avoid duplicating secondary splits
-        fallback_boxes = []
-        if conjoined_detection and len(secondary_boxes) > 0 and conjoined_indices:
-            for idx in simple_indices:
-                source, orig_idx = primary_sources[idx]
-                fallback_boxes.append((source, orig_idx, primary_boxes[idx]))
-            for _, s_indices in conjoined_indices:
-                for s_idx in s_indices:
-                    source, orig_idx = secondary_sources[s_idx]
-                    fallback_boxes.append((source, orig_idx, secondary_boxes[s_idx]))
-        elif len(primary_boxes) > 0:
-            for idx in range(len(primary_boxes)):
-                source, orig_idx = primary_sources[idx]
-                fallback_boxes.append((source, orig_idx, primary_boxes[idx]))
-
-        fallback_conjoined_siblings: dict[int, list[tuple]] = {}
-        if conjoined_detection and len(secondary_boxes) > 0 and conjoined_indices:
-            fb_idx = len(simple_indices)
-            for _, s_indices in conjoined_indices:
-                group_bboxes = []
-                group_fb_indices = []
-                for s_idx in s_indices:
-                    bx = secondary_boxes[s_idx].tolist()
-                    group_bboxes.append(
-                        (
-                            int(round(bx[0])),
-                            int(round(bx[1])),
-                            int(round(bx[2])),
-                            int(round(bx[3])),
-                        )
-                    )
-                    group_fb_indices.append(fb_idx)
-                    fb_idx += 1
-                for k, gi in enumerate(group_fb_indices):
-                    fallback_conjoined_siblings[gi] = [
-                        b for j, b in enumerate(group_bboxes) if j != k
-                    ]
-
         img_h, img_w = image_cv.shape[:2]
-        primary_fallback_count = 0
-        secondary_fallback_count = 0
-
-        for fb_i, (source, orig_idx, box) in enumerate(fallback_boxes):
-            x0_f, y0_f, x1_f, y1_f = box.tolist()
-
-            if source == "primary" and len(primary_results.boxes) > 0:
-                safe_idx = min(orig_idx, len(primary_results.boxes.conf) - 1)
-                conf = float(primary_results.boxes.conf[safe_idx])
-                cls_id = int(primary_results.boxes.cls[safe_idx])
-                cls_name = primary_model.names[cls_id]
-                sam_mask = _fallback_to_yolo_mask(primary_results, safe_idx, "binary")
-                primary_fallback_count += 1
-            elif source == "secondary" and "secondary_results" in locals():
-                try:
-                    safe_idx = min(orig_idx, len(secondary_results.boxes.conf) - 1)
-                    conf = float(secondary_results.boxes.conf[safe_idx])
-                except Exception:
-                    conf = conjoined_confidence
-                cls_name = "speech_bubble"
-                x0 = int(max(0, min(x0_f, img_w)))
-                y0 = int(max(0, min(y0_f, img_h)))
-                x1 = int(max(0, min(x1_f, img_w)))
-                y1 = int(max(0, min(y1_f, img_h)))
-                mask = np.zeros((img_h, img_w), dtype=np.uint8)
-                mask[y0:y1, x0:x1] = 255
-                sam_mask = mask
-                secondary_fallback_count += 1
-            else:
-                conf = conjoined_confidence
-                cls_name = "speech_bubble"
-                x0 = int(max(0, min(x0_f, img_w)))
-                y0 = int(max(0, min(y0_f, img_h)))
-                x1 = int(max(0, min(x1_f, img_w)))
-                y1 = int(max(0, min(y1_f, img_h)))
-                mask = np.zeros((img_h, img_w), dtype=np.uint8)
-                mask[y0:y1, x0:x1] = 255
-                sam_mask = mask
-
-            detection = {
-                "bbox": (
-                    int(round(x0_f)),
-                    int(round(y0_f)),
-                    int(round(x1_f)),
-                    int(round(y1_f)),
-                ),
-                "confidence": conf,
-                "class": cls_name,
-            }
-            detection["sam_mask"] = sam_mask
-            if fb_i in fallback_conjoined_siblings:
-                detection["conjoined_neighbor_bboxes"] = fallback_conjoined_siblings[
-                    fb_i
-                ]
-
-            detections.append(detection)
+        detections = _build_segmentation_detections(
+            primary_boxes,
+            grouping_primary_boxes,
+            primary_sources,
+            primary_results,
+            primary_model,
+            secondary_boxes,
+            secondary_sources,
+            secondary_results,
+            simple_indices,
+            conjoined_indices,
+            img_h,
+            img_w,
+            conjoined_confidence,
+            osb_text_boxes_np=osb_text_boxes_np,
+            verbose=verbose,
+            synthetic_conjoined_groups=synthetic_conjoined_groups,
+        )
 
         log_message(
-            f"Fallback segmentation used {len(detections)} boxes "
-            f"(primary: {primary_fallback_count}, secondary splits: {secondary_fallback_count})",
+            f"Fallback segmentation used {len(detections)} boxes",
             verbose=verbose,
         )
 

@@ -12,6 +12,11 @@ from core.ml.model_manager import ModelType, get_model_manager
 from utils.exceptions import ImageProcessingError
 from utils.logging import log_message
 
+# OSB Detection Parameters
+OSB_BUBBLE_MATCH_IOA_THRESHOLD = (
+    0.2  # Minimum text-box overlap ratio for OSB assignment
+)
+
 
 class OutsideTextDetector:
     """Detects text outside speech bubbles to isolate SFX/captions from dialogue."""
@@ -47,6 +52,39 @@ class OutsideTextDetector:
 
         return not (
             x1_max <= x2_min or x2_max <= x1_min or y1_max <= y2_min or y2_max <= y1_min
+        )
+
+    def box_intersection_area(self, box1, box2) -> float:
+        """Return the intersection area between two xyxy boxes."""
+        x_min = max(box1[0], box2[0])
+        y_min = max(box1[1], box2[1])
+        x_max = min(box1[2], box2[2])
+        y_max = min(box1[3], box2[3])
+        return max(0.0, x_max - x_min) * max(0.0, y_max - y_min)
+
+    def box_area(self, box) -> float:
+        """Return the area of an xyxy box."""
+        return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+
+    def point_in_box(self, point_x: float, point_y: float, box) -> bool:
+        """Return True if a point lies inside an xyxy box."""
+        return box[0] <= point_x <= box[2] and box[1] <= point_y <= box[3]
+
+    def text_box_meaningfully_matches_bubble(self, text_box, bubble_box) -> bool:
+        """Return True when a text box meaningfully belongs to a bubble box."""
+        intersection = self.box_intersection_area(text_box, bubble_box)
+        if intersection <= 0.0:
+            return False
+
+        text_area = self.box_area(text_box)
+        if text_area <= 0.0:
+            return False
+
+        center_x = (text_box[0] + text_box[2]) / 2.0
+        center_y = (text_box[1] + text_box[3]) / 2.0
+        return (
+            intersection / text_area >= OSB_BUBBLE_MATCH_IOA_THRESHOLD
+            or self.point_in_box(center_x, center_y, bubble_box)
         )
 
     def box_is_inside(self, box1, box2, threshold=0.9):
@@ -393,7 +431,8 @@ class OutsideTextDetector:
             for ocr_result in final_results:
                 bbox, _ = ocr_result
 
-                overlaps_any_bubble = False
+                best_bubble = None
+                best_intersection = 0.0
 
                 for yolo_box in yolo_boxes_np:
                     if self.boxes_overlap(bbox, yolo_box):
@@ -407,15 +446,20 @@ class OutsideTextDetector:
                                     break
 
                         if not is_text_free_bubble:
-                            overlaps_any_bubble = True
-                            break
+                            intersection = self.box_intersection_area(bbox, yolo_box)
+                            if intersection > best_intersection:
+                                best_intersection = intersection
+                                best_bubble = yolo_box
 
-                if not overlaps_any_bubble:
+                if (
+                    best_bubble is None
+                    or not self.text_box_meaningfully_matches_bubble(bbox, best_bubble)
+                ):
                     filtered_results.append(ocr_result)
 
             filtered_out = len(final_results) - len(filtered_results)
             log_message(
-                f"Filtered out {filtered_out} OCR results that overlapped with speech bubbles",
+                f"Filtered out {filtered_out} OCR results that meaningfully overlapped speech bubbles",
                 verbose=verbose,
             )
             final_results = filtered_results

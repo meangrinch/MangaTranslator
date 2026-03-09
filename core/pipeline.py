@@ -47,7 +47,35 @@ if TYPE_CHECKING:
     from ui.cancellation import CancellationManager
 
 
-ENABLE_COMPONENT_ORDER_DEBUG = True
+ENABLE_COMPONENT_ORDER_DEBUG = False
+
+
+def _debug_mask_bbox(mask):
+    """Return full-image bbox for a debug mask, or None when empty/invalid."""
+    normalized = (
+        _normalize_debug_mask(mask, (mask.shape[1], mask.shape[0]))
+        if isinstance(mask, np.ndarray) and mask.ndim >= 2
+        else None
+    )
+    if normalized is None:
+        try:
+            mask_array = np.asarray(mask)
+            if mask_array.ndim == 3:
+                mask_array = mask_array[..., 0]
+            if mask_array.ndim != 2:
+                return None
+            normalized = mask_array > 0
+        except Exception:
+            return None
+    coords = np.where(normalized)
+    if coords[0].size == 0 or coords[1].size == 0:
+        return None
+    return [
+        int(coords[1].min()),
+        int(coords[0].min()),
+        int(coords[1].max()) + 1,
+        int(coords[0].max()) + 1,
+    ]
 
 
 def get_image_encoding_params(pil_image_format: Optional[str]) -> Tuple[str, str]:
@@ -202,9 +230,14 @@ def _write_component_order_debug_image(
         bbox = tuple(int(round(v)) for v in item.get("bbox", (0, 0, 0, 0)))
         if item.get("is_outside_text", False):
             draw.rectangle(bbox, outline=osb_color, width=2)
+            draw_bbox = bbox
         else:
-            _draw_dashed_rectangle(draw, bbox, bubble_color, width=2)
-        _draw_centered_index(draw, bbox, item_index, font, index_color)
+            mask_bbox = (
+                _debug_mask_bbox(bubble_masks.get(bbox)) if bubble_masks else None
+            )
+            draw_bbox = tuple(mask_bbox) if mask_bbox is not None else bbox
+            _draw_dashed_rectangle(draw, draw_bbox, bubble_color, width=2)
+        _draw_centered_index(draw, draw_bbox, item_index, font, index_color)
 
     base_path = Path(output_path) if output_path else Path(image_path)
     debug_path = base_path.parent / f"{base_path.stem}.component-order-debug.png"
