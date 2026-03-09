@@ -263,6 +263,7 @@ pip install -r requirements.txt  # Or activate venv first if present
 <summary><b>ML Models & Libraries</b></summary>
 
 - YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
+- Manga109 Speech Bubble Detector: [huyvux3005](https://huggingface.co/huyvux3005/manga109-segmentation-bubble)
 - Comic Speech Bubble Detector YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
 - SAM 2.1: Segment Anything in Images and Videos: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
 - SAM 3: [Meta AI](https://huggingface.co/facebook/sam3)

@@ -28,6 +28,7 @@ class ModelType(Enum):
     UPSCALE = "upscale"
     UPSCALE_LITE = "upscale_lite"
     YOLO_SPEECH_BUBBLE = "yolo_speech_bubble"
+    YOLO_SPEECH_BUBBLE_2 = "yolo_speech_bubble_2"
     YOLO_CONJOINED_BUBBLE = "yolo_conjoined_bubble"
     YOLO_OSBTEXT = "yolo_osbtext"
     YOLO_PANEL = "yolo_panel"
@@ -96,6 +97,9 @@ class ModelManager:
             ModelType.YOLO_SPEECH_BUBBLE: (
                 model_dir / "yolo" / "yolov8m_seg-speech-bubble.pt"
             ),
+            ModelType.YOLO_SPEECH_BUBBLE_2: (
+                model_dir / "yolo" / "manga109-segmentation-bubble.pt"
+            ),
             ModelType.YOLO_CONJOINED_BUBBLE: (
                 model_dir / "yolo" / "comic-speech-bubble-detector-yolov8m.pt"
             ),
@@ -134,6 +138,10 @@ class ModelManager:
             ModelType.YOLO_SPEECH_BUBBLE: {
                 "repo_id": "kitsumed/yolov8m_seg-speech-bubble",
                 "filename": "model.pt",
+            },
+            ModelType.YOLO_SPEECH_BUBBLE_2: {
+                "repo_id": "huyvux3005/manga109-segmentation-bubble",
+                "filename": "best.pt",
             },
             ModelType.YOLO_CONJOINED_BUBBLE: {
                 "repo_id": "ogkalu/comic-speech-bubble-detector-yolov8m",
@@ -429,6 +437,15 @@ class ModelManager:
             log_message("Upscale lite model loaded.", verbose=verbose)
             return model
 
+    def _resolve_speech_bubble_model_type(self, model_path: Optional[str]) -> ModelType:
+        """Determine which speech bubble model type a path corresponds to."""
+        if model_path is None:
+            return ModelType.YOLO_SPEECH_BUBBLE
+        p = Path(model_path)
+        if p == self.model_paths[ModelType.YOLO_SPEECH_BUBBLE_2]:
+            return ModelType.YOLO_SPEECH_BUBBLE_2
+        return ModelType.YOLO_SPEECH_BUBBLE
+
     def load_yolo_speech_bubble(
         self, model_path: Optional[str] = None, verbose: bool = False
     ):
@@ -439,27 +456,27 @@ class ModelManager:
             verbose: Whether to print verbose logging
         """
         with self._lock:
-            if self.is_loaded(ModelType.YOLO_SPEECH_BUBBLE):
-                return self.models[ModelType.YOLO_SPEECH_BUBBLE]
+            model_type = self._resolve_speech_bubble_model_type(model_path)
+
+            if self.is_loaded(model_type):
+                return self.models[model_type]
 
             log_message(
                 "Loading YOLO speech bubble detection model...", verbose=verbose
             )
 
             path = (
-                self.model_paths[ModelType.YOLO_SPEECH_BUBBLE]
-                if model_path is None
-                else Path(model_path)
+                self.model_paths[model_type] if model_path is None else Path(model_path)
             )
 
-            if path == self.model_paths[ModelType.YOLO_SPEECH_BUBBLE]:
-                hf_info = self.model_hf_repos[ModelType.YOLO_SPEECH_BUBBLE]
+            if path == self.model_paths[model_type]:
+                hf_info = self.model_hf_repos[model_type]
                 self._ensure_hf_file(
                     hf_info["repo_id"], hf_info["filename"], path, verbose=verbose
                 )
 
             model = YOLO(str(path))
-            self.models[ModelType.YOLO_SPEECH_BUBBLE] = model
+            self.models[model_type] = model
             log_message("YOLO model loaded.", verbose=verbose)
             return model
 
@@ -1103,6 +1120,8 @@ class ModelManager:
         models_unloaded = []
         if self.is_loaded(ModelType.YOLO_SPEECH_BUBBLE):
             models_unloaded.append("yolo_speech_bubble")
+        if self.is_loaded(ModelType.YOLO_SPEECH_BUBBLE_2):
+            models_unloaded.append("yolo_speech_bubble_2")
         if self.is_loaded(ModelType.YOLO_CONJOINED_BUBBLE):
             models_unloaded.append("yolo_conjoined_bubble")
         if self.is_loaded(ModelType.SAM2):
@@ -1119,6 +1138,9 @@ class ModelManager:
             models_unloaded.append("paddle_ocr_vl")
 
         self.unload_model(ModelType.YOLO_SPEECH_BUBBLE, force_gc=False, verbose=verbose)
+        self.unload_model(
+            ModelType.YOLO_SPEECH_BUBBLE_2, force_gc=False, verbose=verbose
+        )
         self.unload_model(
             ModelType.YOLO_CONJOINED_BUBBLE, force_gc=False, verbose=verbose
         )

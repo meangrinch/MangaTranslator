@@ -147,7 +147,9 @@ def clamp_settings(settings: Any) -> Any:
     return settings
 
 
-def autodetect_yolo_model_path(models_dir: Path) -> Path:
+def autodetect_yolo_model_path(
+    models_dir: Path, bubble_detector_model: str = "yolo_1"
+) -> Path:
     """Returns the path for the primary YOLO speech bubble model.
 
     This function provides a consistent path for the model, which will be
@@ -156,6 +158,8 @@ def autodetect_yolo_model_path(models_dir: Path) -> Path:
     file, but now returns a deterministic path to align with auto-downloading.
     """
     yolo_dir = models_dir / "yolo"
+    if bubble_detector_model == "yolo_2":
+        return yolo_dir / "manga109-segmentation-bubble.pt"
     return yolo_dir / "yolov8m_seg-speech-bubble.pt"
 
 
@@ -164,6 +168,7 @@ def validate_core_inputs(
     rendering_cfg: RenderingConfig,
     models_dir: Path,
     fonts_base_dir: Path,
+    bubble_detector_model: str = "yolo_1",
 ) -> Tuple[Path, Path]:
     """
     Validates core inputs required for translation, raising standard exceptions.
@@ -173,6 +178,7 @@ def validate_core_inputs(
         rendering_cfg (RenderingConfig): Rendering configuration.
         models_dir (Path): Absolute path to the directory containing YOLO models.
         fonts_base_dir (Path): Absolute path to the base directory containing font packs.
+        bubble_detector_model (str): Which bubble detector to use ("yolo_1" or "yolo_2").
 
     Returns:
         tuple[Path, Path]: Validated absolute path to the YOLO model and font directory.
@@ -187,7 +193,7 @@ def validate_core_inputs(
     if not models_dir.is_dir():
         raise FileNotFoundError(f"YOLO models directory not found: {models_dir}")
 
-    yolo_model_path = autodetect_yolo_model_path(models_dir)
+    yolo_model_path = autodetect_yolo_model_path(models_dir, bubble_detector_model)
 
     # --- Font Validation ---
     if not fonts_base_dir.is_dir():

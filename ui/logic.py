@@ -129,6 +129,7 @@ def translate_manga_logic(
             rendering_cfg=rendering_cfg_for_val,
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
+            bubble_detector_model=config.detection.bubble_detector_model,
         )
         config.yolo_model_path = str(yolo_model_path)
         config.rendering.font_dir = str(font_dir_path)
@@ -275,6 +276,7 @@ def process_batch_logic(
             rendering_cfg=rendering_cfg_for_val,
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
+            bubble_detector_model=config.detection.bubble_detector_model,
         )
         config.yolo_model_path = str(yolo_model_path)
         config.rendering.font_dir = str(font_dir_path)

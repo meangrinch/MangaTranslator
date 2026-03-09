@@ -188,6 +188,14 @@ def main():
     )
     parser.set_defaults(conjoined_detection=True)
     parser.add_argument(
+        "--bubble-detector-model",
+        dest="bubble_detector_model",
+        type=str,
+        choices=["yolo_1", "yolo_2"],
+        default="yolo_1",
+        help="Primary bubble detector model",
+    )
+    parser.add_argument(
         "--reading-direction",
         type=str,
         default="rtl",
@@ -787,7 +795,7 @@ def main():
     models_dir = Path(args.models).resolve()
     # Create models directory if it doesn't exist (model manager will handle model downloads)
     models_dir.mkdir(parents=True, exist_ok=True)
-    yolo_model_path = autodetect_yolo_model_path(models_dir)
+    yolo_model_path = autodetect_yolo_model_path(models_dir, args.bubble_detector_model)
 
     config = MangaTranslatorConfig(
         yolo_model_path=str(yolo_model_path),
@@ -800,6 +808,7 @@ def main():
             conjoined_confidence=args.conjoined_confidence,
             panel_confidence=args.panel_confidence,
             seg_model=args.seg_model,
+            bubble_detector_model=args.bubble_detector_model,
             conjoined_detection=args.conjoined_detection,
         ),
         cleaning=CleaningConfig(

@@ -450,6 +450,14 @@ def create_layout(
                             visible=True, elem_classes="settings-group"
                         ) as group_detection:
                             gr.Markdown("### Speech Bubble Detection")
+                            bubble_detector_model = gr.Radio(
+                                choices=["yolo_1", "yolo_2"],
+                                value=saved_settings.get(
+                                    "bubble_detector_model", "yolo_1"
+                                ),
+                                label="Bubble Detector Model",
+                                info=("Primary YOLO model for bubble detection."),
+                            )
                             confidence = gr.Slider(
                                 0.1,
                                 1.0,
@@ -1675,6 +1683,7 @@ def create_layout(
             conjoined_confidence,
             panel_confidence,
             seg_model,
+            bubble_detector_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1775,6 +1784,7 @@ def create_layout(
             conjoined_confidence,
             panel_confidence,
             seg_model,
+            bubble_detector_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1872,6 +1882,7 @@ def create_layout(
             conjoined_confidence,
             panel_confidence,
             seg_model,
+            bubble_detector_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
@@ -1974,6 +1985,7 @@ def create_layout(
             conjoined_confidence,
             panel_confidence,
             seg_model,
+            bubble_detector_model,
             conjoined_detection_checkbox,
             osb_text_verification_checkbox,
             use_panel_sorting_checkbox,
