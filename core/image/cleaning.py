@@ -418,6 +418,7 @@ def clean_speech_bubbles(
     kontext_backend: str = "nunchaku",
     flux_low_vram: bool = False,
     flux_luminance_correction: bool = True,
+    bubble_detector_model: str = "yolo_1",
 ):
     """
     Clean speech bubbles using YOLO/SAM masks and optional Flux inpainting for colored bubbles.
@@ -479,6 +480,7 @@ def clean_speech_bubbles(
                 conjoined_confidence=conjoined_confidence,
                 osb_text_verification=osb_text_verification,
                 osb_text_hf_token=osb_text_hf_token,
+                bubble_detector_model=bubble_detector_model,
             )
             detections = (
                 detection_result[0]

@@ -424,6 +424,7 @@ def translate_and_render(
             osb_enabled=config.outside_text.enabled,
             osb_text_verification=config.detection.use_osb_text_verification,
             osb_text_hf_token=config.outside_text.huggingface_token,
+            bubble_detector_model=config.detection.bubble_detector_model,
         )
     except Exception as e:
         log_message(f"Error during detection: {e}", always_print=True)
@@ -565,6 +566,7 @@ def translate_and_render(
                     kontext_backend=config.outside_text.kontext_backend,
                     flux_low_vram=config.outside_text.flux_low_vram,
                     flux_luminance_correction=config.outside_text.flux_luminance_correction,
+                    bubble_detector_model=config.detection.bubble_detector_model,
                 )
             except CleaningError as e:
                 log_message(f"Cleaning failed: {e}", always_print=True)

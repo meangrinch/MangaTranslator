@@ -68,6 +68,7 @@ def process_outside_text(
             image_override=pil_image,
             existing_bubbles=bubble_data,
             text_free_boxes=text_free_boxes,
+            bubble_detector_model=config.detection.bubble_detector_model,
         )
 
         if not outside_text_results:

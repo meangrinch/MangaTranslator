@@ -1233,6 +1233,7 @@ def detect_speech_bubbles(
     osb_enabled: bool = False,
     osb_text_verification: bool = False,
     osb_text_hf_token: str = "",
+    bubble_detector_model: str = "yolo_1",
 ):
     """Detect speech bubbles using dual YOLO models and optional SAM2/SAM3 refinement.
 
@@ -1293,12 +1294,13 @@ def detect_speech_bubbles(
         log_message("Using cached YOLO detections", verbose=verbose)
         primary_results, primary_boxes = cached_yolo
     else:
+        primary_imgsz = 1600 if bubble_detector_model == "yolo_2" else 640
         primary_results = primary_model(
             image_cv,
             conf=confidence,
             device=_device,
             verbose=False,
-            imgsz=640,
+            imgsz=primary_imgsz,
             retina_masks=True,
         )[0]
         primary_boxes = (
