@@ -498,7 +498,7 @@ def create_layout(
                             )
                             seg_model = gr.Radio(
                                 choices=["sam3", "sam2", "yolo"],
-                                value=saved_settings.get("seg_model", "sam2"),
+                                value=saved_settings.get("seg_model", "yolo"),
                                 label="Segmentation Model",
                                 info=(
                                     "Model to use to segment speech bubbles. "

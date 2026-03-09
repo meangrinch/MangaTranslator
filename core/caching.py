@@ -125,7 +125,7 @@ class UnifiedCache:
         self,
         image: Image.Image,
         yolo_boxes: Any,
-        seg_model: str = "sam2",
+        seg_model: str = "yolo",
         conjoined_detection: bool = True,
         conjoined_confidence: float = 0.35,
     ) -> str:

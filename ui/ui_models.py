@@ -23,7 +23,7 @@ class UIDetectionSettings:
     confidence: float = 0.6
     conjoined_confidence: float = 0.35
     panel_confidence: float = 0.25
-    seg_model: str = "sam2"  # "yolo", "sam2", or "sam3"
+    seg_model: str = "yolo"  # "sam3", "sam2", or "yolo"
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
     use_osb_text_verification: bool = True
@@ -317,7 +317,7 @@ class UIConfigState:
                 panel_confidence=data.get(
                     "panel_confidence", defaults.get("panel_confidence", 0.25)
                 ),
-                seg_model=data.get("seg_model", defaults.get("seg_model", "sam2")),
+                seg_model=data.get("seg_model", defaults.get("seg_model", "yolo")),
                 conjoined_detection=data.get(
                     "conjoined_detection",
                     defaults.get("conjoined_detection", True),

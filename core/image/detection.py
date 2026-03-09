@@ -1226,7 +1226,7 @@ def detect_speech_bubbles(
     confidence=0.6,
     verbose=False,
     device=None,
-    seg_model: str = "sam2",
+    seg_model: str = "yolo",
     conjoined_detection: bool = True,
     conjoined_confidence=0.35,
     image_override: Optional[Image.Image] = None,

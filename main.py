@@ -177,7 +177,7 @@ def main():
         dest="seg_model",
         type=str,
         choices=["sam3", "sam2", "yolo"],
-        default="sam2",
+        default="yolo",
         help="Segmentation method",
     )
     parser.add_argument(
