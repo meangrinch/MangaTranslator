@@ -118,8 +118,8 @@ def call_xai_endpoint(
     }
 
     model_lower = (model_name or "").lower()
-    is_reasoning_model = "reasoning" in model_lower or model_lower.startswith(
-        "grok-4-fast-reasoning"
+    is_reasoning_model = "non-reasoning" not in model_lower and (
+        "reasoning" in model_lower or "grok-4-0709" in model_lower
     )
 
     if is_reasoning_model:
