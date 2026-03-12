@@ -632,6 +632,21 @@ def translate_and_render(
             # Prepare images for Translation
             log_message("Preparing bubble images...", verbose=verbose)
 
+            # Enrich bubble_data with refined cleaning masks
+            if processed_bubbles_info:
+                _mask_lut: Dict[tuple, Any] = {}
+                for _info in processed_bubbles_info:
+                    _bk = tuple(int(round(v)) for v in _info.get("bbox", ()))
+                    if len(_bk) != 4:
+                        continue
+                    _m = _info.get("mask") or _info.get("base_mask")
+                    if _m is not None:
+                        _mask_lut[_bk] = _m
+                for _b in bubble_data:
+                    _bk = tuple(int(round(v)) for v in _b.get("bbox", ()))
+                    if _bk in _mask_lut:
+                        _b["sam_mask"] = _mask_lut[_bk]
+
             # Disable upscaling in test_mode
             bubble_upscale_method = (
                 "none" if config.test_mode else config.translation.upscale_method

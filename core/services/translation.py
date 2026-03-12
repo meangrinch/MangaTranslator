@@ -1549,6 +1549,21 @@ def prepare_bubble_images_for_translation(
         prepared_bubble = bubble.copy()
         x1, y1, x2, y2 = bubble["bbox"]
 
+        # Use the tight bbox of the mask
+        _mask = bubble.get("sam_mask")
+        if _mask is not None:
+            try:
+                _ma = np.asarray(_mask)
+                if _ma.ndim == 3:
+                    _ma = _ma[..., 0]
+                if _ma.ndim == 2:
+                    _rows, _cols = np.where(_ma > 0)
+                    if _rows.size and _cols.size:
+                        x1, y1 = int(_cols.min()), int(_rows.min())
+                        x2, y2 = int(_cols.max()) + 1, int(_rows.max()) + 1
+            except Exception:
+                pass
+
         bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
         bubble_image_pil = cv2_to_pil(bubble_image_cv)
 
