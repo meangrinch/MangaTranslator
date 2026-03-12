@@ -250,6 +250,42 @@ def _write_component_order_debug_image(
     )
 
 
+def _write_llm_crop_debug_images(
+    sorted_items,
+    image_path,
+    output_path,
+    verbose=False,
+):
+    """Save the exact image crops the LLM sees to a debug subfolder."""
+    base_path = Path(output_path) if output_path else Path(image_path)
+    crop_dir = base_path.parent / f"{base_path.stem}.llm-crops"
+    crop_dir.mkdir(parents=True, exist_ok=True)
+
+    count = 0
+    for i, item in enumerate(sorted_items, start=1):
+        img_b64 = item.get("image_b64")
+        if not img_b64:
+            continue
+        try:
+            img_bytes = base64.b64decode(img_b64)
+            img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
+            img_cv = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
+            if img_cv is None:
+                continue
+            label = "osb" if item.get("is_outside_text", False) else "bubble"
+            crop_path = crop_dir / f"{i:03d}_{label}.png"
+            cv2.imwrite(str(crop_path), img_cv)
+            count += 1
+        except Exception:
+            pass
+
+    log_message(
+        f"Wrote {count} LLM crop debug images to: {crop_dir}",
+        verbose=verbose,
+        always_print=True,
+    )
+
+
 def _resolve_pre_upscale_factor(
     pre_cfg: Optional[PreprocessingConfig],
     verbose: bool = False,
@@ -639,7 +675,9 @@ def translate_and_render(
                     _bk = tuple(int(round(v)) for v in _info.get("bbox", ()))
                     if len(_bk) != 4:
                         continue
-                    _m = _info.get("mask") or _info.get("base_mask")
+                    _m = _info.get("mask")
+                    if _m is None:
+                        _m = _info.get("base_mask")
                     if _m is not None:
                         _mask_lut[_bk] = _m
                 for _b in bubble_data:
@@ -812,6 +850,19 @@ def translate_and_render(
                     except Exception as e:
                         log_message(
                             f"Failed to write component-order debug image: {e}",
+                            always_print=True,
+                        )
+
+                    try:
+                        _write_llm_crop_debug_images(
+                            sorted_bubble_data,
+                            image_path,
+                            output_path,
+                            verbose=verbose,
+                        )
+                    except Exception as e:
+                        log_message(
+                            f"Failed to write LLM crop debug images: {e}",
                             always_print=True,
                         )
 

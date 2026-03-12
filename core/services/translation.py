@@ -1523,6 +1523,11 @@ def prepare_bubble_images_for_translation(
     cv2_ext = ".png" if mime_type == "image/png" else ".jpg"
 
     prepared_bubbles = []
+    
+    mask_lookup = {}
+    for b in bubble_data:
+        b_bbox = tuple(int(round(v)) for v in b["bbox"])
+        mask_lookup[b_bbox] = b.get("sam_mask")
 
     if upscale_method == "model":
         log_message(
@@ -1551,20 +1556,43 @@ def prepare_bubble_images_for_translation(
 
         # Use the tight bbox of the mask
         _mask = bubble.get("sam_mask")
+        _ma = None
         if _mask is not None:
-            try:
-                _ma = np.asarray(_mask)
-                if _ma.ndim == 3:
-                    _ma = _ma[..., 0]
-                if _ma.ndim == 2:
-                    _rows, _cols = np.where(_ma > 0)
-                    if _rows.size and _cols.size:
-                        x1, y1 = int(_cols.min()), int(_rows.min())
-                        x2, y2 = int(_cols.max()) + 1, int(_rows.max()) + 1
-            except Exception:
-                pass
+            _ma = np.asarray(_mask)
+            if _ma.ndim == 3:
+                _ma = _ma[..., 0]
+            if _ma.ndim == 2:
+                _rows, _cols = np.where(_ma > 0)
+                if _rows.size and _cols.size:
+                    x1, y1 = int(_cols.min()), int(_rows.min())
+                    x2, y2 = int(_cols.max()) + 1, int(_rows.max()) + 1
 
         bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
+
+        # White out conjoined neighbor text regions visible in this crop
+        neighbor_bboxes = bubble.get("conjoined_neighbor_bboxes")
+        if neighbor_bboxes:
+            own_mask_crop = _ma[y1:y2, x1:x2] > 0 if (_ma is not None and _ma.ndim == 2) else None
+
+            for nb in neighbor_bboxes:
+                nb_tuple = tuple(int(round(v)) for v in nb)
+                neighbor_mask = mask_lookup.get(nb_tuple)
+                
+                if neighbor_mask is not None:
+                    _nm = np.asarray(neighbor_mask)
+                    if _nm.ndim == 3:
+                        _nm = _nm[..., 0]
+                    if _nm.ndim == 2:
+                        nm_crop = _nm[y1:y2, x1:x2] > 0
+                        
+                        if own_mask_crop is not None:
+                            region_mask = nm_crop & ~own_mask_crop
+                        else:
+                            region_mask = nm_crop
+                            
+                        # Apply whiteout precisely on neighbor's mask pixels
+                        bubble_image_cv[region_mask] = 255
+
         bubble_image_pil = cv2_to_pil(bubble_image_cv)
 
         if upscale_method == "model" or upscale_method == "model_lite":
