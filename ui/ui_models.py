@@ -69,6 +69,7 @@ class UITranslationLLMSettings:
     translation_mode: str = "one-step"
     reading_direction: str = "rtl"
     send_full_page_context: bool = True
+    whiteout_conjoined_bubbles: bool = True
     upscale_method: str = "model_lite"
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1024
@@ -230,6 +231,7 @@ class UIConfigState:
             "translation_mode": self.llm_settings.translation_mode,
             "ocr_method": self.llm_settings.ocr_method,
             "send_full_page_context": self.llm_settings.send_full_page_context,
+            "whiteout_conjoined_bubbles": self.llm_settings.whiteout_conjoined_bubbles,
             "upscale_method": self.llm_settings.upscale_method,
             "bubble_min_side_pixels": self.llm_settings.bubble_min_side_pixels,
             "context_image_max_side_pixels": self.llm_settings.context_image_max_side_pixels,
@@ -448,6 +450,7 @@ class UIConfigState:
                     "reading_direction", defaults["reading_direction"]
                 ),
                 send_full_page_context=data.get("send_full_page_context", True),
+                whiteout_conjoined_bubbles=data.get("whiteout_conjoined_bubbles", True),
                 upscale_method=data.get(
                     "upscale_method", defaults.get("upscale_method", "model_lite")
                 ),
@@ -619,6 +622,7 @@ def map_ui_to_backend_config(
         media_resolution_bubbles=ui_state.general.media_resolution_bubbles,
         media_resolution_context=ui_state.general.media_resolution_context,
         send_full_page_context=ui_state.llm_settings.send_full_page_context,
+        whiteout_conjoined_bubbles=ui_state.llm_settings.whiteout_conjoined_bubbles,
         upscale_method=ui_state.llm_settings.upscale_method,
         bubble_min_side_pixels=ui_state.llm_settings.bubble_min_side_pixels,
         context_image_max_side_pixels=ui_state.llm_settings.context_image_max_side_pixels,

@@ -124,6 +124,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         effort_val,
         verbosity_val,
         send_full_page_context_val,
+        whiteout_conjoined_bubbles_val,
         upscale_method_val,
         bubble_min_side_pixels_val,
         context_image_max_side_pixels_val,
@@ -246,6 +247,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             translation_mode=config_translation_mode,
             ocr_method=ocr_method_val,
             send_full_page_context=send_full_page_context_val,
+            whiteout_conjoined_bubbles=whiteout_conjoined_bubbles_val,
             upscale_method=upscale_method_val,
             bubble_min_side_pixels=bubble_min_side_pixels_val,
             context_image_max_side_pixels=context_image_max_side_pixels_val,
@@ -928,6 +930,7 @@ def handle_save_config_click(*args: Any) -> str:
         effort_val,
         verbosity_val,
         send_full_page_context_val,
+        whiteout_conjoined_bubbles_val,
         upscale_method_val,
         bubble_min_side_pixels_val,
         context_image_max_side_pixels_val,
@@ -1039,6 +1042,7 @@ def handle_save_config_click(*args: Any) -> str:
             translation_mode=trans_mode,
             ocr_method=ocr_method_val,
             send_full_page_context=send_full_page_context_val,
+            whiteout_conjoined_bubbles=whiteout_conjoined_bubbles_val,
             upscale_method=upscale_method_val,
             bubble_min_side_pixels=bubble_min_side_pixels_val,
             context_image_max_side_pixels=context_image_max_side_pixels_val,
@@ -1291,6 +1295,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(value=verbosity_val, visible=verbosity_visible),
         "Settings reset to defaults (API keys preserved).",
         gr.update(value=default_ui_state.llm_settings.send_full_page_context),
+        gr.update(value=default_ui_state.llm_settings.whiteout_conjoined_bubbles),
         gr.update(value=default_ui_state.llm_settings.upscale_method),
         default_ui_state.llm_settings.bubble_min_side_pixels,
         default_ui_state.llm_settings.context_image_max_side_pixels,
@@ -1562,6 +1567,7 @@ def handle_ocr_method_change(
         updates.append(batch_saved_language)
 
         updates.append(gr.update(value=False, interactive=False))
+        updates.append(gr.update())
         # Disable code execution checkbox (Gemini Flash only, disabled in text-only mode)
         updates.append(gr.update(value=False, interactive=False))
 
@@ -1713,6 +1719,7 @@ def handle_ocr_method_change(
         updates.append(
             gr.update(value=restored_send_full_page_context, interactive=True)
         )
+        updates.append(gr.update())
         # Restore code execution checkbox interactivity
         updates.append(gr.update(interactive=True))
 

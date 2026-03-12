@@ -72,6 +72,7 @@ class TranslationConfig:
         None  # GPT-5 series only: controls response verbosity (high/medium/low)
     )
     send_full_page_context: bool = True
+    whiteout_conjoined_bubbles: bool = True
     upscale_method: str = "model_lite"  # "model", "model_lite", "lanczos", or "none"
     enable_web_search: bool = (
         False  # Enable model's built-in web search for up-to-date information. OpenRouter uses its own web search tool.

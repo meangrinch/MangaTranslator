@@ -1019,6 +1019,16 @@ def create_layout(
                                 interactive=initial_ocr_method
                                 not in ("manga-ocr", "paddleocr-vl"),
                             )
+                            whiteout_conjoined_bubbles = gr.Checkbox(
+                                value=saved_settings.get(
+                                    "whiteout_conjoined_bubbles", True
+                                ),
+                                label="White-out Conjoined Bubbles",
+                                info=(
+                                    "White-out text from neighboring conjoined bubbles to avoid translating "
+                                    "the same text multiple times. Disable if encountering issues."
+                                ),
+                            )
                             upscale_method = gr.Radio(
                                 choices=[
                                     ("Model", "model"),
@@ -1738,6 +1748,7 @@ def create_layout(
             effort_dropdown,
             verbosity_dropdown,
             send_full_page_context,
+            whiteout_conjoined_bubbles,
             upscale_method,
             bubble_min_side_pixels,
             context_image_max_side_pixels,
@@ -1840,6 +1851,7 @@ def create_layout(
             verbosity_dropdown,
             config_status,
             send_full_page_context,
+            whiteout_conjoined_bubbles,
             upscale_method,
             bubble_min_side_pixels,
             context_image_max_side_pixels,
@@ -1934,6 +1946,7 @@ def create_layout(
             effort_dropdown,
             verbosity_dropdown,
             send_full_page_context,
+            whiteout_conjoined_bubbles,
             upscale_method,
             bubble_min_side_pixels,
             context_image_max_side_pixels,
@@ -2037,6 +2050,7 @@ def create_layout(
             effort_dropdown,
             verbosity_dropdown,
             send_full_page_context,
+            whiteout_conjoined_bubbles,
             upscale_method,
             bubble_min_side_pixels,
             context_image_max_side_pixels,
@@ -2442,6 +2456,7 @@ def create_layout(
                 batch_input_language,
                 batch_original_language_state,
                 send_full_page_context,
+                whiteout_conjoined_bubbles,
                 enable_code_execution_checkbox,
                 config_model_name,
             ],

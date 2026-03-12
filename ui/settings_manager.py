@@ -190,6 +190,7 @@ DEFAULT_SETTINGS = {
     "media_resolution_context": "auto",  # Gemini 3 models
     "auto_scale": True,
     "send_full_page_context": True,
+    "whiteout_conjoined_bubbles": True,
     "special_instructions": "",
     "upscale_method": "model_lite",  # "model", "model_lite", "lanczos", or "none"
     "bubble_min_side_pixels": 128,
@@ -262,6 +263,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "top_k",
     "max_tokens",
     "send_full_page_context",
+    "whiteout_conjoined_bubbles",
     "reasoning_effort",
     "effort",
     "verbosity",

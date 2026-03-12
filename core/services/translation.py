@@ -1496,6 +1496,7 @@ def prepare_bubble_images_for_translation(
     mime_type: str,
     bubble_min_side_pixels: int,
     upscale_method: str = "model_lite",
+    whiteout_conjoined_bubbles: bool = True,
     verbose: bool = False,
 ) -> List[Dict[str, Any]]:
     """
@@ -1571,7 +1572,7 @@ def prepare_bubble_images_for_translation(
 
         # White out conjoined neighbor text regions visible in this crop
         neighbor_bboxes = bubble.get("conjoined_neighbor_bboxes")
-        if neighbor_bboxes:
+        if whiteout_conjoined_bubbles and neighbor_bboxes:
             own_mask_crop = _ma[y1:y2, x1:x2] > 0 if (_ma is not None and _ma.ndim == 2) else None
 
             for nb in neighbor_bboxes:

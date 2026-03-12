@@ -485,7 +485,6 @@ def main():
         default=None,
         help="Optional special instructions for the LLM (formatting, context, character names, etc.)",
     )
-    # Full page context toggle
     parser.add_argument(
         "--no-full-page-context",
         dest="send_full_page_context",
@@ -495,7 +494,12 @@ def main():
             "encountering refusals or using less-capable LLMs"
         ),
     )
-    # Translation upscaling method
+    parser.add_argument(
+        "--no-whiteout-conjoined-bubbles",
+        dest="whiteout_conjoined_bubbles",
+        action="store_false",
+        help="Disable whiting out text from neighboring conjoined bubbles during preparation.",
+    )
     parser.add_argument(
         "--upscale-method",
         type=str,
@@ -685,6 +689,7 @@ def main():
     )
 
     parser.set_defaults(send_full_page_context=True)
+    parser.set_defaults(whiteout_conjoined_bubbles=True)
     parser.set_defaults(auto_scale=True)
     parser.set_defaults(
         verbose=False,
@@ -879,6 +884,7 @@ def main():
             effort=args.effort,
             verbosity=args.verbosity,
             send_full_page_context=args.send_full_page_context,
+            whiteout_conjoined_bubbles=args.whiteout_conjoined_bubbles,
             upscale_method=args.upscale_method,
             bubble_min_side_pixels=args.bubble_min_side_pixels,
             context_image_max_side_pixels=args.context_image_max_side_pixels,

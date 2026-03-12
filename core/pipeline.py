@@ -705,6 +705,7 @@ def translate_and_render(
                 mime_type,
                 config.translation.bubble_min_side_pixels,
                 bubble_upscale_method,
+                config.translation.whiteout_conjoined_bubbles,
                 verbose,
             )
             if upscale_model is not None:
