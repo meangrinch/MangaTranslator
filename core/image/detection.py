@@ -761,9 +761,13 @@ def _split_overlap_zone_with_line(
             offset = _pick_offset(lo, hi)
         else:
             # Tier 2: own-side corners + post-validation.
+            tier1_gap_lo = hi  # furthest cross-over corner of text_B
+            tier1_gap_hi = lo  # furthest cross-over corner of text_A
             lo, hi = lower_bound, upper_bound
             lo, hi = _tighten_own_side(text_boxes_a, center_a_dist, lo, hi)
             lo, hi = _tighten_own_side(text_boxes_b, center_b_dist, lo, hi)
+            lo = max(lo, tier1_gap_lo)
+            hi = min(hi, tier1_gap_hi)
 
             candidate_off = _pick_offset(lo, hi) if lo <= hi else None
             if lo > hi or not _split_respects_text(candidate_off):
