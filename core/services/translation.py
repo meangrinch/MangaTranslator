@@ -1524,7 +1524,7 @@ def prepare_bubble_images_for_translation(
     cv2_ext = ".png" if mime_type == "image/png" else ".jpg"
 
     prepared_bubbles = []
-    
+
     mask_lookup = {}
     for b in bubble_data:
         b_bbox = tuple(int(round(v)) for v in b["bbox"])
@@ -1545,7 +1545,7 @@ def prepare_bubble_images_for_translation(
             f"Upscaling {len(bubble_data)} bubble images with LANCZOS",
             always_print=True,
         )
-    else:  # upscale_method == "none"
+    else:
         log_message(
             f"Processing {len(bubble_data)} bubble images without upscaling",
             always_print=True,
@@ -1570,27 +1570,29 @@ def prepare_bubble_images_for_translation(
 
         bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
 
-        # White out conjoined neighbor text regions visible in this crop
+        # White-out conjoined neighbor text regions visible in this crop
         neighbor_bboxes = bubble.get("conjoined_neighbor_bboxes")
         if whiteout_conjoined_bubbles and neighbor_bboxes:
-            own_mask_crop = _ma[y1:y2, x1:x2] > 0 if (_ma is not None and _ma.ndim == 2) else None
+            own_mask_crop = (
+                _ma[y1:y2, x1:x2] > 0 if (_ma is not None and _ma.ndim == 2) else None
+            )
 
             for nb in neighbor_bboxes:
                 nb_tuple = tuple(int(round(v)) for v in nb)
                 neighbor_mask = mask_lookup.get(nb_tuple)
-                
+
                 if neighbor_mask is not None:
                     _nm = np.asarray(neighbor_mask)
                     if _nm.ndim == 3:
                         _nm = _nm[..., 0]
                     if _nm.ndim == 2:
                         nm_crop = _nm[y1:y2, x1:x2] > 0
-                        
+
                         if own_mask_crop is not None:
                             region_mask = nm_crop & ~own_mask_crop
                         else:
                             region_mask = nm_crop
-                            
+
                         # Apply whiteout precisely on neighbor's mask pixels
                         bubble_image_cv[region_mask] = 255
 
@@ -1617,7 +1619,7 @@ def prepare_bubble_images_for_translation(
             else:
                 resized_bubble = bubble_image_pil
             final_bubble_pil = resized_bubble
-        else:  # upscale_method == "none"
+        else:
             final_bubble_pil = bubble_image_pil
 
         final_bubble_cv = pil_to_cv2(final_bubble_pil)
