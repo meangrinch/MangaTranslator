@@ -157,7 +157,7 @@ def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
     lm = model_name.lower()
     if "non-reasoning" in lm:
         return False
-    return "reasoning" in lm or "grok-4-0709" in lm
+    return "reasoning" in lm or "multi-agent" in lm
 
 
 def is_opus_45_model(model_name: Optional[str]) -> bool:

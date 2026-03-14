@@ -119,7 +119,7 @@ def call_xai_endpoint(
 
     model_lower = (model_name or "").lower()
     is_reasoning_model = "non-reasoning" not in model_lower and (
-        "reasoning" in model_lower or "grok-4-0709" in model_lower
+        "reasoning" in model_lower or "multi-agent" in model_lower
     )
 
     if is_reasoning_model:
