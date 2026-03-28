@@ -8,6 +8,7 @@ import gradio as gr
 import torch
 
 import core
+from core.device import get_best_device
 from ui import layout
 from utils.update_checker import check_for_update
 
@@ -73,15 +74,7 @@ if __name__ == "__main__":
     os.makedirs(MODELS_DIR, exist_ok=True)
     os.makedirs(FONTS_BASE_DIR, exist_ok=True)
 
-    target_device = (
-        torch.device("cpu")
-        if args.cpu
-        else torch.device(
-            "cuda"
-            if torch.cuda.is_available()
-            else "mps" if torch.backends.mps.is_available() else "cpu"
-        )
-    )
+    target_device = torch.device("cpu") if args.cpu else get_best_device()
 
     device_info_str = "CPU"
     if target_device.type == "cuda":
@@ -90,6 +83,12 @@ if __name__ == "__main__":
             device_info_str = f"CUDA ({gpu_name}, ID: 0)"
         except Exception:
             device_info_str = "CUDA (Unknown GPU Name)"
+    elif target_device.type == "xpu":
+        try:
+            gpu_name = torch.xpu.get_device_name(0)
+            device_info_str = f"XPU ({gpu_name}, ID: 0)"
+        except Exception:
+            device_info_str = "XPU (Unknown GPU Name)"
     elif target_device.type == "mps":
         device_info_str = "MPS (Apple Silicon)"
     print(f"Using device: {device_info_str.upper()}")
