@@ -39,6 +39,7 @@ SETTING_CONSTRAINTS: Dict[str, Tuple[float, float]] = {
     "jpeg_quality": (1, 100),
     "png_compression": (0, 6),
     "image_upscale_factor": (1.0, 8.0),
+    "parallel_requests": (1, 10),
 }
 
 # Attribute paths for clamping config objects (MangaTranslatorConfig and children)
@@ -94,6 +95,7 @@ _CONFIG_ATTR_PATHS: Dict[str, Tuple[Tuple[str, ...], ...]] = {
         ("output", "image_upscale_factor"),
         ("preprocessing", "factor"),
     ),
+    "parallel_requests": (("parallel_requests",),),
 }
 
 

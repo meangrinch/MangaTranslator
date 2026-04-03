@@ -167,6 +167,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_font_dropdown,
         special_instructions_val,
         batch_special_instructions_val,
+        batch_parallel_requests_val,
     ) = args
 
     final_input_language = batch_input_language if is_batch else input_language
@@ -297,6 +298,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_input_language=batch_input_language,
         batch_output_language=batch_output_language,
         batch_font_pack=batch_font_dropdown,
+        batch_parallel_requests=int(batch_parallel_requests_val),
     )
 
 

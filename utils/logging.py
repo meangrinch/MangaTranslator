@@ -1,3 +1,8 @@
+import threading
+
+_log_lock = threading.Lock()
+
+
 def log_message(message, verbose=False, always_print=False):
     """
     Print a formatted log message
@@ -10,4 +15,5 @@ def log_message(message, verbose=False, always_print=False):
     if not verbose and not always_print:
         return
 
-    print(f"{message}")
+    with _log_lock:
+        print(f"{message}")

@@ -777,14 +777,14 @@ class ModelManager:
             token: HuggingFace API token
             enable_fast_download: If True, enables HF_XET_HIGH_PERFORMANCE for faster downloads
         """
-        self.hf_token = token if token else None
-        if self.hf_token:
-            os.environ["HF_TOKEN"] = self.hf_token
-            # Enable high-performance downloads with Xet if not already configured
-            if enable_fast_download and "HF_XET_HIGH_PERFORMANCE" not in os.environ:
-                os.environ["HF_XET_HIGH_PERFORMANCE"] = "1"
-        elif "HF_TOKEN" in os.environ:
-            del os.environ["HF_TOKEN"]
+        with self._lock:
+            self.hf_token = token if token else None
+            if self.hf_token:
+                os.environ["HF_TOKEN"] = self.hf_token
+                if enable_fast_download and "HF_XET_HIGH_PERFORMANCE" not in os.environ:
+                    os.environ["HF_XET_HIGH_PERFORMANCE"] = "1"
+            elif "HF_TOKEN" in os.environ:
+                del os.environ["HF_TOKEN"]
 
     def set_flux_hf_token(self, token: str):
         """Set the HuggingFace token for Flux model downloads.

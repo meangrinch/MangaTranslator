@@ -1,9 +1,12 @@
+import asyncio
 import base64
 import math
 import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -1471,6 +1474,188 @@ def translate_and_render(
     return final_image_to_save
 
 
+def _resolve_output_path(
+    img_path: Path,
+    input_dir: Path,
+    output_dir: Path,
+    config: MangaTranslatorConfig,
+    preserve_structure: bool,
+) -> Tuple[Path, str, str]:
+    """Compute output path, display name, and error key for a single image."""
+    if preserve_structure:
+        relative_path = img_path.relative_to(input_dir)
+        output_subdir = output_dir / relative_path.parent
+        os.makedirs(output_subdir, exist_ok=True)
+        output_filename = f"{relative_path.stem}_translated"
+        display_path = str(relative_path)
+        error_key = str(relative_path)
+    else:
+        output_subdir = output_dir
+        output_filename = f"{img_path.stem}_translated"
+        display_path = img_path.name
+        error_key = img_path.name
+
+    original_ext = img_path.suffix.lower()
+    desired_format = config.output.output_format
+    if desired_format == "jpeg":
+        output_ext = ".jpg"
+    elif desired_format == "png":
+        output_ext = ".png"
+    elif desired_format == "auto":
+        output_ext = original_ext
+    else:
+        output_ext = original_ext
+        log_message(
+            f"Warning: Invalid output_format '{desired_format}' in config. "
+            f"Using original extension '{original_ext}'.",
+            always_print=True,
+        )
+
+    return output_subdir / f"{output_filename}{output_ext}", display_path, error_key
+
+
+async def _batch_translate_parallel(
+    image_files: List[Path],
+    input_dir: Path,
+    config: MangaTranslatorConfig,
+    output_dir: Path,
+    preserve_structure: bool,
+    progress_callback: Optional[Callable[[float, str], None]],
+    cancellation_manager: Optional["CancellationManager"],
+) -> Dict[str, Any]:
+    """Process images in parallel using a semaphore to maintain target concurrency.
+
+    The first image is processed sequentially to warm up all ML models (triggering
+    lazy loading and YOLO layer fusing on the main thread). Remaining images are
+    then processed in parallel with models already initialized.
+    """
+    total_images = len(image_files)
+    n_workers = config.parallel_requests
+    results = {"success_count": 0, "error_count": 0, "errors": {}}
+
+    log_message(
+        f"Starting parallel batch processing: {total_images} images, "
+        f"{n_workers} parallel workers",
+        always_print=True,
+    )
+
+    # -- Phase 1: process the first image sequentially to warm up models --
+    first_img = image_files[0]
+    first_output, first_display, first_key = _resolve_output_path(
+        first_img, input_dir, output_dir, config, preserve_structure
+    )
+    log_message(
+        f"Processing 1/{total_images}: {first_display} (warming up models)",
+        always_print=True,
+    )
+    try:
+        if cancellation_manager and cancellation_manager.is_cancelled():
+            raise CancellationError("Batch process cancelled by user.")
+        translate_and_render(
+            first_img, config, first_output, cancellation_manager=cancellation_manager
+        )
+        results["success_count"] += 1
+    except CancellationError:
+        raise
+    except Exception as e:
+        log_message(
+            f"Error processing {first_display}: {str(e)}", always_print=True
+        )
+        results["error_count"] += 1
+        results["errors"][first_key] = str(e)
+
+    completed_count = 1
+    if progress_callback:
+        has_errors = results["error_count"] > 0
+        suffix = " (with errors)" if has_errors else ""
+        progress_callback(
+            1 / total_images, f"Completed 1/{total_images} images{suffix}"
+        )
+
+    # -- Phase 2: process remaining images in parallel --
+    remaining = image_files[1:]
+    if not remaining:
+        return results
+
+    if cancellation_manager and cancellation_manager.is_cancelled():
+        raise CancellationError("Batch process cancelled by user.")
+
+    sem = asyncio.Semaphore(n_workers)
+    results_lock = threading.Lock()
+    cancelled = False
+
+    def _process_single(img_path: Path, index: int) -> Tuple[str, str]:
+        """Run translate_and_render for a single image. Returns (display_path, error_key)."""
+        output_path, display_path, error_key = _resolve_output_path(
+            img_path, input_dir, output_dir, config, preserve_structure
+        )
+        log_message(
+            f"Processing {index + 1}/{total_images}: {display_path}",
+            always_print=True,
+        )
+        translate_and_render(
+            img_path, config, output_path, cancellation_manager=cancellation_manager
+        )
+        return display_path, error_key
+
+    async def _worker(img_path: Path, index: int, executor: ThreadPoolExecutor):
+        nonlocal completed_count, cancelled
+        if cancelled or (cancellation_manager and cancellation_manager.is_cancelled()):
+            cancelled = True
+            return
+
+        async with sem:
+            if cancelled or (cancellation_manager and cancellation_manager.is_cancelled()):
+                cancelled = True
+                return
+
+            loop = asyncio.get_event_loop()
+            try:
+                await loop.run_in_executor(
+                    executor, _process_single, img_path, index
+                )
+                with results_lock:
+                    results["success_count"] += 1
+                    completed_count += 1
+                    count = completed_count
+            except CancellationError:
+                cancelled = True
+                raise
+            except Exception as e:
+                _, display_path, error_key = _resolve_output_path(
+                    img_path, input_dir, output_dir, config, preserve_structure
+                )
+                log_message(
+                    f"Error processing {display_path}: {str(e)}", always_print=True
+                )
+                with results_lock:
+                    results["error_count"] += 1
+                    results["errors"][error_key] = str(e)
+                    completed_count += 1
+                    count = completed_count
+
+            if progress_callback:
+                progress = count / total_images
+                has_errors = results["error_count"] > 0
+                suffix = " (with errors)" if has_errors else ""
+                progress_callback(
+                    progress, f"Completed {count}/{total_images} images{suffix}"
+                )
+
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        tasks = [
+            _worker(img, i, executor)
+            for i, img in enumerate(remaining, start=1)
+        ]
+        gathered = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for exc in gathered:
+        if isinstance(exc, CancellationError):
+            raise exc
+
+    return results
+
+
 def batch_translate_images(
     input_dir: Union[str, Path],
     config: MangaTranslatorConfig,
@@ -1513,7 +1698,6 @@ def batch_translate_images(
     image_extensions = [".jpg", ".jpeg", ".png", ".webp"]
 
     if preserve_structure:
-        # Recursively find all image files preserving directory structure
         image_files = []
         for root, dirs, files in os.walk(input_dir):
             for file in files:
@@ -1531,94 +1715,86 @@ def batch_translate_images(
         log_message(f"No image files found in '{input_dir}'", always_print=True)
         return {"success_count": 0, "error_count": 0, "errors": {}}
 
-    results = {"success_count": 0, "error_count": 0, "errors": {}}
-
     total_images = len(image_files)
     start_batch_time = time.time()
-
-    log_message(f"Starting batch processing: {total_images} images", always_print=True)
 
     if progress_callback:
         progress_callback(0.0, f"Starting batch processing of {total_images} images...")
 
-    for i, img_path in enumerate(image_files):
-        try:
-            # Calculate relative path from input directory for structure preservation
-            if preserve_structure:
-                relative_path = img_path.relative_to(input_dir)
-                # Create output subdirectory structure
-                output_subdir = output_dir / relative_path.parent
-                os.makedirs(output_subdir, exist_ok=True)
-                # Use relative path for output filename
-                output_filename = f"{relative_path.stem}_translated"
-                display_path = str(relative_path)
-                error_key = str(relative_path)
-            else:
-                output_subdir = output_dir
-                output_filename = f"{img_path.stem}_translated"
-                display_path = img_path.name
-                error_key = img_path.name
+    if config.parallel_requests > 1:
+        results = asyncio.run(
+            _batch_translate_parallel(
+                image_files=image_files,
+                input_dir=input_dir,
+                config=config,
+                output_dir=output_dir,
+                preserve_structure=preserve_structure,
+                progress_callback=progress_callback,
+                cancellation_manager=cancellation_manager,
+            )
+        )
+    else:
+        results = {"success_count": 0, "error_count": 0, "errors": {}}
+        log_message(
+            f"Starting batch processing: {total_images} images", always_print=True
+        )
 
-            if cancellation_manager and cancellation_manager.is_cancelled():
-                raise CancellationError("Batch process cancelled by user.")
-
-            if progress_callback:
-                current_progress = i / total_images
-                progress_callback(
-                    current_progress,
-                    f"Processing image {i + 1}/{total_images}: {display_path}",
+        for i, img_path in enumerate(image_files):
+            try:
+                output_path, display_path, error_key = _resolve_output_path(
+                    img_path, input_dir, output_dir, config, preserve_structure
                 )
 
-            original_ext = img_path.suffix.lower()
-            desired_format = config.output.output_format
-            if desired_format == "jpeg":
-                output_ext = ".jpg"
-            elif desired_format == "png":
-                output_ext = ".png"
-            elif desired_format == "auto":
-                output_ext = original_ext
-            else:
-                output_ext = original_ext
+                if cancellation_manager and cancellation_manager.is_cancelled():
+                    raise CancellationError("Batch process cancelled by user.")
+
+                if progress_callback:
+                    current_progress = i / total_images
+                    progress_callback(
+                        current_progress,
+                        f"Processing image {i + 1}/{total_images}: {display_path}",
+                    )
+
                 log_message(
-                    f"Warning: Invalid output_format '{desired_format}' in config. "
-                    f"Using original extension '{original_ext}'.",
+                    f"Processing {i + 1}/{total_images}: {display_path}",
                     always_print=True,
                 )
 
-            output_path = output_subdir / f"{output_filename}{output_ext}"
-            log_message(
-                f"Processing {i + 1}/{total_images}: {display_path}", always_print=True
-            )
-
-            translate_and_render(
-                img_path, config, output_path, cancellation_manager=cancellation_manager
-            )
-
-            results["success_count"] += 1
-
-            if progress_callback:
-                completed_progress = (i + 1) / total_images
-                progress_callback(
-                    completed_progress, f"Completed {i + 1}/{total_images} images"
+                translate_and_render(
+                    img_path,
+                    config,
+                    output_path,
+                    cancellation_manager=cancellation_manager,
                 )
 
-        except CancellationError:
-            log_message(
-                f"Batch cancelled during processing of {display_path}",
-                verbose=config.verbose,
-            )
-            raise
-        except Exception as e:
-            log_message(f"Error processing {display_path}: {str(e)}", always_print=True)
-            results["error_count"] += 1
-            results["errors"][error_key] = str(e)
+                results["success_count"] += 1
 
-            if progress_callback:
-                completed_progress = (i + 1) / total_images
-                progress_callback(
-                    completed_progress,
-                    f"Completed {i + 1}/{total_images} images (with errors)",
+                if progress_callback:
+                    completed_progress = (i + 1) / total_images
+                    progress_callback(
+                        completed_progress,
+                        f"Completed {i + 1}/{total_images} images",
+                    )
+
+            except CancellationError:
+                log_message(
+                    f"Batch cancelled during processing of {display_path}",
+                    verbose=config.verbose,
                 )
+                raise
+            except Exception as e:
+                log_message(
+                    f"Error processing {display_path}: {str(e)}", always_print=True
+                )
+                results["error_count"] += 1
+                results["errors"][error_key] = str(e)
+
+                if progress_callback:
+                    completed_progress = (i + 1) / total_images
+                    progress_callback(
+                        completed_progress,
+                        f"Completed {i + 1}/{total_images} images (with errors)",
+                    )
 
     if progress_callback:
         progress_callback(1.0, "Processing complete")

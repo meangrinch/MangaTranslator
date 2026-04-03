@@ -373,6 +373,16 @@ def create_layout(
                             max_lines=10,
                             elem_id="batch_special_instructions",
                         )
+                        batch_parallel_requests = gr.Slider(
+                            minimum=1,
+                            maximum=10,
+                            value=int(
+                                saved_settings.get("batch_parallel_requests", 1)
+                            ),
+                            step=1,
+                            label="Parallel Requests",
+                            info="Number of images to process simultaneously",
+                        )
                     with gr.Column(scale=1):
                         batch_output_gallery = gr.Gallery(
                             label="Translated Images",
@@ -1990,6 +2000,7 @@ def create_layout(
             batch_font_dropdown,
             special_instructions,
             batch_special_instructions,
+            batch_parallel_requests,
         ]
 
         batch_inputs = [
@@ -2094,6 +2105,7 @@ def create_layout(
             batch_font_dropdown,
             special_instructions,
             batch_special_instructions,
+            batch_parallel_requests,
         ]
 
         # Config Tab Navigation & Updates

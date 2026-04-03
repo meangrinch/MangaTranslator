@@ -47,6 +47,12 @@ def main():
         action="store_true",
         help="Process all images in the input directory or ZIP archive (preserves folder structure for ZIP files)",
     )
+    parser.add_argument(
+        "--parallel-requests",
+        type=int,
+        default=1,
+        help="Number of images to process simultaneously in batch mode (1-10, default: 1)",
+    )
     # --- Provider and API Key Arguments ---
     parser.add_argument(
         "--provider",
@@ -808,6 +814,7 @@ def main():
         device=target_device,
         cleaning_only=args.cleaning_only,
         upscaling_only=args.upscaling_only,
+        parallel_requests=args.parallel_requests,
         detection=DetectionConfig(
             confidence=args.confidence,
             conjoined_confidence=args.conjoined_confidence,

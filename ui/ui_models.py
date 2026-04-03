@@ -195,6 +195,7 @@ class UIConfigState:
     batch_output_language: str = "English"
     batch_font_pack: Optional[str] = None
     batch_special_instructions: Optional[str] = None
+    batch_parallel_requests: int = 1
 
     def to_save_dict(self) -> Dict[str, Any]:
         """Converts the UI state into a dictionary suitable for saving to config.json."""
@@ -298,6 +299,7 @@ class UIConfigState:
             "batch_output_language": self.batch_output_language,
             "batch_font_pack": self.batch_font_pack,
             "batch_special_instructions": self.batch_special_instructions or "",
+            "batch_parallel_requests": self.batch_parallel_requests,
         }
         return data
 
@@ -555,6 +557,7 @@ class UIConfigState:
             ),
             batch_font_pack=data.get("batch_font_pack"),
             batch_special_instructions=data.get("batch_special_instructions") or None,
+            batch_parallel_requests=int(data.get("batch_parallel_requests", 1)),
         )
 
 
@@ -715,6 +718,7 @@ def map_ui_to_backend_config(
         cleaning_only=ui_state.general.cleaning_only,
         upscaling_only=ui_state.general.upscaling_only,
         test_mode=ui_state.general.test_mode,
+        parallel_requests=ui_state.batch_parallel_requests if is_batch else 1,
     )
 
     return backend_config

@@ -1,5 +1,6 @@
 import hashlib
 import pickle
+import threading
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -15,6 +16,7 @@ class UnifiedCache:
         """Initialize the unified cache."""
         from core.text.font_manager import LRUCache
 
+        self._lock = threading.Lock()
         self._yolo_cache = LRUCache(max_size=1)
         self._sam_cache = LRUCache(max_size=1)
         self._translation_cache = LRUCache(max_size=1)
@@ -103,7 +105,8 @@ class UnifiedCache:
         Returns:
             Cached YOLO results or None if not found
         """
-        return self._yolo_cache.get(cache_key)
+        with self._lock:
+            return self._yolo_cache.get(cache_key)
 
     def set_yolo_detection(
         self, cache_key: str, results: Any, verbose: bool = False
@@ -115,7 +118,8 @@ class UnifiedCache:
             results: YOLO detection results to cache
             verbose: Whether to print verbose logging
         """
-        self._yolo_cache.put(cache_key, results)
+        with self._lock:
+            self._yolo_cache.put(cache_key, results)
         log_message(
             f"  - Cached YOLO detection (cache size: {len(self._yolo_cache.cache)})",
             verbose=verbose,
@@ -173,7 +177,8 @@ class UnifiedCache:
         Returns:
             Cached SAM masks or None if not found
         """
-        return self._sam_cache.get(cache_key)
+        with self._lock:
+            return self._sam_cache.get(cache_key)
 
     def set_sam_masks(self, cache_key: str, masks: Any, verbose: bool = False) -> None:
         """Cache SAM masks.
@@ -183,7 +188,8 @@ class UnifiedCache:
             masks: SAM masks to cache
             verbose: Whether to print verbose logging
         """
-        self._sam_cache.put(cache_key, masks)
+        with self._lock:
+            self._sam_cache.put(cache_key, masks)
         log_message(
             f"  - Cached SAM masks (cache size: {len(self._sam_cache.cache)})",
             verbose=verbose,
@@ -274,7 +280,8 @@ class UnifiedCache:
         """
         if cache_key is None:
             return None
-        return self._translation_cache.get(cache_key)
+        with self._lock:
+            return self._translation_cache.get(cache_key)
 
     def set_translation(
         self, cache_key: Optional[str], translations: list, verbose: bool = False
@@ -288,7 +295,8 @@ class UnifiedCache:
         """
         if cache_key is None:
             return
-        self._translation_cache.put(cache_key, translations)
+        with self._lock:
+            self._translation_cache.put(cache_key, translations)
         log_message(
             f"  - Cached translation (cache size: {len(self._translation_cache.cache)})",
             verbose=verbose,
@@ -316,7 +324,8 @@ class UnifiedCache:
         """Get cached manga-ocr results."""
         if cache_key is None:
             return None
-        return self._manga_ocr_cache.get(cache_key)
+        with self._lock:
+            return self._manga_ocr_cache.get(cache_key)
 
     def set_manga_ocr_result(
         self, cache_key: Optional[str], results: list, verbose: bool = False
@@ -324,7 +333,8 @@ class UnifiedCache:
         """Cache manga-ocr results (including failure markers)."""
         if cache_key is None:
             return
-        self._manga_ocr_cache.put(cache_key, results)
+        with self._lock:
+            self._manga_ocr_cache.put(cache_key, results)
         log_message(
             f"  - Cached manga-ocr result (cache size: {len(self._manga_ocr_cache.cache)})",
             verbose=verbose,
@@ -396,7 +406,8 @@ class UnifiedCache:
         Returns:
             Cached upscaled image or None if not found
         """
-        return self._upscale_cache.get(cache_key)
+        with self._lock:
+            return self._upscale_cache.get(cache_key)
 
     def set_upscaled_image(
         self, cache_key: str, image: Image.Image, verbose: bool = False
@@ -408,7 +419,8 @@ class UnifiedCache:
             image: Upscaled image to cache
             verbose: Whether to print verbose logging
         """
-        self._upscale_cache.put(cache_key, image)
+        with self._lock:
+            self._upscale_cache.put(cache_key, image)
         log_message(
             f"  - Cached upscaled image (cache size: {len(self._upscale_cache.cache)})",
             verbose=verbose,
@@ -479,7 +491,8 @@ class UnifiedCache:
         Returns:
             Cached inpainted image or None if not found
         """
-        return self._inpaint_cache.get(cache_key)
+        with self._lock:
+            return self._inpaint_cache.get(cache_key)
 
     def set_inpainted_image(
         self, cache_key: str, image: Image.Image, verbose: bool = False
@@ -491,7 +504,8 @@ class UnifiedCache:
             image: Inpainted image to cache
             verbose: Whether to print verbose logging
         """
-        self._inpaint_cache.put(cache_key, image)
+        with self._lock:
+            self._inpaint_cache.put(cache_key, image)
         log_message(
             f"  - Cached inpainted image (cache size: {len(self._inpaint_cache.cache)})",
             verbose=verbose,
@@ -499,42 +513,49 @@ class UnifiedCache:
 
     def clear_yolo_cache(self, verbose: bool = False) -> None:
         """Clear YOLO detection cache."""
-        self._yolo_cache.cache.clear()
+        with self._lock:
+            self._yolo_cache.cache.clear()
         log_message("YOLO cache cleared", verbose=verbose)
 
     def clear_sam_cache(self, verbose: bool = False) -> None:
         """Clear SAM masks cache."""
-        self._sam_cache.cache.clear()
+        with self._lock:
+            self._sam_cache.cache.clear()
         log_message("SAM cache cleared", verbose=verbose)
 
     def clear_translation_cache(self, verbose: bool = False) -> None:
         """Clear translation cache."""
-        self._translation_cache.cache.clear()
+        with self._lock:
+            self._translation_cache.cache.clear()
         log_message("Translation cache cleared", verbose=verbose)
 
     def clear_manga_ocr_cache(self, verbose: bool = False) -> None:
         """Clear manga-ocr cache."""
-        self._manga_ocr_cache.cache.clear()
+        with self._lock:
+            self._manga_ocr_cache.cache.clear()
         log_message("manga-ocr cache cleared", verbose=verbose)
 
     def clear_upscale_cache(self, verbose: bool = False) -> None:
         """Clear upscaling cache."""
-        self._upscale_cache.cache.clear()
+        with self._lock:
+            self._upscale_cache.cache.clear()
         log_message("Upscale cache cleared", verbose=verbose)
 
     def clear_inpaint_cache(self, verbose: bool = False) -> None:
         """Clear inpainting cache."""
-        self._inpaint_cache.cache.clear()
+        with self._lock:
+            self._inpaint_cache.cache.clear()
         log_message("Inpaint cache cleared", verbose=verbose)
 
     def clear_all(self) -> None:
         """Clear all caches."""
-        self.clear_yolo_cache(verbose=False)
-        self.clear_sam_cache(verbose=False)
-        self.clear_translation_cache(verbose=False)
-        self.clear_manga_ocr_cache(verbose=False)
-        self.clear_upscale_cache(verbose=False)
-        self.clear_inpaint_cache(verbose=False)
+        with self._lock:
+            self._yolo_cache.cache.clear()
+            self._sam_cache.cache.clear()
+            self._translation_cache.cache.clear()
+            self._manga_ocr_cache.cache.clear()
+            self._upscale_cache.cache.clear()
+            self._inpaint_cache.cache.clear()
         log_message("All caches cleared", always_print=True)
 
     def set_current_image(self, image: Image.Image, verbose: bool = False) -> None:
@@ -546,20 +567,23 @@ class UnifiedCache:
         """
         image_hash = self._hash_image(image)
 
-        if self._current_image_hash is None:
-            # First image
-            self._current_image_hash = image_hash
-            log_message("Cache initialized for new image", verbose=verbose)
-        elif self._current_image_hash != image_hash:
-            # Different image detected - clear all caches
-            log_message(
-                "Different image detected - clearing all caches", verbose=verbose
-            )
-            self.clear_all()
-            self._current_image_hash = image_hash
-        else:
-            # Same image - no action needed
-            log_message("Same image detected - reusing caches", verbose=verbose)
+        with self._lock:
+            if self._current_image_hash is None:
+                self._current_image_hash = image_hash
+                log_message("Cache initialized for new image", verbose=verbose)
+            elif self._current_image_hash != image_hash:
+                log_message(
+                    "Different image detected - clearing all caches", verbose=verbose
+                )
+                self._yolo_cache.cache.clear()
+                self._sam_cache.cache.clear()
+                self._translation_cache.cache.clear()
+                self._manga_ocr_cache.cache.clear()
+                self._upscale_cache.cache.clear()
+                self._inpaint_cache.cache.clear()
+                self._current_image_hash = image_hash
+            else:
+                log_message("Same image detected - reusing caches", verbose=verbose)
 
     def get_cache_stats(self) -> dict:
         """Get statistics about cache sizes.
@@ -567,26 +591,30 @@ class UnifiedCache:
         Returns:
             dict: Cache statistics
         """
-        return {
-            "yolo": len(self._yolo_cache.cache),
-            "sam": len(self._sam_cache.cache),
-            "translation": len(self._translation_cache.cache),
-            "manga_ocr": len(self._manga_ocr_cache.cache),
-            "upscale": len(self._upscale_cache.cache),
-            "inpaint": len(self._inpaint_cache.cache),
-        }
+        with self._lock:
+            return {
+                "yolo": len(self._yolo_cache.cache),
+                "sam": len(self._sam_cache.cache),
+                "translation": len(self._translation_cache.cache),
+                "manga_ocr": len(self._manga_ocr_cache.cache),
+                "upscale": len(self._upscale_cache.cache),
+                "inpaint": len(self._inpaint_cache.cache),
+            }
 
 
 _global_cache = None
+_global_cache_lock = threading.Lock()
 
 
 def get_cache() -> UnifiedCache:
-    """Get the global cache instance.
+    """Get the global cache instance (thread-safe).
 
     Returns:
         UnifiedCache: The global cache instance
     """
     global _global_cache
     if _global_cache is None:
-        _global_cache = UnifiedCache()
+        with _global_cache_lock:
+            if _global_cache is None:
+                _global_cache = UnifiedCache()
     return _global_cache

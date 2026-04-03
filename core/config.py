@@ -179,6 +179,7 @@ class MangaTranslatorConfig:
     upscaling_only: bool = False
     test_mode: bool = False
     processing_scale: float = 1.0
+    parallel_requests: int = 1
 
     def __post_init__(self):
         # Load API keys from environment variables if not already set
