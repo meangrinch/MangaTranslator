@@ -1558,9 +1558,7 @@ async def _batch_translate_parallel(
     except CancellationError:
         raise
     except Exception as e:
-        log_message(
-            f"Error processing {first_display}: {str(e)}", always_print=True
-        )
+        log_message(f"Error processing {first_display}: {str(e)}", always_print=True)
         results["error_count"] += 1
         results["errors"][first_key] = str(e)
 
@@ -1605,15 +1603,15 @@ async def _batch_translate_parallel(
             return
 
         async with sem:
-            if cancelled or (cancellation_manager and cancellation_manager.is_cancelled()):
+            if cancelled or (
+                cancellation_manager and cancellation_manager.is_cancelled()
+            ):
                 cancelled = True
                 return
 
             loop = asyncio.get_event_loop()
             try:
-                await loop.run_in_executor(
-                    executor, _process_single, img_path, index
-                )
+                await loop.run_in_executor(executor, _process_single, img_path, index)
                 with results_lock:
                     results["success_count"] += 1
                     completed_count += 1
@@ -1643,10 +1641,7 @@ async def _batch_translate_parallel(
                 )
 
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
-        tasks = [
-            _worker(img, i, executor)
-            for i, img in enumerate(remaining, start=1)
-        ]
+        tasks = [_worker(img, i, executor) for i, img in enumerate(remaining, start=1)]
         gathered = await asyncio.gather(*tasks, return_exceptions=True)
 
     for exc in gathered:
