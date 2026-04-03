@@ -244,9 +244,19 @@ def calculate_centroid_expansion_box(
 
     try:
         # Create safe area using distance transform
-        distance_map = cv2.distanceTransform(
-            cleaned_mask, cv2.DIST_L2, cv2.DIST_MASK_PRECISE
+        # Pad mask with a 1-pixel black border so that image edges are treated
+        # as hard boundaries.  Without this, bubbles touching the image border
+        # get inflated distance values (no background pixels beyond the edge),
+        # which pushes the pole-of-inaccessibility anchor to the border and
+        # collapses the safe area to near-zero width/height.
+        padded_mask = np.zeros(
+            (cleaned_mask.shape[0] + 2, cleaned_mask.shape[1] + 2), dtype=np.uint8
         )
+        padded_mask[1:-1, 1:-1] = cleaned_mask
+        distance_map_padded = cv2.distanceTransform(
+            padded_mask, cv2.DIST_L2, cv2.DIST_MASK_PRECISE
+        )
+        distance_map = distance_map_padded[1:-1, 1:-1]
         safe_area_mask = (distance_map >= padding_pixels).astype(np.uint8) * 255
 
         if not np.any(safe_area_mask):
