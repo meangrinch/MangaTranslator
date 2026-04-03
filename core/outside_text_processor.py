@@ -291,7 +291,13 @@ def process_outside_text(
                     verbose=verbose,
                 )
 
-        if inpainting_method == "opencv" or inpainter is None:
+        if inpainting_method == "none":
+            inpainter = None
+            log_message(
+                "Using text background mode (no inpainting for non-solid regions)",
+                verbose=verbose,
+            )
+        elif inpainting_method == "opencv" or inpainter is None:
             inpainter = None
             log_message("Using OpenCV simple fill for inpainting", verbose=verbose)
 
@@ -306,6 +312,7 @@ def process_outside_text(
 
         current_image = pil_image
         temp_files = []
+        none_skipped_clip_bboxes = set()
         try:
             if mask_groups:
                 base_seed = (
@@ -317,6 +324,7 @@ def process_outside_text(
                 extracted_text_colors = {}
                 flux_inpaints = 0
                 cv2_inpaints = 0
+                none_skips = 0
                 for i, group in enumerate(mask_groups):
                     log_message(
                         f"Inpainting outside text region {i + 1}/{len(mask_groups)}",
@@ -581,6 +589,16 @@ def process_outside_text(
                         cv2_inpaints += 1
                         continue
 
+                    if inpainting_method == "none":
+                        if composite_clip_bbox:
+                            none_skipped_clip_bboxes.add(composite_clip_bbox)
+                        none_skips += 1
+                        log_message(
+                            f"Skipping inpaint for non-solid OSB region {i + 1} (none mode)",
+                            verbose=verbose,
+                        )
+                        continue
+
                     flux_failed = False
                     flux_fail_reason = None
                     inpainted_image = None
@@ -657,8 +675,14 @@ def process_outside_text(
                         current_image = inpainted_image
 
                 log_message("Outside text inpainting completed", verbose=verbose)
+                parts = [
+                    f"Flux: {flux_inpaints}",
+                    f"CV2: {cv2_inpaints}",
+                ]
+                if none_skips:
+                    parts.append(f"Skipped (none): {none_skips}")
                 log_message(
-                    f"Inpainted {len(mask_groups)} outside text regions (Flux: {flux_inpaints}, CV2: {cv2_inpaints})",
+                    f"Inpainted {len(mask_groups)} outside text regions ({', '.join(parts)})",
                     always_print=True,
                 )
         finally:
@@ -736,6 +760,16 @@ def process_outside_text(
             h = max(1, y2 - y1)
             aspect_ratio = float(h) / float(w)
 
+            needs_text_bg = False
+            if none_skipped_clip_bboxes:
+                bcx = (x1 + x2) / 2
+                bcy = (y1 + y2) / 2
+                for clip_bbox in none_skipped_clip_bboxes:
+                    cx1, cy1, cx2, cy2 = clip_bbox
+                    if cx1 <= bcx <= cx2 and cy1 <= bcy <= cy2:
+                        needs_text_bg = True
+                        break
+
             try:
                 is_success, buffer = cv2.imencode(cv2_ext, outside_text_image_cv)
                 if is_success:
@@ -751,6 +785,7 @@ def process_outside_text(
                             "is_dark_text": original_text_colors.get(bbox_tuple, True),
                             "text_color_rgb": extracted_text_colors.get(bbox_tuple),
                             "aspect_ratio": aspect_ratio,
+                            "needs_text_background": needs_text_bg,
                             "original_crop_pil": original_crop_pil,
                         }
                     )

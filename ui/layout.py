@@ -1329,6 +1329,7 @@ def create_layout(
                                         ("Flux.2 Klein 4B", "flux_klein_4b"),
                                         ("Flux.1 Kontext (12B)", "flux_kontext"),
                                         ("OpenCV", "opencv"),
+                                        ("None (text background)", "none"),
                                     ],
                                     label="Inpainting Method",
                                     info=(
@@ -1442,7 +1443,7 @@ def create_layout(
                                         "outside_text_inpainting_method",
                                         "flux_klein_4b",
                                     )
-                                    != "opencv",
+                                    not in ("opencv", "none"),
                                 )
                                 inpaint_colored_bubbles = gr.Checkbox(
                                     value=saved_settings.get(
@@ -1457,7 +1458,7 @@ def create_layout(
                                         "outside_text_inpainting_method",
                                         "flux_klein_4b",
                                     )
-                                    != "opencv",
+                                    not in ("opencv", "none"),
                                 )
 
                                 gr.Markdown("### Font Rendering")
@@ -2309,6 +2310,8 @@ def create_layout(
         ):
             """Update controls based on inpainting method selection."""
             is_opencv = method == "opencv"
+            is_none = method == "none"
+            is_no_flux = is_opencv or is_none
             is_kontext = method == "flux_kontext"
             is_klein = method in ("flux_klein_9b", "flux_klein_4b")
 
@@ -2316,7 +2319,6 @@ def create_layout(
                 max_steps = 30
                 default_steps = 8
             else:
-                # Klein or OpenCV - use Klein defaults (OpenCV ignores steps anyway)
                 max_steps = 12
                 default_steps = 4
 
@@ -2327,14 +2329,14 @@ def create_layout(
                 gr.update(visible=is_kontext),
                 gr.update(visible=show_low_vram),
                 gr.update(
-                    interactive=(not is_opencv),
+                    interactive=(not is_no_flux),
                     maximum=max_steps,
                     value=default_steps,
                 ),
                 gr.update(visible=is_klein),
                 gr.update(interactive=residual_interactive),
-                gr.update(interactive=(not is_opencv)),
-                gr.update(interactive=(not is_opencv)),
+                gr.update(interactive=(not is_no_flux)),
+                gr.update(interactive=(not is_no_flux)),
             )
 
         outside_text_inpainting_method.change(

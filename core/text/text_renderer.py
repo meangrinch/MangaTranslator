@@ -40,6 +40,7 @@ def render_text_skia(
     rotation_deg: float = 0.0,
     vertical_stack: bool = False,
     text_color_rgb: Optional[Tuple[int, int, int]] = None,
+    text_background_color: Optional[Tuple[int, int, int]] = None,
 ) -> Image.Image:
     """
     Fits and renders text within a bounding box using Skia and HarfBuzz.
@@ -270,6 +271,14 @@ def render_text_skia(
         except Exception:
             text_color = skia.ColorBLACK
 
+    skia_bg_color = None
+    if text_background_color is not None:
+        skia_bg_color = skia.Color(
+            text_background_color[0],
+            text_background_color[1],
+            text_background_color[2],
+        )
+
     # Apply supersampling if enabled
     if config.supersampling_factor > 1:
         log_message(
@@ -377,6 +386,7 @@ def render_text_skia(
                 if (rotation_deg and abs(rotation_deg) > 0.01)
                 else 0.0
             ),
+            text_background_color=skia_bg_color,
         )
 
         if not success:
@@ -441,6 +451,7 @@ def render_text_skia(
                 if (rotation_deg and abs(rotation_deg) > 0.01)
                 else 0.0
             ),
+            text_background_color=skia_bg_color,
         )
 
         if not success:

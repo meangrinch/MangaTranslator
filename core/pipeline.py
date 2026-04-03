@@ -1091,6 +1091,22 @@ def translate_and_render(
                             # OSB renders default to horizontal; vertical stacking is fallback-only
                             rotation_deg = 0.0
                             vertical_stack = False
+
+                            text_bg_rgb = None
+                            if bubble.get("needs_text_background"):
+                                if text_color_rgb:
+                                    lum = (
+                                        0.299 * text_color_rgb[0]
+                                        + 0.587 * text_color_rgb[1]
+                                        + 0.114 * text_color_rgb[2]
+                                    )
+                                    text_bg_rgb = (
+                                        (255, 255, 255) if lum < 128 else (0, 0, 0)
+                                    )
+                                else:
+                                    text_bg_rgb = (
+                                        (0, 0, 0) if is_dark_text else (255, 255, 255)
+                                    )
                         else:
                             log_message(
                                 f"Rendering bubble {bbox}: '{text[:30]}...'",
@@ -1172,6 +1188,7 @@ def translate_and_render(
                                     vertical_stack=vertical_stack,
                                     text_color_rgb=text_color_rgb,
                                     raise_on_safe_error=False,
+                                    text_background_color=text_bg_rgb,
                                 )
                                 success = True
                             except Exception as e:
@@ -1205,6 +1222,7 @@ def translate_and_render(
                                             vertical_stack=True,
                                             text_color_rgb=text_color_rgb,
                                             raise_on_safe_error=False,
+                                            text_background_color=text_bg_rgb,
                                         )
                                         log_message(
                                             "Vertical-stack fallback succeeded",

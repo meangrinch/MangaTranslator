@@ -529,7 +529,7 @@ def main():
     parser.add_argument(
         "--osb-inpainting-method",
         type=str,
-        choices=["flux_klein_9b", "flux_klein_4b", "flux_kontext", "opencv"],
+        choices=["flux_klein_9b", "flux_klein_4b", "flux_kontext", "opencv", "none"],
         default="flux_klein_4b",
         help="Inpainting method for outside text removal.",
     )

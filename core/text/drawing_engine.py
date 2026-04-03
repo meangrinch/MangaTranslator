@@ -136,6 +136,7 @@ def draw_layout(
     pre_translate_x: float = 0.0,
     pre_translate_y: float = 0.0,
     pre_rotate_deg: float = 0.0,
+    text_background_color: Optional[int] = None,
 ) -> bool:
     """
     Draws the text layout onto a Skia surface.
@@ -235,6 +236,10 @@ def draw_layout(
                 if abs(pre_rotate_deg) > 1e-3:
                     canvas.rotate(float(pre_rotate_deg))
 
+            bg_paint = None
+            if text_background_color is not None:
+                bg_paint = skia.Paint(AntiAlias=False, Color=text_background_color)
+
             current_baseline_y = first_baseline_y
             for i, line_data in enumerate(final_lines_data):
                 line_width_measured = line_data["width"]
@@ -243,6 +248,17 @@ def draw_layout(
                     block_start_x + (final_max_line_width - line_width_measured) / 2.0
                 )
                 cursor_x = line_start_x
+
+                if bg_paint is not None:
+                    pad_x = final_font_size * 0.1
+                    pad_y = final_font_size * 0.05
+                    rect = skia.Rect.MakeXYWH(
+                        line_start_x - pad_x,
+                        current_baseline_y + final_metrics.fAscent - pad_y,
+                        line_width_measured + 2 * pad_x,
+                        -final_metrics.fAscent + final_metrics.fDescent + 2 * pad_y,
+                    )
+                    canvas.drawRect(rect, bg_paint)
 
                 segments = line_data.get("segments", [])
                 log_message(f"Line {i}: {len(segments)} segments", verbose=verbose)
