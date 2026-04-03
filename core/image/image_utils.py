@@ -174,47 +174,9 @@ def calculate_centroid_expansion_box(
     cleaned_mask: np.ndarray, padding_pixels: float = 5.0, verbose: bool = False
 ) -> Tuple[Tuple[int, int, int, int], Tuple[float, float]]:
     """
-    Calculates guaranteed safe rendering box using the 5-step Distance Transform Insetting Method.
-
-    This function implements a sophisticated algorithm to find the optimal text placement area
-    within a speech bubble, ensuring text never touches the bubble boundaries. The method uses
-    computer vision techniques to create a safe zone for text rendering.
-
-    Algorithm Overview:
-    The 5-step Distance Transform Insetting Method works as follows:
-
-    1. Establish Safe Zone:
-       - Uses cv2.distanceTransform() to compute the distance from each pixel to the nearest
-         bubble edge (0 pixels)
-       - Creates a safe_area_mask where distance >= padding_pixels
-       - This ensures all pixels in the safe zone are at least padding_pixels away from edges
-
-    2. Find Unbiased Anchor:
-       - Calculates the centroid (geometric center) of the safe_area_mask using cv2.moments()
-       - This provides an unbiased starting point for text placement
-       - The centroid represents the "center of mass" of the safe area
-
-    3. Measure Available Space:
-       - Performs ray-casting from the centroid in four cardinal directions (left, right, up, down)
-       - Measures distances to the nearest safe area boundary in each direction
-       - Uses numpy array operations for efficient distance calculation
-
-    4. Calculate Symmetrical Dimensions:
-       - Takes the minimum distance in each axis to ensure the box fits in all directions
-       - Multiplies by 2 to create symmetrical width and height around the centroid
-       - Subtracts 1 pixel margin for safety
-
-    5. Construct Final Box:
-       - Creates a centered rectangle within the safe zone
-       - Ensures the box is completely contained within the original mask bounds
-       - Returns both the box coordinates and the true centroid for precise text positioning
-
-    Why This Approach Works:
-    - Distance Transform provides accurate edge detection and safe zone calculation
-    - Ray-casting ensures the text box never touches bubble boundaries
-    - Centroid-based approach provides natural, visually appealing text placement
-    - Symmetrical dimensions prevent text from appearing off-center
-    - The method handles complex bubble shapes (ovals, irregular polygons, etc.)
+    Calculates a guaranteed safe rendering box within a speech bubble to ensure text
+    never touches the boundaries. It uses distance transforms to establish a safe zone
+    and ray-casts from the center of mass to determine the maximum symmetrical bounds.
 
     Args:
         cleaned_mask: Binary mask (0/255) of the cleaned speech bubble where 255 represents
@@ -243,12 +205,8 @@ def calculate_centroid_expansion_box(
         raise ImageProcessingError("Invalid or empty mask provided")
 
     try:
-        # Create safe area using distance transform
-        # Pad mask with a 1-pixel black border so that image edges are treated
-        # as hard boundaries.  Without this, bubbles touching the image border
-        # get inflated distance values (no background pixels beyond the edge),
-        # which pushes the pole-of-inaccessibility anchor to the border and
-        # collapses the safe area to near-zero width/height.
+        # Treat image edges as hard boundaries. Without this, bubbles touching the border
+        # get inflated distance values, pushing the anchor to the edge and collapsing the safe area.
         padded_mask = np.zeros(
             (cleaned_mask.shape[0] + 2, cleaned_mask.shape[1] + 2), dtype=np.uint8
         )
@@ -267,7 +225,6 @@ def calculate_centroid_expansion_box(
             )
             raise ImageProcessingError("Failed to create safe area mask")
 
-        # Find centroid of safe area
         moments = cv2.moments(safe_area_mask)
 
         if moments["m00"] == 0:
@@ -309,18 +266,15 @@ def calculate_centroid_expansion_box(
             or cx >= mask_w
             or safe_area_mask[cy, cx] != 255
         ):
-            # Centroid is outside safe area, find nearest safe pixel
             safe_pixels = np.argwhere(safe_area_mask == 255)
             if safe_pixels.size == 0:
                 raise ImageProcessingError("No safe pixels found in safe_area_mask")
-            # Find nearest safe pixel to calculated centroid
             distances = np.sqrt(
                 (safe_pixels[:, 0] - centroid_y) ** 2
                 + (safe_pixels[:, 1] - centroid_x) ** 2
             )
             nearest_idx = np.argmin(distances)
             cy, cx = safe_pixels[nearest_idx]
-            # Update centroid to the adjusted position
             centroid_x, centroid_y = float(cx), float(cy)
             centroid = (centroid_x, centroid_y)
 
