@@ -37,6 +37,18 @@ def is_latin_style_language(language_name: str) -> bool:
     return language_name.lower() in latin_style_languages
 
 
+def _is_hangul_character(char: str) -> bool:
+    """Check if a character is Korean Hangul (syllables or jamo)."""
+    if len(char) != 1:
+        return False
+    code = ord(char)
+    return (
+        (0xAC00 <= code <= 0xD7AF)  # Hangul Syllables
+        or (0x1100 <= code <= 0x11FF)  # Hangul Jamo
+        or (0x3130 <= code <= 0x318F)  # Hangul Compatibility Jamo
+    )
+
+
 def is_cjk_character(char: str) -> bool:
     """Check if a character is CJK (Chinese/Japanese/Korean)."""
     if len(char) != 1:
@@ -105,7 +117,12 @@ KINSOKU_NOT_AT_END = set("（【「『〔〈《（［｛([")  # Cannot end a lin
 
 
 def _split_with_cjk_awareness(text: str) -> List[str]:
-    """Split text into tokens. Each CJK char is a token; kinsoku rules apply."""
+    """Split text into tokens. Each CJK char is a token; kinsoku rules apply.
+
+    Hangul (Korean) is excluded from per-character splitting because Korean
+    uses spaces between words — syllables accumulate into word-level tokens
+    like Latin characters, preserving inter-word spacing.
+    """
     tokens: List[str] = []
     current_token = ""
 
@@ -114,7 +131,7 @@ def _split_with_cjk_awareness(text: str) -> List[str]:
             if current_token:
                 tokens.append(current_token)
                 current_token = ""
-        elif is_cjk_character(char):
+        elif is_cjk_character(char) and not _is_hangul_character(char):
             if char in KINSOKU_NOT_AT_START:
                 if current_token:
                     current_token += char
@@ -269,10 +286,12 @@ def try_hyphenate_word(
 
 
 def _is_cjk_token(token: str) -> bool:
-    """Check if token consists entirely of CJK characters."""
+    """Check if token consists entirely of spaceless CJK (Chinese/Japanese, not Hangul)."""
     match = STYLE_PATTERN.match(token)
     content = match.group(2) if match else token
-    return len(content) > 0 and all(is_cjk_character(c) for c in content)
+    return len(content) > 0 and all(
+        is_cjk_character(c) and not _is_hangul_character(c) for c in content
+    )
 
 
 def _needs_space_between(left_token: str, right_token: str) -> bool:
