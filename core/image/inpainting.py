@@ -700,80 +700,82 @@ class FluxKontextInpainter:
 
             required_area = inference_width * inference_height
 
-            if self.backend == "sdnq":
-                # SDNQ: CPU offload handles device management automatically
-                with torch.inference_mode():
-                    gen_device = "cpu" if self.low_vram else self.DEVICE
-                    gen = torch.Generator(device=gen_device).manual_seed(seed)
-                    out = self.pipeline(
-                        prompt=self.prompt,
-                        image=image_scaled_for_inference_pil,
-                        width=inference_width,
-                        height=inference_height,
-                        num_inference_steps=self.num_inference_steps,
-                        guidance_scale=self.guidance_scale,
-                        generator=gen,
-                        output_type="pt",
-                        max_area=required_area,
-                    )
-                    img = out.images[0]
-                    torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
-                    img.clamp_(0, 1)
-                    generated_patch_pil = Image.fromarray(
-                        (
-                            img.mul(255)
-                            .round()
-                            .to(torch.uint8)
-                            .permute(1, 2, 0)
-                            .cpu()
-                            .numpy()
+            # CPU offload moves weights between devices; serialize access across threads
+            with self.manager.flux_inference_lock:
+                if self.backend == "sdnq":
+                    with torch.inference_mode():
+                        gen_device = "cpu" if self.low_vram else self.DEVICE
+                        gen = torch.Generator(device=gen_device).manual_seed(seed)
+                        out = self.pipeline(
+                            prompt=self.prompt,
+                            image=image_scaled_for_inference_pil,
+                            width=inference_width,
+                            height=inference_height,
+                            num_inference_steps=self.num_inference_steps,
+                            guidance_scale=self.guidance_scale,
+                            generator=gen,
+                            output_type="pt",
+                            max_area=required_area,
                         )
-                    )
-            else:
-                # Nunchaku: Manual device management for memory efficiency
-                self.pipeline.text_encoder_2.to(self.DEVICE)
+                        img = out.images[0]
+                        torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
+                        img.clamp_(0, 1)
+                        generated_patch_pil = Image.fromarray(
+                            (
+                                img.mul(255)
+                                .round()
+                                .to(torch.uint8)
+                                .permute(1, 2, 0)
+                                .cpu()
+                                .numpy()
+                            )
+                        )
+                else:
+                    self.pipeline.text_encoder_2.to(self.DEVICE)
 
-                prompt_embeds, pooled_prompt_embeds, _ = self.pipeline.encode_prompt(
-                    prompt=self.prompt,
-                    prompt_2=None,
-                    device=self.DEVICE,
-                )
-
-                self.pipeline.text_encoder_2.to("cpu")
-                empty_cache(self.DEVICE)
-
-                self.pipeline.transformer.to(self.DEVICE)
-
-                with torch.inference_mode():
-                    gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
-                    out = self.pipeline(
-                        prompt_embeds=prompt_embeds,
-                        pooled_prompt_embeds=pooled_prompt_embeds,
-                        image=image_scaled_for_inference_pil,
-                        width=inference_width,
-                        height=inference_height,
-                        num_inference_steps=self.num_inference_steps,
-                        guidance_scale=self.guidance_scale,
-                        generator=gen,
-                        output_type="pt",
-                        max_area=required_area,
-                    )
-                    img = out.images[0]
-                    torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
-                    img.clamp_(0, 1)
-                    generated_patch_pil = Image.fromarray(
-                        (
-                            img.mul(255)
-                            .round()
-                            .to(torch.uint8)
-                            .permute(1, 2, 0)
-                            .cpu()
-                            .numpy()
+                    prompt_embeds, pooled_prompt_embeds, _ = (
+                        self.pipeline.encode_prompt(
+                            prompt=self.prompt,
+                            prompt_2=None,
+                            device=self.DEVICE,
                         )
                     )
 
-                self.pipeline.transformer.to("cpu")
-                empty_cache(self.DEVICE)
+                    self.pipeline.text_encoder_2.to("cpu")
+                    empty_cache(self.DEVICE)
+
+                    self.pipeline.transformer.to(self.DEVICE)
+
+                    with torch.inference_mode():
+                        gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
+                        out = self.pipeline(
+                            prompt_embeds=prompt_embeds,
+                            pooled_prompt_embeds=pooled_prompt_embeds,
+                            image=image_scaled_for_inference_pil,
+                            width=inference_width,
+                            height=inference_height,
+                            num_inference_steps=self.num_inference_steps,
+                            guidance_scale=self.guidance_scale,
+                            generator=gen,
+                            output_type="pt",
+                            max_area=required_area,
+                        )
+                        img = out.images[0]
+                        torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
+                        img.clamp_(0, 1)
+                        generated_patch_pil = Image.fromarray(
+                            (
+                                img.mul(255)
+                                .round()
+                                .to(torch.uint8)
+                                .permute(1, 2, 0)
+                                .cpu()
+                                .numpy()
+                            )
+                        )
+
+                    self.pipeline.transformer.to("cpu")
+                    empty_cache(self.DEVICE)
 
             patch_pil = generated_patch_pil.resize(
                 (width, height), Image.Resampling.LANCZOS
@@ -1219,18 +1221,19 @@ class FluxKleinInpainter:
 
             log_message("  - Running inference...", verbose=verbose)
 
-            with torch.inference_mode():
-                gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
-                out = self.pipeline(
-                    prompt=self.KLEIN_PROMPT,
-                    image=inference_image,
-                    height=inference_h,
-                    width=inference_w,
-                    guidance_scale=self.KLEIN_GUIDANCE_SCALE,
-                    num_inference_steps=self.num_inference_steps,
-                    generator=gen,
-                )
-                generated_patch_pil = out.images[0]
+            with self.manager.flux_inference_lock:
+                with torch.inference_mode():
+                    gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
+                    out = self.pipeline(
+                        prompt=self.KLEIN_PROMPT,
+                        image=inference_image,
+                        height=inference_h,
+                        width=inference_w,
+                        guidance_scale=self.KLEIN_GUIDANCE_SCALE,
+                        num_inference_steps=self.num_inference_steps,
+                        generator=gen,
+                    )
+                    generated_patch_pil = out.images[0]
 
             if (inference_w, inference_h) != (width, height):
                 patch_pil = generated_patch_pil.resize(

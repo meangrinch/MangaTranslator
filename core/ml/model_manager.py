@@ -79,6 +79,9 @@ class ModelManager:
             self.flux_hf_token = None
             self.flux_residual_diff_threshold = 0.15
 
+            # Serializes Flux pipeline inference across threads (CPU offload is not thread-safe)
+            self.flux_inference_lock = threading.Lock()
+
             self._initialized = True
             log_message(
                 f"Model Manager initialized on device: {self.device}", always_print=True
