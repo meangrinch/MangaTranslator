@@ -1706,6 +1706,8 @@ def batch_translate_images(
             if f.is_file() and f.suffix.lower() in image_extensions
         ]
 
+    image_files.sort(key=lambda p: p.name.lower())
+
     if not image_files:
         log_message(f"No image files found in '{input_dir}'", always_print=True)
         return {"success_count": 0, "error_count": 0, "errors": {}}
