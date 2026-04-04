@@ -136,7 +136,7 @@ def main():
         "--model-name",
         type=str,
         default=None,
-        help="Model name for the selected provider (e.g., 'gemini-2.5-flash'). "
+        help="Model name for the selected provider (e.g., 'gemini-3.1-flash-lite-preview'). "
         "If not provided, a default will be attempted based on the provider.",
     )
     parser.add_argument(
@@ -725,12 +725,12 @@ def main():
         api_key = args.google_api_key or os.environ.get("GOOGLE_API_KEY")
         api_key_arg_name = "--google-api-key"
         api_key_env_var = "GOOGLE_API_KEY"
-        default_model = "gemini-3-flash-preview"
+        default_model = "gemini-3.1-flash-lite-preview"
     elif provider == "OpenAI":
         api_key = args.openai_api_key or os.environ.get("OPENAI_API_KEY")
         api_key_arg_name = "--openai-api-key"
         api_key_env_var = "OPENAI_API_KEY"
-        default_model = "gpt-5.2-2025-12-11"
+        default_model = "gpt-5.4-nano-2026-03-17"
     elif provider == "Anthropic":
         api_key = args.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
         api_key_arg_name = "--anthropic-api-key"
@@ -740,17 +740,17 @@ def main():
         api_key = args.xai_api_key or os.environ.get("XAI_API_KEY")
         api_key_arg_name = "--xai-api-key"
         api_key_env_var = "XAI_API_KEY"
-        default_model = "grok-4-1-fast-reasoning"
+        default_model = "grok-4.20-0309-reasoning"
     elif provider == "DeepSeek":
         api_key = args.deepseek_api_key or os.environ.get("DEEPSEEK_API_KEY")
         api_key_arg_name = "--deepseek-api-key"
         api_key_env_var = "DEEPSEEK_API_KEY"
-        default_model = "deepseek-chat"
+        default_model = "deepseek-reasoner"
     elif provider == "Z.ai":
         api_key = args.zai_api_key or os.environ.get("ZAI_API_KEY")
         api_key_arg_name = "--zai-api-key"
         api_key_env_var = "ZAI_API_KEY"
-        default_model = "glm-4.6v"
+        default_model = "glm-5v-turbo"
     elif provider == "Moonshot AI":
         api_key = args.moonshot_api_key or os.environ.get("MOONSHOT_API_KEY")
         api_key_arg_name = "--moonshot-api-key"
@@ -760,7 +760,7 @@ def main():
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
         api_key_env_var = "OPENROUTER_API_KEY"
-        default_model = "openrouter/auto"
+        default_model = "google/gemini-3.1-flash-lite-preview"
     elif provider == "OpenAI-Compatible":
         compatible_url = args.openai_compatible_url
         api_key = args.openai_compatible_api_key or os.environ.get(
