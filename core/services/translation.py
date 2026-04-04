@@ -33,7 +33,12 @@ from utils.model_metadata import (
     get_gpt5_generation,
     get_max_tokens_cap,
     is_46_model,
+    is_anthropic_reasoning_model,
     is_deepseek_reasoning_model,
+    is_gemini_25_flash_model,
+    is_gemini_25_pro_model,
+    is_gemini_3_model,
+    is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
     is_openai_compatible_reasoning_model,
@@ -176,12 +181,7 @@ You must use the following markdown-style markers to convey emphasis:
 
 def _is_reasoning_model_google(model_name: str) -> bool:
     """Check if a Google model is reasoning-capable."""
-    name = model_name or ""
-    return (
-        name.startswith("gemini-2.5")
-        or "gemini-2.5" in name
-        or "gemini-3" in name.lower()
-    )
+    return is_google_reasoning_model(model_name)
 
 
 def _is_reasoning_model_openai(model_name: str) -> bool:
@@ -191,13 +191,7 @@ def _is_reasoning_model_openai(model_name: str) -> bool:
 
 def _is_reasoning_model_anthropic(model_name: str) -> bool:
     """Check if an Anthropic model is reasoning-capable."""
-    lm = (model_name or "").lower()
-    reasoning_prefixes = [
-        "claude-opus-4",
-        "claude-sonnet-4",
-        "claude-haiku-4-5",
-    ]
-    return any(lm.startswith(p) for p in reasoning_prefixes)
+    return is_anthropic_reasoning_model(model_name)
 
 
 def _add_media_resolution_to_part(
@@ -290,7 +284,7 @@ def _build_generation_config(
         max_tokens_value = max_tokens_cap
 
     if provider == "Google":
-        is_gemini_3 = "gemini-3" in model_name.lower()
+        is_gemini_3 = is_gemini_3_model(model_name)
         generation_config = {
             "temperature": temperature,
             "topP": top_p,
@@ -317,8 +311,8 @@ def _build_generation_config(
             )
         elif _is_reasoning_model_google(model_name) and not is_gemini_3:
             reasoning_effort = config.reasoning_effort or "auto"
-            is_flash = "gemini-2.5-flash" in model_name.lower()
-            is_pro = "gemini-2.5-pro" in model_name.lower()
+            is_flash = is_gemini_25_flash_model(model_name)
+            is_pro = is_gemini_25_pro_model(model_name)
             if reasoning_effort == "none":
                 if is_flash:
                     generation_config["thinkingConfig"] = {"thinkingBudget": 0}
@@ -457,7 +451,7 @@ def _build_generation_config(
             "claude-"
         )
         is_grok_model = "grok-4" in model_lower
-        is_gemini_3 = "gemini-3" in model_lower
+        is_gemini_3 = is_gemini_3_model(model_name)
 
         generation_config = {
             "temperature": temperature,
@@ -475,13 +469,8 @@ def _build_generation_config(
         is_gpt5_model = is_openai_model and is_gpt5_series(model_name)
         is_gpt5_1 = is_openai_model and "gpt-5.1" in model_lower
         is_gpt5 = is_openai_model and "gpt-5" in model_lower and not is_gpt5_1
-        # For OpenRouter, Anthropic models use dots (4.5) not hyphens (4-5)
-        is_anthropic_reasoning = is_anthropic_model and (
-            "claude-opus-4" in model_lower
-            or "claude-sonnet-4" in model_lower
-            or "claude-haiku-4.5" in model_lower
-        )
-        # For OpenRouter, Grok models don't have "reasoning" in the name (e.g., "grok-4.1-fast")
+        is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
+        # On OpenRouter, Grok models lack explicit "reasoning" tags (e.g. "grok-4.1-fast")
         is_grok_reasoning = is_grok_model and "non-reasoning" not in model_lower
 
         # Add metadata flags for OpenRouter endpoint to avoid re-parsing model names
@@ -1095,7 +1084,6 @@ def _perform_llm_ocr(
     images_b64: List[str],
     mime_types: List[str],
     ocr_prompt: str,
-    is_gemini_3: bool,
     provider: str,
     input_language: Optional[str],
     reading_direction: str,
@@ -1108,7 +1096,6 @@ def _perform_llm_ocr(
         images_b64: List of base64-encoded images
         mime_types: List of MIME types for each image
         ocr_prompt: OCR prompt text
-        is_gemini_3: Whether model is Gemini 3
         provider: Provider name
         input_language: Input language
         reading_direction: Reading direction
@@ -1123,7 +1110,7 @@ def _perform_llm_ocr(
         mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
         bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
         supports_per_part_res = (
-            provider == "Google" and "gemini-3" in config.model_name.lower()
+            provider == "Google" and is_gemini_3_model(config.model_name)
         ) or provider == "xAI"
         if supports_per_part_res:
             bubble_part = _add_media_resolution_to_part(
@@ -1230,7 +1217,7 @@ def call_translation_api_batch(
         return cached_translation
 
     model_name = config.model_name
-    is_gemini_3 = provider == "Google" and "gemini-3" in model_name.lower()
+    is_gemini_3 = provider == "Google" and is_gemini_3_model(model_name)
     supports_per_part_res = is_gemini_3 or provider == "xAI"
 
     base_parts = []
@@ -1288,7 +1275,6 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
                     images_b64,
                     mime_types,
                     ocr_prompt,
-                    is_gemini_3,
                     provider,
                     input_language,
                     reading_direction,

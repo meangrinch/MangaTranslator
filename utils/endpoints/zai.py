@@ -65,10 +65,10 @@ def call_zai_endpoint(
 
     # Check if this is a vision model
     model_lower = (model_name or "").lower()
-    is_vision_model = "glm-4.5v" in model_lower or "glm-4.6v" in model_lower
+    is_vision_model = model_lower.endswith("v") or "v-" in model_lower
 
     if image_parts and is_vision_model:
-        # Build multimodal content for vision models (glm-4.5v / glm-4.6v)
+        # Build multimodal content for vision models
         user_content = []
         for part in image_parts:
             if (

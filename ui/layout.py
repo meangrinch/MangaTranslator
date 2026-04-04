@@ -896,12 +896,10 @@ def create_layout(
 
                             # Compute initial visibility for enable_code_execution
                             _initial_enable_code_execution_visible = (
-                                config_initial_provider == "Google"
-                                and config_initial_model_name
-                                and "gemini-3" in config_initial_model_name.lower()
-                                and "flash" in config_initial_model_name.lower()
-                                and "flash-lite"
-                                not in config_initial_model_name.lower()
+                                utils.is_code_execution_visible(
+                                    config_initial_provider,
+                                    config_initial_model_name,
+                                )
                             )
 
                             enable_code_execution_checkbox = gr.Checkbox(
@@ -916,13 +914,16 @@ def create_layout(
                                 elem_id="enable_code_execution_checkbox",
                             )
 
-                            # Compute initial visibility for media_resolution (Google provider only, but NOT Gemini 3)
-                            _is_gemini_3 = (
-                                config_initial_model_name
-                                and "gemini-3" in config_initial_model_name.lower()
+                            # Compute initial visibility for media_resolution (Google provider only, but NOT Gemini 3/xAI)
+                            _mr_bubbles_visible_init, _, _ = (
+                                utils.get_media_resolution_config(
+                                    config_initial_provider,
+                                    config_initial_model_name,
+                                )
                             )
                             _initial_media_resolution_visible = (
-                                config_initial_provider == "Google" and not _is_gemini_3
+                                config_initial_provider == "Google"
+                                and not _mr_bubbles_visible_init
                             )
                             initial_media_resolution_value = saved_settings.get(
                                 "media_resolution", "auto"

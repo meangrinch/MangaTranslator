@@ -1738,7 +1738,7 @@ def handle_ocr_method_change(
             updates.append(model_update)
         elif provider == "Z.ai":
             # For LLM OCR mode, only show Z.ai vision models
-            models = ["glm-4.5v", "glm-4.6v"]
+            models = [m for m in settings_manager.PROVIDER_MODELS.get("Z.ai", []) if "v" in m]
             saved_settings = settings_manager.get_saved_settings()
             provider_models_dict = saved_settings.get(
                 "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
