@@ -926,7 +926,7 @@ def main():
             enable_page_number_filtering=args.osb_filter_page_numbers,
             page_filter_margin_threshold=args.osb_page_filter_margin,
             page_filter_min_area_ratio=args.osb_page_filter_min_area,
-            huggingface_token=args.osb_huggingface_token
+            huggingface_token=args.osb_hf_token
             or os.environ.get("HF_TOKEN", ""),
             inpainting_method=args.osb_inpainting_method,
             kontext_backend=args.osb_kontext_backend,
