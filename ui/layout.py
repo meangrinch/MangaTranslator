@@ -376,9 +376,7 @@ def create_layout(
                         batch_parallel_requests = gr.Slider(
                             minimum=1,
                             maximum=10,
-                            value=int(
-                                saved_settings.get("batch_parallel_requests", 1)
-                            ),
+                            value=int(saved_settings.get("batch_parallel_requests", 1)),
                             step=1,
                             label="Parallel Requests",
                             info="Number of images to process simultaneously",
@@ -914,7 +912,7 @@ def create_layout(
                                 elem_id="enable_code_execution_checkbox",
                             )
 
-                            # Compute initial visibility for media_resolution (Google provider only, but NOT Gemini 3/xAI)
+                            # Compute initial visibility for media_resolution (Google/xAI providers only)
                             _mr_bubbles_visible_init, _, _ = (
                                 utils.get_media_resolution_config(
                                     config_initial_provider,
