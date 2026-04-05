@@ -320,7 +320,7 @@ def main():
     parser.add_argument(
         "--max-font-size",
         type=int,
-        default=15,
+        default=16,
         help="Max font size for rendering text (px)",
     )
     parser.add_argument(
@@ -389,7 +389,7 @@ def main():
     parser.add_argument(
         "--supersampling-factor",
         type=int,
-        default=3,
+        default=4,
         help="Render text at Nx resolution then downscale for smoother edges (1-4). "
         "Higher values improve quality but use slightly more memory. 1 = disabled.",
     )
@@ -559,7 +559,7 @@ def main():
     parser.add_argument(
         "--osb-flux-steps",
         type=int,
-        default=8,
+        default=4,
         help=(
             "Number of denoising steps for Flux models. "
             "Klein: 4 is recommended (1-12). "
