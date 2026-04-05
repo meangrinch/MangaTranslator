@@ -6,6 +6,7 @@ __pycache__/
 /.venv/
 /runtime/
 /deps/
+/tests/
 start-webui.bat
 start-webui.sh
 *.otf
@@ -24,3 +25,4 @@ start-webui.sh
 Thumbs.db
 /.vscode/
 *.log
+*.txt
