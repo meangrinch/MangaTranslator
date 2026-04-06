@@ -109,6 +109,20 @@ def sort_panels_by_reading_order(panels, reading_direction="rtl"):
             row_candidates.sort(key=lambda x: x[0])
             row_cand = row_candidates[0][1]
 
+        # Veto ceiling for row_cand to prevent jumping to bottom of previous column
+        if row_cand:
+            is_blocked = False
+            for other in candidates:
+                if other["id"] == row_cand["id"]:
+                    continue
+                is_above = other["bbox"][3] <= (row_cand["bbox"][1] + 50)
+                x_overlap = _iou_x(other["bbox"], row_cand["bbox"])
+                if is_above and x_overlap > 0.2:
+                    is_blocked = True
+                    break
+            if is_blocked:
+                row_cand = None
+
         # Dual veto: ceiling (topological) + right-neighbor (row start)
         if col_cand:
             is_blocked = False
@@ -140,7 +154,11 @@ def sort_panels_by_reading_order(panels, reading_direction="rtl"):
             curr_h = c_box[3] - c_box[1]
             bottom_diff = abs(c_box[3] - row_cand["bbox"][3])
             is_row_aligned = bottom_diff < (curr_h * 0.25)
-            next_node = row_cand if is_row_aligned else col_cand
+
+            if col_cand["bbox"][1] >= row_cand["bbox"][3]:
+                next_node = row_cand
+            else:
+                next_node = row_cand if is_row_aligned else col_cand
 
         if not next_node:
             # Recompute roots among remaining nodes to find a new entry.
