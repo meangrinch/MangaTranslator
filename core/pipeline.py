@@ -43,6 +43,7 @@ from .services.translation import (
     call_translation_api_batch,
     prepare_bubble_images_for_translation,
 )
+from .text.placeholders import generate_test_placeholders
 from .text.text_processing import is_latin_style_language
 from .text.text_renderer import render_text_skia
 
@@ -886,79 +887,19 @@ def translate_and_render(
                     log_message("No valid bubbles after sorting", always_print=True)
                 else:
                     if getattr(config, "test_mode", False):
-                        placeholder_long = "Lorem **ipsum** *dolor* sit amet, consectetur adipiscing elit."
-                        placeholder_short = "Lorem **ipsum** *dolor* sit amet..."
-                        placeholder_osb = "Lorem"
-                        log_message(
-                            f"Test mode: generating placeholders for {len(sorted_bubble_data)} bubbles",
-                            always_print=True,
+                        translated_texts = generate_test_placeholders(
+                            sorted_bubble_data=sorted_bubble_data,
+                            processed_bubbles_info=processed_bubbles_info,
+                            pil_cleaned_image=pil_cleaned_image,
+                            config=config,
+                            main_min_font=main_min_font,
+                            main_max_font=main_max_font,
+                            osb_min_font=osb_min_font,
+                            osb_max_font=osb_max_font,
+                            padding_pixels=padding_pixels,
+                            osb_outline_width=osb_outline_width,
+                            verbose=verbose,
                         )
-                        # Map for rendering info used in probe
-                        bubble_render_info_map_probe = {
-                            tuple(info["bbox"]): {
-                                "color": info["color"],
-                                "mask": info.get("mask"),
-                            }
-                            for info in processed_bubbles_info
-                            if "bbox" in info and "color" in info and "mask" in info
-                        }
-                        for i, bubble in enumerate(sorted_bubble_data):
-                            bbox = bubble["bbox"]
-                            is_outside_text = bubble.get("is_outside_text", False)
-
-                            # Use simple "Lorem ipsum" for OSB text in test mode
-                            if is_outside_text:
-                                translated_texts.append(placeholder_osb)
-                                continue
-
-                            probe_info = bubble_render_info_map_probe.get(
-                                tuple(bbox), {}
-                            )
-                            bubble_color_bgr = probe_info.get("color", (255, 255, 255))
-                            cleaned_mask = probe_info.get("mask")
-                            # Probe fit at max size without mutating the working image
-                            _probe_canvas = pil_cleaned_image.copy()
-                            probe_config = RenderingConfig(
-                                min_font_size=main_max_font,
-                                max_font_size=main_max_font,
-                                line_spacing_mult=config.rendering.line_spacing_mult,
-                                use_subpixel_rendering=config.rendering.use_subpixel_rendering,
-                                font_hinting=config.rendering.font_hinting,
-                                use_ligatures=config.rendering.use_ligatures,
-                                hyphenate_before_scaling=config.rendering.hyphenate_before_scaling,
-                                hyphen_penalty=config.rendering.hyphen_penalty,
-                                hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
-                                badness_exponent=config.rendering.badness_exponent,
-                                padding_pixels=padding_pixels,
-                                supersampling_factor=1,  # No supersampling for probe
-                            )
-                            try:
-                                _ = render_text_skia(
-                                    pil_image=_probe_canvas,
-                                    text=placeholder_long,
-                                    bbox=bbox,
-                                    font_dir=config.rendering.font_dir,
-                                    cleaned_mask=cleaned_mask,
-                                    bubble_color_bgr=bubble_color_bgr,
-                                    config=probe_config,
-                                    verbose=verbose,
-                                    bubble_id=str(i + 1),
-                                )
-                                fits = True
-                            except (RenderingError, FontError) as e:
-                                log_message(
-                                    f"Probe rendering failed: {e}", verbose=verbose
-                                )
-                                fits = False
-                            except Exception as e:
-                                log_message(
-                                    f"Probe rendering unexpected error: {e}",
-                                    always_print=True,
-                                )
-                                fits = False
-                            translated_texts.append(
-                                placeholder_long if fits else placeholder_short
-                            )
                     else:
                         log_message(
                             f"Translating {len(bubble_images_b64)} bubbles: "
@@ -1209,7 +1150,6 @@ def translate_and_render(
                                         log_message(
                                             "OSB render failed, retrying with vertical-stack fallback",
                                             verbose=verbose,
-                                            always_print=True,
                                         )
                                         rendered_image = render_text_skia(
                                             pil_image=pil_cleaned_image,

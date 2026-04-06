@@ -559,7 +559,7 @@ def find_optimal_layout(
         bubble_desc = f"bubble {bubble_id}" if bubble_id else "bubble"
         log_message(
             f"Shrinking text in {bubble_desc} to size {best_fit_size}",
-            always_print=True,
+            verbose=verbose,
         )
 
     return {

@@ -412,6 +412,7 @@ def render_text_skia(
             f"Rendered at size {layout_data['font_size']} with {factor}x supersampling",
             verbose=verbose,
         )
+        final_pil_image.info["font_size"] = layout_data["font_size"]
         return final_pil_image
     else:
         # Normal rendering path (no supersampling)
@@ -464,4 +465,5 @@ def render_text_skia(
             raise RenderingError(f"Final conversion failed: {e}") from e
 
         log_message(f"Rendered at size {layout_data['font_size']}", verbose=verbose)
+        final_pil_image.info["font_size"] = layout_data["font_size"]
         return final_pil_image
