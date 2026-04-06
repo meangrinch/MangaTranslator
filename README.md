@@ -219,7 +219,7 @@ python main.py --input <folder_path> --batch \
 # Single Image, Japanese → English (Google), OSB text pipeline, custom OSB text font
 python main.py --input <image_path> \
   --font-dir "fonts/Komika" --provider Google --google-api-key <AI...> \
-  --osb-enable --osb-font-name "fonts/fast_action"
+  --osb-enable --osb-font-dir "fonts/Clementine"
 
 # Cleaning-only mode (no translation/text rendering)
 python main.py --input <image_path> --cleaning-only

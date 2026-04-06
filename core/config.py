@@ -133,7 +133,7 @@ class OutsideTextConfig:
     )
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6
-    osb_font_name: Optional[str] = None  # None = use main font as fallback
+    osb_font_dir: Optional[str] = None  # None = use main font as fallback
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
     osb_use_ligatures: bool = False

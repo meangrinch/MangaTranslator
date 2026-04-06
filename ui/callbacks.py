@@ -214,7 +214,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             page_filter_min_area_ratio=float(
                 outside_text_page_filter_min_area_ratio_val
             ),
-            osb_font_name=outside_text_osb_font_pack_val,
+            osb_font_dir=outside_text_osb_font_pack_val,
             osb_max_font_size=int(outside_text_osb_max_font_size_val),
             osb_min_font_size=int(outside_text_osb_min_font_size_val),
             osb_use_ligatures=outside_text_osb_use_ligatures_val,
@@ -435,10 +435,10 @@ def _format_single_success_message(
 
     if (
         backend_config.outside_text.enabled
-        and backend_config.outside_text.osb_font_name
+        and backend_config.outside_text.osb_font_dir
     ):
-        osb_font_name = Path(backend_config.outside_text.osb_font_name).name
-        msg_parts.append(f"• OSB Font Pack: {osb_font_name}\n")
+        osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
+        msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
 
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(
@@ -593,10 +593,10 @@ def _format_batch_success_message(
 
     if (
         backend_config.outside_text.enabled
-        and backend_config.outside_text.osb_font_name
+        and backend_config.outside_text.osb_font_dir
     ):
-        osb_font_name = Path(backend_config.outside_text.osb_font_name).name
-        msg_parts.append(f"• OSB Font Pack: {osb_font_name}\n")
+        osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
+        msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
 
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(
@@ -1010,7 +1010,7 @@ def handle_save_config_click(*args: Any) -> str:
             page_filter_min_area_ratio=float(
                 outside_text_page_filter_min_area_ratio_val
             ),
-            osb_font_name=outside_text_osb_font_pack_val,
+            osb_font_dir=outside_text_osb_font_pack_val,
             osb_max_font_size=int(outside_text_osb_max_font_size_val),
             osb_min_font_size=int(outside_text_osb_min_font_size_val),
             osb_use_ligatures=outside_text_osb_use_ligatures_val,
@@ -1324,7 +1324,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
             interactive=default_ui_state.outside_text.enable_page_number_filtering,
         ),
         default_ui_state.outside_text.huggingface_token,
-        gr.update(value=default_ui_state.outside_text.osb_font_name),
+        gr.update(value=default_ui_state.outside_text.osb_font_dir),
         default_ui_state.outside_text.osb_max_font_size,
         default_ui_state.outside_text.osb_min_font_size,
         default_ui_state.outside_text.osb_use_ligatures,

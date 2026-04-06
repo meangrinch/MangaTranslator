@@ -115,8 +115,8 @@ def generate_test_placeholders(
             test_text = text_tier.upper() if is_outside_text else text_tier
 
             font_dir = (
-                config.outside_text.osb_font_name
-                if is_outside_text and config.outside_text.osb_font_name
+                config.outside_text.osb_font_dir
+                if is_outside_text and config.outside_text.osb_font_dir
                 else config.rendering.font_dir
             )
 

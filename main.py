@@ -586,10 +586,10 @@ def main():
         help="Seed for reproducible inpainting (-1 = random)",
     )
     parser.add_argument(
-        "--osb-font-name",
+        "--osb-font-dir",
         type=str,
         default=None,
-        help="Font name for OSB text rendering (default: use main font)",
+        help="Font pack directory for OSB text rendering (default: use main font)",
     )
     parser.add_argument(
         "--osb-max-font-size",
@@ -936,7 +936,7 @@ def main():
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
             osb_confidence=args.osb_confidence,
             seed=args.osb_seed,
-            osb_font_name=args.osb_font_name,
+            osb_font_dir=args.osb_font_dir,
             osb_max_font_size=args.osb_max_font_size,
             osb_min_font_size=args.osb_min_font_size,
             osb_use_ligatures=args.osb_use_ligatures,

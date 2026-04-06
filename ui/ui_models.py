@@ -129,7 +129,7 @@ class UIOutsideTextSettings:
     )
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6
-    osb_font_name: str = ""  # Empty = use main font
+    osb_font_dir: str = ""  # Empty = use main font
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
     osb_use_ligatures: bool = False
@@ -264,7 +264,7 @@ class UIConfigState:
             "outside_text_enable_page_number_filtering": self.outside_text.enable_page_number_filtering,
             "outside_text_page_filter_margin_threshold": self.outside_text.page_filter_margin_threshold,
             "outside_text_page_filter_min_area_ratio": self.outside_text.page_filter_min_area_ratio,
-            "outside_text_osb_font_pack": self.outside_text.osb_font_name,
+            "outside_text_osb_font_pack": self.outside_text.osb_font_dir,
             "outside_text_osb_max_font_size": self.outside_text.osb_max_font_size,
             "outside_text_osb_min_font_size": self.outside_text.osb_min_font_size,
             "outside_text_osb_use_ligatures": self.outside_text.osb_use_ligatures,
@@ -391,7 +391,7 @@ class UIConfigState:
                     "outside_text_flux_residual_diff_threshold", 0.15
                 ),
                 osb_confidence=data.get("outside_text_osb_confidence", 0.6),
-                osb_font_name=data.get(
+                osb_font_dir=data.get(
                     "outside_text_osb_font_pack",
                     defaults.get("outside_text_osb_font_pack", ""),
                 ),
@@ -665,12 +665,12 @@ def map_ui_to_backend_config(
     )
 
     # Determine OSB font (use main font if not specified)
-    osb_font = (
-        ui_state.outside_text.osb_font_name
-        if ui_state.outside_text.osb_font_name
+    osb_font_pack = (
+        ui_state.outside_text.osb_font_dir
+        if ui_state.outside_text.osb_font_dir
         else ui_state.font_pack
     )
-    osb_font_path = fonts_base_dir / osb_font if osb_font else None
+    osb_font_path = fonts_base_dir / osb_font_pack if osb_font_pack else None
 
     outside_text_cfg = OutsideTextConfig(
         enabled=ui_state.outside_text.enabled,
@@ -686,7 +686,7 @@ def map_ui_to_backend_config(
         flux_luminance_correction=ui_state.outside_text.flux_luminance_correction,
         flux_residual_diff_threshold=ui_state.outside_text.flux_residual_diff_threshold,
         osb_confidence=ui_state.outside_text.osb_confidence,
-        osb_font_name=str(osb_font_path) if osb_font_path else None,
+        osb_font_dir=str(osb_font_path) if osb_font_path else None,
         osb_max_font_size=ui_state.outside_text.osb_max_font_size,
         osb_min_font_size=ui_state.outside_text.osb_min_font_size,
         osb_use_ligatures=ui_state.outside_text.osb_use_ligatures,

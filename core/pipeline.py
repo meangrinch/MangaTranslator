@@ -1017,8 +1017,8 @@ def translate_and_render(
                                 verbose=verbose,
                             )
                             font_dir = (
-                                config.outside_text.osb_font_name
-                                if config.outside_text.osb_font_name
+                                config.outside_text.osb_font_dir
+                                if config.outside_text.osb_font_dir
                                 else config.rendering.font_dir
                             )
                             min_font = osb_min_font
