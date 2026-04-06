@@ -131,7 +131,7 @@ class UIOutsideTextSettings:
     osb_confidence: float = 0.6
     osb_font_name: str = ""  # Empty = use main font
     osb_max_font_size: int = 64
-    osb_min_font_size: int = 12
+    osb_min_font_size: int = 10
     osb_use_ligatures: bool = False
     osb_outline_width: float = 3.0
     osb_line_spacing: float = 1.0
@@ -396,7 +396,7 @@ class UIConfigState:
                     defaults.get("outside_text_osb_font_pack", ""),
                 ),
                 osb_max_font_size=data.get("outside_text_osb_max_font_size", 64),
-                osb_min_font_size=data.get("outside_text_osb_min_font_size", 12),
+                osb_min_font_size=data.get("outside_text_osb_min_font_size", 10),
                 osb_use_ligatures=data.get("outside_text_osb_use_ligatures", False),
                 osb_outline_width=data.get("outside_text_osb_outline_width", 3.0),
                 osb_line_spacing=data.get("outside_text_osb_line_spacing", 1.0),

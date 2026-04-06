@@ -1491,7 +1491,7 @@ def create_layout(
                                     5,
                                     96,
                                     value=saved_settings.get(
-                                        "outside_text_osb_min_font_size", 12
+                                        "outside_text_osb_min_font_size", 10
                                     ),
                                     step=1,
                                     label="Min Font Size (px)",

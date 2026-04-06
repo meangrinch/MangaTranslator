@@ -600,7 +600,7 @@ def main():
     parser.add_argument(
         "--osb-min-font-size",
         type=int,
-        default=12,
+        default=10,
         help="Minimum font size for OSB text (5-50px)",
     )
     parser.add_argument(

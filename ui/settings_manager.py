@@ -217,7 +217,7 @@ DEFAULT_SETTINGS = {
     "outside_text_bbox_expansion_percent": 0.1,
     "outside_text_osb_font_pack": "",
     "outside_text_osb_max_font_size": 64,
-    "outside_text_osb_min_font_size": 12,
+    "outside_text_osb_min_font_size": 10,
     "outside_text_osb_use_ligatures": False,
     "outside_text_osb_outline_width": 3.0,
     "outside_text_osb_line_spacing": 1.0,
