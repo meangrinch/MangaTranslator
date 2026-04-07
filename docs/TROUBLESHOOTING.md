@@ -52,6 +52,10 @@
   - Increase font rendering "Supersampling Factor" (e.g., 6-8)
   - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x)
 
+- **Empty bubbles:**
+  - Try lowering "Padding Pixels" (e.g., 3-4)
+  - Try lowering "Min Font Size" (e.g., 6-7)
+
 ### Detection/Cleaning
 
 - **Uncleaned text remaining (near edges of bubbles):**
