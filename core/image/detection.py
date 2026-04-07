@@ -893,8 +893,12 @@ def _split_overlap_zone_with_box_diagonal(
         line_start = (ox0, oy0)
         line_end = (ox1, oy1)
 
-    overlap_mid_x = (ox0 + ox1) / 2.0
-    overlap_mid_y = (oy0 + oy1) / 2.0
+    # Centre-based midpoint prevents asymmetric bubbles from claiming
+    # junction text that belongs to the smaller neighbour.
+    center_mid_x = (center_a[0] + center_b[0]) / 2.0
+    center_mid_y = (center_a[1] + center_b[1]) / 2.0
+    overlap_mid_x = float(np.clip(center_mid_x, ox0, ox1))
+    overlap_mid_y = float(np.clip(center_mid_y, oy0, oy1))
     diag_line = (line_start, line_end)
     h_line = ((ox0, overlap_mid_y), (ox1, overlap_mid_y))
     v_line = ((overlap_mid_x, oy0), (overlap_mid_x, oy1))
