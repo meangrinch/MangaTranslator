@@ -1152,8 +1152,22 @@ def _build_segmentation_detections(
 
     for p_idx, s_indices in conjoined_indices:
         parent_source, parent_orig_idx = primary_sources[p_idx]
-        parent_box = primary_boxes[p_idx]
-        grouping_parent_box = grouping_primary_boxes[p_idx]
+
+        # The parent box must enclose all children for correct mask splitting
+        group_stack = torch.cat(
+            [primary_boxes[p_idx].unsqueeze(0)]
+            + [secondary_boxes[s_idx].unsqueeze(0) for s_idx in s_indices],
+            dim=0,
+        )
+        combined_parent_box = torch.cat(
+            [
+                group_stack[:, :2].min(dim=0).values,
+                group_stack[:, 2:].max(dim=0).values,
+            ]
+        )
+
+        parent_box = combined_parent_box
+        grouping_parent_box = combined_parent_box
         parent_mask = None
 
         if sam_masks is not None and sam_masks[p_idx] is not None:
@@ -1168,6 +1182,13 @@ def _build_segmentation_detections(
 
         group_boxes = [secondary_boxes[s_idx] for s_idx in s_indices]
         group_osb = _get_group_osb_text_boxes(osb_text_boxes_np, grouping_parent_box)
+
+        # Prevent empty split masks when children fall outside the parent mask
+        if parent_mask is not None:
+            for box in group_boxes:
+                box_mask = _build_rect_mask_from_box(box, img_h, img_w) > 0
+                parent_mask = np.logical_or(parent_mask > 0, box_mask)
+
         split_masks = _split_conjoined_mask(
             parent_mask,
             group_boxes,
@@ -1175,10 +1196,12 @@ def _build_segmentation_detections(
             osb_text_boxes=group_osb,
         )
 
-        group_bboxes = [
-            _mask_to_bbox(split_masks[idx], fallback_box=group_boxes[idx])
-            for idx in range(len(group_boxes))
-        ]
+        group_bboxes = []
+        for b in group_boxes:
+            bx0, by0, bx1, by1 = b.tolist() if hasattr(b, "tolist") else b
+            group_bboxes.append(
+                (int(round(bx0)), int(round(by0)), int(round(bx1)), int(round(by1)))
+            )
 
         for local_idx, s_idx in enumerate(s_indices):
             source, orig_idx = secondary_sources[s_idx]
@@ -1220,10 +1243,12 @@ def _build_segmentation_detections(
             osb_text_boxes=group_osb,
         )
 
-        group_bboxes = [
-            _mask_to_bbox(split_masks[local_idx], fallback_box=group_boxes[local_idx])
-            for local_idx in range(len(group_boxes))
-        ]
+        group_bboxes = []
+        for b in group_boxes:
+            bx0, by0, bx1, by1 = b.tolist() if hasattr(b, "tolist") else b
+            group_bboxes.append(
+                (int(round(bx0)), int(round(by0)), int(round(bx1)), int(round(by1)))
+            )
 
         for local_idx, p_idx in enumerate(member_indices):
             source, orig_idx = primary_sources[p_idx]
@@ -1661,7 +1686,19 @@ def detect_speech_bubbles(
             process_indices.append(idx)
 
         for p_idx, s_indices in conjoined_indices:
-            boxes_to_process.append(primary_boxes[p_idx])
+            # SAM needs the prompt box to cover all children for a usable mask
+            group_stack = torch.cat(
+                [primary_boxes[p_idx].unsqueeze(0)]
+                + [secondary_boxes[s_idx].unsqueeze(0) for s_idx in s_indices],
+                dim=0,
+            )
+            combined_parent_box = torch.cat(
+                [
+                    group_stack[:, :2].min(dim=0).values,
+                    group_stack[:, 2:].max(dim=0).values,
+                ]
+            )
+            boxes_to_process.append(combined_parent_box)
             process_indices.append(p_idx)
 
         # Append synthetic conjoined parent boxes to the same SAM batch

@@ -1551,8 +1551,12 @@ def prepare_bubble_images_for_translation(
             if _ma.ndim == 2:
                 _rows, _cols = np.where(_ma > 0)
                 if _rows.size and _cols.size:
-                    x1, y1 = int(_cols.min()), int(_rows.min())
-                    x2, y2 = int(_cols.max()) + 1, int(_rows.max()) + 1
+                    mx1, my1 = int(_cols.min()), int(_rows.min())
+                    mx2, my2 = int(_cols.max()) + 1, int(_rows.max()) + 1
+                    x1 = min(x1, mx1)
+                    y1 = min(y1, my1)
+                    x2 = max(x2, mx2)
+                    y2 = max(y2, my2)
 
         bubble_image_cv = original_cv_image[y1:y2, x1:x2].copy()
 
