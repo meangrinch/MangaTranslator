@@ -1236,6 +1236,12 @@ def _build_segmentation_detections(
 
         group_boxes = [grouping_primary_boxes[idx] for idx in member_indices]
         group_osb = _get_group_osb_text_boxes(osb_text_boxes_np, parent_box)
+
+        if parent_mask is not None:
+            for box in group_boxes:
+                box_mask = _build_rect_mask_from_box(box, img_h, img_w) > 0
+                parent_mask = np.logical_or(parent_mask > 0, box_mask)
+
         split_masks = _split_conjoined_mask(
             parent_mask,
             group_boxes,
