@@ -41,6 +41,7 @@ def render_text_skia(
     vertical_stack: bool = False,
     text_color_rgb: Optional[Tuple[int, int, int]] = None,
     text_background_color: Optional[Tuple[int, int, int]] = None,
+    layout_only: bool = False,
 ) -> Image.Image:
     """
     Fits and renders text within a bounding box using Skia and HarfBuzz.
@@ -223,6 +224,12 @@ def render_text_skia(
         )
     except RenderingError as e:
         raise RenderingError(f"Layout optimization failed: {e}") from e
+
+    if layout_only:
+        log_message(f"Rendered at size {layout_data['font_size']}", verbose=verbose)
+        result = Image.new("RGBA", (1, 1))
+        result.info["font_size"] = layout_data["font_size"]
+        return result
 
     required_styles = {"regular"} | {
         style for _, style in parse_styled_segments(clean_text)

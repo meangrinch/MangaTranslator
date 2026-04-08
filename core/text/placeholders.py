@@ -107,22 +107,23 @@ def generate_test_placeholders(
             t.rstrip(".") if is_outside_text else t for t in placeholder_tiers
         ]
 
+        font_dir = (
+            config.outside_text.osb_font_dir
+            if is_outside_text and config.outside_text.osb_font_dir
+            else config.rendering.font_dir
+        )
+
+        # Use a tiny dummy canvas — layout_only skips all pixel work
+        _probe_canvas = Image.new("RGBA", (bbox[2] - bbox[0], bbox[3] - bbox[1]))
+
         best_font_size = -1
 
         for text_tier in placeholder_tiers_to_use:
-            _probe_canvas_iter = pil_cleaned_image.copy()
-
             test_text = text_tier.upper() if is_outside_text else text_tier
-
-            font_dir = (
-                config.outside_text.osb_font_dir
-                if is_outside_text and config.outside_text.osb_font_dir
-                else config.rendering.font_dir
-            )
 
             try:
                 rendered = render_text_skia(
-                    pil_image=_probe_canvas_iter,
+                    pil_image=_probe_canvas,
                     text=test_text,
                     bbox=bbox,
                     font_dir=font_dir,
@@ -132,12 +133,16 @@ def generate_test_placeholders(
                     verbose=verbose,
                     bubble_id=str(i + 1),
                     raise_on_safe_error=False,
+                    layout_only=True,
                 )
 
                 font_size = rendered.info.get("font_size", 0)
                 if font_size > best_font_size:
                     best_font_size = font_size
                     best_fit = text_tier
+                # Longest tier already fits at max size — no shorter tier can beat it
+                if best_font_size >= max_font:
+                    break
 
             except (RenderingError, FontError) as e:
                 log_message(
