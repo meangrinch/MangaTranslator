@@ -267,8 +267,17 @@ def check_fit(
             def _glue_trailing_punctuation(tokens_list: List[str]) -> List[str]:
                 glued: List[str] = []
                 for tok in tokens_list:
+                    match = STYLE_PATTERN.match(tok)
+                    content = match.group(2) if match else tok
+
+                    # Skip gluing for disconnected ellipsis to allow wrapping
+                    if re.match(r"^(\.{2,})[\)\]\}\u2019\u201D\'\"]*$", content):
+                        glued.append(tok)
+                        continue
+
                     if glued and (
-                        GLUE_TRAILING_PUNCT_RE.match(tok) or GLUE_CLOSERS_RE.match(tok)
+                        GLUE_TRAILING_PUNCT_RE.match(content)
+                        or GLUE_CLOSERS_RE.match(content)
                     ):
                         glued[-1] = glued[-1] + tok
                     else:

@@ -161,7 +161,18 @@ def _split_with_cjk_awareness(text: str) -> List[str]:
     if current_token:
         tokens.append(current_token)
 
-    return tokens
+    # Separate trailing ellipsis to allow wrapping
+    final_tokens = []
+    ellipsis_re = re.compile(r"^(.*?)((\.{2,})[\)\]\}\u2019\u201D\'\"]*)$")
+    for t in tokens:
+        m = ellipsis_re.match(t)
+        if m and m.group(1):
+            final_tokens.append(m.group(1))
+            final_tokens.append(m.group(2))
+        else:
+            final_tokens.append(t)
+
+    return final_tokens
 
 
 def tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
@@ -295,8 +306,17 @@ def _is_cjk_token(token: str) -> bool:
 
 
 def _needs_space_between(left_token: str, right_token: str) -> bool:
-    """No space needed between adjacent CJK tokens."""
-    return not (_is_cjk_token(left_token) and _is_cjk_token(right_token))
+    """No space needed between adjacent CJK tokens or before separated punctuation."""
+    if _is_cjk_token(left_token) and _is_cjk_token(right_token):
+        return False
+
+    match = STYLE_PATTERN.match(right_token)
+    r_content = match.group(2) if match else right_token
+    # No space before detached ellipsis/punctuation chunks
+    if re.match(r"^(\.{2,})[\)\]\}\u2019\u201D\'\"]*$", r_content):
+        return False
+
+    return True
 
 
 def _join_tokens_smart(tokens: List[str]) -> str:
