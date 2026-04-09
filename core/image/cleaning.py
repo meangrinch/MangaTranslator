@@ -269,12 +269,12 @@ def process_single_bubble(
                 validated_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
             if boundary_contours:
+                largest_contour = max(boundary_contours, key=cv2.contourArea)
                 final_mask = np.zeros((img_height, img_width), dtype=np.uint8)
                 cv2.drawContours(
-                    final_mask, boundary_contours, -1, 255, thickness=cv2.FILLED
+                    final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED
                 )
-                all_points = np.vstack(boundary_contours)
-                x, y, w, h = cv2.boundingRect(all_points)
+                x, y, w, h = cv2.boundingRect(largest_contour)
                 text_bbox = (x, y, x + w, y + h)
 
                 if classify_colored:
