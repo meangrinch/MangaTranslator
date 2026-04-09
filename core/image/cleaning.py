@@ -25,10 +25,10 @@ EROSION_KERNEL_SIZE = (5, 5)  # Kernel size for morphological erosion
 DISTANCE_TRANSFORM_MASK_SIZE = 5  # Mask size for distance transform
 
 # Classification thresholds for colored bubbles
-BRIGHT_RATIO_THRESHOLD = 0.50
-DARK_RATIO_THRESHOLD = 0.50
-BRIGHT_DOM_RATIO_MIN = 0.30
-DARK_DOM_RATIO_MIN = 0.30
+BRIGHT_RATIO_THRESHOLD = 0.65
+DARK_RATIO_THRESHOLD = 0.65
+BRIGHT_DOM_RATIO_MIN = 0.40
+DARK_DOM_RATIO_MIN = 0.40
 BRIGHT_DARK_RATIO_MAX = 0.10
 DARK_BRIGHT_RATIO_MAX = 0.10
 
@@ -269,26 +269,27 @@ def process_single_bubble(
                 validated_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
             if boundary_contours:
-                largest_contour = max(boundary_contours, key=cv2.contourArea)
                 final_mask = np.zeros((img_height, img_width), dtype=np.uint8)
                 cv2.drawContours(
-                    final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED
+                    final_mask, boundary_contours, -1, 255, thickness=cv2.FILLED
                 )
-                x, y, w, h = cv2.boundingRect(largest_contour)
+                all_points = np.vstack(boundary_contours)
+                x, y, w, h = cv2.boundingRect(all_points)
                 text_bbox = (x, y, x + w, y + h)
 
                 if classify_colored:
-                    # Sample bubble interior excluding text box and outline to determine if colored
+                    # Sample bubble interior excluding exact text pixels and outline to determine if colored
                     sampling_mask = cv2.erode(
                         base_mask, constraint_erosion_kernel, iterations=2
                     )
-                    if text_bbox:
-                        x1, y1, x2, y2 = text_bbox
-                        x1 = max(0, x1)
-                        y1 = max(0, y1)
-                        x2 = min(img_width, x2)
-                        y2 = min(img_height, y2)
-                        sampling_mask[y1:y2, x1:x2] = 0
+                    text_mask = cv2.bitwise_and(
+                        cv2.bitwise_not(thresholded_roi), shrunk_roi_mask
+                    )
+                    text_mask_dilated = cv2.dilate(
+                        text_mask, np.ones((3, 3), np.uint8), iterations=1
+                    )
+                    sampling_mask[text_mask_dilated == 255] = 0
+
                     sample_pixels = img_gray[sampling_mask == 255]
                     if sample_pixels.size == 0:
                         sample_pixels = masked_pixels
