@@ -65,7 +65,7 @@
   - Increase "Shrink Threshold ROI" (e.g., 6–8)
 
 - **Conjoined bubbles not detected:**
-  - Ensure "Detect Conjoined Bubbles" is enabled
+  - Ensure "Conjoined Bubble Detection" is enabled
   - Lower "Bubble Detection Confidence" (e.g., 0.20)
 
 - **Small bubbles not detected/no room for rendered text:**

@@ -476,7 +476,7 @@ def create_layout(
                             )
                             conjoined_detection_checkbox = gr.Checkbox(
                                 value=saved_settings.get("conjoined_detection", True),
-                                label="Enable Conjoined Bubble Detection",
+                                label="Conjoined Bubble Detection",
                                 info=(
                                     "Uses a secondary YOLO model to detect and split "
                                     "conjoined speech bubbles into separate bubbles."
