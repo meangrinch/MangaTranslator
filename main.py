@@ -217,7 +217,7 @@ def main():
     parser.add_argument(
         "--thresholding-value",
         type=int,
-        default=190,
+        default=200,
         help=(
             "Fixed threshold value for text detection (0-255). "
             "Lower values help clean edge-hugging text."

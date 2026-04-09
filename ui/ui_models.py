@@ -34,7 +34,7 @@ class UIDetectionSettings:
 class UICleaningSettings:
     """UI state for cleaning settings."""
 
-    thresholding_value: int = 190
+    thresholding_value: int = 200
     use_otsu_threshold: bool = False
     roi_shrink_px: int = 5
     inpaint_colored_bubbles: bool = False

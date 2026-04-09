@@ -402,7 +402,7 @@ def clean_speech_bubbles(
     confidence=0.6,
     pre_computed_detections=None,
     device=None,
-    thresholding_value: int = 190,
+    thresholding_value: int = 200,
     use_otsu_threshold: bool = False,
     roi_shrink_px: int = 5,
     verbose: bool = False,
@@ -430,7 +430,7 @@ def clean_speech_bubbles(
         confidence (float): Confidence threshold for detections.
         pre_computed_detections (list, optional): Pre-computed detections from previous call.
         device (torch.device, optional): The device to run detection model on if needed.
-        thresholding_value (int): Fixed threshold value for text detection (0-255). Lower values (e.g., 190)
+        thresholding_value (int): Fixed threshold value for text detection (0-255). Lower values (e.g., 180)
                                  are useful for uncleaned text close to bubble's edges.
         use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value.
         roi_shrink_px (int): Number of pixels to shrink the ROI inwards before identification/fill.

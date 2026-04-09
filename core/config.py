@@ -25,7 +25,7 @@ class DetectionConfig:
 class CleaningConfig:
     """Configuration for speech bubble cleaning."""
 
-    thresholding_value: int = 190
+    thresholding_value: int = 200
     use_otsu_threshold: bool = False
     roi_shrink_px: int = 5
     inpaint_colored_bubbles: bool = False

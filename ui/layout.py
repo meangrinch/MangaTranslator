@@ -548,10 +548,13 @@ def create_layout(
                             thresholding_value = gr.Slider(
                                 0,
                                 255,
-                                value=saved_settings.get("thresholding_value", 210),
+                                value=saved_settings.get("thresholding_value", 200),
                                 step=1,
                                 label="Fixed Threshold Value",
-                                info="Brightness threshold for text detection. Lower helps clean edge-hugging text.",
+                                info=(
+                                    "Brightness threshold for text detection. Lower helps clean "
+                                    "edge-hugging text, but may thin bubble outlines"
+                                ),
                                 interactive=not saved_settings.get(
                                     "use_otsu_threshold", False
                                 ),
