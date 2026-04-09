@@ -224,6 +224,13 @@ def is_46_model(model_name: Optional[str]) -> bool:
     return is_opus_46_model(model_name) or is_sonnet_46_model(model_name)
 
 
+def is_gemma_model(model_name: Optional[str]) -> bool:
+    """Check if a model is a Gemma model (e.g., gemma-4-31b-it)."""
+    if not model_name:
+        return False
+    return "gemma-" in model_name.lower()
+
+
 def is_gemini_3_model(model_name: Optional[str]) -> bool:
     """Check if a model is any Gemini 3 variant (3, 3.1, etc.)."""
     if not model_name:
@@ -255,11 +262,11 @@ def is_gemini_25_pro_model(model_name: Optional[str]) -> bool:
 
 
 def is_google_reasoning_model(model_name: Optional[str]) -> bool:
-    """Check if a Google model is reasoning-capable (Gemini 2.5 or 3 series)."""
+    """Check if a Google model is reasoning-capable (Gemini 2.5, 3 series, or Gemma)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return "gemini-2.5" in lm or "gemini-3" in lm
+    return "gemini-2.5" in lm or "gemini-3" in lm or "gemma-" in lm
 
 
 def is_rosetta_model(model_name: Optional[str]) -> bool:

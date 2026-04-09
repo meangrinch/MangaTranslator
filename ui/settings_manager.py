@@ -21,10 +21,11 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "gemini-3-flash-preview",
         "gemini-2.5-pro",
         "gemini-2.5-flash",
-        "gemini-2.5-flash-lite-preview-09-2025",
         "gemini-2.5-flash-lite",
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
+        "gemma-4-31b-it",
+        "gemma-4-26b-a4b-it",
     ],
     "OpenAI": [
         "gpt-5.4-2026-03-05",

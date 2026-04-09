@@ -100,19 +100,26 @@ def call_gemini_endpoint(
                 if "candidates" in result and len(result["candidates"]) > 0:
                     candidate = result["candidates"][0]
                     content_parts = candidate.get("content", {}).get("parts", [{}])
-                    if content_parts and "text" in content_parts[0]:
-                        return content_parts[0].get("text", "").strip()
-                    else:
-                        finish_reason = candidate.get("finishReason") or "unknown"
-                        log_message(
-                            f"No text content in Google response. Finish reason: {finish_reason}",
-                            always_print=True,
-                        )
-                        log_message(
-                            f"Full response: {json.dumps(result, indent=2)}",
-                            verbose=debug,
-                        )
-                        return ""
+                    if content_parts:
+                        # Filter out thought parts for gemma-4
+                        for part in content_parts:
+                            if "text" in part and not part.get("thought", False):
+                                return part.get("text", "").strip()
+
+                        # Fallback if no non-thought text part exists
+                        if "text" in content_parts[0]:
+                            return content_parts[0].get("text", "").strip()
+
+                    finish_reason = candidate.get("finishReason") or "unknown"
+                    log_message(
+                        f"No text content in Google response. Finish reason: {finish_reason}",
+                        always_print=True,
+                    )
+                    log_message(
+                        f"Full response: {json.dumps(result, indent=2)}",
+                        verbose=debug,
+                    )
+                    return ""
 
                 else:
                     block_reason = (

@@ -37,6 +37,7 @@ from utils.model_metadata import (
     is_deepseek_reasoning_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
+    is_gemma_model,
     is_gemini_3_model,
     is_google_reasoning_model,
     is_gpt5_chat_variant,
@@ -285,6 +286,7 @@ def _build_generation_config(
 
     if provider == "Google":
         is_gemini_3 = is_gemini_3_model(model_name)
+        is_gemma = is_gemma_model(model_name)
         generation_config = {
             "temperature": temperature,
             "topP": top_p,
@@ -302,7 +304,7 @@ def _build_generation_config(
                 config.media_resolution.lower(), "MEDIA_RESOLUTION_UNSPECIFIED"
             )
             generation_config["media_resolution"] = backend_media_resolution
-        if is_gemini_3:
+        if is_gemini_3 or is_gemma:
             reasoning_effort = config.reasoning_effort or "high"
             generation_config["thinkingConfig"] = {"thinkingLevel": reasoning_effort}
             log_message(

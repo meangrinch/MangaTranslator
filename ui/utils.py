@@ -21,6 +21,7 @@ from utils.model_metadata import (
     is_gemini_25_pro_model,
     is_gemini_3_flash_model,
     is_gemini_3_model,
+    is_gemma_model,
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
@@ -374,29 +375,25 @@ def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) 
         return "Reasoning Effort"
 
     gemini3 = is_gemini_3_model(model_name)
+    gemma = is_gemma_model(model_name)
 
-    if (provider == "Google" or provider == "OpenRouter") and gemini3:
+    if (provider == "Google" or provider == "OpenRouter") and (gemini3 or gemma):
         return "Thinking Level"
     elif (
         provider == "Google"
         and is_reasoning_model(provider, model_name)
         and not gemini3
+        and not gemma
     ):
         return "Thinking Budget"
     elif provider == "OpenRouter":
         lm = model_name.lower()
         is_google_model = "google/" in lm or "gemini" in lm
-        if (
-            is_google_model
-            and is_reasoning_model(provider, model_name)
-            and not gemini3
-        ):
+        if is_google_model and is_reasoning_model(provider, model_name) and not gemini3:
             return "Thinking Budget"
         elif _is_anthropic_reasoning_model(model_name):
             return "Extended Thinking"
-    elif provider == "Anthropic" and _is_anthropic_reasoning_model(
-        model_name
-    ):
+    elif provider == "Anthropic" and _is_anthropic_reasoning_model(model_name):
         return "Extended Thinking"
     else:
         return "Reasoning Effort"
@@ -411,7 +408,7 @@ def get_reasoning_effort_info_text(
 
     # Determine base description text based on provider/model
     if provider == "Google":
-        if is_gemini_3_model(model_name):
+        if is_gemini_3_model(model_name) or is_gemma_model(model_name):
             return "Controls model's internal reasoning effort."
         base_text = "Controls reasoning token allocation relative to 'max_tokens'"
     elif provider == "OpenAI":
@@ -427,7 +424,14 @@ def get_reasoning_effort_info_text(
         is_openai_reasoning = (
             "gpt-5" in lm or "o1" in lm or "o3" in lm or "o4-mini" in lm
         )
-        if is_openai_reasoning or is_xai_reasoning_model(model_name) or is_gemini_3_model(model_name):
+        uses_thinking_level = is_gemini_3_model(model_name) or is_gemma_model(
+            model_name
+        )
+        if (
+            is_openai_reasoning
+            or is_xai_reasoning_model(model_name)
+            or uses_thinking_level
+        ):
             return "Controls model's internal reasoning effort."
         else:
             base_text = (
@@ -492,6 +496,9 @@ def get_reasoning_effort_config(
         is_reasoning = is_reasoning_model(provider, model_name)
         if not is_reasoning:
             return False, [], None
+
+        if is_gemma_model(model_name):
+            return True, ["high", "minimal"], "high"
 
         if is_gemini_3_model(model_name):
             if "flash" in lm:
@@ -568,12 +575,15 @@ def get_reasoning_effort_config(
         return False, [], None
 
     elif provider == "OpenRouter":
-        is_google_model = "google/" in lm or "gemini" in lm
+        is_google_model = "google/" in lm or "gemini" in lm or "gemma" in lm
 
         if is_google_model:
             is_reasoning = is_reasoning_model(provider, model_name)
             if not is_reasoning:
                 return False, [], None
+
+            if is_gemma_model(model_name):
+                return True, ["high", "minimal"], "high"
 
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "low"
 
@@ -774,8 +784,8 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
     max_tokens_update = gr.update(value=max_tokens_value, maximum=max_tokens_maximum)
 
     is_gemini_3_google = provider == "Google" and is_gemini_3_model(remembered_model)
-    is_gemini_3_openrouter = (
-        provider == "OpenRouter" and is_gemini_3_model(remembered_model)
+    is_gemini_3_openrouter = provider == "OpenRouter" and is_gemini_3_model(
+        remembered_model
     )
 
     enable_web_search_visible = provider not in ("OpenAI-Compatible", "DeepSeek")
@@ -940,9 +950,7 @@ def update_params_for_model(
     top_p_update = gr.update(interactive=top_p_interactive)
 
     is_gemini_3_google = provider == "Google" and is_gemini_3_model(model_name)
-    is_gemini_3_openrouter = (
-        provider == "OpenRouter" and is_gemini_3_model(model_name)
-    )
+    is_gemini_3_openrouter = provider == "OpenRouter" and is_gemini_3_model(model_name)
 
     reasoning_visible, reasoning_choices, default_val = get_reasoning_effort_config(
         provider, model_name
