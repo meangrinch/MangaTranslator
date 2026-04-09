@@ -83,6 +83,7 @@ Your sole purpose is to accurately transcribe the original text from a series of
 - **Language Focus:** Transcribe only the original {lang_label}text.
 - **Ruby/Furigana Policy:** If small phonetic characters (ruby/furigana) are present, you must ignore them and transcribe only the main, larger base text.
 - **Visual Emphasis Policy:** If the source text is visually emphasized (bold, slanted, etc.), you must mirror that emphasis in your transcription using markdown-style markers: `*italic*` for slanted text, `**bold**` for bold text, `***bold-italic***` for both.
+- **Quotes:** Do not wrap the transcribed text in quotation marks unless they are explicitly present in the image.
 - **Edge Cases:**
   - If an image contains standalone periods/ellipses, you must return it exactly as it appears.
   - If text is indecipherable, you must return the exact token: `[OCR FAILED]`.
@@ -131,6 +132,7 @@ def _build_system_prompt_translation(
 - **Conciseness:** Keep translations idiomatic and concise.
 - **Emphasis:** If the source text is visually emphasized (bold, slanted, etc.), mirror that emphasis using the STYLING GUIDE.
 - **Punctuation:** Replace ellipses (e.g., "…") with consecutive periods (e.g., "...").
+- **Quotes:** Do not wrap the translated text in quotation marks unless they are explicitly present in the source text.
 - **Text Types:**
   - **Spoken Dialogue/Internal Monologue:** Translate naturally, matching the character's personality.
   - **Narration:** Translate neutrally without special styling.
