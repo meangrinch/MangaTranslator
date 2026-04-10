@@ -548,7 +548,7 @@ def create_layout(
                             thresholding_value = gr.Slider(
                                 0,
                                 255,
-                                value=saved_settings.get("thresholding_value", 200),
+                                value=saved_settings.get("thresholding_value", 190),
                                 step=1,
                                 label="Fixed Threshold Value",
                                 info=(

@@ -63,7 +63,7 @@
 
 - **Outlines get eaten during cleaning:**
   - Increase "Shrink Threshold ROI" (e.g., 6–8)
-  - Increase "Fixed Threshold Value" (e.g., 210–220)
+  - Increase "Fixed Threshold Value" (e.g., 200–210)
 
 - **Conjoined bubbles not detected:**
   - Ensure "Conjoined Bubble Detection" is enabled

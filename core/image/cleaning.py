@@ -402,7 +402,7 @@ def clean_speech_bubbles(
     confidence=0.6,
     pre_computed_detections=None,
     device=None,
-    thresholding_value: int = 200,
+    thresholding_value: int = 190,
     use_otsu_threshold: bool = False,
     roi_shrink_px: int = 5,
     verbose: bool = False,
