@@ -27,6 +27,7 @@ SETTING_CONSTRAINTS: Dict[str, Tuple[float, float]] = {
     "supersampling_factor": (1, 16),
     "outside_text_osb_confidence": (0.0, 1.0),
     "outside_text_bbox_expansion_percent": (0.0, 1.0),
+    "outside_text_osb_render_expansion_multiplier": (1.0, 3.0),
     "outside_text_text_box_proximity_ratio": (0.01, 0.1),
     "outside_text_page_filter_margin_threshold": (0.0, 0.3),
     "outside_text_page_filter_min_area_ratio": (0.0, 0.2),
@@ -69,6 +70,9 @@ _CONFIG_ATTR_PATHS: Dict[str, Tuple[Tuple[str, ...], ...]] = {
     "outside_text_osb_confidence": (("outside_text", "osb_confidence"),),
     "outside_text_bbox_expansion_percent": (
         ("outside_text", "bbox_expansion_percent"),
+    ),
+    "outside_text_osb_render_expansion_multiplier": (
+        ("outside_text", "osb_render_expansion_multiplier"),
     ),
     "outside_text_text_box_proximity_ratio": (
         ("outside_text", "text_box_proximity_ratio"),

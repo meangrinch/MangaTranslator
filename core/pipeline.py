@@ -471,6 +471,40 @@ def translate_and_render(
         bubble_data = []
         text_free_boxes = []
 
+    panels = None
+    debug_panels = None
+    if config.detection.use_panel_sorting or ENABLE_COMPONENT_ORDER_DEBUG:
+        try:
+            log_message(
+                "Detecting panels...",
+                verbose=verbose,
+            )
+            debug_panels = detect_panels(
+                image_path,
+                confidence=config.detection.panel_confidence,
+                device=device,
+                verbose=verbose,
+            )
+            if debug_panels:
+                log_message(
+                    f"Detected {len(debug_panels)} panels",
+                    always_print=True,
+                )
+            else:
+                log_message(
+                    "No panels detected",
+                    verbose=verbose,
+                )
+        except Exception as e:
+            log_message(
+                f"Panel detection failed: {e}. Using global sorting.",
+                always_print=True,
+            )
+            debug_panels = None
+
+        if config.detection.use_panel_sorting:
+            panels = debug_panels
+
     # Process outside text detection and inpainting (bubble-aware)
     pil_image_processed, outside_text_data = process_outside_text(
         pil_image_processed,
@@ -480,6 +514,7 @@ def translate_and_render(
         verbose,
         bubble_data=bubble_data,
         text_free_boxes=text_free_boxes,
+        panels=panels,
     )
     original_cv_image = pil_to_cv2(pil_image_processed)
 

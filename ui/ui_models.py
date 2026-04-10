@@ -138,6 +138,7 @@ class UIOutsideTextSettings:
     osb_use_subpixel_rendering: bool = True
     osb_font_hinting: str = "none"
     bbox_expansion_percent: float = 0.1
+    osb_render_expansion_multiplier: float = 1.0
     text_box_proximity_ratio: float = 0.02
 
 
@@ -273,6 +274,7 @@ class UIConfigState:
             "outside_text_osb_use_subpixel_rendering": self.outside_text.osb_use_subpixel_rendering,
             "outside_text_osb_font_hinting": self.outside_text.osb_font_hinting,
             "outside_text_bbox_expansion_percent": self.outside_text.bbox_expansion_percent,
+            "outside_text_osb_render_expansion_multiplier": self.outside_text.osb_render_expansion_multiplier,
             "outside_text_text_box_proximity_ratio": self.outside_text.text_box_proximity_ratio,
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
@@ -695,6 +697,7 @@ def map_ui_to_backend_config(
         osb_use_subpixel_rendering=ui_state.outside_text.osb_use_subpixel_rendering,
         osb_font_hinting=ui_state.outside_text.osb_font_hinting,
         bbox_expansion_percent=ui_state.outside_text.bbox_expansion_percent,
+        osb_render_expansion_multiplier=ui_state.outside_text.osb_render_expansion_multiplier,
         text_box_proximity_ratio=ui_state.outside_text.text_box_proximity_ratio,
     )
 

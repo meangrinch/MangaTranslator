@@ -1474,6 +1474,20 @@ def create_layout(
                                 )
 
                                 gr.Markdown("### Font Rendering")
+                                outside_text_osb_render_expansion_multiplier = gr.Slider(
+                                    1.0,
+                                    3.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_render_expansion_multiplier",
+                                        1.0,
+                                    ),
+                                    step=0.1,
+                                    label="Render Expansion Multiplier",
+                                    info=(
+                                        "Expands the rendered text box by the specified multiplier. "
+                                        "Useful to remedy text being too small for narrow/tall crops."
+                                    ),
+                                )
                                 outside_text_osb_font_pack = gr.Dropdown(
                                     value=saved_osb_font_pack,
                                     choices=[""] + font_choices,
@@ -1529,16 +1543,20 @@ def create_layout(
                                         "outside_text_osb_font_hinting", "none"
                                     ),
                                     label="Font Hinting",
-                                    info="Adjusts glyph outlines to fit pixel grid. 'None' is often best for "
-                                    "high-res displays.",
+                                    info=(
+                                        "Adjusts glyph outlines to fit pixel grid. 'None' is often best for "
+                                        "high-res displays."
+                                    ),
                                 )
                                 outside_text_osb_use_ligatures = gr.Checkbox(
                                     value=saved_settings.get(
                                         "outside_text_osb_use_ligatures", False
                                     ),
                                     label="Use Standard Ligatures (e.g., fi, fl)",
-                                    info="Enables common letter combinations to be rendered as single glyphs "
-                                    "(must be supported by the font).",
+                                    info=(
+                                        "Enables common letter combinations to be rendered as single glyphs "
+                                        "(must be supported by the font)."
+                                    ),
                                 )
                                 outside_text_osb_outline_width = gr.Slider(
                                     0,
@@ -1796,6 +1814,7 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
+            outside_text_osb_render_expansion_multiplier,
             outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
@@ -1894,6 +1913,7 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
+            outside_text_osb_render_expansion_multiplier,
             outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
@@ -1992,6 +2012,7 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
+            outside_text_osb_render_expansion_multiplier,
             outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
@@ -2097,6 +2118,7 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
+            outside_text_osb_render_expansion_multiplier,
             outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,

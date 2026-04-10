@@ -318,6 +318,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "outside_text_page_filter_margin_threshold",
     "outside_text_page_filter_min_area_ratio",
     "outside_text_bbox_expansion_percent",
+    "outside_text_osb_render_expansion_multiplier",
     "outside_text_text_box_proximity_ratio",
     "outside_text_osb_font_pack",
     "outside_text_osb_max_font_size",

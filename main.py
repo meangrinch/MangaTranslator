@@ -640,6 +640,12 @@ def main():
         help="Bounding box expansion percent for OSB detection",
     )
     parser.add_argument(
+        "--osb-render-expansion",
+        type=float,
+        default=1.0,
+        help="Multiplier for the final OSB render box and opencv fill area (1.0-3.0)",
+    )
+    parser.add_argument(
         "--osb-text-box-proximity-ratio",
         type=float,
         default=0.02,
@@ -926,8 +932,7 @@ def main():
             enable_page_number_filtering=args.osb_filter_page_numbers,
             page_filter_margin_threshold=args.osb_page_filter_margin,
             page_filter_min_area_ratio=args.osb_page_filter_min_area,
-            huggingface_token=args.osb_hf_token
-            or os.environ.get("HF_TOKEN", ""),
+            huggingface_token=args.osb_hf_token or os.environ.get("HF_TOKEN", ""),
             inpainting_method=args.osb_inpainting_method,
             kontext_backend=args.osb_kontext_backend,
             flux_low_vram=args.osb_flux_low_vram,
@@ -945,6 +950,7 @@ def main():
             osb_use_subpixel_rendering=args.osb_use_subpixel,
             osb_font_hinting=args.osb_font_hinting,
             bbox_expansion_percent=args.osb_bbox_expansion,
+            osb_render_expansion_multiplier=args.osb_render_expansion,
             text_box_proximity_ratio=args.osb_text_box_proximity_ratio,
         ),
         preprocessing=PreprocessingConfig(

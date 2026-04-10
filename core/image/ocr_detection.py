@@ -548,7 +548,7 @@ class OutsideTextDetector:
         )
 
         groups = []
-        for group_boxes, group_results in grouped_boxes:
+        for group_boxes, group_results, global_indices in grouped_boxes:
             combined_mask = np.zeros((img_h, img_w), dtype=bool)
             individual_masks = []
             mask_indices = []
@@ -566,7 +566,9 @@ class OutsideTextDetector:
                     f"  - Group too large ({max_x - min_x}x{max_y - min_y}), splitting...",
                     verbose=verbose,
                 )
-                for i, (box, result) in enumerate(zip(group_boxes, group_results)):
+                for i, (box, result, g_idx) in enumerate(
+                    zip(group_boxes, group_results, global_indices)
+                ):
                     x0, y0, x1, y1 = box
                     mask = np.zeros((img_h, img_w), dtype=bool)
                     mask[y0:y1, x0:x1] = True
@@ -595,7 +597,7 @@ class OutsideTextDetector:
                             "bbox": bbox,
                             "original_bbox": original_bbox,
                             "individual_masks": [mask],
-                            "mask_indices": [i],
+                            "mask_indices": [g_idx],
                             "confidence": conf,
                         }
                     )
@@ -603,8 +605,8 @@ class OutsideTextDetector:
 
             raw_boxes = [[int(c) for c in res[0]] for res in group_results]
 
-            for i, (box, result, raw_box) in enumerate(
-                zip(group_boxes, group_results, raw_boxes)
+            for i, (box, result, raw_box, g_idx) in enumerate(
+                zip(group_boxes, group_results, raw_boxes, global_indices)
             ):
                 x0, y0, x1, y1 = box
                 mask = np.zeros((img_h, img_w), dtype=bool)
@@ -612,7 +614,7 @@ class OutsideTextDetector:
 
                 combined_mask |= mask
                 individual_masks.append(mask)
-                mask_indices.append(i)
+                mask_indices.append(g_idx)
 
                 _, conf = result
                 avg_confidence += conf
@@ -698,9 +700,10 @@ class OutsideTextDetector:
         for i in range(len(boxes)):
             root = find(i)
             if root not in groups:
-                groups[root] = ([], [])
+                groups[root] = ([], [], [])
             groups[root][0].append(boxes[i])
             groups[root][1].append(results[i])
+            groups[root][2].append(i)
 
         grouped_boxes = list(groups.values())
 

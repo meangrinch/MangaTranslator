@@ -157,6 +157,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
         outside_text_bbox_expansion_percent_val,
+        outside_text_osb_render_expansion_multiplier_val,
         outside_text_text_box_proximity_ratio_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
@@ -223,6 +224,9 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
             bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
+            osb_render_expansion_multiplier=float(
+                outside_text_osb_render_expansion_multiplier_val
+            ),
             text_box_proximity_ratio=float(outside_text_text_box_proximity_ratio_val),
         ),
         provider_settings=UITranslationProviderSettings(
@@ -433,10 +437,7 @@ def _format_single_success_message(
         f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n",
     ]
 
-    if (
-        backend_config.outside_text.enabled
-        and backend_config.outside_text.osb_font_dir
-    ):
+    if backend_config.outside_text.enabled and backend_config.outside_text.osb_font_dir:
         osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
         msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
 
@@ -591,10 +592,7 @@ def _format_batch_success_message(
         f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n",
     ]
 
-    if (
-        backend_config.outside_text.enabled
-        and backend_config.outside_text.osb_font_dir
-    ):
+    if backend_config.outside_text.enabled and backend_config.outside_text.osb_font_dir:
         osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
         msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
 
@@ -967,6 +965,7 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
         outside_text_bbox_expansion_percent_val,
+        outside_text_osb_render_expansion_multiplier_val,
         outside_text_text_box_proximity_ratio_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
@@ -1019,6 +1018,9 @@ def handle_save_config_click(*args: Any) -> str:
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
             bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
+            osb_render_expansion_multiplier=float(
+                outside_text_osb_render_expansion_multiplier_val
+            ),
             text_box_proximity_ratio=float(outside_text_text_box_proximity_ratio_val),
         ),
         provider_settings=UITranslationProviderSettings(
@@ -1333,6 +1335,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.osb_use_subpixel_rendering,
         default_ui_state.outside_text.osb_font_hinting,
         default_ui_state.outside_text.bbox_expansion_percent,
+        default_ui_state.outside_text.osb_render_expansion_multiplier,
         default_ui_state.outside_text.text_box_proximity_ratio,
         gr.update(value=default_ui_state.output.image_upscale_mode),
         gr.update(
@@ -1738,7 +1741,9 @@ def handle_ocr_method_change(
             updates.append(model_update)
         elif provider == "Z.ai":
             # For LLM OCR mode, only show Z.ai vision models
-            models = [m for m in settings_manager.PROVIDER_MODELS.get("Z.ai", []) if "v" in m]
+            models = [
+                m for m in settings_manager.PROVIDER_MODELS.get("Z.ai", []) if "v" in m
+            ]
             saved_settings = settings_manager.get_saved_settings()
             provider_models_dict = saved_settings.get(
                 "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]

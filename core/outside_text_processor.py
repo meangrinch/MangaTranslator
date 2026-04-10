@@ -19,6 +19,11 @@ from core.image.ocr_detection import OutsideTextDetector, extract_text_with_mang
 from core.ml.model_manager import get_model_manager
 from utils.logging import log_message
 
+# OSB Expansion Parameters
+OSB_EXPANSION_ASPECT_RATIO_CONDITION = 0.4
+OSB_EXPANSION_AREA_RATIO_CONDITION = 0.005
+OSB_EXPANSION_PIXEL_BUFFER = 5  # for bubbles, nearby OSB regions, panels
+
 
 def process_outside_text(
     pil_image: Image.Image,
@@ -28,6 +33,7 @@ def process_outside_text(
     verbose: bool = False,
     bubble_data: Optional[List[Dict[str, Any]]] = None,
     text_free_boxes: Optional[List[List[float]]] = None,
+    panels: Optional[List[Tuple[int, int, int, int]]] = None,
 ) -> Tuple[Image.Image, List[Dict[str, Any]]]:
     """
     Process outside text detection, inpainting, and prepare data for translation.
@@ -141,6 +147,138 @@ def process_outside_text(
                     verbose=verbose,
                 )
 
+        raw_outside_text_results = outside_text_results.copy()
+
+        # Apply OSB render expansion
+        expansion_mult = getattr(
+            config.outside_text, "osb_render_expansion_multiplier", 1.0
+        )
+        if expansion_mult > 1.0:
+            log_message(
+                f"Expanding OSB bboxes by {expansion_mult}x...", verbose=verbose
+            )
+            expanded_results = []
+            for i, res in enumerate(outside_text_results):
+                bbox, conf = res
+                x1, y1, x2, y2 = bbox
+                w = x2 - x1
+                h = y2 - y1
+
+                aspect_ratio = float(w) / float(max(1, h))
+                area_ratio = (w * h) / float(max(1, img_w * img_h))
+
+                if (
+                    aspect_ratio > OSB_EXPANSION_ASPECT_RATIO_CONDITION
+                    and area_ratio >= OSB_EXPANSION_AREA_RATIO_CONDITION
+                ):
+                    expanded_results.append(
+                        ([int(x1), int(y1), int(x2), int(y2)], conf)
+                    )
+                    continue
+
+                cx = x1 + w / 2
+                cy = y1 + h / 2
+
+                new_w = w * expansion_mult
+                new_h = h * expansion_mult
+
+                nx1 = int(cx - new_w / 2)
+                ny1 = int(cy - new_h / 2)
+                nx2 = int(cx + new_w / 2)
+                ny2 = int(cy + new_h / 2)
+
+                nx1 = max(0, nx1)
+                ny1 = max(0, ny1)
+                nx2 = min(img_w, nx2)
+                ny2 = min(img_h, ny2)
+
+                if panels:
+                    associated_panel = None
+                    for p in panels:
+                        px1, py1, px2, py2 = p
+                        if px1 <= cx <= px2 and py1 <= cy <= py2:
+                            associated_panel = p
+                            break
+                    if associated_panel:
+                        px1, py1, px2, py2 = associated_panel
+                        panel_buffer = OSB_EXPANSION_PIXEL_BUFFER
+                        c_px1 = min(int(px1) + panel_buffer, int(px2))
+                        c_py1 = min(int(py1) + panel_buffer, int(py2))
+                        c_px2 = max(int(px2) - panel_buffer, int(px1))
+                        c_py2 = max(int(py2) - panel_buffer, int(py1))
+
+                        nx1 = max(c_px1, nx1)
+                        ny1 = max(c_py1, ny1)
+                        nx2 = min(c_px2, nx2)
+                        ny2 = min(c_py2, ny2)
+
+                buffer = OSB_EXPANSION_PIXEL_BUFFER
+                obstacles = []
+                if bubble_data:
+                    for b in bubble_data:
+                        bb = b.get("bbox")
+                        if bb and len(bb) == 4:
+                            bx1, by1, bx2, by2 = [int(c) for c in bb]
+                            obstacles.append(
+                                (
+                                    max(0, bx1 - buffer),
+                                    max(0, by1 - buffer),
+                                    min(img_w, bx2 + buffer),
+                                    min(img_h, by2 + buffer),
+                                )
+                            )
+
+                for j, other_res in enumerate(outside_text_results):
+                    if i == j:
+                        continue
+
+                    if j < i:
+                        ob, _ = expanded_results[j]
+                    else:
+                        ob, _ = other_res
+                    obx1, oby1, obx2, oby2 = [int(c) for c in ob]
+
+                    obstacles.append(
+                        (
+                            max(0, obx1 - buffer),
+                            max(0, oby1 - buffer),
+                            min(img_w, obx2 + buffer),
+                            min(img_h, oby2 + buffer),
+                        )
+                    )
+
+                for ox1, oy1, ox2, oy2 in obstacles:
+                    if not (nx2 <= ox1 or nx1 >= ox2 or ny2 <= oy1 or ny1 >= oy2):
+                        can_retract_nx2 = (nx2 - ox1) if (ox1 >= x2) else float("inf")
+                        can_retract_nx1 = (ox2 - nx1) if (ox2 <= x1) else float("inf")
+                        can_retract_ny2 = (ny2 - oy1) if (oy1 >= y2) else float("inf")
+                        can_retract_ny1 = (oy2 - ny1) if (oy2 <= y1) else float("inf")
+
+                        min_retract = min(
+                            can_retract_nx2,
+                            can_retract_nx1,
+                            can_retract_ny2,
+                            can_retract_ny1,
+                        )
+                        if min_retract != float("inf"):
+                            if min_retract == can_retract_nx2:
+                                nx2 = ox1
+                            elif min_retract == can_retract_nx1:
+                                nx1 = ox2
+                            elif min_retract == can_retract_ny2:
+                                ny2 = oy1
+                            elif min_retract == can_retract_ny1:
+                                ny1 = oy2
+
+                nx1 = min(nx1, int(x1))
+                ny1 = min(ny1, int(y1))
+                nx2 = max(nx2, int(x2))
+                ny2 = max(ny2, int(y2))
+
+                expanded_results.append(([nx1, ny1, nx2, ny2], conf))
+
+            outside_text_results = expanded_results
+
         # Build a mask of all detected speech bubbles to prevent OSB inpainting overlap
         total_bubble_mask = np.zeros((img_h, img_w), dtype=bool)
         if bubble_data:
@@ -171,6 +309,13 @@ def process_outside_text(
                         verbose=verbose,
                     )
 
+            if np.any(total_bubble_mask):
+                # Dilate the bubble mask to provide a safe buffer for OSB fill
+                kernel = np.ones((11, 11), np.uint8)
+                total_bubble_mask = cv2.dilate(
+                    total_bubble_mask.astype(np.uint8), kernel, iterations=1
+                ).astype(bool)
+
         mime_type = (
             "image/png"
             if image_format and image_format.upper() == "PNG"
@@ -180,7 +325,7 @@ def process_outside_text(
 
         # Probe original text color for OSB rendering
         original_text_colors = {}
-        for ocr_result in outside_text_results:
+        for ocr_result in raw_outside_text_results:
             bbox_coords, conf = ocr_result
             x1, y1, x2, y2 = [int(c) for c in bbox_coords]
             bbox_tuple = (x1, y1, x2, y2)
@@ -307,7 +452,7 @@ def process_outside_text(
             text_box_proximity_ratio=config.outside_text.text_box_proximity_ratio,
             verbose=verbose,
             image_override=pil_image,
-            existing_results=outside_text_results,
+            existing_results=raw_outside_text_results,
         )
 
         current_image = pil_image
@@ -408,20 +553,57 @@ def process_outside_text(
                                     )
 
                             # Expanded sampling around the original bbox to find background color
+                            mask_indices = group.get("mask_indices", [])
+                            if mask_indices and raw_outside_text_results:
+                                rx0 = int(
+                                    min(
+                                        [
+                                            raw_outside_text_results[idx][0][0]
+                                            for idx in mask_indices
+                                        ]
+                                    )
+                                )
+                                ry0 = int(
+                                    min(
+                                        [
+                                            raw_outside_text_results[idx][0][1]
+                                            for idx in mask_indices
+                                        ]
+                                    )
+                                )
+                                rx1 = int(
+                                    max(
+                                        [
+                                            raw_outside_text_results[idx][0][2]
+                                            for idx in mask_indices
+                                        ]
+                                    )
+                                )
+                                ry1 = int(
+                                    max(
+                                        [
+                                            raw_outside_text_results[idx][0][3]
+                                            for idx in mask_indices
+                                        ]
+                                    )
+                                )
+                            else:
+                                rx0, ry0, rx1, ry1 = ox, oy, ox + ow, oy + oh
+
                             expansion_px = 2
-                            sx1 = max(0, ox - expansion_px)
-                            sy1 = max(0, oy - expansion_px)
-                            sx2 = min(img_w, ox + ow + expansion_px)
-                            sy2 = min(img_h, oy + oh + expansion_px)
+                            sx1 = max(0, rx0 - expansion_px)
+                            sy1 = max(0, ry0 - expansion_px)
+                            sx2 = min(img_w, rx1 + expansion_px)
+                            sy2 = min(img_h, ry1 + expansion_px)
 
                             if sx2 > sx1 and sy2 > sy1:
                                 mask_h, mask_w = sy2 - sy1, sx2 - sx1
                                 local_mask = np.ones((mask_h, mask_w), dtype=bool)
 
-                                lx0 = max(0, ox0 - sx1)
-                                ly0 = max(0, oy0 - sy1)
-                                lx1 = min(mask_w, ox1 - sx1)
-                                ly1 = min(mask_h, oy1 - sy1)
+                                lx0 = max(0, rx0 - sx1)
+                                ly0 = max(0, ry0 - sy1)
+                                lx1 = min(mask_w, rx1 - sx1)
+                                ly1 = min(mask_h, ry1 - sy1)
 
                                 if lx1 > lx0 and ly1 > ly0:
                                     local_mask[ly0:ly1, lx0:lx1] = False
@@ -445,9 +627,9 @@ def process_outside_text(
                                     )[0][0]
 
                                     crop_rgb = np.array(
-                                        pil_image.crop(
-                                            (ox, oy, ox + ow, oy + oh)
-                                        ).convert("RGB")
+                                        pil_image.crop((rx0, ry0, rx1, ry1)).convert(
+                                            "RGB"
+                                        )
                                     )
                                     crop_lab = cv2.cvtColor(
                                         crop_rgb, cv2.COLOR_RGB2LAB
@@ -525,11 +707,105 @@ def process_outside_text(
                                         )
 
                                     force_fill = inpainting_method == "opencv"
-                                    should_simple_fill = (
-                                        white_ratio >= ratio_threshold
-                                        or black_ratio >= ratio_threshold
-                                        or force_fill
-                                    )
+
+                                    # Get expanded bounds for this group to check solid color and for cv2 fill
+                                    p_x0, p_y0, p_x1, p_y1 = ox, oy, ox + ow, oy + oh
+                                    mask_indices = group.get("mask_indices", [])
+                                    if mask_indices and outside_text_results:
+                                        p_x0 = max(
+                                            0,
+                                            int(
+                                                min(
+                                                    [
+                                                        outside_text_results[idx][0][0]
+                                                        for idx in mask_indices
+                                                    ]
+                                                )
+                                            ),
+                                        )
+                                        p_y0 = max(
+                                            0,
+                                            int(
+                                                min(
+                                                    [
+                                                        outside_text_results[idx][0][1]
+                                                        for idx in mask_indices
+                                                    ]
+                                                )
+                                            ),
+                                        )
+                                        p_x1 = min(
+                                            img_w,
+                                            int(
+                                                max(
+                                                    [
+                                                        outside_text_results[idx][0][2]
+                                                        for idx in mask_indices
+                                                    ]
+                                                )
+                                            ),
+                                        )
+                                        p_y1 = min(
+                                            img_h,
+                                            int(
+                                                max(
+                                                    [
+                                                        outside_text_results[idx][0][3]
+                                                        for idx in mask_indices
+                                                    ]
+                                                )
+                                            ),
+                                        )
+
+                                    force_fill = inpainting_method == "opencv"
+
+                                    # Simply check if the expanded boundary is solid color
+                                    expanded_is_solid = False
+                                    if not force_fill:
+                                        ex_sx1 = max(0, p_x0 - expansion_px)
+                                        ex_sy1 = max(0, p_y0 - expansion_px)
+                                        ex_sx2 = min(img_w, p_x1 + expansion_px)
+                                        ex_sy2 = min(img_h, p_y1 + expansion_px)
+
+                                        if ex_sx2 > ex_sx1 and ex_sy2 > ex_sy1:
+                                            # Grab boundary pixels using Numpy directly for speed
+                                            crop_img = current_image.crop(
+                                                (ex_sx1, ex_sy1, ex_sx2, ex_sy2)
+                                            )
+                                            ecrop_np = np.array(crop_img.convert("RGB"))
+                                            elocal_mask = np.ones(
+                                                ecrop_np.shape[:2], dtype=bool
+                                            )
+
+                                            ix1 = max(0, p_x0 - ex_sx1)
+                                            iy1 = max(0, p_y0 - ex_sy1)
+                                            ix2 = min(ecrop_np.shape[1], p_x1 - ex_sx1)
+                                            iy2 = min(ecrop_np.shape[0], p_y1 - ex_sy1)
+
+                                            if ix2 > ix1 and iy2 > iy1:
+                                                elocal_mask[iy1:iy2, ix1:ix2] = False
+
+                                            eborder_pixels = ecrop_np[elocal_mask]
+                                            if eborder_pixels.size > 0:
+                                                ewhite_ratio = np.mean(
+                                                    np.all(
+                                                        eborder_pixels >= white_thresh,
+                                                        axis=1,
+                                                    )
+                                                )
+                                                eblack_ratio = np.mean(
+                                                    np.all(
+                                                        eborder_pixels <= black_thresh,
+                                                        axis=1,
+                                                    )
+                                                )
+                                                if (
+                                                    ewhite_ratio >= ratio_threshold
+                                                    or eblack_ratio >= ratio_threshold
+                                                ):
+                                                    expanded_is_solid = True
+
+                                    should_simple_fill = expanded_is_solid or force_fill
 
                                     if should_simple_fill:
                                         fill_color = fallback_fill_color
@@ -553,34 +829,86 @@ def process_outside_text(
                     def apply_simple_fill(color_to_use):
                         new_img = current_image.copy()
 
-                        if (
+                        mask_indices = group.get("mask_indices", [])
+                        if mask_indices and outside_text_results:
+                            p_x0 = max(
+                                0,
+                                int(
+                                    min(
+                                        [
+                                            outside_text_results[idx][0][0]
+                                            for idx in mask_indices
+                                        ]
+                                    )
+                                ),
+                            )
+                            p_y0 = max(
+                                0,
+                                int(
+                                    min(
+                                        [
+                                            outside_text_results[idx][0][1]
+                                            for idx in mask_indices
+                                        ]
+                                    )
+                                ),
+                            )
+                            p_x1 = min(
+                                img_w,
+                                int(
+                                    max(
+                                        [
+                                            outside_text_results[idx][0][2]
+                                            for idx in mask_indices
+                                        ]
+                                    )
+                                ),
+                            )
+                            p_y1 = min(
+                                img_h,
+                                int(
+                                    max(
+                                        [
+                                            outside_text_results[idx][0][3]
+                                            for idx in mask_indices
+                                        ]
+                                    )
+                                ),
+                            )
+                        elif (
                             original_bbox_dict
                             and ox1 is not None
                             and ox0 is not None
                             and oy1 is not None
                             and oy0 is not None
-                            and ox1 > ox0
-                            and oy1 > oy0
                         ):
-                            # Restricted fill logic: Clip mask to bbox
-                            region_mask = combined_mask[oy0:oy1, ox0:ox1]
-                            if not np.any(region_mask):
-                                return new_img
-
-                            mask_pil = Image.fromarray(
-                                (region_mask * 255).astype(np.uint8), mode="L"
-                            )
-                            patch = Image.new(
-                                "RGB", (ox1 - ox0, oy1 - oy0), color_to_use
-                            )
-                            new_img.paste(patch, (ox0, oy0), mask=mask_pil)
+                            p_x0, p_y0, p_x1, p_y1 = ox0, oy0, ox1, oy1
                         else:
-                            # Full mask fill
+                            # Full mask fill fallback
                             mask_pil = Image.fromarray(
                                 (combined_mask * 255).astype(np.uint8), mode="L"
                             )
                             patch = Image.new("RGB", new_img.size, color_to_use)
                             new_img.paste(patch, (0, 0), mask=mask_pil)
+                            return new_img
+
+                        if p_x1 > p_x0 and p_y1 > p_y0:
+                            # Create a solid rectangle mask for the expanded bounds, but exclude speech bubbles
+                            rect_mask = np.zeros((img_h, img_w), dtype=bool)
+                            rect_mask[p_y0:p_y1, p_x0:p_x1] = True
+                            rect_mask = np.logical_and(
+                                rect_mask, np.logical_not(total_bubble_mask)
+                            )
+
+                            region_mask = rect_mask[p_y0:p_y1, p_x0:p_x1]
+                            if np.any(region_mask):
+                                mask_pil = Image.fromarray(
+                                    (region_mask * 255).astype(np.uint8), mode="L"
+                                )
+                                patch = Image.new(
+                                    "RGB", (p_x1 - p_x0, p_y1 - p_y0), color_to_use
+                                )
+                                new_img.paste(patch, (p_x0, p_y0), mask=mask_pil)
 
                         return new_img
 
@@ -696,10 +1024,15 @@ def process_outside_text(
         outside_text_data = []
         original_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
 
-        for ocr_result in outside_text_results:
-            bbox_coords, conf = ocr_result
+        for expanded_res, raw_res in zip(
+            outside_text_results, raw_outside_text_results
+        ):
+            bbox_coords, conf = expanded_res
+            raw_coords, _ = raw_res
+
             x1, y1, x2, y2 = [int(c) for c in bbox_coords]
             bbox_tuple = (x1, y1, x2, y2)
+            raw_bbox_tuple = tuple(int(c) for c in raw_coords)
 
             outside_text_image_cv = original_cv_image[y1:y2, x1:x2].copy()
 
@@ -778,12 +1111,15 @@ def process_outside_text(
                     outside_text_data.append(
                         {
                             "bbox": bbox_tuple,
+                            "original_bbox": raw_bbox_tuple,
                             "confidence": conf,
                             "is_outside_text": True,
                             "image_b64": image_b64,
                             "mime_type": mime_type,
-                            "is_dark_text": original_text_colors.get(bbox_tuple, True),
-                            "text_color_rgb": extracted_text_colors.get(bbox_tuple),
+                            "is_dark_text": original_text_colors.get(
+                                raw_bbox_tuple, True
+                            ),
+                            "text_color_rgb": extracted_text_colors.get(raw_bbox_tuple),
                             "aspect_ratio": aspect_ratio,
                             "needs_text_background": needs_text_bg,
                             "original_crop_pil": original_crop_pil,
