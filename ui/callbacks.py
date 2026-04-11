@@ -1352,6 +1352,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
             interactive=default_ui_state.output.image_upscale_mode != "off",
         ),
         default_ui_state.general.auto_scale,
+        default_ui_state.batch_parallel_requests,
     ]
 
 

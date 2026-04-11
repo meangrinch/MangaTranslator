@@ -1928,6 +1928,7 @@ def create_layout(
             image_upscale_factor,
             image_upscale_model,
             auto_scale,
+            batch_parallel_requests,
         ]
 
         translate_inputs = [
