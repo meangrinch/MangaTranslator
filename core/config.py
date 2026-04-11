@@ -110,6 +110,7 @@ class RenderingConfig:
     padding_pixels: float = 5.0
     outline_width: float = 0.0
     supersampling_factor: int = 4
+    detach_trailing_ellipsis: bool = True
 
 
 @dataclass

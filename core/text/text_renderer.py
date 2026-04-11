@@ -221,6 +221,7 @@ def render_text_skia(
             bubble_id,
             cleaned_mask,
             layout_box_top_left,
+            config.detach_trailing_ellipsis,
         )
     except RenderingError as e:
         raise RenderingError(f"Layout optimization failed: {e}") from e

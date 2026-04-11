@@ -130,6 +130,7 @@ def check_fit(
     badness_exponent: float,
     word_width_cache: Optional[Dict[Tuple[str, int], float]] = None,
     verbose: bool = False,
+    detach_trailing_ellipsis: bool = True,
 ) -> Optional[Dict]:
     """Check if text fits within the given dimensions at the specified font size.
 
@@ -207,7 +208,9 @@ def check_fit(
                 }
             return None
 
-        tokens: List[Tuple[str, bool]] = tokenize_styled_text(text)
+        tokens: List[Tuple[str, bool]] = tokenize_styled_text(
+            text, detach_trailing_ellipsis
+        )
         augmented_tokens: List[str] = []
 
         if hyphenate_before_scaling:
@@ -264,14 +267,18 @@ def check_fit(
             GLUE_TRAILING_PUNCT_RE = re.compile(r"^[,.;:!?…]+$")
             GLUE_CLOSERS_RE = re.compile(r"^[\)\]\}\u2019\u201D\'\"]+$")
 
-            def _glue_trailing_punctuation(tokens_list: List[str]) -> List[str]:
+            def _glue_trailing_punctuation(
+                tokens_list: List[str], _detach: bool = True
+            ) -> List[str]:
                 glued: List[str] = []
                 for tok in tokens_list:
                     match = STYLE_PATTERN.match(tok)
                     content = match.group(2) if match else tok
 
                     # Skip gluing for disconnected ellipsis to allow wrapping
-                    if re.match(r"^(\.{2,})[\)\]\}\u2019\u201D\'\"]*$", content):
+                    if _detach and re.match(
+                        r"^(\.{2,})[\)\]\}\u2019\u201D\'\"]*$", content
+                    ):
                         glued.append(tok)
                         continue
 
@@ -284,7 +291,9 @@ def check_fit(
                         glued.append(tok)
                 return glued
 
-            augmented_tokens = _glue_trailing_punctuation(augmented_tokens)
+            augmented_tokens = _glue_trailing_punctuation(
+                augmented_tokens, detach_trailing_ellipsis
+            )
         except Exception:
             pass
 
@@ -314,6 +323,7 @@ def check_fit(
             space_width,
             badness_exponent,
             hyphen_penalty,
+            detach_trailing_ellipsis,
         )
 
         if not wrapped_lines_text:
@@ -430,6 +440,7 @@ def find_optimal_layout(
     bubble_id: Optional[str] = None,
     cleaned_mask: Optional[np.ndarray] = None,
     box_top_left: Optional[Tuple[int, int]] = None,
+    detach_trailing_ellipsis: bool = True,
 ) -> Dict:
     """Find the optimal font size and layout for text within given dimensions.
 
@@ -509,6 +520,7 @@ def find_optimal_layout(
                 badness_exponent,
                 word_width_cache,
                 verbose,
+                detach_trailing_ellipsis,
             )
 
             if fit_data is None:

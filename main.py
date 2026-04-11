@@ -393,6 +393,16 @@ def main():
         help="Render text at Nx resolution then downscale for smoother edges (1-4). "
         "Higher values improve quality but use slightly more memory. 1 = disabled.",
     )
+    parser.add_argument(
+        "--no-detach-trailing-ellipsis",
+        dest="detach_trailing_ellipsis",
+        action="store_false",
+        help=(
+            "Disable detaching trailing ellipsis onto a new line for better wrapping. "
+            "When disabled, trailing '...' stays glued to the preceding word."
+        ),
+    )
+    parser.set_defaults(detach_trailing_ellipsis=True)
     # Output args
     parser.add_argument(
         "--jpeg-quality",
@@ -919,6 +929,7 @@ def main():
             badness_exponent=args.badness_exponent,
             padding_pixels=args.padding_pixels,
             supersampling_factor=args.supersampling_factor,
+            detach_trailing_ellipsis=args.detach_trailing_ellipsis,
         ),
         output=OutputConfig(
             output_format=args.output_format,

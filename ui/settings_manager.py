@@ -175,6 +175,7 @@ DEFAULT_SETTINGS = {
     "badness_exponent": 3.0,
     "padding_pixels": 5.0,
     "supersampling_factor": 4,
+    "detach_trailing_ellipsis": True,
     "font_pack": None,
     "verbose": False,
     "jpeg_quality": 95,
@@ -289,6 +290,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "hyphenation_min_word_length",
     "badness_exponent",
     "supersampling_factor",
+    "detach_trailing_ellipsis",
     # Models / Detection
     "confidence",
     "conjoined_confidence",

@@ -1149,6 +1149,7 @@ def translate_and_render(
                                 osb_outline_width if is_outside_text else 0.0
                             ),
                             supersampling_factor=config.rendering.supersampling_factor,
+                            detach_trailing_ellipsis=config.rendering.detach_trailing_ellipsis,
                         )
                         success = False
                         if is_outside_text:

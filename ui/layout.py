@@ -1165,6 +1165,13 @@ def create_layout(
                                 label="Hyphenate Long Words",
                                 info="Try inserting hyphens when wrapping before reducing font size.",
                             )
+                            detach_trailing_ellipsis = gr.Checkbox(
+                                value=saved_settings.get(
+                                    "detach_trailing_ellipsis", True
+                                ),
+                                label="Detach Trailing Ellipsis",
+                                info="Move trailing '...' onto a new line for better text wrapping.",
+                            )
                             hyphen_penalty = gr.Slider(
                                 100,
                                 2000,
@@ -1785,6 +1792,7 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
+            detach_trailing_ellipsis,
             special_instructions,
             batch_special_instructions,
             hyphen_penalty,
@@ -1889,6 +1897,7 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
+            detach_trailing_ellipsis,
             special_instructions,
             batch_special_instructions,
             outside_text_enabled,
@@ -1985,6 +1994,7 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
+            detach_trailing_ellipsis,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
@@ -2091,6 +2101,7 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
+            detach_trailing_ellipsis,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,

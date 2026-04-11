@@ -116,7 +116,9 @@ KINSOKU_NOT_AT_START = set(  # Cannot start a line
 KINSOKU_NOT_AT_END = set("（【「『〔〈《（［｛([")  # Cannot end a line
 
 
-def _split_with_cjk_awareness(text: str) -> List[str]:
+def _split_with_cjk_awareness(
+    text: str, detach_trailing_ellipsis: bool = True
+) -> List[str]:
     """Split text into tokens. Each CJK char is a token; kinsoku rules apply.
 
     Hangul (Korean) is excluded from per-character splitting because Korean
@@ -161,21 +163,25 @@ def _split_with_cjk_awareness(text: str) -> List[str]:
     if current_token:
         tokens.append(current_token)
 
-    # Separate trailing ellipsis to allow wrapping
-    final_tokens = []
-    ellipsis_re = re.compile(r"^(.*?)((\.{2,})[\)\]\}\u2019\u201D\'\"]*)$")
-    for t in tokens:
-        m = ellipsis_re.match(t)
-        if m and m.group(1):
-            final_tokens.append(m.group(1))
-            final_tokens.append(m.group(2))
-        else:
-            final_tokens.append(t)
+    if detach_trailing_ellipsis:
+        # Separate trailing ellipsis to allow wrapping
+        final_tokens = []
+        ellipsis_re = re.compile(r"^(.*?)((\.{2,})[\)\]\}\u2019\u201D\'\"]*)$")
+        for t in tokens:
+            m = ellipsis_re.match(t)
+            if m and m.group(1):
+                final_tokens.append(m.group(1))
+                final_tokens.append(m.group(2))
+            else:
+                final_tokens.append(t)
+        return final_tokens
 
-    return final_tokens
+    return tokens
 
 
-def tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
+def tokenize_styled_text(
+    text: str, detach_trailing_ellipsis: bool = True
+) -> List[Tuple[str, bool]]:
     """
     Tokenizes text into atomic units for wrapping where styled blocks are
     preserved as single, unbreakable tokens.
@@ -192,20 +198,20 @@ def tokenize_styled_text(text: str) -> List[Tuple[str, bool]]:
         start, end = match.span()
         if start > last_end:
             preceding = text[last_end:start]
-            for w in _split_with_cjk_awareness(preceding):
+            for w in _split_with_cjk_awareness(preceding, detach_trailing_ellipsis):
                 tokens.append((w, False))
 
         marker = match.group(1)
         content = match.group(2)
         if content:
-            for w in _split_with_cjk_awareness(content):
+            for w in _split_with_cjk_awareness(content, detach_trailing_ellipsis):
                 tokens.append((f"{marker}{w}{marker}", True))
 
         last_end = end
 
     if last_end < len(text):
         trailing = text[last_end:]
-        for w in _split_with_cjk_awareness(trailing):
+        for w in _split_with_cjk_awareness(trailing, detach_trailing_ellipsis):
             tokens.append((w, False))
 
     return tokens
@@ -305,27 +311,30 @@ def _is_cjk_token(token: str) -> bool:
     )
 
 
-def _needs_space_between(left_token: str, right_token: str) -> bool:
+def _needs_space_between(
+    left_token: str, right_token: str, detach_trailing_ellipsis: bool = True
+) -> bool:
     """No space needed between adjacent CJK tokens or before separated punctuation."""
     if _is_cjk_token(left_token) and _is_cjk_token(right_token):
         return False
 
-    match = STYLE_PATTERN.match(right_token)
-    r_content = match.group(2) if match else right_token
-    # No space before detached ellipsis/punctuation chunks
-    if re.match(r"^(\.{2,})[\)\]\}\u2019\u201D\'\"]*$", r_content):
-        return False
+    if detach_trailing_ellipsis:
+        match = STYLE_PATTERN.match(right_token)
+        r_content = match.group(2) if match else right_token
+        # No space before detached ellipsis/punctuation chunks
+        if re.match(r"^(\.{2,})[\)\]\}\u2019\u201D\'\"]*$", r_content):
+            return False
 
     return True
 
 
-def _join_tokens_smart(tokens: List[str]) -> str:
+def _join_tokens_smart(tokens: List[str], detach_trailing_ellipsis: bool = True) -> str:
     """Join tokens with smart spacing (no space between adjacent CJK tokens)."""
     if not tokens:
         return ""
     result = tokens[0]
     for i in range(1, len(tokens)):
-        if _needs_space_between(tokens[i - 1], tokens[i]):
+        if _needs_space_between(tokens[i - 1], tokens[i], detach_trailing_ellipsis):
             result += " " + tokens[i]
         else:
             result += tokens[i]
@@ -339,6 +348,7 @@ def find_optimal_breaks_dp(
     space_width: float,
     badness_exponent: float = 3.0,
     hyphen_penalty: float = 1000.0,
+    detach_trailing_ellipsis: bool = True,
 ) -> Optional[List[str]]:
     """
     Pragmatic Knuth-Plass style DP to find globally optimal line breaks.
@@ -375,7 +385,9 @@ def find_optimal_breaks_dp(
                 # Add space only if needed between this token and the previous one on the line
                 if j < i - 1:
                     # Check if we need space between tokens[j] and tokens[j+1]
-                    if _needs_space_between(tokens[j], tokens[j + 1]):
+                    if _needs_space_between(
+                        tokens[j], tokens[j + 1], detach_trailing_ellipsis
+                    ):
                         line_width += space_width
                 line_width += token_w[j]
 
@@ -407,7 +419,9 @@ def find_optimal_breaks_dp(
         current_break = N
         while current_break > 0:
             prev_break = path[current_break]
-            line = _join_tokens_smart(tokens[prev_break:current_break])
+            line = _join_tokens_smart(
+                tokens[prev_break:current_break], detach_trailing_ellipsis
+            )
             lines.insert(0, line)
             current_break = prev_break
 
