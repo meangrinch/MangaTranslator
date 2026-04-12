@@ -371,9 +371,14 @@ def process_single_bubble(
                             np.uint8([[sampled_bgr]]), cv2.COLOR_BGR2HSV
                         )[0][0]
                         if hsv[1] < 25:
-                            text_color_bgr = (
-                                (0, 0, 0) if hsv[2] < 128 else (255, 255, 255)
-                            )
+                            if not is_colored_bubble:
+                                text_color_bgr = (
+                                    (0, 0, 0) if fill_color_bgr == (255, 255, 255) else (255, 255, 255)
+                                )
+                            else:
+                                text_color_bgr = (
+                                    (0, 0, 0) if hsv[2] < 128 else (255, 255, 255)
+                                )
                         else:
                             text_color_bgr = sampled_bgr
 
