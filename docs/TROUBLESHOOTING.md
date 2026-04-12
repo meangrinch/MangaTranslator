@@ -42,6 +42,10 @@
 - **Text too large/small:**
   - Adjust "Max Font Size" and "Min Font Size" ranges
 
+- **Using different fonts for different bubble types (e.g., thoughts vs. speech):**
+  - Replace the italic/bold/bold+italic variants of a font with any font file you want, just ensure the filenames contain one of those keywords so they are detected as variants
+  - To further fine-tune the results, add a special instruction telling the LLM to use italics/bold/bold+italic (which are now your custom fonts) for internal monologues, etc.
+
 - **Text overlaps with each other:**
   - Your font is likely broken/corrupted; try using a different font (e.g., ones included with the portable package)
 
