@@ -8,7 +8,7 @@ from PIL import Image
 
 from core.text.font_manager import LRUCache, load_font_data
 from core.text.layout_engine import shape_line
-from core.text.text_processing import parse_styled_segments
+from core.text.text_processing import is_rtl_script, parse_styled_segments
 from utils.exceptions import FontError, RenderingError
 from utils.logging import log_message
 
@@ -263,6 +263,10 @@ def draw_layout(
                 segments = line_data.get("segments", [])
                 log_message(f"Line {i}: {len(segments)} segments", verbose=verbose)
 
+                is_line_rtl = is_rtl_script(line_data.get("text_with_markers", ""))
+                if is_line_rtl:
+                    cursor_x = line_start_x + line_width_measured
+
                 for segment_text, style_name in segments:
                     typeface_to_use = None
                     hb_face_to_use = None
@@ -349,43 +353,29 @@ def draw_layout(
 
                     # HarfBuzz uses 26.6 fixed-point format (64 units per pixel)
                     HB_26_6_SCALE_FACTOR = 64.0
-                    is_rtl = seg_direction == "rtl"
 
-                    if is_rtl:
-                        # For RTL, HarfBuzz returns glyphs in logical order
-                        # with positive x_advance. Compute total width first,
-                        # then place glyphs from right edge advancing left.
-                        total_segment_width = (
-                            sum(pos.x_advance for pos in positions)
-                            / HB_26_6_SCALE_FACTOR
-                        )
-                        rtl_cursor = total_segment_width
-                        for _, pos in zip(infos, positions):
-                            advance = pos.x_advance / HB_26_6_SCALE_FACTOR
-                            rtl_cursor -= advance
-                            glyph_x = (
-                                cursor_x
-                                + rtl_cursor
-                                + (pos.x_offset / HB_26_6_SCALE_FACTOR)
-                            )
-                            glyph_y = current_baseline_y - (
-                                pos.y_offset / HB_26_6_SCALE_FACTOR
-                            )
-                            skia_point_positions.append(skia.Point(glyph_x, glyph_y))
-                        segment_cursor_x = total_segment_width
+                    segment_width_calculated = (
+                        sum(pos.x_advance for pos in positions) / HB_26_6_SCALE_FACTOR
+                    )
+
+                    if is_line_rtl:
+                        cursor_x -= segment_width_calculated
+                        segment_start_x = cursor_x
                     else:
-                        for _, pos in zip(infos, positions):
-                            glyph_x = (
-                                cursor_x
-                                + segment_cursor_x
-                                + (pos.x_offset / HB_26_6_SCALE_FACTOR)
-                            )
-                            glyph_y = current_baseline_y - (
-                                pos.y_offset / HB_26_6_SCALE_FACTOR
-                            )
-                            skia_point_positions.append(skia.Point(glyph_x, glyph_y))
+                        segment_start_x = cursor_x
 
-                            segment_cursor_x += pos.x_advance / HB_26_6_SCALE_FACTOR
+                    for _, pos in zip(infos, positions):
+                        glyph_x = (
+                            segment_start_x
+                            + segment_cursor_x
+                            + (pos.x_offset / HB_26_6_SCALE_FACTOR)
+                        )
+                        glyph_y = current_baseline_y - (
+                            pos.y_offset / HB_26_6_SCALE_FACTOR
+                        )
+                        skia_point_positions.append(skia.Point(glyph_x, glyph_y))
+
+                        segment_cursor_x += pos.x_advance / HB_26_6_SCALE_FACTOR
 
                     try:
                         _ = builder.allocRunPos(
@@ -398,10 +388,12 @@ def draw_layout(
                             if outline_paint:
                                 canvas.drawTextBlob(text_blob, 0, 0, outline_paint)
                             canvas.drawTextBlob(text_blob, 0, 0, paint)
-                            segment_width = segment_cursor_x
-                            cursor_x += segment_width
+
+                            if not is_line_rtl:
+                                cursor_x += segment_width_calculated
+
                             log_message(
-                                f"Rendered '{segment_text}' ({style_name}) width={segment_width:.0f}",
+                                f"Rendered '{segment_text}' ({style_name}) width={segment_width_calculated:.0f}",
                                 verbose=verbose,
                             )
                         else:
@@ -415,8 +407,8 @@ def draw_layout(
                             f"Skia rendering error for '{segment_text}': {e}",
                             always_print=True,
                         )
-                        segment_width = segment_cursor_x
-                        cursor_x += segment_width
+                        if not is_line_rtl:
+                            cursor_x += segment_width_calculated
 
                 current_baseline_y += final_line_height
 
