@@ -326,7 +326,7 @@ def draw_layout(
                     hb_font_segment.scale = (hb_scale, hb_scale)
 
                     try:
-                        infos, positions = shape_line(
+                        infos, positions, seg_direction = shape_line(
                             segment_text, hb_font_segment, features_to_enable
                         )
                         if not infos:
@@ -349,18 +349,43 @@ def draw_layout(
 
                     # HarfBuzz uses 26.6 fixed-point format (64 units per pixel)
                     HB_26_6_SCALE_FACTOR = 64.0
-                    for _, pos in zip(infos, positions):
-                        glyph_x = (
-                            cursor_x
-                            + segment_cursor_x
-                            + (pos.x_offset / HB_26_6_SCALE_FACTOR)
-                        )
-                        glyph_y = current_baseline_y - (
-                            pos.y_offset / HB_26_6_SCALE_FACTOR
-                        )
-                        skia_point_positions.append(skia.Point(glyph_x, glyph_y))
+                    is_rtl = seg_direction == "rtl"
 
-                        segment_cursor_x += pos.x_advance / HB_26_6_SCALE_FACTOR
+                    if is_rtl:
+                        # For RTL, HarfBuzz returns glyphs in logical order
+                        # with positive x_advance. Compute total width first,
+                        # then place glyphs from right edge advancing left.
+                        total_segment_width = (
+                            sum(pos.x_advance for pos in positions)
+                            / HB_26_6_SCALE_FACTOR
+                        )
+                        rtl_cursor = total_segment_width
+                        for _, pos in zip(infos, positions):
+                            advance = pos.x_advance / HB_26_6_SCALE_FACTOR
+                            rtl_cursor -= advance
+                            glyph_x = (
+                                cursor_x
+                                + rtl_cursor
+                                + (pos.x_offset / HB_26_6_SCALE_FACTOR)
+                            )
+                            glyph_y = current_baseline_y - (
+                                pos.y_offset / HB_26_6_SCALE_FACTOR
+                            )
+                            skia_point_positions.append(skia.Point(glyph_x, glyph_y))
+                        segment_cursor_x = total_segment_width
+                    else:
+                        for _, pos in zip(infos, positions):
+                            glyph_x = (
+                                cursor_x
+                                + segment_cursor_x
+                                + (pos.x_offset / HB_26_6_SCALE_FACTOR)
+                            )
+                            glyph_y = current_baseline_y - (
+                                pos.y_offset / HB_26_6_SCALE_FACTOR
+                            )
+                            skia_point_positions.append(skia.Point(glyph_x, glyph_y))
+
+                            segment_cursor_x += pos.x_advance / HB_26_6_SCALE_FACTOR
 
                     try:
                         _ = builder.allocRunPos(

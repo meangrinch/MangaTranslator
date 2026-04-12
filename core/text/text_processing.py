@@ -7,6 +7,38 @@ import numpy as np
 STYLE_PATTERN = re.compile(r"(\*{1,3})(.*?)(\1)")
 
 
+def is_rtl_script(text: str) -> bool:
+    """Check if text contains dominant RTL script characters (Arabic, Hebrew, etc.)."""
+    rtl_count = 0
+    ltr_count = 0
+    for ch in text:
+        cp = ord(ch)
+        if ch.isspace() or ch in ("*",):
+            continue
+        # Arabic (0600–06FF), Arabic Supplement (0750–077F), Arabic Extended-A (08A0–08FF),
+        # Arabic Presentation Forms A/B (FB50–FDFF, FE70–FEFF)
+        if (
+            0x0600 <= cp <= 0x06FF
+            or 0x0750 <= cp <= 0x077F
+            or 0x08A0 <= cp <= 0x08FF
+            or 0xFB50 <= cp <= 0xFDFF
+            or 0xFE70 <= cp <= 0xFEFF
+        ):
+            rtl_count += 1
+        # Hebrew (0590–05FF, FB1D–FB4F)
+        elif 0x0590 <= cp <= 0x05FF or 0xFB1D <= cp <= 0xFB4F:
+            rtl_count += 1
+        # Thaana (0780–07BF) — Maldivian RTL
+        elif 0x0780 <= cp <= 0x07BF:
+            rtl_count += 1
+        # NKo (07C0–07FA) — Mande RTL
+        elif 0x07C0 <= cp <= 0x07FA:
+            rtl_count += 1
+        else:
+            ltr_count += 1
+    return rtl_count > ltr_count
+
+
 def is_latin_style_language(language_name: str) -> bool:
     """
     Determines if a language typically uses Latin script and hyphenation.

@@ -21,8 +21,12 @@ VISUAL_WIDTH_EPSILON = 0.0
 
 def shape_line(
     text_line: str, hb_font: hb.Font, features: Dict[str, bool]
-) -> Tuple[List[hb.GlyphInfo], List[hb.GlyphPosition]]:
+) -> Tuple[List[hb.GlyphInfo], List[hb.GlyphPosition], str]:
     """Shapes a line of text with HarfBuzz.
+
+    Returns:
+        Tuple of (glyph_infos, glyph_positions, direction) where direction
+        is "ltr" or "rtl" as detected by HarfBuzz.
 
     Raises:
         RenderingError: If HarfBuzz shaping fails
@@ -30,9 +34,10 @@ def shape_line(
     hb_buffer = hb.Buffer()
     hb_buffer.add_str(text_line)
     hb_buffer.guess_segment_properties()
+    direction = str(hb_buffer.direction)
     try:
         hb.shape(hb_font, hb_buffer, features)
-        return hb_buffer.glyph_infos, hb_buffer.glyph_positions
+        return hb_buffer.glyph_infos, hb_buffer.glyph_positions, direction
     except Exception as e:
         log_message(f"HarfBuzz shaping failed: {e}", always_print=True)
         raise RenderingError("HarfBuzz text shaping failed") from e
@@ -92,7 +97,7 @@ def calculate_styled_line_width(
         hb_scale = int(font_size * 64)
         hb_font_segment.scale = (hb_scale, hb_scale)
 
-        _, positions = shape_line(segment_text, hb_font_segment, features)
+        _, positions, _ = shape_line(segment_text, hb_font_segment, features)
         if not positions:
             continue
 
