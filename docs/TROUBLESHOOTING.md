@@ -120,7 +120,7 @@
 
 - **Flux.1 Kontext Nunchaku backend not available:**
   - Nunchaku requires an Nvidia GPU (CUDA) and separate installation
-  - Use the SDNQ backend (cross-platform) or Flux Klein instead
+  - Use the SDNQ backend (cross-platform) or Flux.2 Klein instead
 
 - **Poor inpainting quality:**
   - Try increasing inference steps
