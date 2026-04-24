@@ -79,7 +79,7 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
 
 
 def is_gpt5_series(model_name: Optional[str]) -> bool:
-    """Check if a model is any GPT-5 variant (5, 5.1, 5.2, 5.3, 5.4, etc.)."""
+    """Check if a model is any GPT-5 variant (5, 5.1, 5.2, 5.3, 5.4, 5.5, etc.)."""
     if not model_name:
         return False
     lm = model_name.lower()
@@ -99,10 +99,31 @@ def is_gpt5_pro(model_name: Optional[str]) -> bool:
 _GPT5_GEN_RE = re.compile(r"gpt-(5(?:\.\d+)?)", re.IGNORECASE)
 
 
+def supports_openai_original_image_detail(model_name: Optional[str]) -> bool:
+    """Whether an OpenAI model supports image detail='original'."""
+    if not is_gpt5_series(model_name):
+        return False
+
+    lm = (model_name or "").lower()
+    if any(token in lm for token in ("mini", "nano", "chat")):
+        return False
+
+    gen = get_gpt5_generation(model_name)
+    if not gen or gen == "5":
+        return False
+
+    try:
+        major, minor = (int(part) for part in gen.split(".", 1))
+    except ValueError:
+        return False
+
+    return (major, minor) >= (5, 4)
+
+
 def get_gpt5_generation(model_name: Optional[str]) -> Optional[str]:
     """Extract the GPT-5 generation string.
 
-    Returns '5', '5.1', '5.2', '5.3', '5.4', etc. or None if not a GPT-5 model.
+    Returns '5', '5.1', '5.2', '5.3', '5.4', '5.5', etc. or None if not a GPT-5 model.
     """
     if not model_name:
         return None

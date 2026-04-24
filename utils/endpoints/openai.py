@@ -58,6 +58,7 @@ def call_openai_endpoint(
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
     input_content = []
+    image_detail = generation_config.get("image_detail")
     for part in image_parts:
         if (
             "inline_data" in part
@@ -66,12 +67,13 @@ def call_openai_endpoint(
         ):
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            input_content.append(
-                {
-                    "type": "input_image",
-                    "image_url": f"data:{mime_type};base64,{base64_image}",
-                }
-            )
+            image_item = {
+                "type": "input_image",
+                "image_url": f"data:{mime_type};base64,{base64_image}",
+            }
+            if image_detail:
+                image_item["detail"] = image_detail
+            input_content.append(image_item)
         else:
             log_message(f"Invalid image part format: {part}", always_print=True)
     input_content.append({"type": "input_text", "text": text_part["text"]})
@@ -104,7 +106,7 @@ def call_openai_endpoint(
         if is_reasoning_capable and not is_chat_variant:
             effort = generation_config.get("reasoning_effort")
             if effort:
-                xhigh_capable = gen in ("5.2", "5.3", "5.4")
+                xhigh_capable = gen in ("5.2", "5.3", "5.4", "5.5")
                 none_capable = gen is not None and gen != "5"
 
                 if none_capable and effort == "none":

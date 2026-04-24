@@ -117,6 +117,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         test_mode_toggle,
         enable_web_search_val,
         enable_code_execution_val,
+        image_detail_val,
         media_resolution_val,
         media_resolution_bubbles_val,
         media_resolution_context_val,
@@ -290,6 +291,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             test_mode=test_mode_toggle,
             enable_web_search=enable_web_search_val,
             enable_code_execution=enable_code_execution_val,
+            image_detail=image_detail_val,
             media_resolution=media_resolution_val,
             media_resolution_bubbles=media_resolution_bubbles_val,
             media_resolution_context=media_resolution_context_val,
@@ -925,6 +927,7 @@ def handle_save_config_click(*args: Any) -> str:
         b_font,
         enable_web_search_val,
         enable_code_execution_val,
+        image_detail_val,
         media_resolution_val,
         media_resolution_bubbles_val,
         media_resolution_context_val,
@@ -1086,6 +1089,7 @@ def handle_save_config_click(*args: Any) -> str:
             test_mode=test_mode_val,
             enable_web_search=enable_web_search_val,
             enable_code_execution=enable_code_execution_val,
+            image_detail=image_detail_val,
             media_resolution=media_resolution_val,
             media_resolution_bubbles=media_resolution_bubbles_val,
             media_resolution_context=media_resolution_context_val,
@@ -1159,6 +1163,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         _,  # max_tokens_update - unused (using saved default instead)
         enable_web_search_update,
         enable_code_execution_update,
+        image_detail_update,
         media_resolution_update,
         media_resolution_bubbles_update,
         media_resolution_context_update,
@@ -1177,6 +1182,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     max_tokens_val = 16384 if is_reasoning else 4096
     enable_web_search_visible = enable_web_search_update.get("visible", False)
     enable_code_execution_visible = enable_code_execution_update.get("visible", False)
+    image_detail_visible = image_detail_update.get("visible", False)
     media_resolution_visible = media_resolution_update.get("visible", False)
     media_resolution_bubbles_visible = media_resolution_bubbles_update.get(
         "visible", False
@@ -1285,6 +1291,12 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(
             value=default_ui_state.general.enable_code_execution,
             visible=enable_code_execution_visible,
+        ),
+        gr.update(
+            value=default_ui_state.general.image_detail,
+            visible=image_detail_visible,
+            choices=image_detail_update.get("choices"),
+            info=image_detail_update.get("info"),
         ),
         gr.update(
             value=default_ui_state.general.media_resolution,
@@ -1581,6 +1593,7 @@ def handle_ocr_method_change(
         updates.append(gr.update())
         # Disable code execution checkbox (Gemini Flash only, disabled in text-only mode)
         updates.append(gr.update(value=False, interactive=False))
+        updates.append(gr.update(interactive=False))
         # Disable media resolution dropdowns (no images sent to LLM in text-only mode)
         updates.append(gr.update(interactive=False))
         updates.append(gr.update(interactive=False))
@@ -1664,6 +1677,7 @@ def handle_ocr_method_change(
         updates.append(gr.update(interactive=False))
         updates.append(gr.update(interactive=False))
         updates.append(gr.update(interactive=False))
+        updates.append(gr.update(interactive=False))
 
         # Model list refresh — same as manga-ocr (enables text-only providers)
         if current_provider == "OpenRouter":
@@ -1740,6 +1754,7 @@ def handle_ocr_method_change(
         )
         restored_whiteout = saved_settings.get("whiteout_conjoined_bubbles", True)
         updates.append(gr.update(value=restored_whiteout, interactive=True))
+        updates.append(gr.update(interactive=True))
         updates.append(gr.update(interactive=True))
         updates.append(gr.update(interactive=True))
         updates.append(gr.update(interactive=True))

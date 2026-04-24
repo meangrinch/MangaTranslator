@@ -80,6 +80,7 @@ class TranslationConfig:
     enable_code_execution: bool = (
         False  # Enable Gemini's code execution tool for image zoom/inspection (Gemini 3 Flash only)
     )
+    image_detail: str = "auto"  # OpenAI only: image detail (auto/high/low/original)
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)
     )

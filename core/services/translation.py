@@ -43,6 +43,7 @@ from utils.model_metadata import (
     is_gpt5_chat_variant,
     is_gpt5_series,
     is_openai_compatible_reasoning_model,
+    supports_openai_original_image_detail,
 )
 from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
 from utils.model_metadata import (
@@ -356,10 +357,18 @@ def _build_generation_config(
             "top_p": top_p,
             "max_output_tokens": max_tokens_value,
         }  # top_k not supported by OpenAI
+        image_detail = (config.image_detail or "auto").lower()
+        if image_detail not in ("auto", "original", "high", "low"):
+            image_detail = "auto"
+        if image_detail == "original" and not supports_openai_original_image_detail(
+            model_name
+        ):
+            image_detail = "high"
+        generation_config["image_detail"] = image_detail
         if config.reasoning_effort:
             gen = get_gpt5_generation(model_name)
             is_chat = is_gpt5_chat_variant(model_name)
-            xhigh_capable = gen in ("5.2", "5.3", "5.4")
+            xhigh_capable = gen in ("5.2", "5.3", "5.4", "5.5")
             effort = config.reasoning_effort
             if effort == "xhigh" and not xhigh_capable:
                 effort = "high"

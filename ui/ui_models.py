@@ -157,6 +157,7 @@ class UIGeneralSettings:
     enable_code_execution: bool = (
         False  # Enable Gemini's code execution for image zoom/inspection.
     )
+    image_detail: str = "auto"  # OpenAI only: image detail (auto/high/low/original)
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)
     )
@@ -290,6 +291,7 @@ class UIConfigState:
             "test_mode": self.general.test_mode,
             "enable_web_search": self.general.enable_web_search,
             "enable_code_execution": self.general.enable_code_execution,
+            "image_detail": self.general.image_detail,
             "media_resolution": self.general.media_resolution,
             "media_resolution_bubbles": self.general.media_resolution_bubbles,
             "media_resolution_context": self.general.media_resolution_context,
@@ -538,6 +540,10 @@ class UIConfigState:
                     "enable_code_execution",
                     defaults.get("enable_code_execution", False),
                 ),
+                image_detail=data.get(
+                    "image_detail",
+                    defaults.get("image_detail", "auto"),
+                ),
                 media_resolution=data.get(
                     "media_resolution",
                     defaults.get("media_resolution", "auto"),
@@ -632,6 +638,7 @@ def map_ui_to_backend_config(
         ocr_method=ui_state.llm_settings.ocr_method,
         enable_web_search=ui_state.general.enable_web_search,
         enable_code_execution=ui_state.general.enable_code_execution,
+        image_detail=ui_state.general.image_detail,
         media_resolution=ui_state.general.media_resolution,
         media_resolution_bubbles=ui_state.general.media_resolution_bubbles,
         media_resolution_context=ui_state.general.media_resolution_context,

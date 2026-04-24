@@ -918,6 +918,37 @@ def create_layout(
                                 elem_id="enable_code_execution_checkbox",
                             )
 
+                            (
+                                _initial_image_detail_visible,
+                                _initial_image_detail_choices,
+                                _initial_image_detail_default,
+                                _initial_image_detail_info,
+                            ) = utils.get_image_detail_config(
+                                config_initial_provider, config_initial_model_name
+                            )
+                            _initial_image_detail_value = saved_settings.get(
+                                "image_detail", _initial_image_detail_default
+                            )
+                            if (
+                                _initial_image_detail_choices
+                                and _initial_image_detail_value
+                                not in _initial_image_detail_choices
+                            ):
+                                _initial_image_detail_value = (
+                                    _initial_image_detail_default
+                                )
+
+                            image_detail_dropdown = gr.Radio(
+                                label="Image Detail",
+                                choices=_initial_image_detail_choices,
+                                value=_initial_image_detail_value,
+                                info=_initial_image_detail_info,
+                                visible=_initial_image_detail_visible,
+                                interactive=initial_ocr_method
+                                not in ("manga-ocr", "paddleocr-vl"),
+                                elem_id="image_detail_dropdown",
+                            )
+
                             # Compute initial visibility for media_resolution (Google/xAI providers only)
                             _mr_bubbles_visible_init, _, _ = (
                                 utils.get_media_resolution_config(
@@ -1782,6 +1813,7 @@ def create_layout(
             batch_font_dropdown,
             enable_web_search_checkbox,
             enable_code_execution_checkbox,
+            image_detail_dropdown,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -1886,6 +1918,7 @@ def create_layout(
             batch_font_dropdown,
             enable_web_search_checkbox,
             enable_code_execution_checkbox,
+            image_detail_dropdown,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -1985,6 +2018,7 @@ def create_layout(
             test_mode_toggle,
             enable_web_search_checkbox,
             enable_code_execution_checkbox,
+            image_detail_dropdown,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -2092,6 +2126,7 @@ def create_layout(
             test_mode_toggle,
             enable_web_search_checkbox,
             enable_code_execution_checkbox,
+            image_detail_dropdown,
             media_resolution_dropdown,
             media_resolution_bubbles_dropdown,
             media_resolution_context_dropdown,
@@ -2237,6 +2272,7 @@ def create_layout(
                 max_tokens,
                 enable_web_search_checkbox,
                 enable_code_execution_checkbox,
+                image_detail_dropdown,
                 media_resolution_dropdown,
                 media_resolution_bubbles_dropdown,
                 media_resolution_context_dropdown,
@@ -2283,6 +2319,7 @@ def create_layout(
                 max_tokens,
                 enable_web_search_checkbox,
                 enable_code_execution_checkbox,
+                image_detail_dropdown,
                 media_resolution_dropdown,
                 media_resolution_bubbles_dropdown,
                 media_resolution_context_dropdown,
@@ -2519,6 +2556,7 @@ def create_layout(
                 send_full_page_context,
                 whiteout_conjoined_bubbles,
                 enable_code_execution_checkbox,
+                image_detail_dropdown,
                 media_resolution_dropdown,
                 media_resolution_bubbles_dropdown,
                 media_resolution_context_dropdown,

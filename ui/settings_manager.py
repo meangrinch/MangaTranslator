@@ -28,6 +28,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "gemma-4-26b-a4b-it",
     ],
     "OpenAI": [
+        "gpt-5.5-2026-04-23",
         "gpt-5.4-2026-03-05",
         "gpt-5.4-mini-2026-03-17",
         "gpt-5.4-nano-2026-03-17",
@@ -50,6 +51,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "o4-mini-2025-04-16",
         "o3-2025-04-16",
         "o1-2024-12-17",
+        "gpt-5.5-pro-2026-04-23",
         "gpt-5.4-pro-2026-03-05",
         "gpt-5.2-pro-2025-12-11",
         "gpt-5-pro-2025-10-06",
@@ -189,6 +191,7 @@ DEFAULT_SETTINGS = {
     "verbosity": "low",  # GPT-5 series only: controls response verbosity (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "enable_code_execution": False,  # Enable Gemini's code execution for image zoom/inspection.
+    "image_detail": "auto",  # OpenAI only: image detail (auto/high/low/original)
     "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
     "media_resolution_bubbles": "auto",  # Gemini 3 models
     "media_resolution_context": "auto",  # Gemini 3 models
@@ -273,6 +276,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "effort",
     "verbosity",
     "enable_web_search",
+    "image_detail",
     "special_instructions",
     "batch_special_instructions",
     # Rendering
@@ -552,10 +556,7 @@ def get_saved_settings() -> Dict[str, Any]:
             always_print=True,
         )
         default_provider = DEFAULT_SETTINGS["provider"]
-        if (
-            default_provider != "OpenRouter"
-            and default_provider != "OpenAI-Compatible"
-        ):
+        if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
             valid_models = PROVIDER_MODELS.get(default_provider, [])
             settings["model_name"] = valid_models[0] if valid_models else None
         else:
@@ -566,10 +567,7 @@ def get_saved_settings() -> Dict[str, Any]:
             always_print=True,
         )
         default_provider = DEFAULT_SETTINGS["provider"]
-        if (
-            default_provider != "OpenRouter"
-            and default_provider != "OpenAI-Compatible"
-        ):
+        if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
             valid_models = PROVIDER_MODELS.get(default_provider, [])
             settings["model_name"] = valid_models[0] if valid_models else None
         else:

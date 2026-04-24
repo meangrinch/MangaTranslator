@@ -250,6 +250,7 @@ class UnifiedCache:
             "max_tokens": config.max_tokens,
             "reasoning_effort": config.reasoning_effort,
             "effort": config.effort,
+            "image_detail": getattr(config, "image_detail", None),
             "media_resolution": getattr(config, "media_resolution", None),
             "media_resolution_bubbles": getattr(
                 config, "media_resolution_bubbles", None

@@ -496,6 +496,16 @@ def main():
         help="Media resolution for context (full page) images (Gemini 3 and xAI only)",
     )
     parser.add_argument(
+        "--image-detail",
+        type=str,
+        choices=["auto", "original", "high", "low"],
+        default="auto",
+        help=(
+            "Image detail for OpenAI to process bubble/context images. "
+            "'original' is supported on GPT-5.4+ base/pro models."
+        ),
+    )
+    parser.add_argument(
         "--special-instructions",
         type=str,
         default=None,
@@ -900,6 +910,7 @@ def main():
             translation_mode=args.translation_mode,
             enable_web_search=args.enable_web_search,
             enable_code_execution=args.enable_code_execution,
+            image_detail=args.image_detail,
             media_resolution=args.media_resolution,
             media_resolution_bubbles=args.media_resolution_bubbles,
             media_resolution_context=args.media_resolution_context,

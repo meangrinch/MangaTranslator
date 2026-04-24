@@ -30,6 +30,7 @@ from utils.model_metadata import (
     is_openai_reasoning_model,
     is_opus_45_model,
     is_opus_47_model,
+    supports_openai_original_image_detail,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
 )
@@ -533,7 +534,7 @@ def get_reasoning_effort_config(
                 return True, ["high"], "high"
             return True, ["high", "medium", "low"], "medium"
 
-        if gen in ("5.2", "5.3", "5.4"):
+        if gen in ("5.2", "5.3", "5.4", "5.5"):
             return True, ["xhigh", "high", "medium", "low", "none"], "medium"
         if gen == "5.1":
             return True, ["high", "medium", "low", "none"], "medium"
@@ -697,6 +698,26 @@ def get_media_resolution_config(
         return (True, ["auto", "high", "low"], "Resolution for Grok to process images.")
 
     return False, ["auto"], ""
+
+
+def get_image_detail_config(
+    provider: str, model_name: Optional[str]
+) -> Tuple[bool, List[str], str, str]:
+    """Get image detail configuration for a provider/model combination."""
+    if provider != "OpenAI":
+        return False, ["auto"], "auto", ""
+
+    choices = ["auto", "high", "low"]
+    info = "Detail level for OpenAI to process bubble/context images."
+
+    if supports_openai_original_image_detail(model_name):
+        choices = ["auto", "original", "high", "low"]
+        info += " 'original' is available on GPT-5.4+ base/pro models."
+
+    if model_name and "gpt-5.5" in model_name.lower():
+        info += " On gpt-5.5, 'auto' follows 'original' sizing."
+
+    return True, choices, "auto", info
 
 
 def is_code_execution_visible(provider: str, model_name: Optional[str]) -> bool:
@@ -876,6 +897,19 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         visible=is_code_execution_visible(provider, remembered_model)
     )
 
+    (
+        image_detail_visible,
+        image_detail_choices,
+        image_detail_default,
+        image_detail_info,
+    ) = get_image_detail_config(provider, remembered_model)
+    image_detail_update = gr.update(
+        visible=image_detail_visible,
+        choices=image_detail_choices,
+        value=image_detail_default,
+        info=image_detail_info,
+    )
+
     # Verbosity dropdown (GPT-5 series only)
     verbosity_visible, verbosity_choices, verbosity_default_value = (
         get_verbosity_config(provider, remembered_model)
@@ -904,6 +938,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         max_tokens_update,
         enable_web_search_update,
         enable_code_execution_update,
+        image_detail_update,
         media_resolution_update,
         media_resolution_bubbles_update,
         media_resolution_context_update,
@@ -997,6 +1032,19 @@ def update_params_for_model(
         info=enable_web_search_info,
     )
 
+    (
+        image_detail_visible,
+        image_detail_choices,
+        image_detail_default,
+        image_detail_info,
+    ) = get_image_detail_config(provider, model_name)
+    image_detail_update = gr.update(
+        visible=image_detail_visible,
+        choices=image_detail_choices,
+        value=image_detail_default,
+        info=image_detail_info,
+    )
+
     is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
@@ -1060,6 +1108,7 @@ def update_params_for_model(
         max_tokens_update,
         enable_web_search_update,
         enable_code_execution_update,
+        image_detail_update,
         media_resolution_update,
         media_resolution_bubbles_update,
         media_resolution_context_update,
