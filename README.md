@@ -170,7 +170,6 @@ fonts/
 If you want to use the OSB text pipeline, you need a Hugging Face token with access to the following repositories:
 
 - `deepghs/AnimeText_yolo`
-- `black-forest-labs/FLUX.1-Kontext-dev` (only required if using Flux.1 Kontext with Nunchaku backend)
 
 #### Steps to create a token:
 
@@ -266,6 +265,8 @@ pip install -r requirements.txt  # Or activate venv first if present
 - YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Manga109 Speech Bubble Detector: [huyvux3005](https://huggingface.co/huyvux3005/manga109-segmentation-bubble)
 - Comic Speech Bubble Detector YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
+- Manga109 YOLO: [deepghs](https://huggingface.co/deepghs/manga109_yolo)
+- AnimeText YOLO: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
 - SAM 2.1: Segment Anything in Images and Videos: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
 - SAM 3: [Meta AI](https://huggingface.co/facebook/sam3)
 - FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
@@ -276,7 +277,5 @@ pip install -r requirements.txt  # Or activate venv first if present
 - 2x-AnimeSharpV4: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)
 - PaddleOCR-VL-1.5: [PaddlePaddle](https://github.com/PaddlePaddle/PaddleOCR-VL-1.5)
-- Manga109 YOLO: [deepghs](https://huggingface.co/deepghs/manga109_yolo)
-- AnimeText YOLO: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
 
 </details>
