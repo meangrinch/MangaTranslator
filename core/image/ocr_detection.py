@@ -790,6 +790,30 @@ def extract_text_with_manga_ocr(
         return ["[OCR FAILED]"] * len(images)
 
 
+def _get_image_size_value(size_config, key: str):
+    if isinstance(size_config, dict):
+        return size_config.get(key)
+    return getattr(size_config, key, None)
+
+
+def _get_paddle_ocr_vl_size(processor, max_pixels: int) -> dict:
+    image_processor = processor.image_processor
+    size_config = getattr(image_processor, "size", {}) or {}
+
+    shortest_edge = getattr(image_processor, "min_pixels", None)
+    if shortest_edge is None:
+        shortest_edge = _get_image_size_value(size_config, "shortest_edge")
+    if shortest_edge is None:
+        shortest_edge = _get_image_size_value(size_config, "min_pixels")
+    if shortest_edge is None:
+        shortest_edge = 28 * 28 * 130
+
+    return {
+        "shortest_edge": shortest_edge,
+        "longest_edge": max_pixels,
+    }
+
+
 def extract_text_with_paddle_ocr_vl(
     images: List[Image.Image], verbose: bool = False
 ) -> List[str]:
@@ -810,6 +834,7 @@ def extract_text_with_paddle_ocr_vl(
         processor, model = model_manager.get_paddle_ocr_vl(verbose=verbose)
 
         max_pixels = 1280 * 28 * 28
+        image_size = _get_paddle_ocr_vl_size(processor, max_pixels)
 
         extracted_texts = []
         for i, img in enumerate(images):
@@ -843,10 +868,7 @@ def extract_text_with_paddle_ocr_vl(
                     return_dict=True,
                     return_tensors="pt",
                     images_kwargs={
-                        "size": {
-                            "shortest_edge": processor.image_processor.min_pixels,
-                            "longest_edge": max_pixels,
-                        }
+                        "size": image_size,
                     },
                 ).to(model.device)
 
