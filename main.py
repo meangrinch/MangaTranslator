@@ -660,10 +660,28 @@ def main():
         help="Bounding box expansion percent for OSB detection",
     )
     parser.add_argument(
-        "--osb-render-expansion",
+        "--osb-render-expansion-narrow",
         type=float,
         default=1.0,
-        help="Multiplier for the final OSB render box and opencv fill area (1.0-3.0)",
+        help="Multiplier for narrow/tall OSB render boxes (1.0-3.0)",
+    )
+    parser.add_argument(
+        "--osb-render-expansion-tiny",
+        type=float,
+        default=1.0,
+        help="Multiplier for tiny OSB render boxes (1.0-3.0)",
+    )
+    parser.add_argument(
+        "--osb-render-expansion-aspect-threshold",
+        type=float,
+        default=0.4,
+        help="Classify OSB boxes as narrow/tall at or below this width/height ratio",
+    )
+    parser.add_argument(
+        "--osb-render-expansion-area-threshold",
+        type=float,
+        default=0.005,
+        help="Classify OSB boxes as tiny below this image area ratio",
     )
     parser.add_argument(
         "--osb-text-box-proximity-ratio",
@@ -972,7 +990,14 @@ def main():
             osb_use_subpixel_rendering=args.osb_use_subpixel,
             osb_font_hinting=args.osb_font_hinting,
             bbox_expansion_percent=args.osb_bbox_expansion,
-            osb_render_expansion_multiplier=args.osb_render_expansion,
+            osb_render_expansion_narrow_multiplier=args.osb_render_expansion_narrow,
+            osb_render_expansion_tiny_multiplier=args.osb_render_expansion_tiny,
+            osb_render_expansion_aspect_ratio_threshold=(
+                args.osb_render_expansion_aspect_threshold
+            ),
+            osb_render_expansion_area_ratio_threshold=(
+                args.osb_render_expansion_area_threshold
+            ),
             text_box_proximity_ratio=args.osb_text_box_proximity_ratio,
         ),
         preprocessing=PreprocessingConfig(

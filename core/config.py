@@ -144,7 +144,10 @@ class OutsideTextConfig:
     osb_use_subpixel_rendering: bool = False
     osb_font_hinting: str = "none"
     bbox_expansion_percent: float = 0.1
-    osb_render_expansion_multiplier: float = 1.0
+    osb_render_expansion_narrow_multiplier: float = 1.0
+    osb_render_expansion_tiny_multiplier: float = 1.0
+    osb_render_expansion_aspect_ratio_threshold: float = 0.4
+    osb_render_expansion_area_ratio_threshold: float = 0.005
     text_box_proximity_ratio: float = 0.02  # 2% of image dimension
     flux_guidance_scale: float = 2.5
     flux_prompt: str = "Remove all text."

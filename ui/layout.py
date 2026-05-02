@@ -1515,18 +1515,61 @@ def create_layout(
                                 )
 
                                 gr.Markdown("### Font Rendering")
-                                outside_text_osb_render_expansion_multiplier = gr.Slider(
+                                outside_text_osb_render_expansion_narrow_multiplier = gr.Slider(
                                     1.0,
                                     3.0,
                                     value=saved_settings.get(
-                                        "outside_text_osb_render_expansion_multiplier",
+                                        "outside_text_osb_render_expansion_narrow_multiplier",
                                         1.0,
                                     ),
                                     step=0.1,
-                                    label="Render Expansion Multiplier",
+                                    label="Narrow/Tall Expansion Multiplier",
                                     info=(
-                                        "Expands the rendered text box by the specified multiplier. "
-                                        "Useful to remedy text being too small for narrow/tall crops."
+                                        "Expands OSB render boxes whose width/height aspect ratio "
+                                        "is at or below the narrow/tall threshold."
+                                    ),
+                                )
+                                outside_text_osb_render_expansion_aspect_ratio_threshold = gr.Slider(
+                                    0.05,
+                                    1.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_render_expansion_aspect_ratio_threshold",
+                                        0.4,
+                                    ),
+                                    step=0.01,
+                                    label="Narrow/Tall Aspect Ratio Threshold",
+                                    info=(
+                                        "Classifies a box as narrow/tall when width divided by "
+                                        "height is at or below this value."
+                                    ),
+                                )
+                                outside_text_osb_render_expansion_tiny_multiplier = gr.Slider(
+                                    1.0,
+                                    3.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_render_expansion_tiny_multiplier",
+                                        1.0,
+                                    ),
+                                    step=0.1,
+                                    label="Tiny Bubble Expansion Multiplier",
+                                    info=(
+                                        "Expands OSB render boxes whose area is below the tiny "
+                                        "bubble area threshold."
+                                    ),
+                                )
+                                outside_text_osb_render_expansion_area_threshold_percent = gr.Slider(
+                                    0.0,
+                                    5.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_render_expansion_area_ratio_threshold",
+                                        0.005,
+                                    )
+                                    * 100.0,
+                                    step=0.1,
+                                    label="Tiny Bubble Area Threshold (%)",
+                                    info=(
+                                        "Classifies a box as tiny when its area is below this "
+                                        "percentage of the full image area."
                                     ),
                                 )
                                 outside_text_osb_font_pack = gr.Dropdown(
@@ -1857,7 +1900,10 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
-            outside_text_osb_render_expansion_multiplier,
+            outside_text_osb_render_expansion_narrow_multiplier,
+            outside_text_osb_render_expansion_aspect_ratio_threshold,
+            outside_text_osb_render_expansion_tiny_multiplier,
+            outside_text_osb_render_expansion_area_threshold_percent,
             outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
@@ -1958,7 +2004,10 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
-            outside_text_osb_render_expansion_multiplier,
+            outside_text_osb_render_expansion_narrow_multiplier,
+            outside_text_osb_render_expansion_aspect_ratio_threshold,
+            outside_text_osb_render_expansion_tiny_multiplier,
+            outside_text_osb_render_expansion_area_threshold_percent,
             outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
@@ -2060,7 +2109,10 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
-            outside_text_osb_render_expansion_multiplier,
+            outside_text_osb_render_expansion_narrow_multiplier,
+            outside_text_osb_render_expansion_aspect_ratio_threshold,
+            outside_text_osb_render_expansion_tiny_multiplier,
+            outside_text_osb_render_expansion_area_threshold_percent,
             outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,
@@ -2168,7 +2220,10 @@ def create_layout(
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent,
-            outside_text_osb_render_expansion_multiplier,
+            outside_text_osb_render_expansion_narrow_multiplier,
+            outside_text_osb_render_expansion_aspect_ratio_threshold,
+            outside_text_osb_render_expansion_tiny_multiplier,
+            outside_text_osb_render_expansion_area_threshold_percent,
             outside_text_text_box_proximity_ratio,
             image_upscale_mode,
             image_upscale_factor,

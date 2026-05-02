@@ -159,7 +159,10 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
         outside_text_bbox_expansion_percent_val,
-        outside_text_osb_render_expansion_multiplier_val,
+        outside_text_osb_render_expansion_narrow_multiplier_val,
+        outside_text_osb_render_expansion_aspect_ratio_threshold_val,
+        outside_text_osb_render_expansion_tiny_multiplier_val,
+        outside_text_osb_render_expansion_area_threshold_percent_val,
         outside_text_text_box_proximity_ratio_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
@@ -226,9 +229,19 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
             bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
-            osb_render_expansion_multiplier=float(
-                outside_text_osb_render_expansion_multiplier_val
+            osb_render_expansion_narrow_multiplier=float(
+                outside_text_osb_render_expansion_narrow_multiplier_val
             ),
+            osb_render_expansion_tiny_multiplier=float(
+                outside_text_osb_render_expansion_tiny_multiplier_val
+            ),
+            osb_render_expansion_aspect_ratio_threshold=float(
+                outside_text_osb_render_expansion_aspect_ratio_threshold_val
+            ),
+            osb_render_expansion_area_ratio_threshold=float(
+                outside_text_osb_render_expansion_area_threshold_percent_val
+            )
+            / 100.0,
             text_box_proximity_ratio=float(outside_text_text_box_proximity_ratio_val),
         ),
         provider_settings=UITranslationProviderSettings(
@@ -971,7 +984,10 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
         outside_text_bbox_expansion_percent_val,
-        outside_text_osb_render_expansion_multiplier_val,
+        outside_text_osb_render_expansion_narrow_multiplier_val,
+        outside_text_osb_render_expansion_aspect_ratio_threshold_val,
+        outside_text_osb_render_expansion_tiny_multiplier_val,
+        outside_text_osb_render_expansion_area_threshold_percent_val,
         outside_text_text_box_proximity_ratio_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
@@ -1024,9 +1040,19 @@ def handle_save_config_click(*args: Any) -> str:
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
             bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
-            osb_render_expansion_multiplier=float(
-                outside_text_osb_render_expansion_multiplier_val
+            osb_render_expansion_narrow_multiplier=float(
+                outside_text_osb_render_expansion_narrow_multiplier_val
             ),
+            osb_render_expansion_tiny_multiplier=float(
+                outside_text_osb_render_expansion_tiny_multiplier_val
+            ),
+            osb_render_expansion_aspect_ratio_threshold=float(
+                outside_text_osb_render_expansion_aspect_ratio_threshold_val
+            ),
+            osb_render_expansion_area_ratio_threshold=float(
+                outside_text_osb_render_expansion_area_threshold_percent_val
+            )
+            / 100.0,
             text_box_proximity_ratio=float(outside_text_text_box_proximity_ratio_val),
         ),
         provider_settings=UITranslationProviderSettings(
@@ -1352,7 +1378,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.osb_use_subpixel_rendering,
         default_ui_state.outside_text.osb_font_hinting,
         default_ui_state.outside_text.bbox_expansion_percent,
-        default_ui_state.outside_text.osb_render_expansion_multiplier,
+        default_ui_state.outside_text.osb_render_expansion_narrow_multiplier,
+        default_ui_state.outside_text.osb_render_expansion_aspect_ratio_threshold,
+        default_ui_state.outside_text.osb_render_expansion_tiny_multiplier,
+        default_ui_state.outside_text.osb_render_expansion_area_ratio_threshold * 100.0,
         default_ui_state.outside_text.text_box_proximity_ratio,
         gr.update(value=default_ui_state.output.image_upscale_mode),
         gr.update(

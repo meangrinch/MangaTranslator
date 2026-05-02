@@ -20,8 +20,6 @@ from core.ml.model_manager import get_model_manager
 from utils.logging import log_message
 
 # OSB Expansion Parameters
-OSB_EXPANSION_ASPECT_RATIO_CONDITION = 0.4
-OSB_EXPANSION_AREA_RATIO_CONDITION = 0.005
 OSB_EXPANSION_PIXEL_BUFFER = 5  # for bubbles, nearby OSB regions, panels
 
 
@@ -149,13 +147,24 @@ def process_outside_text(
 
         raw_outside_text_results = outside_text_results.copy()
 
-        # Apply OSB render expansion
-        expansion_mult = getattr(
-            config.outside_text, "osb_render_expansion_multiplier", 1.0
+        # Apply OSB render expansion for shapes that tend to render too small.
+        narrow_expansion_mult = getattr(
+            config.outside_text, "osb_render_expansion_narrow_multiplier", 1.0
         )
-        if expansion_mult > 1.0:
+        tiny_expansion_mult = getattr(
+            config.outside_text, "osb_render_expansion_tiny_multiplier", 1.0
+        )
+        aspect_ratio_threshold = getattr(
+            config.outside_text, "osb_render_expansion_aspect_ratio_threshold", 0.4
+        )
+        area_ratio_threshold = getattr(
+            config.outside_text, "osb_render_expansion_area_ratio_threshold", 0.005
+        )
+        if max(narrow_expansion_mult, tiny_expansion_mult) > 1.0:
             log_message(
-                f"Expanding OSB bboxes by {expansion_mult}x...", verbose=verbose
+                "Expanding OSB bboxes "
+                f"(narrow/tall: {narrow_expansion_mult}x, tiny: {tiny_expansion_mult}x)...",
+                verbose=verbose,
             )
             expanded_results = []
             for i, res in enumerate(outside_text_results):
@@ -166,11 +175,16 @@ def process_outside_text(
 
                 aspect_ratio = float(w) / float(max(1, h))
                 area_ratio = (w * h) / float(max(1, img_w * img_h))
+                is_narrow_tall = aspect_ratio <= aspect_ratio_threshold
+                is_tiny = area_ratio < area_ratio_threshold
 
-                if (
-                    aspect_ratio > OSB_EXPANSION_ASPECT_RATIO_CONDITION
-                    and area_ratio >= OSB_EXPANSION_AREA_RATIO_CONDITION
-                ):
+                expansion_mult = 1.0
+                if is_narrow_tall:
+                    expansion_mult = max(expansion_mult, narrow_expansion_mult)
+                if is_tiny:
+                    expansion_mult = max(expansion_mult, tiny_expansion_mult)
+
+                if expansion_mult <= 1.0:
                     expanded_results.append(
                         ([int(x1), int(y1), int(x2), int(y2)], conf)
                     )
