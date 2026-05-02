@@ -15,7 +15,7 @@ def call_xai_endpoint(
     generation_config: Dict[str, Any],
     system_prompt: Optional[str] = None,
     debug: bool = False,
-    timeout: int = 120,
+    timeout: int = 3600,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
@@ -27,7 +27,7 @@ def call_xai_endpoint(
         api_key (str): xAI API key.
         model_name (str): xAI model to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
-        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens, reasoning_tokens).
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens).
         system_prompt (Optional[str]): System prompt for the model.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
@@ -117,20 +117,13 @@ def call_xai_endpoint(
         "top_p": generation_config.get("top_p"),
     }
 
-    model_lower = (model_name or "").lower()
-    is_reasoning_model = "non-reasoning" not in model_lower and (
-        "reasoning" in model_lower or "multi-agent" in model_lower
-    )
+    payload["max_output_tokens"] = generation_config.get("max_tokens", 4096)
 
-    if is_reasoning_model:
-        max_tokens_value = generation_config.get("max_tokens", 4096)
-        reasoning_effort = generation_config.get("reasoning_effort", "high")
-        # Mimics OpenAI's functionality
-        if reasoning_effort and reasoning_effort in ["high", "low"]:
-            payload["reasoning_effort"] = reasoning_effort
-        payload["max_output_tokens"] = max_tokens_value
-    else:
-        payload["max_output_tokens"] = generation_config.get("max_tokens", 4096)
+    model_lower = (model_name or "").lower()
+    if "multi-agent" in model_lower:
+        reasoning_effort = generation_config.get("reasoning_effort")
+        if reasoning_effort in ("low", "medium", "high", "xhigh"):
+            payload["reasoning"] = {"effort": reasoning_effort}
 
     if enable_web_search:
         payload["tools"] = [{"type": "web_search"}]

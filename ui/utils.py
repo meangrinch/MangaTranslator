@@ -31,6 +31,7 @@ from utils.model_metadata import (
     is_opus_45_model,
     is_opus_47_model,
     supports_openai_original_image_detail,
+    supports_xai_reasoning_parameter,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
 )
@@ -371,6 +372,7 @@ def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) 
         - "Thinking Level" for Gemini 3 models
         - "Thinking Budget" for Google reasoning models (non-Gemini 3)
         - "Extended Thinking" for Anthropic reasoning models
+        - "Multi-Agent Depth" for xAI multi-agent models
         - "Reasoning Effort" otherwise
     """
     if not model_name:
@@ -379,7 +381,9 @@ def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) 
     gemini3 = is_gemini_3_model(model_name)
     gemma = is_gemma_model(model_name)
 
-    if (provider == "Google" or provider == "OpenRouter") and (gemini3 or gemma):
+    if provider == "xAI" and supports_xai_reasoning_parameter(model_name):
+        return "Multi-Agent Depth"
+    elif (provider == "Google" or provider == "OpenRouter") and (gemini3 or gemma):
         return "Thinking Level"
     elif (
         provider == "Google"
@@ -416,7 +420,12 @@ def get_reasoning_effort_info_text(
     elif provider == "OpenAI":
         return "Controls model's internal reasoning effort."
     elif provider == "xAI":
-        return "Controls model's internal reasoning effort."
+        if supports_xai_reasoning_parameter(model_name):
+            return (
+                "Controls xAI multi-agent agent count "
+                "(low/medium=4 agents, high/xhigh=16 agents)."
+            )
+        return "Grok reasons automatically; no configurable reasoning effort is sent."
     elif provider == "Moonshot AI":
         return "Enables or disables model thinking (high=enabled, none=disabled)."
     elif provider == "DeepSeek":
@@ -555,10 +564,9 @@ def get_reasoning_effort_config(
         return True, ["high", "medium", "low", "none"], "low"
 
     elif provider == "xAI":
-        is_reasoning = is_xai_reasoning_model(model_name)
-        if not is_reasoning:
+        if not supports_xai_reasoning_parameter(model_name):
             return False, [], None
-        return True, ["high", "low"], "high"
+        return True, ["xhigh", "high", "medium", "low"], "high"
 
     elif provider == "DeepSeek":
         is_reasoning = is_deepseek_reasoning_model(model_name)

@@ -179,7 +179,22 @@ def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
     lm = model_name.lower()
     if "non-reasoning" in lm:
         return False
-    return "reasoning" in lm or "multi-agent" in lm
+    return (
+        lm.startswith("grok-4.3")
+        or "grok-4.20" in lm
+        or "grok-4-1-fast" in lm
+        or "grok-4.1-fast" in lm
+        or "reasoning" in lm
+        or "multi-agent" in lm
+    )
+
+
+def supports_xai_reasoning_parameter(model_name: Optional[str]) -> bool:
+    """Whether xAI accepts the Responses API `reasoning` parameter."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "multi-agent" in lm and "non-reasoning" not in lm
 
 
 def is_anthropic_reasoning_model(model_name: Optional[str]) -> bool:

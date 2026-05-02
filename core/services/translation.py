@@ -52,6 +52,7 @@ from utils.model_metadata import (
     is_rosetta_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
+    supports_xai_reasoning_parameter,
 )
 
 TRANSLATION_PATTERN = re.compile(
@@ -407,14 +408,13 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "xAI":
-        is_reasoning = is_xai_reasoning_model(model_name)
         generation_config = {
             "temperature": temperature,
             "top_p": top_p,
             "max_tokens": max_tokens_value,
             "media_resolution": config.media_resolution,
         }
-        if is_reasoning:
+        if supports_xai_reasoning_parameter(model_name):
             generation_config["reasoning_effort"] = config.reasoning_effort or "high"
         return generation_config
 
