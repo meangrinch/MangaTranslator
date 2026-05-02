@@ -192,7 +192,7 @@ DEFAULT_SETTINGS = {
     "verbosity": "low",  # GPT-5 series only: controls response verbosity (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "enable_code_execution": False,  # Enable Gemini's code execution for image zoom/inspection.
-    "image_detail": "auto",  # OpenAI only: image detail (auto/high/low/original)
+    "image_detail": "auto",  # OpenAI image detail (auto/high/low/original)
     "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
     "media_resolution_bubbles": "auto",  # Gemini 3 models
     "media_resolution_context": "auto",  # Gemini 3 models

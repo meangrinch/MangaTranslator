@@ -96,6 +96,24 @@ def is_gpt5_pro(model_name: Optional[str]) -> bool:
     return is_gpt5_series(model_name) and "-pro" in (model_name or "").lower()
 
 
+def is_openai_model_family(model_name: Optional[str]) -> bool:
+    """Check if a model name is OpenAI-family, including OpenRouter-prefixed IDs."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return (
+        "openai/" in lm
+        or lm.startswith("gpt-")
+        or lm.startswith("o1")
+        or lm.startswith("o3")
+        or lm.startswith("o4-mini")
+        or "/gpt-" in lm
+        or "/o1" in lm
+        or "/o3" in lm
+        or "/o4-mini" in lm
+    )
+
+
 _GPT5_GEN_RE = re.compile(r"gpt-(5(?:\.\d+)?)", re.IGNORECASE)
 
 

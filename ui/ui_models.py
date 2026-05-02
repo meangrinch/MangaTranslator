@@ -157,7 +157,7 @@ class UIGeneralSettings:
     enable_code_execution: bool = (
         False  # Enable Gemini's code execution for image zoom/inspection.
     )
-    image_detail: str = "auto"  # OpenAI only: image detail (auto/high/low/original)
+    image_detail: str = "auto"  # OpenAI image detail (auto/high/low/original)
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)
     )

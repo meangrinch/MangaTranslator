@@ -43,6 +43,7 @@ from utils.model_metadata import (
     is_gpt5_chat_variant,
     is_gpt5_series,
     is_openai_compatible_reasoning_model,
+    is_openai_model_family,
     supports_openai_original_image_detail,
 )
 from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
@@ -260,6 +261,16 @@ def _build_generation_config(
     top_p = config.top_p
     top_k = config.top_k
 
+    def normalize_image_detail() -> str:
+        image_detail = (config.image_detail or "auto").lower()
+        if image_detail not in ("auto", "original", "high", "low"):
+            image_detail = "auto"
+        if image_detail == "original" and not supports_openai_original_image_detail(
+            model_name
+        ):
+            image_detail = "high"
+        return image_detail
+
     if config.max_tokens is not None:
         max_tokens_value = config.max_tokens
     else:
@@ -358,14 +369,7 @@ def _build_generation_config(
             "top_p": top_p,
             "max_output_tokens": max_tokens_value,
         }  # top_k not supported by OpenAI
-        image_detail = (config.image_detail or "auto").lower()
-        if image_detail not in ("auto", "original", "high", "low"):
-            image_detail = "auto"
-        if image_detail == "original" and not supports_openai_original_image_detail(
-            model_name
-        ):
-            image_detail = "high"
-        generation_config["image_detail"] = image_detail
+        generation_config["image_detail"] = normalize_image_detail()
         if config.reasoning_effort:
             gen = get_gpt5_generation(model_name)
             is_chat = is_gpt5_chat_variant(model_name)
@@ -467,7 +471,7 @@ def _build_generation_config(
 
     elif provider == "OpenRouter":
         model_lower = (model_name or "").lower()
-        is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
+        is_openai_model = is_openai_model_family(model_name)
         is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith(
             "claude-"
         )
@@ -480,6 +484,8 @@ def _build_generation_config(
             "top_k": top_k,
             "max_tokens": max_tokens_value,
         }
+        if is_openai_model:
+            generation_config["image_detail"] = normalize_image_detail()
 
         is_openai_reasoning = is_openai_model and (
             "gpt-5" in model_lower

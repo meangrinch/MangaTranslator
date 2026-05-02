@@ -120,8 +120,14 @@ def call_openrouter_endpoint(
         "X-OpenRouter-Categories": "writing-assistant,image-gen",
     }
 
+    metadata = generation_config.get("_metadata", {})
     messages = []
     user_content = []
+    image_detail = (
+        generation_config.get("image_detail")
+        if metadata.get("is_openai_model", False)
+        else None
+    )
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     for part in image_parts:
@@ -132,12 +138,10 @@ def call_openrouter_endpoint(
         ):
             mime_type = part["inline_data"]["mime_type"]
             base64_image = part["inline_data"]["data"]
-            user_content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
-                }
-            )
+            image_url = {"url": f"data:{mime_type};base64,{base64_image}"}
+            if image_detail:
+                image_url["detail"] = image_detail
+            user_content.append({"type": "image_url", "image_url": image_url})
         else:
             log_message(f"Invalid image part format: {part}", always_print=True)
     user_content.append({"type": "text", "text": text_part["text"]})
@@ -153,7 +157,6 @@ def call_openrouter_endpoint(
         if not model_name.endswith(":online"):
             payload["model"] = f"{model_name}:online"
 
-    metadata = generation_config.get("_metadata", {})
     is_openai_model = metadata.get("is_openai_model", False)
     is_anthropic_model = metadata.get("is_anthropic_model", False)
 
