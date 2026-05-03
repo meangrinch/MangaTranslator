@@ -156,7 +156,7 @@ DEFAULT_SETTINGS = {
     "use_osb_text_verification": True,
     "use_panel_sorting": True,
     "use_otsu_threshold": False,
-    "thresholding_value": 190,
+    "thresholding_value": 200,
     "roi_shrink_px": 5,
     "inpaint_colored_bubbles": False,
     "temperature": DEFAULT_PROVIDER_SAMPLING["temperature"],
