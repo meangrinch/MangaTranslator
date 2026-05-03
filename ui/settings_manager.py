@@ -116,7 +116,7 @@ DEFAULT_SETTINGS = {
     "zai_api_key": "",
     "moonshot_api_key": "",
     "openrouter_api_key": "",
-    "openai_compatible_url": "http://localhost:1234/v1",
+    "openai_compatible_url": "http://localhost:8080/v1",
     "openai_compatible_api_key": "",
     "model_name": (
         PROVIDER_MODELS[DEFAULT_PROVIDER][0]

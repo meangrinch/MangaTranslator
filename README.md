@@ -160,7 +160,7 @@ fonts/
 - Web UI: configure provider/model/key in the Config tab (stored locally)
 - CLI: pass keys/URLs as flags or via env vars
 - Env vars: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
-- OpenAI-compatible default URL: `http://localhost:1234/v1`
+- OpenAI-compatible default URL: `http://localhost:8080/v1`
 
 > [!NOTE]
 > YanoljaNEXT-Rosetta models (e.g., `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`) are automatically detected when used via the OpenAI-Compatible provider and receive optimized prompting. These are text-only models and require two-step + local OCR model. The Special Instructions field is mapped to Rosetta's translation glossary (one entry per line, e.g., `Yanolja NEXT -> 야놀자넥스트`).
@@ -208,11 +208,11 @@ Examples:
 python main.py --input <image_path> \
   --font-dir "fonts/Komika" --provider Google --google-api-key <AI...>
 
-# Batch folder, custom source/target languages, OpenAI-Compatible provider (LM Studio)
+# Batch folder, custom source/target languages, OpenAI-Compatible provider (llama.cpp)
 python main.py --input <folder_path> --batch \
   --font-dir "fonts/Komika" \
   --input-language <src_lang> --output-language <tgt_lang> \
-  --provider OpenAI-Compatible --openai-compatible-url http://localhost:1234/v1 \
+  --provider OpenAI-Compatible --openai-compatible-url http://localhost:8080/v1 \
   --output ./output
 
 # Single Image, Japanese → English (Google), OSB text pipeline, custom OSB text font

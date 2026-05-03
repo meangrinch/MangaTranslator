@@ -131,8 +131,8 @@ def main():
     parser.add_argument(
         "--openai-compatible-url",
         type=str,
-        default="http://localhost:1234/v1",
-        help="Base URL for the OpenAI-Compatible endpoint (default is LM Studio)",
+        default="http://localhost:8080/v1",
+        help="Base URL for the OpenAI-Compatible endpoint (default is llama.cpp)",
     )
     parser.add_argument(
         "--openai-compatible-api-key",

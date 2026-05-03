@@ -53,7 +53,7 @@ class UITranslationProviderSettings:
     zai_api_key: Optional[str] = ""
     moonshot_api_key: Optional[str] = ""
     openrouter_api_key: Optional[str] = ""
-    openai_compatible_url: str = "http://localhost:1234/v1"
+    openai_compatible_url: str = "http://localhost:8080/v1"
     openai_compatible_api_key: Optional[str] = ""
 
 
