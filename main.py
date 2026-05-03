@@ -53,6 +53,14 @@ def main():
         default=1,
         help="Number of images to process simultaneously in batch mode (1-10, default: 1)",
     )
+    parser.add_argument(
+        "--batch-previous-context-images",
+        type=int,
+        default=0,
+        choices=range(0, 6),
+        metavar="{0..5}",
+        help="Batch only: include this many previous source pages as visual context (0-5, default: 0)",
+    )
     # --- Provider and API Key Arguments ---
     parser.add_argument(
         "--provider",
@@ -940,6 +948,15 @@ def main():
             upscale_method=args.upscale_method,
             bubble_min_side_pixels=args.bubble_min_side_pixels,
             context_image_max_side_pixels=args.context_image_max_side_pixels,
+            previous_context_image_count=(
+                args.batch_previous_context_images
+                if (
+                    args.batch
+                    and args.send_full_page_context
+                    and args.ocr_method == "LLM"
+                )
+                else 0
+            ),
             osb_min_side_pixels=args.osb_min_side_pixels,
             special_instructions=args.special_instructions,
             ocr_method=args.ocr_method,

@@ -239,6 +239,8 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_output_language": "English",
     "batch_font_pack": None,
     "batch_special_instructions": "",
+    "batch_parallel_requests": 1,
+    "batch_previous_context_image_count": 0,
 }
 
 
@@ -355,6 +357,8 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "batch_input_language",
     "batch_output_language",
     "batch_font_pack",
+    "batch_parallel_requests",
+    "batch_previous_context_image_count",
 ]
 
 

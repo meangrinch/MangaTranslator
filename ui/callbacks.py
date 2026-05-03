@@ -174,6 +174,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         special_instructions_val,
         batch_special_instructions_val,
         batch_parallel_requests_val,
+        batch_previous_context_image_count_val,
     ) = args
 
     final_input_language = batch_input_language if is_batch else input_language
@@ -320,6 +321,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_output_language=batch_output_language,
         batch_font_pack=batch_font_dropdown,
         batch_parallel_requests=int(batch_parallel_requests_val),
+        batch_previous_context_image_count=int(batch_previous_context_image_count_val),
     )
 
 
@@ -462,6 +464,11 @@ def _format_single_success_message(
         msg_parts.append(
             f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
         )
+        previous_context_count = backend_config.translation.previous_context_image_count
+        if previous_context_count:
+            msg_parts.append(
+                f"• Previous Context Images: {previous_context_count}\n"
+            )
 
     msg_parts.append(
         f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"
@@ -617,6 +624,11 @@ def _format_batch_success_message(
         msg_parts.append(
             f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
         )
+        previous_context_count = backend_config.translation.previous_context_image_count
+        if previous_context_count:
+            msg_parts.append(
+                f"• Previous Context Images: {previous_context_count}\n"
+            )
 
     msg_parts.append(
         f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"
@@ -993,6 +1005,8 @@ def handle_save_config_click(*args: Any) -> str:
         image_upscale_factor_val,
         image_upscale_model_val,
         auto_scale_val,
+        batch_parallel_requests_val,
+        batch_previous_context_image_count_val,
     ) = args
     ui_state = UIConfigState(
         detection=UIDetectionSettings(
@@ -1131,6 +1145,8 @@ def handle_save_config_click(*args: Any) -> str:
         batch_output_language=b_out_lang,
         batch_font_pack=b_font,
         batch_special_instructions=batch_special_instructions_val,
+        batch_parallel_requests=int(batch_parallel_requests_val),
+        batch_previous_context_image_count=int(batch_previous_context_image_count_val),
     )
 
     # Convert UI state to dictionary for saving
@@ -1394,6 +1410,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         ),
         default_ui_state.general.auto_scale,
         default_ui_state.batch_parallel_requests,
+        default_ui_state.batch_previous_context_image_count,
     ]
 
 
@@ -1619,6 +1636,7 @@ def handle_ocr_method_change(
         updates.append(batch_saved_language)
 
         updates.append(gr.update(value=False, interactive=False))
+        updates.append(gr.update(value=0, interactive=False))
         updates.append(gr.update())
         # Disable code execution checkbox (Gemini Flash only, disabled in text-only mode)
         updates.append(gr.update(value=False, interactive=False))
@@ -1701,6 +1719,7 @@ def handle_ocr_method_change(
         updates.append(batch_saved_language)
 
         updates.append(gr.update(value=False, interactive=False))
+        updates.append(gr.update(value=0, interactive=False))
         updates.append(gr.update())
         updates.append(gr.update(value=False, interactive=False))
         updates.append(gr.update(interactive=False))
@@ -1780,6 +1799,19 @@ def handle_ocr_method_change(
         )
         updates.append(
             gr.update(value=restored_send_full_page_context, interactive=True)
+        )
+        restored_previous_context_count = saved_settings.get(
+            "batch_previous_context_image_count", 0
+        )
+        updates.append(
+            gr.update(
+                value=(
+                    restored_previous_context_count
+                    if restored_send_full_page_context
+                    else 0
+                ),
+                interactive=restored_send_full_page_context,
+            )
         )
         restored_whiteout = saved_settings.get("whiteout_conjoined_bubbles", True)
         updates.append(gr.update(value=restored_whiteout, interactive=True))

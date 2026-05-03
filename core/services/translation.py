@@ -105,6 +105,7 @@ def _build_system_prompt_translation(
     mode: str,
     reading_direction: str,
     full_page_context: bool = False,
+    previous_context_image_count: int = 0,
 ) -> str:
     direction = (
         "right-to-left"
@@ -128,6 +129,11 @@ def _build_system_prompt_translation(
   - If an image contains standalone periods/ellipses, you must return it exactly as it appears.
   - If text is indecipherable, you must return the exact token: `[OCR FAILED]`."""
 
+    previous_context_rule = ""
+    if previous_context_image_count > 0:
+        previous_context_rule = """
+- **Previous Page Reference:** Previous source page images are visual/narrative reference only. Do not transcribe, translate, number, or count them in the output schema."""  # noqa
+
     core_rules = f"""
 ## CORE RULES
 - **Reading Context:** The {input_type} are presented in a {direction} reading order. Do not reorder them.
@@ -142,7 +148,7 @@ def _build_system_prompt_translation(
   - **Narration:** Translate neutrally without special styling.
   - **Audible SFX:** Translate physical sounds (Giongo) as standard onomatopoeia.
   - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives. Do not add a period at the end.
-{edge_cases}
+{edge_cases}{previous_context_rule}
 """  # noqa
 
     shared_components = f"""
@@ -1179,6 +1185,7 @@ def call_translation_api_batch(
     mime_types: List[str],
     full_image_mime_type: str,
     bubble_metadata: List[Dict[str, Any]],
+    previous_context_images: Optional[List[Dict[str, str]]] = None,
     debug: bool = False,
 ) -> List[str]:
     """
@@ -1194,6 +1201,7 @@ def call_translation_api_batch(
         mime_types (List[str]): List of MIME types for each text element image.
         full_image_mime_type (str): MIME type of the full page image.
         bubble_metadata (List[Dict]): List of metadata dicts with 'is_outside_text' flags for each image.
+        previous_context_images: Previous source page images, oldest-to-newest, as reference only.
         debug (bool): Whether to print debugging information.
 
     Returns:
@@ -1209,6 +1217,10 @@ def call_translation_api_batch(
     output_language = config.output_language
     reading_direction = config.reading_direction
     translation_mode = config.translation_mode
+    previous_context_images = previous_context_images or []
+    if not config.send_full_page_context or config.ocr_method != "LLM":
+        previous_context_images = []
+    previous_context_image_count = len(previous_context_images)
 
     # Include conditional bubble hints
     total_elements = len(images_b64)
@@ -1238,7 +1250,12 @@ def call_translation_api_batch(
         context_hints = "\nNote: " + " ".join(hints) + " Translate them accordingly."
 
     cache = get_cache()
-    cache_key = cache.get_translation_cache_key(images_b64, full_image_b64, config)
+    cache_key = cache.get_translation_cache_key(
+        images_b64,
+        full_image_b64,
+        config,
+        previous_context_images=previous_context_images,
+    )
     cached_translation = cache.get_translation(cache_key)
     if cached_translation is not None:
         log_message("  - Using cached translation", verbose=debug)
@@ -1270,6 +1287,19 @@ def call_translation_api_batch(
                 context_part, config.media_resolution_context
             )
         base_parts.append(context_part)
+
+    for image in previous_context_images:
+        previous_part = {
+            "inline_data": {
+                "mime_type": image.get("mime_type", "image/jpeg"),
+                "data": image.get("data", ""),
+            }
+        }
+        if supports_per_part_res:
+            previous_part = _add_media_resolution_to_part(
+                previous_part, config.media_resolution_context
+            )
+        base_parts.append(previous_part)
 
     try:
         if translation_mode == "two-step":
@@ -1335,12 +1365,20 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
                 )
                 else ""
             )
+            previous_page_context = ""
+            if previous_context_image_count:
+                previous_page_context = (
+                    f" {previous_context_image_count} previous source page image(s) "
+                    "are also provided as visual/narrative reference only. Image order "
+                    "for reference images is current full page first when present, then "
+                    "previous source pages oldest-to-newest."
+                )
 
             special_instructions_section = _format_special_instructions(config)
 
             translation_prompt = f"""
 ## CONTEXT
-You have been provided with a list of {total_elements} transcribed text segments from a manga page. {full_page_context}
+You have been provided with a list of {total_elements} transcribed text segments from a manga page. {full_page_context}{previous_page_context}
 {context_hints}
 
 {ocr_input_section}
@@ -1368,8 +1406,26 @@ The target language is {output_language}. Use the appropriate translation approa
                     )
                 translation_parts.append(context_part)
 
+            for image in previous_context_images:
+                previous_part = {
+                    "inline_data": {
+                        "mime_type": image.get("mime_type", "image/jpeg"),
+                        "data": image.get("data", ""),
+                    }
+                }
+                if supports_per_part_res:
+                    previous_part = _add_media_resolution_to_part(
+                        previous_part, config.media_resolution_context
+                    )
+                translation_parts.append(previous_part)
+
             use_rosetta = is_rosetta_model(model_name)
             if use_rosetta:
+                if previous_context_image_count:
+                    log_message(
+                        "Previous context images were requested, but Rosetta uses text-only requests.",
+                        verbose=debug,
+                    )
                 log_message(
                     "YanoljaNEXT Rosetta model detected — using Rosetta prompt format",
                     always_print=True,
@@ -1388,6 +1444,7 @@ The target language is {output_language}. Use the appropriate translation approa
                     full_page_context=(
                         config.send_full_page_context and bool(full_image_b64)
                     ),
+                    previous_context_image_count=previous_context_image_count,
                 )
             translation_response_text = _call_llm_endpoint(
                 config,
@@ -1446,12 +1503,20 @@ The target language is {output_language}. Use the appropriate translation approa
                 if config.send_full_page_context
                 else ""
             )
+            previous_page_context = ""
+            if previous_context_image_count:
+                previous_page_context = (
+                    f" {previous_context_image_count} previous source page image(s) "
+                    "are also provided as visual/narrative reference only. Request "
+                    "image order is text crops first, optional current full page, then "
+                    "previous source pages oldest-to-newest."
+                )
 
             special_instructions_section = _format_special_instructions(config)
 
             one_step_prompt = f"""
 ## CONTEXT
-You have been provided with {total_elements} individual text images from a manga page. {full_page_context}
+You have been provided with {total_elements} individual text images from a manga page. {full_page_context}{previous_page_context}
 {context_hints}
 
 ## TASK
@@ -1467,6 +1532,7 @@ For each image, you must perform two steps:
                 full_page_context=(
                     config.send_full_page_context and bool(full_image_b64)
                 ),
+                previous_context_image_count=previous_context_image_count,
             )
             response_text = _call_llm_endpoint(
                 config,

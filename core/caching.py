@@ -211,6 +211,7 @@ class UnifiedCache:
         images_b64: list,
         full_image_b64: str,
         config,
+        previous_context_images: Optional[List[Dict[str, str]]] = None,
     ) -> Optional[str]:
         """Compute cache key for LLM translation.
 
@@ -220,6 +221,7 @@ class UnifiedCache:
             images_b64: List of base64 encoded bubble images
             full_image_b64: Base64 encoded full page image
             config: TranslationConfig object
+            previous_context_images: Previous page context images, in request order
 
         Returns:
             str: Cache key, or None if not deterministic
@@ -229,6 +231,7 @@ class UnifiedCache:
 
         images_hash = hashlib.sha256("".join(images_b64).encode()).hexdigest()[:16]
         full_hash = hashlib.sha256(full_image_b64.encode()).hexdigest()[:16]
+        previous_context_images = previous_context_images or []
 
         cache_params = {
             "provider": config.provider,
@@ -265,6 +268,16 @@ class UnifiedCache:
                 config, "context_image_max_side_pixels", None
             ),
         }
+        if previous_context_images:
+            previous_hash = hashlib.sha256(
+                "".join(
+                    image.get("data", "") for image in previous_context_images
+                ).encode()
+            ).hexdigest()[:16]
+            cache_params["previous_context_image_count"] = len(
+                previous_context_images
+            )
+            cache_params["previous_context_image_hash"] = previous_hash
         config_hash = self._hash_dict(cache_params)
 
         key_string = f"trans_{images_hash}_{full_hash}_{config_hash}"

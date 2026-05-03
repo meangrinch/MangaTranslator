@@ -202,6 +202,7 @@ class UIConfigState:
     batch_font_pack: Optional[str] = None
     batch_special_instructions: Optional[str] = None
     batch_parallel_requests: int = 1
+    batch_previous_context_image_count: int = 0
 
     def to_save_dict(self) -> Dict[str, Any]:
         """Converts the UI state into a dictionary suitable for saving to config.json."""
@@ -280,10 +281,18 @@ class UIConfigState:
             "outside_text_osb_use_subpixel_rendering": self.outside_text.osb_use_subpixel_rendering,
             "outside_text_osb_font_hinting": self.outside_text.osb_font_hinting,
             "outside_text_bbox_expansion_percent": self.outside_text.bbox_expansion_percent,
-            "outside_text_osb_render_expansion_narrow_multiplier": self.outside_text.osb_render_expansion_narrow_multiplier,
-            "outside_text_osb_render_expansion_tiny_multiplier": self.outside_text.osb_render_expansion_tiny_multiplier,
-            "outside_text_osb_render_expansion_aspect_ratio_threshold": self.outside_text.osb_render_expansion_aspect_ratio_threshold,
-            "outside_text_osb_render_expansion_area_ratio_threshold": self.outside_text.osb_render_expansion_area_ratio_threshold,
+            "outside_text_osb_render_expansion_narrow_multiplier": (
+                self.outside_text.osb_render_expansion_narrow_multiplier
+            ),
+            "outside_text_osb_render_expansion_tiny_multiplier": (
+                self.outside_text.osb_render_expansion_tiny_multiplier
+            ),
+            "outside_text_osb_render_expansion_aspect_ratio_threshold": (
+                self.outside_text.osb_render_expansion_aspect_ratio_threshold
+            ),
+            "outside_text_osb_render_expansion_area_ratio_threshold": (
+                self.outside_text.osb_render_expansion_area_ratio_threshold
+            ),
             "outside_text_text_box_proximity_ratio": self.outside_text.text_box_proximity_ratio,
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
@@ -312,6 +321,14 @@ class UIConfigState:
             "batch_font_pack": self.batch_font_pack,
             "batch_special_instructions": self.batch_special_instructions or "",
             "batch_parallel_requests": self.batch_parallel_requests,
+            "batch_previous_context_image_count": (
+                self.batch_previous_context_image_count
+                if (
+                    self.llm_settings.send_full_page_context
+                    and self.llm_settings.ocr_method == "LLM"
+                )
+                else 0
+            ),
         }
         return data
 
@@ -596,6 +613,9 @@ class UIConfigState:
             batch_font_pack=data.get("batch_font_pack"),
             batch_special_instructions=data.get("batch_special_instructions") or None,
             batch_parallel_requests=int(data.get("batch_parallel_requests", 1)),
+            batch_previous_context_image_count=int(
+                data.get("batch_previous_context_image_count", 0)
+            ),
         )
 
 
@@ -668,6 +688,15 @@ def map_ui_to_backend_config(
         upscale_method=ui_state.llm_settings.upscale_method,
         bubble_min_side_pixels=ui_state.llm_settings.bubble_min_side_pixels,
         context_image_max_side_pixels=ui_state.llm_settings.context_image_max_side_pixels,
+        previous_context_image_count=(
+            ui_state.batch_previous_context_image_count
+            if (
+                is_batch
+                and ui_state.llm_settings.send_full_page_context
+                and ui_state.llm_settings.ocr_method == "LLM"
+            )
+            else 0
+        ),
         osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
         special_instructions=ui_state.llm_settings.special_instructions,
         reasoning_effort=ui_state.general.reasoning_effort,

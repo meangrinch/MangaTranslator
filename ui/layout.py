@@ -381,6 +381,32 @@ def create_layout(
                             label="Parallel Requests",
                             info="Number of images to process simultaneously",
                         )
+                        batch_previous_context_image_count = gr.Slider(
+                            minimum=0,
+                            maximum=5,
+                            value=int(
+                                (
+                                    saved_settings.get(
+                                        "batch_previous_context_image_count", 0
+                                    )
+                                    if saved_settings.get(
+                                        "send_full_page_context", True
+                                    )
+                                    else 0
+                                )
+                            ),
+                            step=1,
+                            label="Previous Context Images",
+                            info=(
+                                "Sends up to this many previous source pages "
+                                "as visual reference when full-page context is enabled; "
+                                "higher values can increase token cost."
+                            ),
+                            interactive=(
+                                saved_settings.get("send_full_page_context", True)
+                                and saved_settings.get("ocr_method", "LLM") == "LLM"
+                            ),
+                        )
                     with gr.Column(scale=1):
                         batch_output_gallery = gr.Gallery(
                             label="Translated Images",
@@ -1909,6 +1935,8 @@ def create_layout(
             image_upscale_factor,
             image_upscale_model,
             auto_scale,
+            batch_parallel_requests,
+            batch_previous_context_image_count,
         ]
 
         reset_outputs = [
@@ -2014,6 +2042,7 @@ def create_layout(
             image_upscale_model,
             auto_scale,
             batch_parallel_requests,
+            batch_previous_context_image_count,
         ]
 
         translate_inputs = [
@@ -2124,6 +2153,7 @@ def create_layout(
             special_instructions,
             batch_special_instructions,
             batch_parallel_requests,
+            batch_previous_context_image_count,
         ]
 
         batch_inputs = [
@@ -2235,6 +2265,7 @@ def create_layout(
             special_instructions,
             batch_special_instructions,
             batch_parallel_requests,
+            batch_previous_context_image_count,
         ]
 
         # Config Tab Navigation & Updates
@@ -2609,6 +2640,7 @@ def create_layout(
                 batch_input_language,
                 batch_original_language_state,
                 send_full_page_context,
+                batch_previous_context_image_count,
                 whiteout_conjoined_bubbles,
                 enable_code_execution_checkbox,
                 image_detail_dropdown,
@@ -2618,6 +2650,17 @@ def create_layout(
                 config_model_name,
                 provider_state,
             ],
+            queue=False,
+        )
+
+        send_full_page_context.change(
+            fn=lambda enabled: (
+                gr.update(interactive=True)
+                if enabled
+                else gr.update(value=0, interactive=False)
+            ),
+            inputs=send_full_page_context,
+            outputs=batch_previous_context_image_count,
             queue=False,
         )
 
