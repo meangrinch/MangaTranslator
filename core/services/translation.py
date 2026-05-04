@@ -132,7 +132,10 @@ def _build_system_prompt_translation(
     previous_context_rule = ""
     if previous_context_image_count > 0:
         previous_context_rule = """
-- **Previous Page Reference:** Previous source page images are visual/narrative reference only. Do not transcribe, translate, number, or count them in the output schema."""  # noqa
+- **Previous Page Reference:** Earlier source pages are visual/narrative context only — do not transcribe, translate, number, or count them. Use them to maintain consistency:
+  - **Proper Nouns:** Keep character names, place names, organizations, technique/skill/title names, honorifics, and stylized terms spelled exactly as they appeared previously.
+  - **Character Voice:** Preserve each character's established voice, register, and pronoun choices.
+  - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior context."""  # noqa
 
     core_rules = f"""
 ## CORE RULES
@@ -1369,9 +1372,8 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
             if previous_context_image_count:
                 previous_page_context = (
                     f" {previous_context_image_count} previous source page image(s) "
-                    "are also provided as visual/narrative reference only. Image order "
-                    "for reference images is current full page first when present, then "
-                    "previous source pages oldest-to-newest."
+                    "are attached as reference. Image order: current full page first "
+                    "(when present), then previous source pages oldest-to-newest."
                 )
 
             special_instructions_section = _format_special_instructions(config)
@@ -1421,11 +1423,6 @@ The target language is {output_language}. Use the appropriate translation approa
 
             use_rosetta = is_rosetta_model(model_name)
             if use_rosetta:
-                if previous_context_image_count:
-                    log_message(
-                        "Previous context images were requested, but Rosetta uses text-only requests.",
-                        verbose=debug,
-                    )
                 log_message(
                     "YanoljaNEXT Rosetta model detected — using Rosetta prompt format",
                     always_print=True,
@@ -1507,9 +1504,9 @@ The target language is {output_language}. Use the appropriate translation approa
             if previous_context_image_count:
                 previous_page_context = (
                     f" {previous_context_image_count} previous source page image(s) "
-                    "are also provided as visual/narrative reference only. Request "
-                    "image order is text crops first, optional current full page, then "
-                    "previous source pages oldest-to-newest."
+                    "are attached as reference. Image order: text crops first, "
+                    "optional current full page, then previous source pages "
+                    "oldest-to-newest."
                 )
 
             special_instructions_section = _format_special_instructions(config)
