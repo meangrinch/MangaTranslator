@@ -1484,15 +1484,72 @@ def create_layout(
                                     "outside_text_inpainting_method",
                                     "flux_klein_4b",
                                 ) in ("flux_klein_9b", "flux_klein_4b")
+                                _is_flux_for_klein_options = saved_settings.get(
+                                    "outside_text_inpainting_method",
+                                    "flux_klein_4b",
+                                ) not in ("opencv", "none")
+                                _upscale_small_crops_enabled = saved_settings.get(
+                                    "outside_text_flux_upscale_small_crops", True
+                                )
+                                _group_flux_regions_enabled = saved_settings.get(
+                                    "outside_text_flux_group_regions", False
+                                )
                                 outside_text_flux_luminance_correction = gr.Checkbox(
-                                    value=saved_settings.get(
-                                        "outside_text_flux_luminance_correction", True
+                                    value=(
+                                        saved_settings.get(
+                                            "outside_text_flux_luminance_correction",
+                                            True,
+                                        )
+                                        if not _is_klein_for_lum
+                                        else (
+                                            saved_settings.get(
+                                                "outside_text_flux_luminance_correction",
+                                                True,
+                                            )
+                                            if (
+                                                _upscale_small_crops_enabled
+                                                and not _group_flux_regions_enabled
+                                            )
+                                            else False
+                                        )
                                     ),
                                     label="Luminance Correction",
                                     info=(
-                                        "Try and match generated patch brightness to surrounding context."
+                                        "Try and match generated patch brightness to surrounding context. "
+                                        "Only available for ungrouped Klein crops scaled to ~1MP."
                                     ),
                                     visible=_is_klein_for_lum,
+                                    interactive=(
+                                        _is_klein_for_lum
+                                        and _upscale_small_crops_enabled
+                                        and not _group_flux_regions_enabled
+                                    ),
+                                )
+                                outside_text_flux_upscale_small_crops = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_flux_upscale_small_crops", True
+                                    ),
+                                    label="Upscale Klein Crops to ~1MP",
+                                    info=(
+                                        "Scale small Klein inpaint crops before Flux inference for better cleanup."
+                                    ),
+                                    visible=_is_flux_for_klein_options,
+                                    interactive=_is_klein_for_lum,
+                                )
+                                outside_text_flux_group_regions = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_flux_group_regions", False
+                                    ),
+                                    label="Group Flux Regions",
+                                    info=(
+                                        "Run one Flux pass over a combined expanded mask for all non-solid OSB regions."
+                                    ),
+                                    visible=_is_flux_for_klein_options,
+                                    interactive=saved_settings.get(
+                                        "outside_text_inpainting_method",
+                                        "flux_klein_4b",
+                                    )
+                                    not in ("opencv", "none"),
                                 )
                                 outside_text_flux_residual_diff_threshold = gr.Slider(
                                     0.0,
@@ -1512,6 +1569,7 @@ def create_layout(
                                         "flux_klein_4b",
                                     )
                                     == "flux_kontext",
+                                    visible=_is_kontext,
                                 )
                                 outside_text_seed = gr.Number(
                                     value=saved_settings.get("outside_text_seed", 1),
@@ -1577,7 +1635,7 @@ def create_layout(
                                         1.0,
                                     ),
                                     step=0.1,
-                                    label="Tiny Bubble Expansion Multiplier",
+                                    label="Tiny Expansion Multiplier",
                                     info=(
                                         "Expands OSB render boxes whose area is below the tiny "
                                         "bubble area threshold."
@@ -1592,7 +1650,7 @@ def create_layout(
                                     )
                                     * 100.0,
                                     step=0.1,
-                                    label="Tiny Bubble Area Threshold (%)",
+                                    label="Tiny Area Threshold (%)",
                                     info=(
                                         "Classifies a box as tiny when its area is below this "
                                         "percentage of the full image area."
@@ -1911,6 +1969,8 @@ def create_layout(
             outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
+            outside_text_flux_upscale_small_crops,
+            outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_enable_page_number_filtering,
@@ -2017,6 +2077,8 @@ def create_layout(
             outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
+            outside_text_flux_upscale_small_crops,
+            outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_enable_page_number_filtering,
@@ -2123,6 +2185,8 @@ def create_layout(
             outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
+            outside_text_flux_upscale_small_crops,
+            outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_enable_page_number_filtering,
@@ -2235,6 +2299,8 @@ def create_layout(
             outside_text_flux_low_vram,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
+            outside_text_flux_upscale_small_crops,
+            outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_enable_page_number_filtering,
@@ -2488,7 +2554,11 @@ def create_layout(
 
         # Inpainting method change -> enable/disable controls and adjust steps range
         def _update_inpainting_controls(
-            method: str, current_backend: str, current_steps: int
+            method: str,
+            current_backend: str,
+            current_steps: int,
+            upscale_small_crops: bool,
+            group_regions: bool,
         ):
             """Update controls based on inpainting method selection."""
             is_opencv = method == "opencv"
@@ -2506,6 +2576,16 @@ def create_layout(
 
             show_low_vram = is_klein or (is_kontext and current_backend == "sdnq")
             residual_interactive = is_kontext and current_backend == "nunchaku"
+            luminance_interactive = (
+                is_klein and bool(upscale_small_crops) and not bool(group_regions)
+            )
+            luminance_update = gr.update(visible=False, interactive=False)
+            if is_klein:
+                luminance_update = gr.update(
+                    visible=True,
+                    interactive=luminance_interactive,
+                    value=luminance_interactive,
+                )
 
             return (
                 gr.update(visible=is_kontext),
@@ -2515,8 +2595,10 @@ def create_layout(
                     maximum=max_steps,
                     value=default_steps,
                 ),
-                gr.update(visible=is_klein),
-                gr.update(interactive=residual_interactive),
+                luminance_update,
+                gr.update(visible=(not is_no_flux), interactive=is_klein),
+                gr.update(visible=(not is_no_flux), interactive=(not is_no_flux)),
+                gr.update(visible=is_kontext, interactive=residual_interactive),
                 gr.update(interactive=(not is_no_flux)),
                 gr.update(interactive=(not is_no_flux)),
             )
@@ -2527,18 +2609,53 @@ def create_layout(
                 outside_text_inpainting_method,
                 outside_text_kontext_backend,
                 outside_text_flux_num_inference_steps,
+                outside_text_flux_upscale_small_crops,
+                outside_text_flux_group_regions,
             ],
             outputs=[
                 outside_text_kontext_backend,
                 outside_text_flux_low_vram,
                 outside_text_flux_num_inference_steps,
                 outside_text_flux_luminance_correction,
+                outside_text_flux_upscale_small_crops,
+                outside_text_flux_group_regions,
                 outside_text_flux_residual_diff_threshold,
                 outside_text_seed,
                 inpaint_colored_bubbles,
             ],
             queue=False,
         )
+
+        def _update_luminance_interactivity(
+            upscale_small_crops: bool, group_regions: bool, method: str
+        ):
+            """Luminance correction is calibrated for ungrouped ~1MP Klein crops."""
+            is_klein = method in ("flux_klein_9b", "flux_klein_4b")
+            if not is_klein:
+                return gr.update(interactive=False)
+
+            luminance_interactive = bool(upscale_small_crops) and not bool(
+                group_regions
+            )
+            return gr.update(
+                interactive=luminance_interactive,
+                value=luminance_interactive,
+            )
+
+        for control in (
+            outside_text_flux_upscale_small_crops,
+            outside_text_flux_group_regions,
+        ):
+            control.change(
+                fn=_update_luminance_interactivity,
+                inputs=[
+                    outside_text_flux_upscale_small_crops,
+                    outside_text_flux_group_regions,
+                    outside_text_inpainting_method,
+                ],
+                outputs=outside_text_flux_luminance_correction,
+                queue=False,
+            )
 
         # Kontext backend change -> update Low VRAM and Residual diff visibility
         def _update_kontext_backend_controls(backend: str):

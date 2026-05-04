@@ -128,6 +128,8 @@ class UIOutsideTextSettings:
     flux_luminance_correction: bool = (
         True  # Match patch luminance to surrounding context
     )
+    flux_upscale_small_crops: bool = True
+    flux_group_regions: bool = False
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.6
     osb_font_dir: str = ""  # Empty = use main font
@@ -267,6 +269,8 @@ class UIConfigState:
             "outside_text_flux_low_vram": self.outside_text.flux_low_vram,
             "outside_text_flux_num_inference_steps": self.outside_text.flux_num_inference_steps,
             "outside_text_flux_luminance_correction": self.outside_text.flux_luminance_correction,
+            "outside_text_flux_upscale_small_crops": self.outside_text.flux_upscale_small_crops,
+            "outside_text_flux_group_regions": self.outside_text.flux_group_regions,
             "outside_text_flux_residual_diff_threshold": self.outside_text.flux_residual_diff_threshold,
             "outside_text_osb_confidence": self.outside_text.osb_confidence,
             "outside_text_enable_page_number_filtering": self.outside_text.enable_page_number_filtering,
@@ -416,6 +420,10 @@ class UIConfigState:
                 flux_luminance_correction=data.get(
                     "outside_text_flux_luminance_correction", True
                 ),
+                flux_upscale_small_crops=data.get(
+                    "outside_text_flux_upscale_small_crops", True
+                ),
+                flux_group_regions=data.get("outside_text_flux_group_regions", False),
                 flux_residual_diff_threshold=data.get(
                     "outside_text_flux_residual_diff_threshold", 0.15
                 ),
@@ -753,6 +761,8 @@ def map_ui_to_backend_config(
         flux_low_vram=ui_state.outside_text.flux_low_vram,
         flux_num_inference_steps=ui_state.outside_text.flux_num_inference_steps,
         flux_luminance_correction=ui_state.outside_text.flux_luminance_correction,
+        flux_upscale_small_crops=ui_state.outside_text.flux_upscale_small_crops,
+        flux_group_regions=ui_state.outside_text.flux_group_regions,
         flux_residual_diff_threshold=ui_state.outside_text.flux_residual_diff_threshold,
         osb_confidence=ui_state.outside_text.osb_confidence,
         osb_font_dir=str(osb_font_path) if osb_font_path else None,

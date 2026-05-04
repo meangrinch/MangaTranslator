@@ -583,6 +583,18 @@ def main():
         action="store_true",
         help="Enable sequential CPU offload for Flux Klein/Kontext SDNQ models (reduces VRAM usage)",
     )
+    parser.add_argument(
+        "--osb-no-flux-upscale-small-crops",
+        dest="osb_flux_upscale_small_crops",
+        action="store_false",
+        help="Disable scaling small Flux Klein OSB crops to ~1MP before inference",
+    )
+    parser.set_defaults(osb_flux_upscale_small_crops=True)
+    parser.add_argument(
+        "--osb-flux-group-regions",
+        action="store_true",
+        help="Group non-solid OSB regions into one expanded Flux mask per page",
+    )
 
     parser.add_argument(
         "--osb-flux-steps",
@@ -995,6 +1007,8 @@ def main():
             flux_low_vram=args.osb_flux_low_vram,
             flux_num_inference_steps=args.osb_flux_steps,
             flux_luminance_correction=args.osb_flux_luminance_correction,
+            flux_upscale_small_crops=args.osb_flux_upscale_small_crops,
+            flux_group_regions=args.osb_flux_group_regions,
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
             osb_confidence=args.osb_confidence,
             seed=args.osb_seed,

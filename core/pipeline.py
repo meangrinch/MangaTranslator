@@ -174,7 +174,9 @@ def _encode_previous_context_source_page(
         context_image_cv = pil_to_cv2(context_image_pil)
         is_success, buffer = cv2.imencode(cv2_ext, context_image_cv)
         if not is_success:
-            raise ImageProcessingError(f"Previous context image encoding to {cv2_ext} failed")
+            raise ImageProcessingError(
+                f"Previous context image encoding to {cv2_ext} failed"
+            )
         return {
             "mime_type": mime_type,
             "data": base64.b64encode(buffer).decode("utf-8"),
@@ -827,6 +829,7 @@ def translate_and_render(
                     kontext_backend=config.outside_text.kontext_backend,
                     flux_low_vram=config.outside_text.flux_low_vram,
                     flux_luminance_correction=config.outside_text.flux_luminance_correction,
+                    flux_upscale_small_crops=config.outside_text.flux_upscale_small_crops,
                     bubble_detector_model=config.detection.bubble_detector_model,
                 )
             except CleaningError as e:

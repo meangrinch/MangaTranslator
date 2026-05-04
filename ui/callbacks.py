@@ -144,6 +144,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_flux_low_vram_val,
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_luminance_correction_val,
+        outside_text_flux_upscale_small_crops_val,
+        outside_text_flux_group_regions_val,
         outside_text_flux_residual_diff_threshold_val,
         outside_text_osb_confidence_val,
         outside_text_enable_page_number_filtering_val,
@@ -210,6 +212,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             flux_low_vram=outside_text_flux_low_vram_val,
             flux_num_inference_steps=int(outside_text_flux_num_inference_steps_val),
             flux_luminance_correction=outside_text_flux_luminance_correction_val,
+            flux_upscale_small_crops=outside_text_flux_upscale_small_crops_val,
+            flux_group_regions=outside_text_flux_group_regions_val,
             flux_residual_diff_threshold=float(
                 outside_text_flux_residual_diff_threshold_val
             ),
@@ -981,6 +985,8 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_flux_low_vram_val,
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_luminance_correction_val,
+        outside_text_flux_upscale_small_crops_val,
+        outside_text_flux_group_regions_val,
         outside_text_flux_residual_diff_threshold_val,
         outside_text_osb_confidence_val,
         outside_text_enable_page_number_filtering_val,
@@ -1034,6 +1040,8 @@ def handle_save_config_click(*args: Any) -> str:
             flux_low_vram=outside_text_flux_low_vram_val,
             flux_num_inference_steps=int(outside_text_flux_num_inference_steps_val),
             flux_luminance_correction=outside_text_flux_luminance_correction_val,
+            flux_upscale_small_crops=outside_text_flux_upscale_small_crops_val,
+            flux_group_regions=outside_text_flux_group_regions_val,
             flux_residual_diff_threshold=float(
                 outside_text_flux_residual_diff_threshold_val
             ),
@@ -1373,6 +1381,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.flux_low_vram,
         default_ui_state.outside_text.flux_num_inference_steps,
         default_ui_state.outside_text.flux_luminance_correction,
+        default_ui_state.outside_text.flux_upscale_small_crops,
+        default_ui_state.outside_text.flux_group_regions,
         default_ui_state.outside_text.flux_residual_diff_threshold,
         default_ui_state.outside_text.osb_confidence,
         gr.update(value=default_ui_state.outside_text.enable_page_number_filtering),

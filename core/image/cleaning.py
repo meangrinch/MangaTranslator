@@ -424,6 +424,7 @@ def clean_speech_bubbles(
     kontext_backend: str = "nunchaku",
     flux_low_vram: bool = False,
     flux_luminance_correction: bool = True,
+    flux_upscale_small_crops: bool = True,
     bubble_detector_model: str = "yolo_1",
 ):
     """
@@ -756,6 +757,7 @@ def clean_speech_bubbles(
                             num_inference_steps=int(flux_num_inference_steps),
                             low_vram=flux_low_vram,
                             luminance_correction=flux_luminance_correction,
+                            upscale_small_crops=flux_upscale_small_crops,
                             verbose=verbose,
                         )
                     elif inpaint_method == "flux_klein_4b":
@@ -766,6 +768,7 @@ def clean_speech_bubbles(
                             num_inference_steps=int(flux_num_inference_steps),
                             low_vram=flux_low_vram,
                             luminance_correction=flux_luminance_correction,
+                            upscale_small_crops=flux_upscale_small_crops,
                             verbose=verbose,
                         )
                     else:

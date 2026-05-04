@@ -397,6 +397,7 @@ def process_outside_text(
                     num_inference_steps=config.outside_text.flux_num_inference_steps,
                     low_vram=config.outside_text.flux_low_vram,
                     luminance_correction=config.outside_text.flux_luminance_correction,
+                    upscale_small_crops=config.outside_text.flux_upscale_small_crops,
                     verbose=verbose,
                 )
                 log_message("Using Flux.2 Klein 9B for inpainting", verbose=verbose)
@@ -415,6 +416,7 @@ def process_outside_text(
                     num_inference_steps=config.outside_text.flux_num_inference_steps,
                     low_vram=config.outside_text.flux_low_vram,
                     luminance_correction=config.outside_text.flux_luminance_correction,
+                    upscale_small_crops=config.outside_text.flux_upscale_small_crops,
                     verbose=verbose,
                 )
                 log_message("Using Flux.2 Klein 4B for inpainting", verbose=verbose)
@@ -484,6 +486,8 @@ def process_outside_text(
                 flux_inpaints = 0
                 cv2_inpaints = 0
                 none_skips = 0
+                group_flux_regions = bool(config.outside_text.flux_group_regions)
+                grouped_flux_candidates = []
                 for i, group in enumerate(mask_groups):
                     log_message(
                         f"Inpainting outside text region {i + 1}/{len(mask_groups)}",
@@ -941,6 +945,46 @@ def process_outside_text(
                         )
                         continue
 
+                    if group_flux_regions and inpainter is not None:
+                        grouped_mask = combined_mask.copy()
+                        if composite_clip_bbox is not None:
+                            clip_x1, clip_y1, clip_x2, clip_y2 = composite_clip_bbox
+                            clip_x1 = max(0, min(img_w, clip_x1))
+                            clip_x2 = max(0, min(img_w, clip_x2))
+                            clip_y1 = max(0, min(img_h, clip_y1))
+                            clip_y2 = max(0, min(img_h, clip_y2))
+
+                            clipped_grouped_mask = np.zeros_like(grouped_mask)
+                            if clip_x2 > clip_x1 and clip_y2 > clip_y1:
+                                clipped_grouped_mask[
+                                    clip_y1:clip_y2, clip_x1:clip_x2
+                                ] = grouped_mask[clip_y1:clip_y2, clip_x1:clip_x2]
+                            grouped_mask = clipped_grouped_mask
+
+                        if not np.any(grouped_mask):
+                            log_message(
+                                f"Skipping OSB region {i + 1} after grouped clip (no remaining area)",
+                                verbose=verbose,
+                            )
+                            continue
+
+                        grouped_flux_candidates.append(
+                            {
+                                "index": i + 1,
+                                "mask": grouped_mask,
+                                "fallback_color": (
+                                    fallback_fill_color
+                                    if fallback_fill_color
+                                    else (255, 255, 255)
+                                ),
+                            }
+                        )
+                        log_message(
+                            f"Queued OSB region {i + 1} for grouped Flux inpainting",
+                            verbose=verbose,
+                        )
+                        continue
+
                     flux_failed = False
                     flux_fail_reason = None
                     inpainted_image = None
@@ -1015,6 +1059,57 @@ def process_outside_text(
                                 temp_files.remove(temp_file)
                     else:
                         current_image = inpainted_image
+
+                if grouped_flux_candidates:
+                    grouped_mask = np.zeros((img_h, img_w), dtype=bool)
+                    for candidate in grouped_flux_candidates:
+                        grouped_mask = np.logical_or(grouped_mask, candidate["mask"])
+
+                    if np.any(grouped_mask):
+                        log_message(
+                            "Running grouped Flux inpainting for "
+                            f"{len(grouped_flux_candidates)} OSB regions",
+                            verbose=verbose,
+                        )
+                        try:
+                            group_seed = base_seed if base_seed > 0 else base_seed
+                            inpainted_image = inpainter.inpaint_mask(
+                                current_image,
+                                grouped_mask,
+                                seed=group_seed,
+                                verbose=verbose,
+                                strict_mask_clipping=True,
+                                ocr_params={
+                                    "type": "outside_text_group",
+                                    "regions": len(grouped_flux_candidates),
+                                },
+                            )
+                            if inpainted_image is current_image:
+                                raise RuntimeError(
+                                    "Flux returned original image (no inpaint)"
+                                )
+                            current_image = inpainted_image
+                            flux_inpaints += len(grouped_flux_candidates)
+                        except Exception as e:
+                            log_message(
+                                "Grouped Flux inpainting failed "
+                                f"({e}); falling back to CV2 fill",
+                                always_print=True,
+                            )
+                            for candidate in grouped_flux_candidates:
+                                mask_pil = Image.fromarray(
+                                    (candidate["mask"] * 255).astype(np.uint8),
+                                    mode="L",
+                                )
+                                patch = Image.new(
+                                    "RGB",
+                                    current_image.size,
+                                    candidate["fallback_color"],
+                                )
+                                next_image = current_image.copy()
+                                next_image.paste(patch, (0, 0), mask=mask_pil)
+                                current_image = next_image
+                            cv2_inpaints += len(grouped_flux_candidates)
 
                 log_message("Outside text inpainting completed", verbose=verbose)
                 parts = [

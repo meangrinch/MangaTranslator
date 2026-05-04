@@ -25,6 +25,60 @@ CONTEXT_PADDING_RATIO = 0.5  # Context padding is 50% of detection size
 MAX_CONTEXT_PADDING = 80  # Context padding capped at 80 pixels
 
 
+def _prompt_value_to_cpu(value):
+    if isinstance(value, torch.Tensor):
+        return value.detach().to("cpu")
+    if isinstance(value, tuple):
+        return tuple(_prompt_value_to_cpu(item) for item in value)
+    if isinstance(value, list):
+        return [_prompt_value_to_cpu(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _prompt_value_to_cpu(item) for key, item in value.items()}
+    return value
+
+
+def _prompt_value_to_device(value, device: torch.device):
+    if isinstance(value, torch.Tensor):
+        return value.to(device)
+    if isinstance(value, tuple):
+        return tuple(_prompt_value_to_device(item, device) for item in value)
+    if isinstance(value, list):
+        return [_prompt_value_to_device(item, device) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _prompt_value_to_device(item, device) for key, item in value.items()
+        }
+    return value
+
+
+def _pipeline_execution_device(pipeline, fallback: torch.device) -> torch.device:
+    execution_device = getattr(pipeline, "_execution_device", None)
+    if execution_device is None:
+        return fallback
+    return torch.device(execution_device)
+
+
+def _encode_flux_prompt(pipeline, prompt: str, device: torch.device):
+    try:
+        encoded = pipeline.encode_prompt(prompt=prompt, prompt_2=None, device=device)
+    except TypeError:
+        encoded = pipeline.encode_prompt(prompt=prompt, device=device)
+
+    if not isinstance(encoded, tuple) or len(encoded) < 2:
+        raise RuntimeError("Flux prompt encoder returned an unexpected result.")
+
+    return encoded[0], encoded[1]
+
+
+def _flux_prompt_kwargs(
+    prompt_embeds, pooled_prompt_embeds, include_pooled: bool = True
+) -> Dict:
+    kwargs = {"prompt_embeds": prompt_embeds}
+    if include_pooled and pooled_prompt_embeds is not None:
+        kwargs["pooled_prompt_embeds"] = pooled_prompt_embeds
+    return kwargs
+
+
 class FluxKontextInpainter:
     """Inpainter using Flux Kontext models for text removal."""
 
@@ -81,6 +135,8 @@ class FluxKontextInpainter:
         self.pipeline = None
         self.transformer = None
         self.text_encoder_2 = None
+        self._prompt_embeds_cpu = None
+        self._pooled_prompt_embeds_cpu = None
 
         # Fixed parameters optimized for text removal
         self.guidance_scale = FLUX_GUIDANCE_SCALE
@@ -118,11 +174,29 @@ class FluxKontextInpainter:
         self.pipeline = None
         self.transformer = None
         self.text_encoder_2 = None
+        self._prompt_embeds_cpu = None
+        self._pooled_prompt_embeds_cpu = None
 
         if self.backend == "sdnq":
             self.manager.unload_flux_kontext_sdnq_models()
         else:
             self.manager.unload_flux_kontext_models()
+
+    def _get_prompt_embeddings(self, device: torch.device, verbose: bool = False):
+        if self._prompt_embeds_cpu is None:
+            log_message("  - Encoding Flux prompt embeddings", verbose=verbose)
+            prompt_embeds, pooled_prompt_embeds = _encode_flux_prompt(
+                self.pipeline, self.prompt, device
+            )
+            self._prompt_embeds_cpu = _prompt_value_to_cpu(prompt_embeds)
+            self._pooled_prompt_embeds_cpu = _prompt_value_to_cpu(pooled_prompt_embeds)
+        else:
+            log_message("  - Reusing Flux prompt embeddings", verbose=verbose)
+
+        return (
+            _prompt_value_to_device(self._prompt_embeds_cpu, device),
+            _prompt_value_to_device(self._pooled_prompt_embeds_cpu, device),
+        )
 
     def convert_mask_to_tensor(self, mask_np):
         """Convert a numpy mask to the tensor format expected by the pipeline.
@@ -706,8 +780,14 @@ class FluxKontextInpainter:
                     with torch.inference_mode():
                         gen_device = "cpu" if self.low_vram else self.DEVICE
                         gen = torch.Generator(device=gen_device).manual_seed(seed)
+                        prompt_device = _pipeline_execution_device(
+                            self.pipeline, self.DEVICE
+                        )
+                        prompt_embeds, pooled_prompt_embeds = (
+                            self._get_prompt_embeddings(prompt_device, verbose=verbose)
+                        )
                         out = self.pipeline(
-                            prompt=self.prompt,
+                            **_flux_prompt_kwargs(prompt_embeds, pooled_prompt_embeds),
                             image=image_scaled_for_inference_pil,
                             width=inference_width,
                             height=inference_height,
@@ -731,26 +811,24 @@ class FluxKontextInpainter:
                             )
                         )
                 else:
-                    self.pipeline.text_encoder_2.to(self.DEVICE)
+                    should_encode_prompt = self._prompt_embeds_cpu is None
+                    if should_encode_prompt:
+                        self.pipeline.text_encoder_2.to(self.DEVICE)
 
-                    prompt_embeds, pooled_prompt_embeds, _ = (
-                        self.pipeline.encode_prompt(
-                            prompt=self.prompt,
-                            prompt_2=None,
-                            device=self.DEVICE,
-                        )
+                    prompt_embeds, pooled_prompt_embeds = self._get_prompt_embeddings(
+                        self.DEVICE, verbose=verbose
                     )
 
-                    self.pipeline.text_encoder_2.to("cpu")
-                    empty_cache(self.DEVICE)
+                    if should_encode_prompt:
+                        self.pipeline.text_encoder_2.to("cpu")
+                        empty_cache(self.DEVICE)
 
                     self.pipeline.transformer.to(self.DEVICE)
 
                     with torch.inference_mode():
                         gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
                         out = self.pipeline(
-                            prompt_embeds=prompt_embeds,
-                            pooled_prompt_embeds=pooled_prompt_embeds,
+                            **_flux_prompt_kwargs(prompt_embeds, pooled_prompt_embeds),
                             image=image_scaled_for_inference_pil,
                             width=inference_width,
                             height=inference_height,
@@ -833,6 +911,7 @@ class FluxKleinInpainter:
     MIN_RESOLUTION = 64
     MAX_RESOLUTION = 2048
     RESOLUTION_MULTIPLE = 16
+    MAX_INFERENCE_PIXELS = 4_000_000
     KLEIN_PADDING_MULTIPLIER = 2.0  # Double padding vs Kontext for more context
 
     def __init__(
@@ -843,6 +922,7 @@ class FluxKleinInpainter:
         num_inference_steps: int = 4,
         low_vram: bool = False,
         luminance_correction: bool = True,
+        upscale_small_crops: bool = True,
         verbose: bool = False,
     ):
         """Initialize the Flux Klein Inpainter.
@@ -854,6 +934,7 @@ class FluxKleinInpainter:
             num_inference_steps: Number of denoising steps (1-12, default: 4).
             low_vram: If True, use sequential CPU offload (slower but lower VRAM).
             luminance_correction: If True, match patch luminance to surrounding context.
+            upscale_small_crops: If True, scale small crops to ~1MP before inference.
             verbose: Whether to print verbose logging.
         """
         self.variant = variant.lower()
@@ -863,6 +944,7 @@ class FluxKleinInpainter:
         self.num_inference_steps = num_inference_steps
         self.low_vram = low_vram
         self.luminance_correction = luminance_correction
+        self.upscale_small_crops = upscale_small_crops
         self.verbose = verbose
 
         self.DEVICE = device if device is not None else get_best_device()
@@ -871,6 +953,8 @@ class FluxKleinInpainter:
         self.manager = get_model_manager()
         self.cache = get_cache()
         self.pipeline = None
+        self._prompt_embeds_cpu = None
+        self._pooled_prompt_embeds_cpu = None
 
     def load_models(self):
         """Load Flux Klein models via model manager."""
@@ -892,12 +976,68 @@ class FluxKleinInpainter:
     def unload_models(self):
         """Unload Flux.2 Klein models via model manager to free up memory."""
         self.pipeline = None
+        self._prompt_embeds_cpu = None
+        self._pooled_prompt_embeds_cpu = None
         self.manager.unload_flux_klein_models()
+
+    def _get_prompt_embeddings(self, device: torch.device, verbose: bool = False):
+        if self._prompt_embeds_cpu is None:
+            log_message(
+                "  - Encoding Flux.2 Klein prompt embeddings", verbose=verbose
+            )
+            prompt_embeds, pooled_prompt_embeds = _encode_flux_prompt(
+                self.pipeline, self.KLEIN_PROMPT, device
+            )
+            self._prompt_embeds_cpu = _prompt_value_to_cpu(prompt_embeds)
+            self._pooled_prompt_embeds_cpu = _prompt_value_to_cpu(pooled_prompt_embeds)
+        else:
+            log_message("  - Reusing Flux.2 Klein prompt embeddings", verbose=verbose)
+
+        return (
+            _prompt_value_to_device(self._prompt_embeds_cpu, device),
+            _prompt_value_to_device(self._pooled_prompt_embeds_cpu, device),
+        )
 
     def _quantize_dimension(self, dim: int) -> int:
         """Quantize dimension to be a multiple of RESOLUTION_MULTIPLE within allowed range."""
         dim = max(self.MIN_RESOLUTION, min(self.MAX_RESOLUTION, dim))
         return (dim // self.RESOLUTION_MULTIPLE) * self.RESOLUTION_MULTIPLE
+
+    def _expand_bounds_to_min_size(
+        self,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        img_w: int,
+        img_h: int,
+    ) -> Tuple[int, int, int, int]:
+        target_w = min(self.MIN_RESOLUTION, img_w)
+        target_h = min(self.MIN_RESOLUTION, img_h)
+
+        width = x2 - x1
+        if width < target_w:
+            extra = target_w - width
+            x1 = max(0, x1 - extra // 2)
+            x2 = min(img_w, x2 + extra - extra // 2)
+            if x2 - x1 < target_w:
+                if x1 == 0:
+                    x2 = min(img_w, target_w)
+                else:
+                    x1 = max(0, img_w - target_w)
+
+        height = y2 - y1
+        if height < target_h:
+            extra = target_h - height
+            y1 = max(0, y1 - extra // 2)
+            y2 = min(img_h, y2 + extra - extra // 2)
+            if y2 - y1 < target_h:
+                if y1 == 0:
+                    y2 = min(img_h, target_h)
+                else:
+                    y1 = max(0, img_h - target_h)
+
+        return x1, y1, x2, y2
 
     def _compute_luminance_stats(
         self, image_np: np.ndarray, mask_np: np.ndarray
@@ -991,12 +1131,15 @@ class FluxKleinInpainter:
         return Image.fromarray(corrected_np)
 
     def _prepare_image_for_inference(
-        self, image_pil: Image.Image, verbose: bool = False
+        self,
+        image_pil: Image.Image,
+        verbose: bool = False,
     ) -> Tuple[Image.Image, int, int]:
-        """Prepare image for Klein inference by scaling to ~1MP.
+        """Prepare image for Klein inference.
 
-        Scales the image to approximately 1 megapixel while maintaining
-        aspect ratio and ensuring dimensions are multiples of 16.
+        Optionally scales the image to approximately 1 megapixel while maintaining
+        aspect ratio. When that scaling is disabled, large crops are still capped
+        to 4MP. Dimensions are always kept within model constraints.
 
         Args:
             image_pil: Input PIL image
@@ -1007,22 +1150,37 @@ class FluxKleinInpainter:
         """
         orig_w, orig_h = image_pil.size
         current_pixels = orig_w * orig_h
-        target_pixels = 1_048_576  # 2^20 = 1024x1024
 
-        if current_pixels > 0:
+        if current_pixels <= 0:
+            scale = 1.0
+            reason = "model-compatible dimensions"
+        elif self.upscale_small_crops:
+            target_pixels = 1_048_576  # 2^20 = 1024x1024
             scale = math.sqrt(target_pixels / current_pixels)
+            reason = "~1MP, multiples of 16"
+        elif current_pixels > self.MAX_INFERENCE_PIXELS:
+            scale = math.sqrt(self.MAX_INFERENCE_PIXELS / current_pixels)
+            reason = "4MP cap, multiples of 16"
         else:
             scale = 1.0
+            reason = "model-compatible dimensions"
 
         new_w = int(orig_w * scale)
         new_h = int(orig_h * scale)
 
         new_w = self._quantize_dimension(new_w)
         new_h = self._quantize_dimension(new_h)
+        while new_w * new_h > self.MAX_INFERENCE_PIXELS:
+            if new_w >= new_h and new_w > self.MIN_RESOLUTION:
+                new_w -= self.RESOLUTION_MULTIPLE
+            elif new_h > self.MIN_RESOLUTION:
+                new_h -= self.RESOLUTION_MULTIPLE
+            else:
+                break
 
         if (new_w, new_h) != (orig_w, orig_h):
             log_message(
-                f"  - Scaling {orig_w}x{orig_h} -> {new_w}x{new_h} (~1MP, multiples of 16)",
+                f"  - Scaling {orig_w}x{orig_h} -> {new_w}x{new_h} ({reason})",
                 verbose=verbose,
             )
             image_pil = image_pil.resize((new_w, new_h), Image.Resampling.LANCZOS)
@@ -1091,18 +1249,24 @@ class FluxKleinInpainter:
         y1 = max(0, y_min - padding)
         x2 = min(img_w, x_max + 1 + padding)
         y2 = min(img_h, y_max + 1 + padding)
+        x1, y1, x2, y2 = self._expand_bounds_to_min_size(x1, y1, x2, y2, img_w, img_h)
 
-        width = self._quantize_dimension(x2 - x1)
-        height = self._quantize_dimension(y2 - y1)
+        width = min(self._quantize_dimension(x2 - x1), img_w)
+        height = min(self._quantize_dimension(y2 - y1), img_h)
 
-        x2 = min(img_w, x1 + width)
-        y2 = min(img_h, y1 + height)
+        if x1 + width > img_w:
+            x1 = max(0, img_w - width)
+        if y1 + height > img_h:
+            y1 = max(0, img_h - height)
+        x2 = x1 + width
+        y2 = y1 + height
         width = x2 - x1
         height = y2 - y1
 
-        if width < self.MIN_RESOLUTION or height < self.MIN_RESOLUTION:
+        if width <= 0 or height <= 0:
             log_message(
-                f"  - Region too small ({width}x{height}), skipping", verbose=verbose
+                f"  - Region has invalid size ({width}x{height}), skipping",
+                verbose=verbose,
             )
             return image_pil
 
@@ -1121,6 +1285,9 @@ class FluxKleinInpainter:
             "blur": blur_radius,
             "variant": self.variant,
             "lum_corr": self.luminance_correction,
+            "upscale_small": self.upscale_small_crops,
+            "max_pixels": self.MAX_INFERENCE_PIXELS,
+            "min_size": (self.MIN_RESOLUTION, self.MIN_RESOLUTION),
         }
         if strict_mask_clipping:
             cache_params["strict_clip"] = True
@@ -1203,7 +1370,8 @@ class FluxKleinInpainter:
 
         if patch_pil is None:
             inference_image, _, _ = self._prepare_image_for_inference(
-                image_cropped_pil, verbose=verbose
+                image_cropped_pil,
+                verbose=verbose,
             )
             inference_w, inference_h = inference_image.size
 
@@ -1224,8 +1392,18 @@ class FluxKleinInpainter:
             with self.manager.flux_inference_lock:
                 with torch.inference_mode():
                     gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
+                    prompt_device = _pipeline_execution_device(
+                        self.pipeline, self.DEVICE
+                    )
+                    prompt_embeds, pooled_prompt_embeds = self._get_prompt_embeddings(
+                        prompt_device, verbose=verbose or self.verbose
+                    )
                     out = self.pipeline(
-                        prompt=self.KLEIN_PROMPT,
+                        **_flux_prompt_kwargs(
+                            prompt_embeds,
+                            pooled_prompt_embeds,
+                            include_pooled=False,
+                        ),
                         image=inference_image,
                         height=inference_h,
                         width=inference_w,
