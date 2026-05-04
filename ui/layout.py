@@ -379,7 +379,7 @@ def create_layout(
                             value=int(saved_settings.get("batch_parallel_requests", 1)),
                             step=1,
                             label="Parallel Requests",
-                            info="Number of images to process simultaneously",
+                            info="Number of images to process simultaneously.",
                         )
                         batch_previous_context_image_count = gr.Slider(
                             minimum=0,
@@ -399,8 +399,8 @@ def create_layout(
                             label="Previous Context Images",
                             info=(
                                 "Sends up to this many previous source pages "
-                                "as visual reference when full-page context is enabled; "
-                                "higher values can increase token cost."
+                                "as visual reference when full-page context is enabled. "
+                                "Might improve translation quality."
                             ),
                             interactive=(
                                 saved_settings.get("send_full_page_context", True)
