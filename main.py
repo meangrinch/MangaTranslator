@@ -57,9 +57,7 @@ def main():
         "--batch-previous-context-images",
         type=int,
         default=0,
-        choices=range(0, 6),
-        metavar="{0..5}",
-        help="Batch only: include this many previous source pages as visual context (0-5, default: 0)",
+        help="Batch only: include this many previous source pages as visual context (0-10, default: 0)",
     )
     # --- Provider and API Key Arguments ---
     parser.add_argument(

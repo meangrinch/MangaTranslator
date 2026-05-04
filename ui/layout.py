@@ -383,7 +383,7 @@ def create_layout(
                         )
                         batch_previous_context_image_count = gr.Slider(
                             minimum=0,
-                            maximum=5,
+                            maximum=10,
                             value=int(
                                 (
                                     saved_settings.get(
