@@ -2,6 +2,7 @@ import asyncio
 import base64
 import math
 import os
+import re
 import threading
 import time
 from collections import OrderedDict
@@ -54,6 +55,19 @@ if TYPE_CHECKING:
 
 ENABLE_COMPONENT_ORDER_DEBUG = False
 PREVIOUS_CONTEXT_CACHE_MAX_SIZE = 32
+NATURAL_SORT_TOKEN_RE = re.compile(r"(\d+)")
+
+
+def _natural_text_sort_key(text: str) -> Tuple[Tuple[int, Union[int, str], str], ...]:
+    return tuple(
+        (0, int(part), part) if part.isdigit() else (1, part.lower(), part)
+        for part in NATURAL_SORT_TOKEN_RE.split(text)
+        if part
+    )
+
+
+def _natural_path_sort_key(path: Path):
+    return tuple(_natural_text_sort_key(part) for part in path.parts)
 
 
 def _debug_mask_bbox(mask):
@@ -2044,7 +2058,18 @@ def batch_translate_images(
             if f.is_file() and f.suffix.lower() in image_extensions
         ]
 
-    image_files.sort(key=lambda p: p.name.lower())
+    def _batch_sort_key(path: Path):
+        try:
+            sort_path = (
+                path.relative_to(input_dir)
+                if preserve_structure
+                else Path(path.name)
+            )
+        except ValueError:
+            sort_path = path
+        return _natural_path_sort_key(sort_path)
+
+    image_files.sort(key=_batch_sort_key)
 
     if not image_files:
         log_message(f"No image files found in '{input_dir}'", always_print=True)
