@@ -18,6 +18,8 @@ SETTING_CONSTRAINTS: Dict[str, Tuple[float, float]] = {
     "context_image_max_side_pixels": (512, 2560),
     "previous_context_image_count": (0, 10),
     "batch_previous_context_image_count": (0, 10),
+    "previous_context_text_count": (0, 50),
+    "batch_previous_context_text_count": (0, 50),
     "osb_min_side_pixels": (64, 512),
     "max_font_size": (5, 50),
     "min_font_size": (5, 50),
@@ -66,6 +68,7 @@ _CONFIG_ATTR_PATHS: Dict[str, Tuple[Tuple[str, ...], ...]] = {
     "previous_context_image_count": (
         ("translation", "previous_context_image_count"),
     ),
+    "previous_context_text_count": (("translation", "previous_context_text_count"),),
     "osb_min_side_pixels": (("translation", "osb_min_side_pixels"),),
     "max_font_size": (("rendering", "max_font_size"),),
     "min_font_size": (("rendering", "min_font_size"),),

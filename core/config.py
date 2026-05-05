@@ -89,6 +89,7 @@ class TranslationConfig:
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1024
     previous_context_image_count: int = 0
+    previous_context_text_count: int = 0
     osb_min_side_pixels: int = 128
     special_instructions: Optional[str] = None
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl"

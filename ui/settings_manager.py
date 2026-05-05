@@ -243,6 +243,7 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_special_instructions": "",
     "batch_parallel_requests": 1,
     "batch_previous_context_image_count": 0,
+    "batch_previous_context_text_count": 0,
 }
 
 
@@ -363,6 +364,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "batch_font_pack",
     "batch_parallel_requests",
     "batch_previous_context_image_count",
+    "batch_previous_context_text_count",
 ]
 
 

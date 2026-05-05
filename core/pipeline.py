@@ -274,6 +274,44 @@ def _build_previous_context_images(
     return previous_images
 
 
+def _build_previous_context_texts(
+    image_files: List[Path],
+    image_index: int,
+    config: MangaTranslatorConfig,
+    ocr_text_history: Optional[Dict[Path, List[str]]] = None,
+    ocr_text_history_lock: Optional[threading.Lock] = None,
+) -> List[List[str]]:
+    """Collect OCR transcripts from up to N already-processed prior pages.
+
+    Parallel callers that require deterministic prior-page text context should
+    wait for the required previous pages before calling this helper.
+    """
+    requested_count = int(
+        getattr(config.translation, "previous_context_text_count", 0) or 0
+    )
+    if requested_count <= 0 or ocr_text_history is None:
+        return []
+
+    start_index = max(0, image_index - requested_count)
+    previous_paths = image_files[start_index:image_index]
+    if not previous_paths:
+        return []
+
+    previous_texts: List[List[str]] = []
+    if ocr_text_history_lock is not None:
+        with ocr_text_history_lock:
+            for previous_path in previous_paths:
+                texts = ocr_text_history.get(previous_path)
+                if texts:
+                    previous_texts.append(list(texts))
+    else:
+        for previous_path in previous_paths:
+            texts = ocr_text_history.get(previous_path)
+            if texts:
+                previous_texts.append(list(texts))
+    return previous_texts
+
+
 def _load_debug_font(size: int):
     """Load a bold-ish font for the debug overlay, falling back safely."""
     font_candidates = [
@@ -517,6 +555,9 @@ def translate_and_render(
     output_path: Optional[Union[str, Path]] = None,
     cancellation_manager: Optional["CancellationManager"] = None,
     previous_context_images: Optional[List[Dict[str, str]]] = None,
+    previous_context_texts: Optional[List[List[str]]] = None,
+    previous_context_texts_provider: Optional[Callable[[], List[List[str]]]] = None,
+    ocr_texts_out: Optional[List[str]] = None,
 ):
     """
     Main function to translate manga speech bubbles and render translations using a config object.
@@ -526,6 +567,13 @@ def translate_and_render(
         config (MangaTranslatorConfig): Configuration object containing all settings.
         output_path (str or Path, optional): Path to save the final image. If None, image is not saved.
         previous_context_images: Batch-only previous source page images for LLM reference.
+        previous_context_texts: Batch-only previous source page OCR transcripts for LLM reference
+            (oldest-to-newest, one inner list per page).
+        previous_context_texts_provider: Optional callback used to fetch previous-page
+            OCR transcripts immediately before the translation API call.
+        ocr_texts_out: Optional mutable list. When provided, the current page's OCR transcripts
+            (in reading order) are appended so the orchestrator can chain them as previous-page
+            text context for subsequent pages.
 
     Returns:
         PIL.Image: Final translated image
@@ -535,6 +583,7 @@ def translate_and_render(
     verbose = config.verbose
     device = config.device
     previous_context_images = previous_context_images or []
+    previous_context_texts = previous_context_texts or []
 
     log_message(f"Using device: {device}", verbose=verbose)
 
@@ -1125,12 +1174,43 @@ def translate_and_render(
                             verbose=verbose,
                         )
                     else:
-                        log_message(
-                            f"Translating {len(bubble_images_b64)} bubbles: "
-                            f"{config.translation.input_language} → {config.translation.output_language}",
-                            always_print=True,
-                        )
                         try:
+                            if previous_context_texts_provider is not None:
+                                previous_context_texts = (
+                                    previous_context_texts_provider() or []
+                                )
+                            context_parts = []
+                            if previous_context_images:
+                                image_page_count = len(previous_context_images)
+                                context_parts.append(
+                                    f"Previous Context Images: {image_page_count} page(s)"
+                                )
+                            if previous_context_texts:
+                                usable_context_text_pages = sum(
+                                    1
+                                    for page_texts in previous_context_texts
+                                    if any(
+                                        (text or "").strip()
+                                        and (text or "").strip() != "[OCR FAILED]"
+                                        for text in (page_texts or [])
+                                    )
+                                )
+                                if usable_context_text_pages:
+                                    context_parts.append(
+                                        "Previous Context OCR Text: "
+                                        f"{usable_context_text_pages} page(s)"
+                                    )
+                            context_suffix = (
+                                f" ({', '.join(context_parts)})"
+                                if context_parts
+                                else ""
+                            )
+                            log_message(
+                                f"Translating {len(bubble_images_b64)} bubbles: "
+                                f"{config.translation.input_language} → {config.translation.output_language}"
+                                f"{context_suffix}",
+                                always_print=True,
+                            )
                             translated_texts = call_translation_api_batch(
                                 config=config.translation,
                                 images_b64=bubble_images_b64,
@@ -1140,6 +1220,8 @@ def translate_and_render(
                                 or "image/jpeg",
                                 bubble_metadata=sorted_bubble_data,
                                 previous_context_images=previous_context_images,
+                                previous_context_texts=previous_context_texts,
+                                ocr_texts_output=ocr_texts_out,
                                 debug=verbose,
                             )
                         except TranslationError as e:
@@ -1700,6 +1782,12 @@ async def _batch_translate_parallel(
     results = {"success_count": 0, "error_count": 0, "errors": {}}
     previous_context_cache = OrderedDict()
     previous_context_cache_lock = threading.Lock()
+    ocr_text_history: Dict[Path, List[str]] = {}
+    ocr_text_history_lock = threading.Lock()
+    ocr_text_ready_events = [threading.Event() for _ in image_files]
+    requested_text_context_count = int(
+        getattr(config.translation, "previous_context_text_count", 0) or 0
+    )
 
     log_message(
         f"Starting parallel batch processing: {total_images} images, "
@@ -1726,13 +1814,26 @@ async def _batch_translate_parallel(
             previous_context_cache,
             previous_context_cache_lock,
         )
+        first_previous_context_texts = _build_previous_context_texts(
+            image_files,
+            0,
+            config,
+            ocr_text_history,
+            ocr_text_history_lock,
+        )
+        first_ocr_texts: List[str] = []
         translate_and_render(
             first_img,
             config,
             first_output,
             cancellation_manager=cancellation_manager,
             previous_context_images=first_previous_context_images,
+            previous_context_texts=first_previous_context_texts,
+            ocr_texts_out=first_ocr_texts,
         )
+        if first_ocr_texts:
+            with ocr_text_history_lock:
+                ocr_text_history[first_img] = first_ocr_texts
         results["success_count"] += 1
     except CancellationError:
         raise
@@ -1740,6 +1841,8 @@ async def _batch_translate_parallel(
         log_message(f"Error processing {first_display}: {str(e)}", always_print=True)
         results["error_count"] += 1
         results["errors"][first_key] = str(e)
+    finally:
+        ocr_text_ready_events[0].set()
 
     completed_count = 1
     if progress_callback:
@@ -1761,6 +1864,19 @@ async def _batch_translate_parallel(
     results_lock = threading.Lock()
     cancelled = False
 
+    def _wait_for_required_previous_ocr(index: int) -> None:
+        if requested_text_context_count <= 0:
+            return
+        start_index = max(0, index - requested_text_context_count)
+        for previous_index in range(start_index, index):
+            if cancellation_manager and cancellation_manager.is_cancelled():
+                raise CancellationError("Batch process cancelled by user.")
+            while not ocr_text_ready_events[previous_index].wait(timeout=0.2):
+                if cancellation_manager and cancellation_manager.is_cancelled():
+                    raise CancellationError("Batch process cancelled by user.")
+            if cancellation_manager and cancellation_manager.is_cancelled():
+                raise CancellationError("Batch process cancelled by user.")
+
     def _process_single(img_path: Path, index: int) -> Tuple[str, str]:
         """Run translate_and_render for a single image. Returns (display_path, error_key)."""
         output_path, display_path, error_key = _resolve_output_path(
@@ -1777,58 +1893,90 @@ async def _batch_translate_parallel(
             previous_context_cache,
             previous_context_cache_lock,
         )
+
+        def previous_context_texts_provider() -> List[List[str]]:
+            _wait_for_required_previous_ocr(index)
+            return _build_previous_context_texts(
+                image_files,
+                index,
+                config,
+                ocr_text_history,
+                ocr_text_history_lock,
+            )
+
+        captured_ocr_texts: List[str] = []
         translate_and_render(
             img_path,
             config,
             output_path,
             cancellation_manager=cancellation_manager,
             previous_context_images=previous_context_images,
+            previous_context_texts_provider=previous_context_texts_provider,
+            ocr_texts_out=captured_ocr_texts,
         )
+        if captured_ocr_texts:
+            with ocr_text_history_lock:
+                ocr_text_history[img_path] = captured_ocr_texts
         return display_path, error_key
 
     async def _worker(img_path: Path, index: int, executor: ThreadPoolExecutor):
         nonlocal completed_count, cancelled
-        if cancelled or (cancellation_manager and cancellation_manager.is_cancelled()):
-            cancelled = True
-            return
-
-        async with sem:
+        try:
             if cancelled or (
                 cancellation_manager and cancellation_manager.is_cancelled()
             ):
                 cancelled = True
                 return
 
-            loop = asyncio.get_event_loop()
-            try:
-                await loop.run_in_executor(executor, _process_single, img_path, index)
-                with results_lock:
-                    results["success_count"] += 1
-                    completed_count += 1
-                    count = completed_count
-            except CancellationError:
-                cancelled = True
-                raise
-            except Exception as e:
-                _, display_path, error_key = _resolve_output_path(
-                    img_path, input_dir, output_dir, config, preserve_structure
-                )
-                log_message(
-                    f"Error processing {display_path}: {str(e)}", always_print=True
-                )
-                with results_lock:
-                    results["error_count"] += 1
-                    results["errors"][error_key] = str(e)
-                    completed_count += 1
-                    count = completed_count
+            async with sem:
+                if cancelled or (
+                    cancellation_manager and cancellation_manager.is_cancelled()
+                ):
+                    cancelled = True
+                    return
 
-            if progress_callback:
-                progress = count / total_images
-                has_errors = results["error_count"] > 0
-                suffix = " (with errors)" if has_errors else ""
-                progress_callback(
-                    progress, f"Completed {count}/{total_images} images{suffix}"
-                )
+                loop = asyncio.get_event_loop()
+                try:
+                    await loop.run_in_executor(
+                        executor, _process_single, img_path, index
+                    )
+                    with results_lock:
+                        results["success_count"] += 1
+                        completed_count += 1
+                        count = completed_count
+                except CancellationError:
+                    cancelled = True
+                    raise
+                except Exception as e:
+                    _, display_path, error_key = _resolve_output_path(
+                        img_path, input_dir, output_dir, config, preserve_structure
+                    )
+                    log_message(
+                        f"Error processing {display_path}: {str(e)}",
+                        always_print=True,
+                    )
+                    with results_lock:
+                        results["error_count"] += 1
+                        results["errors"][error_key] = str(e)
+                        completed_count += 1
+                        count = completed_count
+
+                if progress_callback:
+                    progress = count / total_images
+                    has_errors = results["error_count"] > 0
+                    suffix = " (with errors)" if has_errors else ""
+                    progress_callback(
+                        progress, f"Completed {count}/{total_images} images{suffix}"
+                    )
+        except CancellationError:
+            cancelled = True
+            raise
+        finally:
+            ocr_text_ready_events[index].set()
+
+            if cancelled:
+                for event in ocr_text_ready_events:
+                    event.set()
 
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         tasks = [_worker(img, i, executor) for i, img in enumerate(remaining, start=1)]
@@ -1924,6 +2072,8 @@ def batch_translate_images(
         results = {"success_count": 0, "error_count": 0, "errors": {}}
         previous_context_cache = OrderedDict()
         previous_context_cache_lock = threading.Lock()
+        ocr_text_history: Dict[Path, List[str]] = {}
+        ocr_text_history_lock = threading.Lock()
         log_message(
             f"Starting batch processing: {total_images} images", always_print=True
         )
@@ -1956,13 +2106,26 @@ def batch_translate_images(
                     previous_context_cache,
                     previous_context_cache_lock,
                 )
+                previous_context_texts = _build_previous_context_texts(
+                    image_files,
+                    i,
+                    config,
+                    ocr_text_history,
+                    ocr_text_history_lock,
+                )
+                captured_ocr_texts: List[str] = []
                 translate_and_render(
                     img_path,
                     config,
                     output_path,
                     cancellation_manager=cancellation_manager,
                     previous_context_images=previous_context_images,
+                    previous_context_texts=previous_context_texts,
+                    ocr_texts_out=captured_ocr_texts,
                 )
+                if captured_ocr_texts:
+                    with ocr_text_history_lock:
+                        ocr_text_history[img_path] = captured_ocr_texts
 
                 results["success_count"] += 1
 

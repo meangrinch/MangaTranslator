@@ -100,12 +100,48 @@ Your sole purpose is to accurately transcribe the original text from a series of
 """  # noqa
 
 
+def _format_previous_context_prompt_note(
+    previous_context_image_count: int,
+    previous_context_text_count: int,
+    image_order: str,
+) -> str:
+    has_images = previous_context_image_count > 0
+    has_text = previous_context_text_count > 0
+
+    if has_images and has_text:
+        return (
+            f" {previous_context_image_count} previous source page image(s) are "
+            "attached as visual reference, and transcribed text from "
+            f"{previous_context_text_count} previous source page(s) is provided "
+            "in `## PREVIOUS PAGE TRANSCRIPTS`. Image order: "
+            f"{image_order}. Use this previous-page context only as narrative "
+            "reference; do not transcribe, translate, or renumber previous-page "
+            "material."
+        )
+
+    if has_images:
+        return (
+            f" {previous_context_image_count} previous source page image(s) "
+            f"are attached as reference. Image order: {image_order}."
+        )
+
+    if has_text:
+        return (
+            f" Transcribed text from {previous_context_text_count} previous "
+            "source page(s) is provided in `## PREVIOUS PAGE TRANSCRIPTS` "
+            "as narrative reference only — do not translate or renumber it."
+        )
+
+    return ""
+
+
 def _build_system_prompt_translation(
     output_language: str,
     mode: str,
     reading_direction: str,
     full_page_context: bool = False,
     previous_context_image_count: int = 0,
+    previous_context_text_count: int = 0,
 ) -> str:
     direction = (
         "right-to-left"
@@ -130,12 +166,24 @@ def _build_system_prompt_translation(
   - If text is indecipherable, you must return the exact token: `[OCR FAILED]`."""
 
     previous_context_rule = ""
-    if previous_context_image_count > 0:
+    if previous_context_image_count > 0 and previous_context_text_count > 0:
+        previous_context_rule = """
+- **Previous Page Context:** Earlier source-page images and transcripts are visual/narrative context only; do not transcribe, translate, number, or count them. Use them to maintain consistency:
+  - **Proper Nouns:** Keep character names, place names, organizations, technique/skill/title names, honorifics, and stylized terms consistent with established usage.
+  - **Character Voice:** Preserve each character's established voice, register, and pronoun choices.
+  - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior visuals and dialogue."""  # noqa
+    elif previous_context_image_count > 0:
         previous_context_rule = """
 - **Previous Page Reference:** Earlier source pages are visual/narrative context only — do not transcribe, translate, number, or count them. Use them to maintain consistency:
   - **Proper Nouns:** Keep character names, place names, organizations, technique/skill/title names, honorifics, and stylized terms spelled exactly as they appeared previously.
   - **Character Voice:** Preserve each character's established voice, register, and pronoun choices.
   - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior context."""  # noqa
+    elif previous_context_text_count > 0:
+        previous_context_rule = """
+- **Previous Page Transcripts:** Earlier source-page transcribed text is provided as narrative context only — do not translate, number, or count it. Use it to maintain consistency:
+  - **Proper Nouns:** Keep character names, place names, organizations, technique/skill/title names, honorifics, and stylized terms aligned with their established usage.
+  - **Character Voice:** Preserve each character's established voice, register, and pronoun choices.
+  - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior dialogue."""  # noqa
 
     core_rules = f"""
 ## CORE RULES
@@ -867,6 +915,45 @@ def _check_ocr_failure(texts: List[str], provider: Optional[str] = None) -> bool
         return all(text == "[OCR FAILED]" for text in texts)
 
 
+def _format_previous_context_texts(
+    previous_context_texts: Optional[List[List[str]]],
+) -> str:
+    """Format previous-page OCR transcripts as a labeled context block.
+
+    Pages are listed oldest-to-newest (matching the previous-image convention).
+    Empty/failed entries are omitted, and the section is suppressed entirely
+    when no usable transcripts remain.
+    """
+    if not previous_context_texts:
+        return ""
+
+    page_blocks = []
+    for page_index, page_texts in enumerate(previous_context_texts, start=1):
+        if not page_texts:
+            continue
+        lines = []
+        for idx, text in enumerate(page_texts, start=1):
+            cleaned = (text or "").strip()
+            if not cleaned or cleaned == "[OCR FAILED]":
+                continue
+            lines.append(f"{idx}: {cleaned}")
+        if not lines:
+            continue
+        page_blocks.append(
+            f"### Previous Page {page_index}\n" + "\n".join(lines)
+        )
+
+    if not page_blocks:
+        return ""
+
+    return (
+        "\n## PREVIOUS PAGE TRANSCRIPTS\n"
+        "Listed oldest-to-newest. These are reference only — do not translate or renumber.\n"
+        + "\n\n".join(page_blocks)
+        + "\n"
+    )
+
+
 def _format_special_instructions(config: TranslationConfig) -> str:
     """Format user's special instructions section for prompts.
 
@@ -1189,6 +1276,8 @@ def call_translation_api_batch(
     full_image_mime_type: str,
     bubble_metadata: List[Dict[str, Any]],
     previous_context_images: Optional[List[Dict[str, str]]] = None,
+    previous_context_texts: Optional[List[List[str]]] = None,
+    ocr_texts_output: Optional[List[str]] = None,
     debug: bool = False,
 ) -> List[str]:
     """
@@ -1205,6 +1294,11 @@ def call_translation_api_batch(
         full_image_mime_type (str): MIME type of the full page image.
         bubble_metadata (List[Dict]): List of metadata dicts with 'is_outside_text' flags for each image.
         previous_context_images: Previous source page images, oldest-to-newest, as reference only.
+        previous_context_texts: Per-previous-page OCR transcripts (oldest-to-newest) included as
+            narrative reference only. Each inner list contains the OCR strings for that page in reading order.
+        ocr_texts_output: Optional mutable list. When provided, OCR transcripts (source-language text) for
+            the current page's bubbles are appended in reading order so callers can propagate them as
+            previous-page text context for subsequent calls.
         debug (bool): Whether to print debugging information.
 
     Returns:
@@ -1224,6 +1318,24 @@ def call_translation_api_batch(
     if not config.send_full_page_context or config.ocr_method != "LLM":
         previous_context_images = []
     previous_context_image_count = len(previous_context_images)
+    # Filter out empty pages (no usable OCR) and trim to configured cap so the
+    # request order matches the prompt order regardless of upstream history gaps.
+    cleaned_previous_texts: List[List[str]] = []
+    configured_text_count = int(
+        getattr(config, "previous_context_text_count", 0) or 0
+    )
+    if previous_context_texts and configured_text_count > 0:
+        for page_texts in previous_context_texts:
+            usable = [
+                (t or "").strip()
+                for t in (page_texts or [])
+                if (t or "").strip() and (t or "").strip() != "[OCR FAILED]"
+            ]
+            if usable:
+                cleaned_previous_texts.append(usable)
+        cleaned_previous_texts = cleaned_previous_texts[-configured_text_count:]
+    previous_context_text_count = len(cleaned_previous_texts)
+    previous_text_section = _format_previous_context_texts(cleaned_previous_texts)
 
     # Include conditional bubble hints
     total_elements = len(images_b64)
@@ -1258,10 +1370,13 @@ def call_translation_api_batch(
         full_image_b64,
         config,
         previous_context_images=previous_context_images,
+        previous_context_texts=cleaned_previous_texts,
     )
-    cached_translation = cache.get_translation(cache_key)
+    cached_translation, cached_ocr_texts = cache.get_translation(cache_key)
     if cached_translation is not None:
         log_message("  - Using cached translation", verbose=debug)
+        if ocr_texts_output is not None and cached_ocr_texts is not None:
+            ocr_texts_output.extend(cached_ocr_texts)
         return cached_translation
 
     model_name = config.model_name
@@ -1368,13 +1483,14 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
                 )
                 else ""
             )
-            previous_page_context = ""
-            if previous_context_image_count:
-                previous_page_context = (
-                    f" {previous_context_image_count} previous source page image(s) "
-                    "are attached as reference. Image order: current full page first "
-                    "(when present), then previous source pages oldest-to-newest."
-                )
+            previous_page_context = _format_previous_context_prompt_note(
+                previous_context_image_count,
+                previous_context_text_count,
+                (
+                    "current full page first (when present), then previous "
+                    "source pages oldest-to-newest"
+                ),
+            )
 
             special_instructions_section = _format_special_instructions(config)
 
@@ -1382,7 +1498,7 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
 ## CONTEXT
 You have been provided with a list of {total_elements} transcribed text segments from a manga page. {full_page_context}{previous_page_context}
 {context_hints}
-
+{previous_text_section}
 {ocr_input_section}
 
 ## TASK
@@ -1442,6 +1558,7 @@ The target language is {output_language}. Use the appropriate translation approa
                         config.send_full_page_context and bool(full_image_b64)
                     ),
                     previous_context_image_count=previous_context_image_count,
+                    previous_context_text_count=previous_context_text_count,
                 )
             translation_response_text = _call_llm_endpoint(
                 config,
@@ -1473,6 +1590,8 @@ The target language is {output_language}. Use the appropriate translation approa
                         combined_results.append(f"[{provider}: OCR Failed]")
                     else:
                         combined_results.append(f"[{provider}: Translation failed]")
+                if ocr_texts_output is not None:
+                    ocr_texts_output.extend(extracted_texts)
                 return combined_results
 
             combined_results = []
@@ -1489,7 +1608,11 @@ The target language is {output_language}. Use the appropriate translation approa
                 else:
                     combined_results.append(final_translations[i])
 
-            cache.set_translation(cache_key, combined_results)
+            cache.set_translation(
+                cache_key, combined_results, ocr_texts=extracted_texts
+            )
+            if ocr_texts_output is not None:
+                ocr_texts_output.extend(extracted_texts)
             return combined_results
 
         elif translation_mode == "one-step":
@@ -1500,14 +1623,14 @@ The target language is {output_language}. Use the appropriate translation approa
                 if config.send_full_page_context
                 else ""
             )
-            previous_page_context = ""
-            if previous_context_image_count:
-                previous_page_context = (
-                    f" {previous_context_image_count} previous source page image(s) "
-                    "are attached as reference. Image order: text crops first, "
-                    "optional current full page, then previous source pages "
-                    "oldest-to-newest."
-                )
+            previous_page_context = _format_previous_context_prompt_note(
+                previous_context_image_count,
+                previous_context_text_count,
+                (
+                    "text crops first, optional current full page, then previous "
+                    "source pages oldest-to-newest"
+                ),
+            )
 
             special_instructions_section = _format_special_instructions(config)
 
@@ -1515,7 +1638,7 @@ The target language is {output_language}. Use the appropriate translation approa
 ## CONTEXT
 You have been provided with {total_elements} individual text images from a manga page. {full_page_context}{previous_page_context}
 {context_hints}
-
+{previous_text_section}
 ## TASK
 For each image, you must perform two steps:
 1.  **Transcribe:** Extract the original text exactly as it appears.
@@ -1530,6 +1653,7 @@ For each image, you must perform two steps:
                     config.send_full_page_context and bool(full_image_b64)
                 ),
                 previous_context_image_count=previous_context_image_count,
+                previous_context_text_count=previous_context_text_count,
             )
             response_text = _call_llm_endpoint(
                 config,
@@ -1545,14 +1669,21 @@ For each image, you must perform two steps:
             )
 
             translations = []
+            ocr_texts = []
             for line in raw_lines:
                 if "||" in line:
                     parts = line.split("||", 1)
+                    ocr_texts.append(parts[0].strip())
                     translations.append(parts[1].strip())
                 else:
+                    # Model violated the format — keep the line as the translation
+                    # and mark OCR as failed so it isn't reused as prior context.
+                    ocr_texts.append("[OCR FAILED]")
                     translations.append(line)
 
-            cache.set_translation(cache_key, translations)
+            cache.set_translation(cache_key, translations, ocr_texts=ocr_texts)
+            if ocr_texts_output is not None:
+                ocr_texts_output.extend(ocr_texts)
             return translations
         else:
             raise TranslationError(

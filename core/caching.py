@@ -212,6 +212,7 @@ class UnifiedCache:
         full_image_b64: str,
         config,
         previous_context_images: Optional[List[Dict[str, str]]] = None,
+        previous_context_texts: Optional[List[List[str]]] = None,
     ) -> Optional[str]:
         """Compute cache key for LLM translation.
 
@@ -222,6 +223,7 @@ class UnifiedCache:
             full_image_b64: Base64 encoded full page image
             config: TranslationConfig object
             previous_context_images: Previous page context images, in request order
+            previous_context_texts: Previous page OCR transcripts (oldest-to-newest)
 
         Returns:
             str: Cache key, or None if not deterministic
@@ -232,6 +234,7 @@ class UnifiedCache:
         images_hash = hashlib.sha256("".join(images_b64).encode()).hexdigest()[:16]
         full_hash = hashlib.sha256(full_image_b64.encode()).hexdigest()[:16]
         previous_context_images = previous_context_images or []
+        previous_context_texts = previous_context_texts or []
 
         cache_params = {
             "provider": config.provider,
@@ -278,39 +281,62 @@ class UnifiedCache:
                 previous_context_images
             )
             cache_params["previous_context_image_hash"] = previous_hash
+        if previous_context_texts:
+            previous_texts_hash = hashlib.sha256(
+                "\u241e".join(
+                    "\u241f".join(page or []) for page in previous_context_texts
+                ).encode()
+            ).hexdigest()[:16]
+            cache_params["previous_context_text_count"] = len(previous_context_texts)
+            cache_params["previous_context_text_hash"] = previous_texts_hash
         config_hash = self._hash_dict(cache_params)
 
         key_string = f"trans_{images_hash}_{full_hash}_{config_hash}"
         return hashlib.sha256(key_string.encode()).hexdigest()
 
-    def get_translation(self, cache_key: Optional[str]) -> Optional[list]:
+    def get_translation(
+        self, cache_key: Optional[str]
+    ) -> "tuple[Optional[list], Optional[list]]":
         """Get cached translation results.
 
         Args:
             cache_key: Cache key (can be None if not deterministic)
 
         Returns:
-            Cached translations or None if not found
+            (translations, ocr_texts) tuple. ocr_texts may be None for legacy
+            cache entries that predate OCR-text caching.
         """
         if cache_key is None:
-            return None
+            return None, None
         with self._lock:
-            return self._translation_cache.get(cache_key)
+            entry = self._translation_cache.get(cache_key)
+        if entry is None:
+            return None, None
+        # Back-compat: pre-existing entries are bare translation lists
+        if isinstance(entry, dict):
+            return entry.get("translations"), entry.get("ocr_texts")
+        return entry, None
 
     def set_translation(
-        self, cache_key: Optional[str], translations: list, verbose: bool = False
+        self,
+        cache_key: Optional[str],
+        translations: list,
+        ocr_texts: Optional[list] = None,
+        verbose: bool = False,
     ) -> None:
         """Cache translation results.
 
         Args:
             cache_key: Cache key (can be None if not deterministic)
             translations: Translation results to cache
+            ocr_texts: Optional source-language OCR transcripts captured alongside the translations
             verbose: Whether to print verbose logging
         """
         if cache_key is None:
             return
+        entry = {"translations": translations, "ocr_texts": ocr_texts}
         with self._lock:
-            self._translation_cache.put(cache_key, translations)
+            self._translation_cache.put(cache_key, entry)
         log_message(
             f"  - Cached translation (cache size: {len(self._translation_cache.cache)})",
             verbose=verbose,

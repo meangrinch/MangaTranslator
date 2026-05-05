@@ -205,6 +205,7 @@ class UIConfigState:
     batch_special_instructions: Optional[str] = None
     batch_parallel_requests: int = 1
     batch_previous_context_image_count: int = 0
+    batch_previous_context_text_count: int = 0
 
     def to_save_dict(self) -> Dict[str, Any]:
         """Converts the UI state into a dictionary suitable for saving to config.json."""
@@ -333,6 +334,7 @@ class UIConfigState:
                 )
                 else 0
             ),
+            "batch_previous_context_text_count": self.batch_previous_context_text_count,
         }
         return data
 
@@ -624,6 +626,9 @@ class UIConfigState:
             batch_previous_context_image_count=int(
                 data.get("batch_previous_context_image_count", 0)
             ),
+            batch_previous_context_text_count=int(
+                data.get("batch_previous_context_text_count", 0)
+            ),
         )
 
 
@@ -704,6 +709,9 @@ def map_ui_to_backend_config(
                 and ui_state.llm_settings.ocr_method == "LLM"
             )
             else 0
+        ),
+        previous_context_text_count=(
+            ui_state.batch_previous_context_text_count if is_batch else 0
         ),
         osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
         special_instructions=ui_state.llm_settings.special_instructions,

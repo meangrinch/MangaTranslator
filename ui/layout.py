@@ -407,6 +407,22 @@ def create_layout(
                                 and saved_settings.get("ocr_method", "LLM") == "LLM"
                             ),
                         )
+                        batch_previous_context_text_count = gr.Slider(
+                            minimum=0,
+                            maximum=50,
+                            value=int(
+                                saved_settings.get(
+                                    "batch_previous_context_text_count", 0
+                                )
+                            ),
+                            step=1,
+                            label="Previous Context OCR Text",
+                            info=(
+                                "Sends up to this many previous pages' OCR text "
+                                "transcripts as narrative "
+                                "reference. Might improve translation quality."
+                            ),
+                        )
                     with gr.Column(scale=1):
                         batch_output_gallery = gr.Gallery(
                             label="Translated Images",
@@ -1997,6 +2013,7 @@ def create_layout(
             auto_scale,
             batch_parallel_requests,
             batch_previous_context_image_count,
+            batch_previous_context_text_count,
         ]
 
         reset_outputs = [
@@ -2105,6 +2122,7 @@ def create_layout(
             auto_scale,
             batch_parallel_requests,
             batch_previous_context_image_count,
+            batch_previous_context_text_count,
         ]
 
         translate_inputs = [
@@ -2218,6 +2236,7 @@ def create_layout(
             batch_special_instructions,
             batch_parallel_requests,
             batch_previous_context_image_count,
+            batch_previous_context_text_count,
         ]
 
         batch_inputs = [
@@ -2332,6 +2351,7 @@ def create_layout(
             batch_special_instructions,
             batch_parallel_requests,
             batch_previous_context_image_count,
+            batch_previous_context_text_count,
         ]
 
         # Config Tab Navigation & Updates

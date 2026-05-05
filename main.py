@@ -59,6 +59,15 @@ def main():
         default=0,
         help="Batch only: include this many previous source pages as visual context (0-10, default: 0)",
     )
+    parser.add_argument(
+        "--batch-previous-context-texts",
+        type=int,
+        default=0,
+        help=(
+            "Batch only: include this many previous pages' OCR text transcripts "
+            "as narrative context (0-50, default: 0)"
+        ),
+    )
     # --- Provider and API Key Arguments ---
     parser.add_argument(
         "--provider",
@@ -966,6 +975,9 @@ def main():
                     and args.ocr_method == "LLM"
                 )
                 else 0
+            ),
+            previous_context_text_count=(
+                args.batch_previous_context_texts if args.batch else 0
             ),
             osb_min_side_pixels=args.osb_min_side_pixels,
             special_instructions=args.special_instructions,

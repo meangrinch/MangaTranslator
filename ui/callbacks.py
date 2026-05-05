@@ -177,6 +177,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_special_instructions_val,
         batch_parallel_requests_val,
         batch_previous_context_image_count_val,
+        batch_previous_context_text_count_val,
     ) = args
 
     final_input_language = batch_input_language if is_batch else input_language
@@ -326,6 +327,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_font_pack=batch_font_dropdown,
         batch_parallel_requests=int(batch_parallel_requests_val),
         batch_previous_context_image_count=int(batch_previous_context_image_count_val),
+        batch_previous_context_text_count=int(batch_previous_context_text_count_val),
     )
 
 
@@ -1013,6 +1015,7 @@ def handle_save_config_click(*args: Any) -> str:
         auto_scale_val,
         batch_parallel_requests_val,
         batch_previous_context_image_count_val,
+        batch_previous_context_text_count_val,
     ) = args
     ui_state = UIConfigState(
         detection=UIDetectionSettings(
@@ -1155,6 +1158,7 @@ def handle_save_config_click(*args: Any) -> str:
         batch_special_instructions=batch_special_instructions_val,
         batch_parallel_requests=int(batch_parallel_requests_val),
         batch_previous_context_image_count=int(batch_previous_context_image_count_val),
+        batch_previous_context_text_count=int(batch_previous_context_text_count_val),
     )
 
     # Convert UI state to dictionary for saving
@@ -1421,6 +1425,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.general.auto_scale,
         default_ui_state.batch_parallel_requests,
         default_ui_state.batch_previous_context_image_count,
+        default_ui_state.batch_previous_context_text_count,
     ]
 
 
