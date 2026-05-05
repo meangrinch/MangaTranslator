@@ -60,14 +60,18 @@
   - Try lowering "Padding Pixels" (e.g., 3-4)
   - Try lowering "Min Font Size" (e.g., 6-7)
 
+- **Outside-bubble replacement text is too small or cramped:**
+  - Raise "Narrow/Tall Expansion Multiplier" (e.g., 2.0) and/or adjust the corresponding threshold
+  - Raise "Tiny Expansion Multiplier" (e.g., 2.0) and/or adjust the corresponding threshold
+
 ### Detection/Cleaning
 
 - **Uncleaned text remaining (near edges of bubbles):**
-  - Lower "Fixed Threshold Value" (e.g., 180) and/or reduce "Shrink Threshold ROI" (e.g., 0–2)
+  - Lower "Fixed Threshold Value" (e.g., 170-190) and/or reduce "Shrink Threshold ROI" (e.g., 0-2)
 
 - **Outlines get eaten during cleaning:**
   - Increase "Shrink Threshold ROI" (e.g., 6–8)
-  - Increase "Fixed Threshold Value" (e.g., 200–210)
+  - Increase "Fixed Threshold Value" (e.g., 210-220)
 
 - **Conjoined bubbles not detected:**
   - Ensure "Conjoined Bubble Detection" is enabled
@@ -92,6 +96,8 @@
     - "paddleocr-vl": non-Japanese sources
   - Increase "max_tokens" and/or use a higher "reasoning_effort" (e.g., "high")
   - Switch "Bubble/Context Resizing Method" to a better quality method (e.g., "Model")
+  - In batch mode, try raising "Previous Context OCR Text"
+  - In batch mode, try raising "Previous Context Images" (requires "Send Full Page to LLM")
 
 - **API refusals/censorship:**
   - Try disabling "Send Full Page to LLM"
@@ -99,8 +105,10 @@
 
 - **High LLM token usage:**
   - Disable "Send Full Page to LLM"
+  - Set "Previous Context Images" and "Previous Context OCR Text" to 0
   - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes
-  - Lower "Media Resolution" (if using Gemini models)
+  - Lower "Media Resolution" (if using Gemini or xAI models)
+  - Lower "Image Detail" (if using OpenAI models)
   - Use "manga-ocr/paddleocr-vl" OCR method (may perform worse than more-capable VLMs)
 
 ### Inpainting
@@ -111,17 +119,22 @@
 
 - **Out of VRAM / CUDA errors:**
   - Enable "Low VRAM Mode"
-  - Ensure you have at least 4 GB of VRAM
+  - Disable "Upscale Klein Crops to ~1MP"
+  - Use Flux.2 Klein 4B (smallest model)
   - Use OpenCV (no VRAM required)
+
+- **Slow Flux OSB inpainting:**
+  - Enable "Group Flux Regions" to inpaint multiple OSB masks in one Flux pass (at the cost of quality)
+  - Disable "Upscale Klein Crops to ~1MP" (at the cost of quality)
 
 - **Minor color shifts in inpainted regions:**
   - Flux.2 Klein models may introduce slight color changes; try enabling/disabling "Luminance Correction"
   - Use Flux.1 Kontext (SDNQ or Nunchaku) for less noticeable color shifts
 
+- **Poor inpainting quality:**
+  - Keep "Upscale Klein Crops to ~1MP" enabled
+  - Increase inference steps (for Flux.1 Kontext)
+
 - **Flux.1 Kontext Nunchaku backend not available:**
   - Nunchaku requires an Nvidia GPU (CUDA) and separate installation
   - Use the SDNQ backend (cross-platform) or Flux.2 Klein instead
-
-- **Poor inpainting quality:**
-  - Try increasing inference steps
-  - Try Kontext over Klein (or vice-versa)
