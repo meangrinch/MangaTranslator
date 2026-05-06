@@ -554,7 +554,7 @@ def _build_generation_config(
         is_gpt5_1 = is_openai_model and "gpt-5.1" in model_lower
         is_gpt5 = is_openai_model and "gpt-5" in model_lower and not is_gpt5_1
         is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
-        # On OpenRouter, Grok models lack explicit "reasoning" tags (e.g. "grok-4.1-fast")
+        # OpenRouter Grok metadata omit explicit reasoning tags in name
         is_grok_reasoning = is_grok_model and "non-reasoning" not in model_lower
 
         is_opus_45 = is_opus_45_model(model_name)
@@ -939,9 +939,7 @@ def _format_previous_context_texts(
             lines.append(f"{idx}: {cleaned}")
         if not lines:
             continue
-        page_blocks.append(
-            f"### Previous Page {page_index}\n" + "\n".join(lines)
-        )
+        page_blocks.append(f"### Previous Page {page_index}\n" + "\n".join(lines))
 
     if not page_blocks:
         return ""
@@ -1321,9 +1319,7 @@ def call_translation_api_batch(
     # Filter out empty pages (no usable OCR) and trim to configured cap so the
     # request order matches the prompt order regardless of upstream history gaps.
     cleaned_previous_texts: List[List[str]] = []
-    configured_text_count = int(
-        getattr(config, "previous_context_text_count", 0) or 0
-    )
+    configured_text_count = int(getattr(config, "previous_context_text_count", 0) or 0)
     if previous_context_texts and configured_text_count > 0:
         for page_texts in previous_context_texts:
             usable = [

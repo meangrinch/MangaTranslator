@@ -10,7 +10,6 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
         - 32768 for OpenAI GPT 4.1 models
         - 16384 for OpenAI GPT 4o models and models with "chat" in the name
         - 31744 for Anthropic Claude Opus 4/4.1 models (not 4.5/4.6/4.7)
-        - 29696 for xAI Grok fast models
         - 23552 for Z.ai "glm-4.6v" model
         - 16384 for Z.ai "glm-4.5v" model
         - None for all other models (no cap, use existing 63488 max)
@@ -35,15 +34,11 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
             and "claude-opus-4-7" not in model_lower
         ):
             return 31744
-    elif provider == "xAI":
-        if "grok" in model_lower and "fast" in model_lower:
-            return 29696
     elif provider == "OpenRouter":
         is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
         is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith(
             "claude-"
         )
-        is_grok_model = "grok" in model_lower
 
         if is_openai_model:
             if "gpt-4.1" in model_lower:
@@ -60,8 +55,6 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
                 and "claude-opus-4.7" not in model_lower
             ):
                 return 31744
-        if is_grok_model and "fast" in model_lower:
-            return 29696
         if "glm-4.6v" in model_lower:
             return 23552
         if "glm-4.5v" in model_lower:
@@ -200,8 +193,6 @@ def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
     return (
         lm.startswith("grok-4.3")
         or "grok-4.20" in lm
-        or "grok-4-1-fast" in lm
-        or "grok-4.1-fast" in lm
         or "reasoning" in lm
         or "multi-agent" in lm
     )

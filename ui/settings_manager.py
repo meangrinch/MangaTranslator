@@ -74,11 +74,6 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "grok-4.20-0309-reasoning",
         "grok-4.20-0309-non-reasoning",
         "grok-4.20-multi-agent-0309",
-        "grok-4-1-fast-reasoning",
-        "grok-4-1-fast-non-reasoning",
-        "grok-4-fast-reasoning",
-        "grok-4-fast-non-reasoning",
-        "grok-4-0709",
     ],
     "DeepSeek": [
         "deepseek-v4-pro",
