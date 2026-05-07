@@ -5,26 +5,6 @@ import time
 import zipfile
 from pathlib import Path
 
-import torch
-
-from core.config import (
-    CleaningConfig,
-    DetectionConfig,
-    MangaTranslatorConfig,
-    OutputConfig,
-    OutsideTextConfig,
-    PreprocessingConfig,
-    RenderingConfig,
-    TranslationConfig,
-)
-from core.pipeline import batch_translate_images, translate_and_render
-from core.validation import (
-    autodetect_yolo_model_path,
-    clamp_settings,
-    validate_mutually_exclusive_modes,
-)
-from utils.logging import log_message
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -777,6 +757,26 @@ def main():
     )
 
     args = parser.parse_args()
+
+    import torch
+
+    from core.config import (
+        CleaningConfig,
+        DetectionConfig,
+        MangaTranslatorConfig,
+        OutputConfig,
+        OutsideTextConfig,
+        PreprocessingConfig,
+        RenderingConfig,
+        TranslationConfig,
+    )
+    from core.pipeline import batch_translate_images, translate_and_render
+    from core.validation import (
+        autodetect_yolo_model_path,
+        clamp_settings,
+        validate_mutually_exclusive_modes,
+    )
+    from utils.logging import log_message
 
     # --- Validate mutually exclusive flags ---
     try:

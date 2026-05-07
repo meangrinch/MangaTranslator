@@ -4,16 +4,8 @@ import sys
 from pathlib import Path
 from threading import Thread
 
-import gradio as gr
-import torch
 
-import core
-from core.device import get_best_device
-from ui import layout
-from utils.update_checker import check_for_update
-
-
-def custom_except_hook(exc_type, exc_value, exc_traceback):
+def custom_except_hook(gr, exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, gr.Error):
         print(f"Gradio-handled Error: {exc_value}")
     else:
@@ -24,22 +16,10 @@ def custom_except_hook(exc_type, exc_value, exc_traceback):
         print("--------------------------")
 
 
-sys.excepthook = custom_except_hook
-
-
 def _get_pytorch_version_tuple(version_str):
     """Convert version string like '2.9.0' to tuple (2, 9, 0) for comparison."""
     parts = version_str.split("+")[0].split("-")[0].split(".")
     return tuple(int(part) for part in parts[:3])
-
-
-# PyTorch 2.9.0+ uses PYTORCH_ALLOC_CONF, older versions use PYTORCH_CUDA_ALLOC_CONF
-_pytorch_version = _get_pytorch_version_tuple(torch.__version__)
-if _pytorch_version >= (2, 9, 0):
-    # Helps prevent fragmentation OOM errors on some GPUs
-    os.environ["PYTORCH_ALLOC_CONF"] = "max_split_size_mb:512"
-else:
-    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
 
 def main():
@@ -69,6 +49,26 @@ def main():
     )
     args = parser.parse_args()
 
+    import gradio as gr
+    import torch
+
+    from core._version import __version__
+    from core.device import get_best_device
+    from ui import layout
+    from utils.update_checker import check_for_update
+
+    sys.excepthook = lambda exc_type, exc_value, exc_traceback: custom_except_hook(
+        gr, exc_type, exc_value, exc_traceback
+    )
+
+    # PyTorch 2.9.0+ uses PYTORCH_ALLOC_CONF, older versions use PYTORCH_CUDA_ALLOC_CONF
+    _pytorch_version = _get_pytorch_version_tuple(torch.__version__)
+    if _pytorch_version >= (2, 9, 0):
+        # Helps prevent fragmentation OOM errors on some GPUs
+        os.environ["PYTORCH_ALLOC_CONF"] = "max_split_size_mb:512"
+    else:
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
+
     MODELS_DIR = Path(args.models)
     FONTS_BASE_DIR = Path(args.fonts)
 
@@ -94,11 +94,11 @@ def main():
         device_info_str = "MPS (Apple Silicon)"
     print(f"Using device: {device_info_str.upper()}")
     print(f"PyTorch version: {torch.__version__}")
-    print(f"MangaTranslator version: v{core.__version__}")
+    print(f"MangaTranslator version: v{__version__}")
 
     def _update_notice():
         available, latest = check_for_update(
-            core.__version__, repo="meangrinch/MangaTranslator", timeout=3.0
+            __version__, repo="meangrinch/MangaTranslator", timeout=3.0
         )
         if available and latest:
             print(f"UPDATE AVAILABLE: v{latest.lstrip('v')}")
