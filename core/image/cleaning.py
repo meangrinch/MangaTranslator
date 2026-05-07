@@ -373,7 +373,9 @@ def process_single_bubble(
                         if hsv[1] < 25:
                             if not is_colored_bubble:
                                 text_color_bgr = (
-                                    (0, 0, 0) if fill_color_bgr == (255, 255, 255) else (255, 255, 255)
+                                    (0, 0, 0)
+                                    if fill_color_bgr == (255, 255, 255)
+                                    else (255, 255, 255)
                                 )
                             else:
                                 text_color_bgr = (

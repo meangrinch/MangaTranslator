@@ -277,9 +277,7 @@ class UnifiedCache:
                     image.get("data", "") for image in previous_context_images
                 ).encode()
             ).hexdigest()[:16]
-            cache_params["previous_context_image_count"] = len(
-                previous_context_images
-            )
+            cache_params["previous_context_image_count"] = len(previous_context_images)
             cache_params["previous_context_image_hash"] = previous_hash
         if previous_context_texts:
             previous_texts_hash = hashlib.sha256(

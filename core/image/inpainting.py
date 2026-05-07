@@ -982,9 +982,7 @@ class FluxKleinInpainter:
 
     def _get_prompt_embeddings(self, device: torch.device, verbose: bool = False):
         if self._prompt_embeds_cpu is None:
-            log_message(
-                "  - Encoding Flux.2 Klein prompt embeddings", verbose=verbose
-            )
+            log_message("  - Encoding Flux.2 Klein prompt embeddings", verbose=verbose)
             prompt_embeds, pooled_prompt_embeds = _encode_flux_prompt(
                 self.pipeline, self.KLEIN_PROMPT, device
             )

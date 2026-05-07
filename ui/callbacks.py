@@ -472,9 +472,7 @@ def _format_single_success_message(
         )
         previous_context_count = backend_config.translation.previous_context_image_count
         if previous_context_count:
-            msg_parts.append(
-                f"• Previous Context Images: {previous_context_count}\n"
-            )
+            msg_parts.append(f"• Previous Context Images: {previous_context_count}\n")
 
     msg_parts.append(
         f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"
@@ -632,9 +630,7 @@ def _format_batch_success_message(
         )
         previous_context_count = backend_config.translation.previous_context_image_count
         if previous_context_count:
-            msg_parts.append(
-                f"• Previous Context Images: {previous_context_count}\n"
-            )
+            msg_parts.append(f"• Previous Context Images: {previous_context_count}\n")
 
     msg_parts.append(
         f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"

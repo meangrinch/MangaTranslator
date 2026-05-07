@@ -2061,9 +2061,7 @@ def batch_translate_images(
     def _batch_sort_key(path: Path):
         try:
             sort_path = (
-                path.relative_to(input_dir)
-                if preserve_structure
-                else Path(path.name)
+                path.relative_to(input_dir) if preserve_structure else Path(path.name)
             )
         except ValueError:
             sort_path = path

@@ -65,9 +65,7 @@ _CONFIG_ATTR_PATHS: Dict[str, Tuple[Tuple[str, ...], ...]] = {
     "context_image_max_side_pixels": (
         ("translation", "context_image_max_side_pixels"),
     ),
-    "previous_context_image_count": (
-        ("translation", "previous_context_image_count"),
-    ),
+    "previous_context_image_count": (("translation", "previous_context_image_count"),),
     "previous_context_text_count": (("translation", "previous_context_text_count"),),
     "osb_min_side_pixels": (("translation", "osb_min_side_pixels"),),
     "max_font_size": (("rendering", "max_font_size"),),

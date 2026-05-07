@@ -35,16 +35,15 @@ from utils.model_metadata import (
     is_46_model,
     is_anthropic_reasoning_model,
     is_deepseek_reasoning_model,
+    is_gemini_3_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
     is_gemma_model,
-    is_gemini_3_model,
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
-    supports_openai_original_image_detail,
 )
 from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
 from utils.model_metadata import (
@@ -53,6 +52,7 @@ from utils.model_metadata import (
     is_rosetta_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
+    supports_openai_original_image_detail,
     supports_xai_reasoning_parameter,
 )
 

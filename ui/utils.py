@@ -17,10 +17,10 @@ from utils.model_metadata import (
     is_46_model,
     is_anthropic_reasoning_model,
     is_deepseek_reasoning_model,
-    is_gemini_25_flash_model,
-    is_gemini_25_pro_model,
     is_gemini_3_flash_model,
     is_gemini_3_model,
+    is_gemini_25_flash_model,
+    is_gemini_25_pro_model,
     is_gemma_model,
     is_google_reasoning_model,
     is_gpt5_chat_variant,
@@ -31,10 +31,10 @@ from utils.model_metadata import (
     is_openai_reasoning_model,
     is_opus_45_model,
     is_opus_47_model,
-    supports_openai_original_image_detail,
-    supports_xai_reasoning_parameter,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
+    supports_openai_original_image_detail,
+    supports_xai_reasoning_parameter,
 )
 
 from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_settings

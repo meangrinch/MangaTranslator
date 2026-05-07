@@ -21,6 +21,15 @@ Issues = "https://github.com/meangrinch/MangaTranslator/issues"
 manga-translator = "main:main"
 manga-translator-web = "app:main"
 
+[project.optional-dependencies]
+dev = ["black", "isort"]
+
+[tool.black]
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+
 [tool.setuptools]
 py-modules = ["app", "main"]
 
