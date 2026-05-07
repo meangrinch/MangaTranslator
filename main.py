@@ -28,7 +28,8 @@ from utils.logging import log_message
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Translate manga/comic speech bubbles using a configuration approach"
+        description="Translate manga/comic speech bubbles using a configuration approach",
+        usage="%(prog)s --input INPUT [options]",
     )
     parser.add_argument(
         "--input",
