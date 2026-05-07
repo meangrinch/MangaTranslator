@@ -151,7 +151,7 @@ def main():
         "--model-name",
         type=str,
         default=None,
-        help="Model name for the selected provider (e.g., 'gemini-3.1-flash-lite-preview'). "
+        help="Model name for the selected provider (e.g., 'gemini-3.1-flash-lite'). "
         "If not provided, a default will be attempted based on the provider.",
     )
     parser.add_argument(
@@ -796,7 +796,7 @@ def main():
         api_key = args.google_api_key or os.environ.get("GOOGLE_API_KEY")
         api_key_arg_name = "--google-api-key"
         api_key_env_var = "GOOGLE_API_KEY"
-        default_model = "gemini-3.1-flash-lite-preview"
+        default_model = "gemini-3.1-flash-lite"
     elif provider == "OpenAI":
         api_key = args.openai_api_key or os.environ.get("OPENAI_API_KEY")
         api_key_arg_name = "--openai-api-key"
@@ -831,7 +831,7 @@ def main():
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
         api_key_env_var = "OPENROUTER_API_KEY"
-        default_model = "google/gemini-3.1-flash-lite-preview"
+        default_model = "google/gemini-3.1-flash-lite"
     elif provider == "OpenAI-Compatible":
         compatible_url = args.openai_compatible_url
         api_key = args.openai_compatible_api_key or os.environ.get(
