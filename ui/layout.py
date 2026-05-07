@@ -202,8 +202,10 @@ def create_layout(
 ) -> gr.Blocks:
     """Creates the Gradio UI layout and connects callbacks."""
 
+    css_path = Path(__file__).with_name("style.css")
+
     with gr.Blocks(
-        title="MangaTranslator", js=js_credits, css_paths="style.css"
+        title="MangaTranslator", js=js_credits, css_paths=str(css_path)
     ) as app:
 
         gr.Markdown("# MangaTranslator")

@@ -41,7 +41,8 @@ if _pytorch_version >= (2, 9, 0):
 else:
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
-if __name__ == "__main__":
+
+def main():
     parser = argparse.ArgumentParser(description="MangaTranslator")
     parser.add_argument(
         "--models",
@@ -112,3 +113,7 @@ if __name__ == "__main__":
 
     app.queue()
     app.launch(inbrowser=args.open_browser, server_port=args.port, show_error=True)
+
+
+if __name__ == "__main__":
+    main()
