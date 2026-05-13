@@ -1177,7 +1177,6 @@ def translate_and_render(
                         translated_texts = generate_test_placeholders(
                             sorted_bubble_data=sorted_bubble_data,
                             processed_bubbles_info=processed_bubbles_info,
-                            pil_cleaned_image=pil_cleaned_image,
                             config=config,
                             main_min_font=main_min_font,
                             main_max_font=main_max_font,

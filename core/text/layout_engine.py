@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -18,6 +19,8 @@ from utils.logging import log_message
 
 # Epsilon to guard rounding when converting from HarfBuzz 26.6 fixed-point.
 VISUAL_WIDTH_EPSILON = 0.0
+VERTICAL_OPTICAL_LEADING_RATIO = 0.12
+VERTICAL_GROUPED_PUNCTUATION = set(".,;:!?…。．！？｡")
 
 
 def shape_line(
@@ -120,6 +123,159 @@ def calculate_styled_line_width(
     return visual_width_all + VISUAL_WIDTH_EPSILON
 
 
+def _is_separator_or_space(ch: str) -> bool:
+    try:
+        category = unicodedata.category(ch)
+    except Exception:
+        return ch.isspace()
+    return ch.isspace() or (len(category) > 0 and category[0] == "Z")
+
+
+def _iter_vertical_units(text: str) -> List[Tuple[str, str]]:
+    units: List[Tuple[str, str]] = []
+    for segment_text, style_name in parse_styled_segments(text):
+        current = ""
+        current_is_punctuation = False
+        for ch in segment_text:
+            if _is_separator_or_space(ch):
+                if current:
+                    units.append((current, style_name))
+                    current = ""
+                    current_is_punctuation = False
+                continue
+            if unicodedata.combining(ch) and current:
+                current += ch
+                continue
+            ch_is_punctuation = ch in VERTICAL_GROUPED_PUNCTUATION
+            if current and current_is_punctuation and ch_is_punctuation:
+                current += ch
+                continue
+            if current:
+                units.append((current, style_name))
+            current = ch
+            current_is_punctuation = ch_is_punctuation
+        if current:
+            units.append((current, style_name))
+    return units
+
+
+def _measure_vertical_unit(
+    text: str,
+    style_name: str,
+    font_size: int,
+    loaded_hb_faces: Dict[str, Optional[hb.Face]],
+    features: Dict[str, bool],
+) -> Optional[Dict]:
+    hb_face = loaded_hb_faces.get(style_name) or loaded_hb_faces.get("regular")
+    if hb_face is None:
+        return None
+
+    hb_font = hb.Font(hb_face)
+    hb_font.ptem = float(font_size)
+    hb_scale = int(font_size * 64)
+    hb_font.scale = (hb_scale, hb_scale)
+
+    infos, positions, _ = shape_line(text, hb_font, features)
+    if not infos or not positions:
+        return None
+
+    HB_26_6_SCALE_FACTOR = 64.0
+    cursor_x = 0
+    left = float("inf")
+    right = float("-inf")
+    top = float("inf")
+    bottom = float("-inf")
+
+    for info, pos in zip(infos, positions):
+        extents = hb_font.get_glyph_extents(info.codepoint)
+        origin_x = cursor_x + pos.x_offset
+        origin_y = -pos.y_offset
+
+        if extents:
+            glyph_x1 = origin_x + extents.x_bearing
+            glyph_x2 = glyph_x1 + extents.width
+            glyph_y1 = origin_y - extents.y_bearing
+            glyph_y2 = origin_y - (extents.y_bearing + extents.height)
+        else:
+            glyph_x1 = origin_x
+            glyph_x2 = origin_x + pos.x_advance
+            glyph_y1 = origin_y - font_size * 64
+            glyph_y2 = origin_y
+
+        left = min(left, glyph_x1, glyph_x2)
+        right = max(right, glyph_x1, glyph_x2)
+        top = min(top, glyph_y1, glyph_y2)
+        bottom = max(bottom, glyph_y1, glyph_y2)
+        cursor_x += pos.x_advance
+
+    if left == float("inf") or right == float("-inf"):
+        return None
+
+    visual_width = max(1.0, (right - left) / HB_26_6_SCALE_FACTOR)
+    visual_height = max(1.0, (bottom - top) / HB_26_6_SCALE_FACTOR)
+
+    return {
+        "text_with_markers": text,
+        "style": style_name,
+        "width": visual_width,
+        "height": visual_height,
+        "left": left / HB_26_6_SCALE_FACTOR,
+        "right": right / HB_26_6_SCALE_FACTOR,
+        "top": top / HB_26_6_SCALE_FACTOR,
+        "bottom": bottom / HB_26_6_SCALE_FACTOR,
+    }
+
+
+def _build_vertical_layout(
+    text: str,
+    font_size: int,
+    max_render_width: float,
+    max_render_height: float,
+    loaded_hb_faces: Dict[str, Optional[hb.Face]],
+    features_to_enable: Dict[str, bool],
+    line_spacing_mult: float,
+    metrics,
+) -> Optional[Dict]:
+    lines_data_at_size = []
+    for unit_text, style_name in _iter_vertical_units(text):
+        unit = _measure_vertical_unit(
+            unit_text,
+            style_name,
+            font_size,
+            loaded_hb_faces,
+            features_to_enable,
+        )
+        if unit is None:
+            continue
+        lines_data_at_size.append(unit)
+
+    if not lines_data_at_size:
+        return None
+
+    current_y = 0.0
+    optical_leading = max(1.0, font_size * VERTICAL_OPTICAL_LEADING_RATIO)
+    for index, unit in enumerate(lines_data_at_size):
+        unit["origin_y"] = current_y - unit["top"]
+        if index == len(lines_data_at_size) - 1:
+            current_y += unit["height"]
+        else:
+            current_y += unit["height"] + optical_leading * line_spacing_mult
+
+    block_height = max(1.0, current_y)
+    max_line_width = max(unit["width"] for unit in lines_data_at_size)
+
+    if max_line_width <= max_render_width and block_height <= max_render_height:
+        return {
+            "lines": lines_data_at_size,
+            "metrics": metrics,
+            "max_line_width": max_line_width,
+            "line_height": 0.0,
+            "block_height": block_height,
+            "orientation": "vertical",
+        }
+    return None
+
+
 def check_fit(
     font_size: int,
     text: str,
@@ -137,6 +293,7 @@ def check_fit(
     word_width_cache: Optional[Dict[Tuple[str, int], float]] = None,
     verbose: bool = False,
     detach_trailing_punctuation: bool = True,
+    vertical_stack: bool = False,
 ) -> Optional[Dict]:
     """Check if text fits within the given dimensions at the specified font size.
 
@@ -184,7 +341,19 @@ def check_fit(
                 )
             single_line_height = font_size * 1.2 * line_spacing_mult
 
-        # Respect explicit newlines as hard line breaks (e.g., for vertical stacking)
+        if vertical_stack:
+            return _build_vertical_layout(
+                text,
+                font_size,
+                max_render_width,
+                max_render_height,
+                loaded_hb_faces,
+                features_to_enable,
+                line_spacing_mult,
+                metrics,
+            )
+
+        # Respect explicit newlines as hard line breaks
         if "\n" in text:
             explicit_lines = text.split("\n")
             current_max_line_width = 0.0
@@ -444,6 +613,7 @@ def find_optimal_layout(
     cleaned_mask: Optional[np.ndarray] = None,
     box_top_left: Optional[Tuple[int, int]] = None,
     detach_trailing_punctuation: bool = True,
+    vertical_stack: bool = False,
 ) -> Dict:
     """Find the optimal font size and layout for text within given dimensions.
 
@@ -475,8 +645,8 @@ def find_optimal_layout(
     Raises:
         RenderingError: If text doesn't fit at minimum font size or layout fails
     """
-    # Preserve explicit newlines if present (e.g., vertical stacking),
-    # otherwise collapse whitespace for normal paragraph layout
+    # Preserve explicit newlines if present, otherwise collapse whitespace for
+    # normal paragraph layout. Vertical layout handles whitespace per segment.
     if "\n" in text or "\r" in text:
         clean_text = text.replace("\r\n", "\n").replace("\r", "\n")
     else:
@@ -489,6 +659,7 @@ def find_optimal_layout(
     best_fit_metrics = None
     best_fit_max_line_width = float("inf")
     best_fit_line_height = 0.0
+    best_fit_block_height = 0.0
 
     word_width_cache: Dict[Tuple[str, int], float] = {}
 
@@ -524,13 +695,18 @@ def find_optimal_layout(
                 word_width_cache,
                 verbose,
                 detach_trailing_punctuation,
+                vertical_stack,
             )
 
             if fit_data is None:
                 # Squeezing narrower won't help (only makes it taller)
                 break
 
-            if cleaned_mask is not None and box_top_left is not None:
+            if (
+                cleaned_mask is not None
+                and box_top_left is not None
+                and not vertical_stack
+            ):
                 has_collision = _check_collision(
                     fit_data["lines"],
                     box_top_left,
@@ -545,6 +721,7 @@ def find_optimal_layout(
                     best_fit_metrics = fit_data["metrics"]
                     best_fit_max_line_width = fit_data["max_line_width"]
                     best_fit_line_height = fit_data["line_height"]
+                    best_fit_block_height = fit_data.get("block_height", 0.0)
 
                     succeeded_at_current_size = True
                     break
@@ -562,6 +739,7 @@ def find_optimal_layout(
                 best_fit_metrics = fit_data["metrics"]
                 best_fit_max_line_width = fit_data["max_line_width"]
                 best_fit_line_height = fit_data["line_height"]
+                best_fit_block_height = fit_data.get("block_height", 0.0)
                 succeeded_at_current_size = True
                 break
 
@@ -592,4 +770,6 @@ def find_optimal_layout(
         "metrics": best_fit_metrics,
         "max_line_width": best_fit_max_line_width,
         "line_height": best_fit_line_height,
+        "orientation": "vertical" if vertical_stack else "horizontal",
+        "block_height": best_fit_block_height,
     }

@@ -148,10 +148,9 @@ KINSOKU_NOT_AT_START = set(  # Cannot start a line
 KINSOKU_NOT_AT_END = set("（【「『〔〈《（［｛([")  # Cannot end a line
 
 TRAILING_PUNCT_CLOSERS = r"\)\]\}\u2019\u201D'\""
-DETACHABLE_TRAILING_PUNCT_CORE = r"(?:\.{2,}(?:\?|!\?)?|!!|!\?|\?!)"
+DETACHABLE_TRAILING_PUNCT_CORE = r"[.!?]{2,}"
 DETACHABLE_TRAILING_PUNCT_RE = re.compile(
-    rf"^(.*?)(\.{{2,}}(?:\?|!\?)?[{TRAILING_PUNCT_CLOSERS}]*|"
-    rf"(?<![!?])(?:!!|!\?|\?!)[{TRAILING_PUNCT_CLOSERS}]*)$"
+    rf"^(.*?)({DETACHABLE_TRAILING_PUNCT_CORE}[{TRAILING_PUNCT_CLOSERS}]*)$"
 )
 DETACHED_TRAILING_PUNCT_RE = re.compile(
     rf"^{DETACHABLE_TRAILING_PUNCT_CORE}[{TRAILING_PUNCT_CLOSERS}]*$"
@@ -160,6 +159,10 @@ DETACHED_TRAILING_PUNCT_RE = re.compile(
 
 def is_detached_trailing_punctuation(token: str) -> bool:
     return bool(DETACHED_TRAILING_PUNCT_RE.match(token))
+
+
+def _is_detached_ellipsis(token: str) -> bool:
+    return is_detached_trailing_punctuation(token) and token.startswith("..")
 
 
 def _split_with_cjk_awareness(
@@ -379,7 +382,15 @@ def _join_tokens_smart(
         return ""
     result = tokens[0]
     for i in range(1, len(tokens)):
-        if _needs_space_between(tokens[i - 1], tokens[i], detach_trailing_punctuation):
+        starts_with_detached_punctuation = False
+        if detach_trailing_punctuation and i == 1:
+            match = STYLE_PATTERN.match(tokens[0])
+            content = match.group(2) if match else tokens[0]
+            starts_with_detached_punctuation = _is_detached_ellipsis(content)
+
+        if starts_with_detached_punctuation:
+            result += tokens[i]
+        elif _needs_space_between(tokens[i - 1], tokens[i], detach_trailing_punctuation):
             result += " " + tokens[i]
         else:
             result += tokens[i]

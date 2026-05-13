@@ -93,21 +93,7 @@ def render_text_skia(
     if not clean_text:
         return pil_image
 
-    # Prepare text for layout (vertical stacking removes whitespace to stay single-column)
-    if vertical_stack:
-        import unicodedata
-
-        def _is_separator_or_space(ch: str) -> bool:
-            try:
-                cat = unicodedata.category(ch)
-            except Exception:
-                return ch.isspace()
-            return ch.isspace() or (len(cat) > 0 and cat[0] == "Z")
-
-        stacked_chars = [ch for ch in clean_text if not _is_separator_or_space(ch)]
-        layout_text = "\n".join(stacked_chars)
-    else:
-        layout_text = clean_text
+    layout_text = clean_text
 
     # Initialize config with defaults if not provided
     if config is None:
@@ -222,6 +208,7 @@ def render_text_skia(
             cleaned_mask,
             layout_box_top_left,
             config.detach_trailing_punctuation,
+            vertical_stack,
         )
     except RenderingError as e:
         raise RenderingError(f"Layout optimization failed: {e}") from e
@@ -319,13 +306,28 @@ def render_text_skia(
 
         # Scale font size in layout_data for rendering
         scaled_layout_data = layout_data.copy()
+        scaled_layout_data["lines"] = [
+            line_data.copy() for line_data in layout_data["lines"]
+        ]
         scaled_layout_data["font_size"] = layout_data["font_size"] * factor
         scaled_layout_data["line_height"] = layout_data["line_height"] * factor
         scaled_layout_data["max_line_width"] = layout_data["max_line_width"] * factor
+        if layout_data.get("block_height") is not None:
+            scaled_layout_data["block_height"] = layout_data["block_height"] * factor
 
-        # Scale line widths
+        # Scale per-line and per-glyph measurements
         for line_data in scaled_layout_data["lines"]:
-            line_data["width"] = line_data["width"] * factor
+            for key in (
+                "width",
+                "height",
+                "left",
+                "right",
+                "top",
+                "bottom",
+                "origin_y",
+            ):
+                if key in line_data:
+                    line_data[key] = line_data[key] * factor
 
         # Scale metrics - create a simple object with scaled attributes
         original_metrics = layout_data["metrics"]

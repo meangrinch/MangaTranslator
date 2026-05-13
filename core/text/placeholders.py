@@ -11,7 +11,6 @@ from utils.logging import log_message
 def generate_test_placeholders(
     sorted_bubble_data: List[Dict[str, Any]],
     processed_bubbles_info: List[Dict[str, Any]],
-    pil_cleaned_image: Image.Image,
     config: MangaTranslatorConfig,
     main_min_font: int,
     main_max_font: int,
