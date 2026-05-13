@@ -94,7 +94,7 @@ class UIRenderingSettings:
     badness_exponent: float = 3.0
     padding_pixels: float = 5.0
     supersampling_factor: int = 4
-    detach_trailing_ellipsis: bool = True
+    detach_trailing_punctuation: bool = True
 
 
 @dataclass
@@ -261,7 +261,7 @@ class UIConfigState:
             "badness_exponent": self.rendering.badness_exponent,
             "padding_pixels": self.rendering.padding_pixels,
             "supersampling_factor": self.rendering.supersampling_factor,
-            "detach_trailing_ellipsis": self.rendering.detach_trailing_ellipsis,
+            "detach_trailing_punctuation": self.rendering.detach_trailing_punctuation,
             "outside_text_enabled": self.outside_text.enabled,
             "outside_text_seed": self.outside_text.seed,
             "outside_text_huggingface_token": self.outside_text.huggingface_token,
@@ -551,9 +551,9 @@ class UIConfigState:
                 supersampling_factor=data.get(
                     "supersampling_factor", defaults.get("supersampling_factor", 4)
                 ),
-                detach_trailing_ellipsis=data.get(
-                    "detach_trailing_ellipsis",
-                    defaults.get("detach_trailing_ellipsis", True),
+                detach_trailing_punctuation=data.get(
+                    "detach_trailing_punctuation",
+                    defaults.get("detach_trailing_punctuation", True),
                 ),
             ),
             output=UIOutputSettings(
@@ -734,7 +734,7 @@ def map_ui_to_backend_config(
         badness_exponent=ui_state.rendering.badness_exponent,
         padding_pixels=ui_state.rendering.padding_pixels,
         supersampling_factor=ui_state.rendering.supersampling_factor,
-        detach_trailing_ellipsis=ui_state.rendering.detach_trailing_ellipsis,
+        detach_trailing_punctuation=ui_state.rendering.detach_trailing_punctuation,
     )
 
     upscale_mode = ui_state.output.image_upscale_mode

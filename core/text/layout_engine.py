@@ -8,6 +8,7 @@ import uharfbuzz as hb
 from core.text.text_processing import (
     STYLE_PATTERN,
     find_optimal_breaks_dp,
+    is_detached_trailing_punctuation,
     parse_styled_segments,
     tokenize_styled_text,
     try_hyphenate_word,
@@ -135,7 +136,7 @@ def check_fit(
     badness_exponent: float,
     word_width_cache: Optional[Dict[Tuple[str, int], float]] = None,
     verbose: bool = False,
-    detach_trailing_ellipsis: bool = True,
+    detach_trailing_punctuation: bool = True,
 ) -> Optional[Dict]:
     """Check if text fits within the given dimensions at the specified font size.
 
@@ -214,7 +215,7 @@ def check_fit(
             return None
 
         tokens: List[Tuple[str, bool]] = tokenize_styled_text(
-            text, detach_trailing_ellipsis
+            text, detach_trailing_punctuation
         )
         augmented_tokens: List[str] = []
 
@@ -280,10 +281,7 @@ def check_fit(
                     match = STYLE_PATTERN.match(tok)
                     content = match.group(2) if match else tok
 
-                    # Skip gluing for disconnected ellipsis to allow wrapping
-                    if _detach and re.match(
-                        r"^(\.{2,})[\)\]\}\u2019\u201D\'\"]*$", content
-                    ):
+                    if _detach and is_detached_trailing_punctuation(content):
                         glued.append(tok)
                         continue
 
@@ -297,7 +295,7 @@ def check_fit(
                 return glued
 
             augmented_tokens = _glue_trailing_punctuation(
-                augmented_tokens, detach_trailing_ellipsis
+                augmented_tokens, detach_trailing_punctuation
             )
         except Exception:
             pass
@@ -328,7 +326,7 @@ def check_fit(
             space_width,
             badness_exponent,
             hyphen_penalty,
-            detach_trailing_ellipsis,
+            detach_trailing_punctuation,
         )
 
         if not wrapped_lines_text:
@@ -445,7 +443,7 @@ def find_optimal_layout(
     bubble_id: Optional[str] = None,
     cleaned_mask: Optional[np.ndarray] = None,
     box_top_left: Optional[Tuple[int, int]] = None,
-    detach_trailing_ellipsis: bool = True,
+    detach_trailing_punctuation: bool = True,
 ) -> Dict:
     """Find the optimal font size and layout for text within given dimensions.
 
@@ -525,7 +523,7 @@ def find_optimal_layout(
                 badness_exponent,
                 word_width_cache,
                 verbose,
-                detach_trailing_ellipsis,
+                detach_trailing_punctuation,
             )
 
             if fit_data is None:

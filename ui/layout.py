@@ -1236,12 +1236,15 @@ def create_layout(
                                 "(must be supported by the font).",
                             )
                             gr.Markdown("### Text Layout")
-                            detach_trailing_ellipsis = gr.Checkbox(
+                            detach_trailing_punctuation = gr.Checkbox(
                                 value=saved_settings.get(
-                                    "detach_trailing_ellipsis", True
+                                    "detach_trailing_punctuation", True
                                 ),
-                                label="Detach Trailing Ellipsis",
-                                info="Move trailing '...' onto a new line for better text wrapping.",
+                                label="Detach Trailing Punctuation",
+                                info=(
+                                    "Move trailing punctuation clusters onto a new line "
+                                    "for better text wrapping."
+                                ),
                             )
                             hyphenate_before_scaling = gr.Checkbox(
                                 value=saved_settings.get(
@@ -1972,7 +1975,7 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
-            detach_trailing_ellipsis,
+            detach_trailing_punctuation,
             special_instructions,
             batch_special_instructions,
             hyphen_penalty,
@@ -2086,7 +2089,7 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
-            detach_trailing_ellipsis,
+            detach_trailing_punctuation,
             special_instructions,
             batch_special_instructions,
             outside_text_enabled,
@@ -2192,7 +2195,7 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
-            detach_trailing_ellipsis,
+            detach_trailing_punctuation,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
@@ -2307,7 +2310,7 @@ def create_layout(
             context_image_max_side_pixels,
             osb_min_side_pixels,
             hyphenate_before_scaling,
-            detach_trailing_ellipsis,
+            detach_trailing_punctuation,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,

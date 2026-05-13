@@ -390,15 +390,15 @@ def main():
         "Higher values improve quality but use slightly more memory. 1 = disabled.",
     )
     parser.add_argument(
-        "--no-detach-trailing-ellipsis",
-        dest="detach_trailing_ellipsis",
+        "--no-detach-trailing-punctuation",
+        dest="detach_trailing_punctuation",
         action="store_false",
         help=(
-            "Disable detaching trailing ellipsis onto a new line for better wrapping. "
-            "When disabled, trailing '...' stays glued to the preceding word."
+            "Disable detaching trailing punctuation clusters onto a new line "
+            "for better wrapping."
         ),
     )
-    parser.set_defaults(detach_trailing_ellipsis=True)
+    parser.set_defaults(detach_trailing_punctuation=True)
     # Output args
     parser.add_argument(
         "--jpeg-quality",
@@ -998,7 +998,7 @@ def main():
             badness_exponent=args.badness_exponent,
             padding_pixels=args.padding_pixels,
             supersampling_factor=args.supersampling_factor,
-            detach_trailing_ellipsis=args.detach_trailing_ellipsis,
+            detach_trailing_punctuation=args.detach_trailing_punctuation,
         ),
         output=OutputConfig(
             output_format=args.output_format,
