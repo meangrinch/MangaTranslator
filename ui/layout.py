@@ -414,7 +414,7 @@ def create_layout(
                             maximum=50,
                             value=int(
                                 saved_settings.get(
-                                    "batch_previous_context_text_count", 0
+                                    "batch_previous_context_text_count", 3
                                 )
                             ),
                             step=1,

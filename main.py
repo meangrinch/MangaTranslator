@@ -43,10 +43,10 @@ def main():
     parser.add_argument(
         "--batch-previous-context-texts",
         type=int,
-        default=0,
+        default=3,
         help=(
             "Batch only: include this many previous pages' OCR text transcripts "
-            "as narrative context (0-50, default: 0)"
+            "as narrative context (0-50, default: 3)"
         ),
     )
     # --- Provider and API Key Arguments ---

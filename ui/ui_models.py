@@ -205,7 +205,7 @@ class UIConfigState:
     batch_special_instructions: Optional[str] = None
     batch_parallel_requests: int = 1
     batch_previous_context_image_count: int = 0
-    batch_previous_context_text_count: int = 0
+    batch_previous_context_text_count: int = 3
 
     def to_save_dict(self) -> Dict[str, Any]:
         """Converts the UI state into a dictionary suitable for saving to config.json."""
@@ -627,7 +627,7 @@ class UIConfigState:
                 data.get("batch_previous_context_image_count", 0)
             ),
             batch_previous_context_text_count=int(
-                data.get("batch_previous_context_text_count", 0)
+                data.get("batch_previous_context_text_count", 3)
             ),
         )
 

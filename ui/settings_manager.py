@@ -238,7 +238,7 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_special_instructions": "",
     "batch_parallel_requests": 1,
     "batch_previous_context_image_count": 0,
-    "batch_previous_context_text_count": 0,
+    "batch_previous_context_text_count": 3,
 }
 
 
