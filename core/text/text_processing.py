@@ -1,10 +1,12 @@
 import re
+import unicodedata
 from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
 # Markdown-like style pattern: ***bold italic***, **bold**, *italic*
 STYLE_PATTERN = re.compile(r"(\*{1,3})(.*?)(\1)")
+NO_SPACE_BEFORE_MARKER = "\uf000"
 
 
 def is_rtl_script(text: str) -> bool:
@@ -79,6 +81,53 @@ def _is_hangul_character(char: str) -> bool:
         or (0x1100 <= code <= 0x11FF)  # Hangul Jamo
         or (0x3130 <= code <= 0x318F)  # Hangul Compatibility Jamo
     )
+
+
+def strip_no_space_before_marker(token: str) -> str:
+    if token.startswith(NO_SPACE_BEFORE_MARKER):
+        return token[len(NO_SPACE_BEFORE_MARKER) :]
+    return token
+
+
+def split_hangul_word_for_wrapping(token: str) -> Optional[List[str]]:
+    """
+    Split a Hangul-containing word into breakable units without adding hyphens.
+
+    The first unit keeps normal spacing. Later units are marked so the wrapper
+    can break before them without inserting spaces into the rendered line.
+    """
+    normalized = unicodedata.normalize("NFC", token)
+    match = re.match(r"^(\W*)([\w\-]+)(\W*)$", normalized)
+    if match:
+        leading_punc, core_word, trailing_punc = match.groups()
+    else:
+        leading_punc, core_word, trailing_punc = "", normalized, ""
+
+    if not any(_is_hangul_character(ch) for ch in core_word):
+        return None
+
+    units: List[str] = []
+    current_non_hangul = ""
+    for ch in core_word:
+        if _is_hangul_character(ch):
+            if current_non_hangul:
+                units.append(current_non_hangul)
+                current_non_hangul = ""
+            units.append(ch)
+        elif unicodedata.combining(ch) and units:
+            units[-1] += ch
+        else:
+            current_non_hangul += ch
+
+    if current_non_hangul:
+        units.append(current_non_hangul)
+
+    if len(units) < 2:
+        return None
+
+    units[0] = leading_punc + units[0]
+    units[-1] = units[-1] + trailing_punc
+    return [units[0]] + [f"{NO_SPACE_BEFORE_MARKER}{unit}" for unit in units[1:]]
 
 
 def is_cjk_character(char: str) -> bool:
@@ -351,6 +400,7 @@ def try_hyphenate_word(
 
 def _is_cjk_token(token: str) -> bool:
     """Check if token consists entirely of spaceless CJK (Chinese/Japanese, not Hangul)."""
+    token = strip_no_space_before_marker(token)
     match = STYLE_PATTERN.match(token)
     content = match.group(2) if match else token
     return len(content) > 0 and all(
@@ -362,6 +412,12 @@ def _needs_space_between(
     left_token: str, right_token: str, detach_trailing_punctuation: bool = True
 ) -> bool:
     """No space needed between adjacent CJK tokens or before separated punctuation."""
+    if right_token.startswith(NO_SPACE_BEFORE_MARKER):
+        return False
+
+    left_token = strip_no_space_before_marker(left_token)
+    right_token = strip_no_space_before_marker(right_token)
+
     if _is_cjk_token(left_token) and _is_cjk_token(right_token):
         return False
 
@@ -380,20 +436,24 @@ def _join_tokens_smart(
     """Join tokens with smart spacing (no space between adjacent CJK tokens)."""
     if not tokens:
         return ""
-    result = tokens[0]
+    result = strip_no_space_before_marker(tokens[0])
     for i in range(1, len(tokens)):
         starts_with_detached_punctuation = False
         if detach_trailing_punctuation and i == 1:
-            match = STYLE_PATTERN.match(tokens[0])
-            content = match.group(2) if match else tokens[0]
+            first_token = strip_no_space_before_marker(tokens[0])
+            match = STYLE_PATTERN.match(first_token)
+            content = match.group(2) if match else first_token
             starts_with_detached_punctuation = _is_detached_ellipsis(content)
 
+        clean_token = strip_no_space_before_marker(tokens[i])
         if starts_with_detached_punctuation:
-            result += tokens[i]
-        elif _needs_space_between(tokens[i - 1], tokens[i], detach_trailing_punctuation):
-            result += " " + tokens[i]
+            result += clean_token
+        elif _needs_space_between(
+            tokens[i - 1], tokens[i], detach_trailing_punctuation
+        ):
+            result += " " + clean_token
         else:
-            result += tokens[i]
+            result += clean_token
     return result
 
 
@@ -454,7 +514,9 @@ def find_optimal_breaks_dp(
                 badness = pow(slack, badness_exponent)
 
                 # Add hyphen penalty if line ends with hyphen (support styled markers)
-                last_token = tokens[i - 1] if i > 0 else ""
+                last_token = strip_no_space_before_marker(
+                    tokens[i - 1] if i > 0 else ""
+                )
                 ends_with_hyphen = last_token.endswith("-")
                 if not ends_with_hyphen:
                     styled_match = STYLE_PATTERN.match(last_token)

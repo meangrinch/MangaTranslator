@@ -7,10 +7,13 @@ import skia
 import uharfbuzz as hb
 
 from core.text.text_processing import (
+    NO_SPACE_BEFORE_MARKER,
     STYLE_PATTERN,
     find_optimal_breaks_dp,
     is_detached_trailing_punctuation,
     parse_styled_segments,
+    split_hangul_word_for_wrapping,
+    strip_no_space_before_marker,
     tokenize_styled_text,
     try_hyphenate_word,
 )
@@ -415,7 +418,16 @@ def check_fit(
                     if word_width > max_render_width:
 
                         def wrap_part(part: str) -> str:
-                            return f"{marker}{part}{marker}" if marker else part
+                            no_space_before = part.startswith(NO_SPACE_BEFORE_MARKER)
+                            clean_part = strip_no_space_before_marker(part)
+                            wrapped = (
+                                f"{marker}{clean_part}{marker}"
+                                if marker
+                                else clean_part
+                            )
+                            if no_space_before:
+                                return f"{NO_SPACE_BEFORE_MARKER}{wrapped}"
+                            return wrapped
 
                         def width_test_func(part: str) -> bool:
                             wrapped = wrap_part(part)
@@ -424,9 +436,14 @@ def check_fit(
                             )
                             return w <= max_render_width
 
-                        split_parts = try_hyphenate_word(
-                            core_text, hyphenation_min_word_length, width_test_func
-                        )
+                        split_parts = split_hangul_word_for_wrapping(core_text)
+                        if split_parts is None:
+                            split_parts = try_hyphenate_word(
+                                core_text,
+                                hyphenation_min_word_length,
+                                width_test_func,
+                            )
+
                         if split_parts:
                             augmented_tokens.extend(wrap_part(p) for p in split_parts)
                         else:
@@ -447,8 +464,9 @@ def check_fit(
             ) -> List[str]:
                 glued: List[str] = []
                 for tok in tokens_list:
-                    match = STYLE_PATTERN.match(tok)
-                    content = match.group(2) if match else tok
+                    clean_tok = strip_no_space_before_marker(tok)
+                    match = STYLE_PATTERN.match(clean_tok)
+                    content = match.group(2) if match else clean_tok
 
                     if _detach and is_detached_trailing_punctuation(content):
                         glued.append(tok)
@@ -458,7 +476,7 @@ def check_fit(
                         GLUE_TRAILING_PUNCT_RE.match(content)
                         or GLUE_CLOSERS_RE.match(content)
                     ):
-                        glued[-1] = glued[-1] + tok
+                        glued[-1] = glued[-1] + clean_tok
                     else:
                         glued.append(tok)
                 return glued
@@ -475,8 +493,9 @@ def check_fit(
                 if cached_key in word_width_cache:
                     return word_width_cache[cached_key]
 
+            clean_word = strip_no_space_before_marker(word)
             width_val = calculate_styled_line_width(
-                word, font_size, loaded_hb_faces, features_to_enable
+                clean_word, font_size, loaded_hb_faces, features_to_enable
             )
 
             if word_width_cache is not None:
