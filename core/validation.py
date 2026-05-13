@@ -25,7 +25,7 @@ SETTING_CONSTRAINTS: Dict[str, Tuple[float, float]] = {
     "min_font_size": (5, 50),
     "line_spacing_mult": (0.5, 2.0),
     "hyphen_penalty": (100, 2000),
-    "hyphenation_min_word_length": (6, 10),
+    "hyphenation_min_word_length": (4, 10),
     "badness_exponent": (2.0, 4.0),
     "padding_pixels": (2, 12),
     "supersampling_factor": (1, 16),

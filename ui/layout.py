@@ -1266,7 +1266,7 @@ def create_layout(
                                 ),
                             )
                             hyphenation_min_word_length = gr.Slider(
-                                6,
+                                4,
                                 10,
                                 value=saved_settings.get(
                                     "hyphenation_min_word_length", 8

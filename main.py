@@ -367,7 +367,7 @@ def main():
         "--hyphenation-min-word-length",
         type=int,
         default=8,
-        help="Minimum word length required for hyphenation (6-10)",
+        help="Minimum word length required for hyphenation (4-10)",
     )
     parser.add_argument(
         "--badness-exponent",
