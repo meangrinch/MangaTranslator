@@ -409,6 +409,8 @@ def render_text_skia(
             for key in (
                 "width",
                 "height",
+                "advance_height",
+                "baseline_offset_y",
                 "left",
                 "right",
                 "top",

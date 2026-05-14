@@ -22,7 +22,8 @@ from utils.logging import log_message
 
 # Epsilon to guard rounding when converting from HarfBuzz 26.6 fixed-point.
 VISUAL_WIDTH_EPSILON = 0.0
-VERTICAL_OPTICAL_LEADING_RATIO = 0.12
+HB_26_6_SCALE_FACTOR = 64.0
+VERTICAL_ADVANCE_TRACKING = 0.90
 VERTICAL_GROUPED_PUNCTUATION = set(".,;:!?…。．！？｡")
 
 
@@ -182,12 +183,13 @@ def _measure_vertical_unit(
     if not infos or not positions:
         return None
 
-    HB_26_6_SCALE_FACTOR = 64.0
     cursor_x = 0
     left = float("inf")
     right = float("-inf")
     top = float("inf")
     bottom = float("-inf")
+    vertical_advances = []
+    first_vertical_origin_y: Optional[float] = None
 
     for info, pos in zip(infos, positions):
         extents = hb_font.get_glyph_extents(info.codepoint)
@@ -211,17 +213,37 @@ def _measure_vertical_unit(
         bottom = max(bottom, glyph_y1, glyph_y2)
         cursor_x += pos.x_advance
 
+        vertical_advance = hb_font.get_glyph_v_advance(info.codepoint)
+        if vertical_advance:
+            vertical_advances.append(abs(vertical_advance) / HB_26_6_SCALE_FACTOR)
+
+        if first_vertical_origin_y is None:
+            vertical_origin = hb_font.get_glyph_v_origin(info.codepoint)
+            if vertical_origin is not None:
+                _, vertical_origin_y = vertical_origin
+                first_vertical_origin_y = vertical_origin_y / HB_26_6_SCALE_FACTOR
+
     if left == float("inf") or right == float("-inf"):
         return None
 
     visual_width = max(1.0, (right - left) / HB_26_6_SCALE_FACTOR)
     visual_height = max(1.0, (bottom - top) / HB_26_6_SCALE_FACTOR)
+    advance_height = max(vertical_advances) if vertical_advances else 0.0
+    if advance_height <= 0:
+        advance_height = max(visual_height, float(font_size))
+
+    if first_vertical_origin_y is None:
+        first_vertical_origin_y = -top / HB_26_6_SCALE_FACTOR + max(
+            0.0, (advance_height - visual_height) / 2.0
+        )
 
     return {
         "text_with_markers": text,
         "style": style_name,
         "width": visual_width,
         "height": visual_height,
+        "advance_height": advance_height,
+        "baseline_offset_y": first_vertical_origin_y,
         "left": left / HB_26_6_SCALE_FACTOR,
         "right": right / HB_26_6_SCALE_FACTOR,
         "top": top / HB_26_6_SCALE_FACTOR,
@@ -256,15 +278,32 @@ def _build_vertical_layout(
         return None
 
     current_y = 0.0
-    optical_leading = max(1.0, font_size * VERTICAL_OPTICAL_LEADING_RATIO)
     for index, unit in enumerate(lines_data_at_size):
-        unit["origin_y"] = current_y - unit["top"]
-        if index == len(lines_data_at_size) - 1:
-            current_y += unit["height"]
-        else:
-            current_y += unit["height"] + optical_leading * line_spacing_mult
+        advance_height = max(unit["height"], unit.get("advance_height", 0.0))
+        step_height = max(
+            unit["height"],
+            advance_height * line_spacing_mult * VERTICAL_ADVANCE_TRACKING,
+        )
 
-    block_height = max(1.0, current_y)
+        unit["advance_height"] = advance_height
+        unit["origin_y"] = current_y + unit.get("baseline_offset_y", 0.0)
+        if index == len(lines_data_at_size) - 1:
+            current_y += advance_height
+        else:
+            current_y += step_height
+
+    visual_top = min(unit["origin_y"] + unit["top"] for unit in lines_data_at_size)
+    visual_bottom = max(
+        unit["origin_y"] + unit["bottom"] for unit in lines_data_at_size
+    )
+    content_top = min(0.0, visual_top)
+    content_bottom = max(current_y, visual_bottom)
+    if content_top < 0.0:
+        for unit in lines_data_at_size:
+            unit["origin_y"] -= content_top
+        content_bottom -= content_top
+
+    block_height = max(1.0, content_bottom)
     max_line_width = max(unit["width"] for unit in lines_data_at_size)
 
     if max_line_width <= max_render_width and block_height <= max_render_height:
