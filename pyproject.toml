@@ -22,7 +22,7 @@ manga-translator = "main:main"
 manga-translator-web = "app:main"
 
 [project.optional-dependencies]
-dev = ["black", "isort"]
+dev = ["black", "flake8", "isort"]
 
 [tool.black]
 target-version = ["py310"]
