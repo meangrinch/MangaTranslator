@@ -383,6 +383,7 @@ def check_fit(
                     "metrics": metrics,
                     "max_line_width": current_max_line_width,
                     "line_height": single_line_height,
+                    "block_height": total_block_height,
                 }
             return None
 
@@ -553,6 +554,7 @@ def check_fit(
                 "metrics": metrics,
                 "max_line_width": current_max_line_width,
                 "line_height": single_line_height,
+                "block_height": total_block_height,
             }
 
         return None

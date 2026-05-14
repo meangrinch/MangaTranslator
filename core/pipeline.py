@@ -1443,6 +1443,11 @@ def translate_and_render(
                             detach_trailing_punctuation=(
                                 config.rendering.detach_trailing_punctuation
                             ),
+                            auto_vertical_text=(
+                                False
+                                if is_outside_text
+                                else config.rendering.auto_vertical_text
+                            ),
                         )
                         success = False
                         if is_outside_text:

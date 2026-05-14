@@ -399,6 +399,14 @@ def main():
         ),
     )
     parser.set_defaults(detach_trailing_punctuation=True)
+    parser.add_argument(
+        "--auto-vertical-text",
+        action="store_true",
+        help=(
+            "Automatically stack short translated text vertically in tall speech bubbles "
+            "when it improves the layout."
+        ),
+    )
     # Output args
     parser.add_argument(
         "--jpeg-quality",
@@ -999,6 +1007,7 @@ def main():
             padding_pixels=args.padding_pixels,
             supersampling_factor=args.supersampling_factor,
             detach_trailing_punctuation=args.detach_trailing_punctuation,
+            auto_vertical_text=args.auto_vertical_text,
         ),
         output=OutputConfig(
             output_format=args.output_format,

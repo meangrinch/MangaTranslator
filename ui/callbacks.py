@@ -132,6 +132,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         osb_min_side_pixels_val,
         hyphenate_before_scaling_val,
         detach_trailing_punctuation_val,
+        auto_vertical_text_val,
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
@@ -289,6 +290,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             use_ligatures=use_ligatures,
             hyphenate_before_scaling=hyphenate_before_scaling_val,
             detach_trailing_punctuation=detach_trailing_punctuation_val,
+            auto_vertical_text=auto_vertical_text_val,
             hyphen_penalty=hyphen_penalty_val,
             hyphenation_min_word_length=hyphenation_min_word_length_val,
             badness_exponent=badness_exponent_val,
@@ -969,6 +971,7 @@ def handle_save_config_click(*args: Any) -> str:
         osb_min_side_pixels_val,
         hyphenate_before_scaling_val,
         detach_trailing_punctuation_val,
+        auto_vertical_text_val,
         special_instructions_val,
         batch_special_instructions_val,
         hyphen_penalty_val,
@@ -1115,6 +1118,7 @@ def handle_save_config_click(*args: Any) -> str:
             use_ligatures=liga,
             hyphenate_before_scaling=hyphenate_before_scaling_val,
             detach_trailing_punctuation=detach_trailing_punctuation_val,
+            auto_vertical_text=auto_vertical_text_val,
             hyphen_penalty=hyphen_penalty_val,
             hyphenation_min_word_length=hyphenation_min_word_length_val,
             badness_exponent=badness_exponent_val,
@@ -1372,6 +1376,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.llm_settings.osb_min_side_pixels,
         gr.update(value=default_ui_state.rendering.hyphenate_before_scaling),
         gr.update(value=default_ui_state.rendering.detach_trailing_punctuation),
+        gr.update(value=default_ui_state.rendering.auto_vertical_text),
         default_ui_state.llm_settings.special_instructions or "",
         default_ui_state.batch_special_instructions or "",
         default_ui_state.outside_text.enabled,
@@ -1513,7 +1518,6 @@ def update_process_buttons(
 
 def cancel_process():
     """Signal that the current process should be cancelled."""
-    global CANCELLATION_MANAGER
     if CANCELLATION_MANAGER:
         CANCELLATION_MANAGER.cancel()
 

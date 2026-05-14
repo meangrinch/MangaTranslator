@@ -114,6 +114,7 @@ class RenderingConfig:
     outline_width: float = 0.0
     supersampling_factor: int = 4
     detach_trailing_punctuation: bool = True
+    auto_vertical_text: bool = False
 
 
 @dataclass

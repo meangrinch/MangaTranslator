@@ -97,6 +97,9 @@ def generate_test_placeholders(
             padding_pixels=padding_pixels,
             outline_width=(osb_outline_width if is_outside_text else 0.0),
             supersampling_factor=1,  # No supersampling for probe
+            auto_vertical_text=(
+                False if is_outside_text else config.rendering.auto_vertical_text
+            ),
         )
         best_fit = (
             placeholder_tiny.rstrip(".") if is_outside_text else placeholder_tiny

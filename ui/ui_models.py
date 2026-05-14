@@ -95,6 +95,7 @@ class UIRenderingSettings:
     padding_pixels: float = 5.0
     supersampling_factor: int = 4
     detach_trailing_punctuation: bool = True
+    auto_vertical_text: bool = False
 
 
 @dataclass
@@ -262,6 +263,7 @@ class UIConfigState:
             "padding_pixels": self.rendering.padding_pixels,
             "supersampling_factor": self.rendering.supersampling_factor,
             "detach_trailing_punctuation": self.rendering.detach_trailing_punctuation,
+            "auto_vertical_text": self.rendering.auto_vertical_text,
             "outside_text_enabled": self.outside_text.enabled,
             "outside_text_seed": self.outside_text.seed,
             "outside_text_huggingface_token": self.outside_text.huggingface_token,
@@ -555,6 +557,10 @@ class UIConfigState:
                     "detach_trailing_punctuation",
                     defaults.get("detach_trailing_punctuation", True),
                 ),
+                auto_vertical_text=data.get(
+                    "auto_vertical_text",
+                    defaults.get("auto_vertical_text", False),
+                ),
             ),
             output=UIOutputSettings(
                 output_format=data.get("output_format", defaults["output_format"]),
@@ -735,6 +741,7 @@ def map_ui_to_backend_config(
         padding_pixels=ui_state.rendering.padding_pixels,
         supersampling_factor=ui_state.rendering.supersampling_factor,
         detach_trailing_punctuation=ui_state.rendering.detach_trailing_punctuation,
+        auto_vertical_text=ui_state.rendering.auto_vertical_text,
     )
 
     upscale_mode = ui_state.output.image_upscale_mode

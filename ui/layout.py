@@ -1246,6 +1246,14 @@ def create_layout(
                                     "for better text wrapping."
                                 ),
                             )
+                            auto_vertical_text = gr.Checkbox(
+                                value=saved_settings.get("auto_vertical_text", False),
+                                label="Auto Vertical Text for Tall Bubbles",
+                                info=(
+                                    "Stack short translated text vertically in tall speech bubbles "
+                                    "when it improves readability."
+                                ),
+                            )
                             hyphenate_before_scaling = gr.Checkbox(
                                 value=saved_settings.get(
                                     "hyphenate_before_scaling", True
@@ -1976,6 +1984,7 @@ def create_layout(
             osb_min_side_pixels,
             hyphenate_before_scaling,
             detach_trailing_punctuation,
+            auto_vertical_text,
             special_instructions,
             batch_special_instructions,
             hyphen_penalty,
@@ -2090,6 +2099,7 @@ def create_layout(
             osb_min_side_pixels,
             hyphenate_before_scaling,
             detach_trailing_punctuation,
+            auto_vertical_text,
             special_instructions,
             batch_special_instructions,
             outside_text_enabled,
@@ -2196,6 +2206,7 @@ def create_layout(
             osb_min_side_pixels,
             hyphenate_before_scaling,
             detach_trailing_punctuation,
+            auto_vertical_text,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
@@ -2311,6 +2322,7 @@ def create_layout(
             osb_min_side_pixels,
             hyphenate_before_scaling,
             detach_trailing_punctuation,
+            auto_vertical_text,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,

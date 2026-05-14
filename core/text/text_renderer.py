@@ -18,12 +18,65 @@ from core.text.font_manager import (
     sanitize_text_for_font,
 )
 from core.text.layout_engine import find_optimal_layout
-from core.text.text_processing import parse_styled_segments
+from core.text.text_processing import is_rtl_script, parse_styled_segments
 from utils.exceptions import FontError, ImageProcessingError, RenderingError
 from utils.logging import log_message
 
 GRAYSCALE_MIDPOINT = 128  # Threshold for determining text color
 FALLBACK_PADDING_RATIO = 0.08  # 8% padding ratio when safe area calculation fails
+AUTO_VERTICAL_MIN_ASPECT_RATIO = 1.6
+AUTO_VERTICAL_MAX_CHARS = 12
+AUTO_VERTICAL_MAX_WORDS = 1
+AUTO_VERTICAL_MAX_HORIZONTAL_FILL = 0.45
+AUTO_VERTICAL_MIN_FILL_GAIN = 0.20
+
+
+def _plain_text_for_layout_policy(text: str) -> str:
+    return "".join(segment_text for segment_text, _ in parse_styled_segments(text))
+
+
+def _should_try_auto_vertical_text(
+    text: str,
+    max_render_width: float,
+    max_render_height: float,
+) -> bool:
+    if max_render_width <= 0 or max_render_height <= 0:
+        return False
+    if max_render_height / max_render_width < AUTO_VERTICAL_MIN_ASPECT_RATIO:
+        return False
+
+    plain_text = _plain_text_for_layout_policy(text).strip()
+    if not plain_text or is_rtl_script(plain_text):
+        return False
+
+    non_space_chars = sum(1 for ch in plain_text if not ch.isspace())
+    word_count = len(plain_text.split())
+    return (
+        non_space_chars <= AUTO_VERTICAL_MAX_CHARS
+        and word_count <= AUTO_VERTICAL_MAX_WORDS
+    )
+
+
+def _auto_vertical_layout_is_better(
+    horizontal_layout: dict,
+    vertical_layout: dict,
+    max_render_height: float,
+) -> bool:
+    if max_render_height <= 0:
+        return False
+
+    horizontal_block_height = horizontal_layout.get("block_height") or 0.0
+    vertical_block_height = vertical_layout.get("block_height") or 0.0
+    if horizontal_block_height <= 0 or vertical_block_height <= 0:
+        return False
+
+    horizontal_fill = horizontal_block_height / max_render_height
+    vertical_fill = vertical_block_height / max_render_height
+    return (
+        vertical_layout["font_size"] >= horizontal_layout["font_size"]
+        and horizontal_fill <= AUTO_VERTICAL_MAX_HORIZONTAL_FILL
+        and vertical_fill >= horizontal_fill + AUTO_VERTICAL_MIN_FILL_GAIN
+    )
 
 
 def render_text_skia(
@@ -187,8 +240,8 @@ def render_text_skia(
             if _hb_face:
                 preload_hb_faces[style_key] = _hb_face
 
-    try:
-        layout_data = find_optimal_layout(
+    def _find_layout(use_vertical_stack: bool) -> dict:
+        return find_optimal_layout(
             layout_text,
             max_render_width,
             max_render_height,
@@ -199,7 +252,7 @@ def render_text_skia(
             config.min_font_size,
             config.max_font_size,
             config.line_spacing_mult,
-            False if vertical_stack else config.hyphenate_before_scaling,
+            False if use_vertical_stack else config.hyphenate_before_scaling,
             config.hyphen_penalty,
             config.hyphenation_min_word_length,
             config.badness_exponent,
@@ -208,10 +261,46 @@ def render_text_skia(
             cleaned_mask,
             layout_box_top_left,
             config.detach_trailing_punctuation,
-            vertical_stack,
+            use_vertical_stack,
         )
+
+    try:
+        layout_data = _find_layout(vertical_stack)
     except RenderingError as e:
-        raise RenderingError(f"Layout optimization failed: {e}") from e
+        if not (
+            config.auto_vertical_text
+            and not vertical_stack
+            and _should_try_auto_vertical_text(
+                layout_text, max_render_width, max_render_height
+            )
+        ):
+            raise RenderingError(f"Layout optimization failed: {e}") from e
+
+        try:
+            layout_data = _find_layout(True)
+            log_message(
+                "Using auto vertical text layout after horizontal layout failed",
+                verbose=verbose,
+            )
+        except RenderingError:
+            raise RenderingError(f"Layout optimization failed: {e}") from e
+    else:
+        if (
+            config.auto_vertical_text
+            and not vertical_stack
+            and _should_try_auto_vertical_text(
+                layout_text, max_render_width, max_render_height
+            )
+        ):
+            try:
+                vertical_layout_data = _find_layout(True)
+                if _auto_vertical_layout_is_better(
+                    layout_data, vertical_layout_data, max_render_height
+                ):
+                    layout_data = vertical_layout_data
+                    log_message("Using auto vertical text layout", verbose=verbose)
+            except RenderingError:
+                pass
 
     if layout_only:
         log_message(f"Rendered at size {layout_data['font_size']}", verbose=verbose)

@@ -171,6 +171,7 @@ DEFAULT_SETTINGS = {
     "padding_pixels": 5.0,
     "supersampling_factor": 4,
     "detach_trailing_punctuation": True,
+    "auto_vertical_text": False,
     "font_pack": None,
     "verbose": False,
     "jpeg_quality": 95,
@@ -297,6 +298,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "badness_exponent",
     "supersampling_factor",
     "detach_trailing_punctuation",
+    "auto_vertical_text",
     # Models / Detection
     "confidence",
     "conjoined_confidence",
