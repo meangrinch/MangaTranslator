@@ -32,7 +32,7 @@ def main():
         "--parallel-requests",
         type=int,
         default=1,
-        help="Number of images to process simultaneously in batch mode (1-10, default: 1)",
+        help="Batch only: number of images to process simultaneously (1-10, default: 1)",
     )
     parser.add_argument(
         "--batch-previous-context-images",
