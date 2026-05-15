@@ -382,7 +382,7 @@ def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) 
     gemini3 = is_gemini_3_model(model_name)
     gemma = is_gemma_model(model_name)
 
-    if provider == "xAI" and supports_xai_reasoning_parameter(model_name):
+    if provider == "xAI" and "multi-agent" in model_name.lower():
         return "Multi-Agent Depth"
     elif (provider == "Google" or provider == "OpenRouter") and (gemini3 or gemma):
         return "Thinking Level"
@@ -421,11 +421,13 @@ def get_reasoning_effort_info_text(
     elif provider == "OpenAI":
         return "Controls model's internal reasoning effort."
     elif provider == "xAI":
-        if supports_xai_reasoning_parameter(model_name):
+        if model_name and "multi-agent" in model_name.lower():
             return (
                 "Controls xAI multi-agent agent count "
                 "(low/medium=4 agents, high/xhigh=16 agents)."
             )
+        if supports_xai_reasoning_parameter(model_name):
+            return "Controls model's internal reasoning effort."
         return "Grok reasons automatically; no configurable reasoning effort is sent."
     elif provider == "Moonshot AI":
         return "Enables or disables model thinking (high=enabled, none=disabled)."
@@ -567,7 +569,9 @@ def get_reasoning_effort_config(
     elif provider == "xAI":
         if not supports_xai_reasoning_parameter(model_name):
             return False, [], None
-        return True, ["xhigh", "high", "medium", "low"], "high"
+        if "multi-agent" in lm:
+            return True, ["xhigh", "high", "medium", "low"], "high"
+        return True, ["high", "medium", "low", "none"], "low"
 
     elif provider == "DeepSeek":
         is_reasoning = is_deepseek_reasoning_model(model_name)

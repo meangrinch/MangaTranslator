@@ -120,9 +120,12 @@ def call_xai_endpoint(
     payload["max_output_tokens"] = generation_config.get("max_tokens", 4096)
 
     model_lower = (model_name or "").lower()
+    reasoning_effort = generation_config.get("reasoning_effort")
     if "multi-agent" in model_lower:
-        reasoning_effort = generation_config.get("reasoning_effort")
         if reasoning_effort in ("low", "medium", "high", "xhigh"):
+            payload["reasoning"] = {"effort": reasoning_effort}
+    elif model_lower.startswith("grok-4.3"):
+        if reasoning_effort in ("none", "low", "medium", "high"):
             payload["reasoning"] = {"effort": reasoning_effort}
 
     if enable_web_search:

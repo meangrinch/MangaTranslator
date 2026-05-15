@@ -475,8 +475,8 @@ def _build_generation_config(
             "max_tokens": max_tokens_value,
             "media_resolution": config.media_resolution,
         }
-        if supports_xai_reasoning_parameter(model_name):
-            generation_config["reasoning_effort"] = config.reasoning_effort or "high"
+        if config.reasoning_effort:
+            generation_config["reasoning_effort"] = config.reasoning_effort
         return generation_config
 
     elif provider == "DeepSeek":
