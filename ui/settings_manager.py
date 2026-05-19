@@ -16,8 +16,9 @@ CONFIG_FILE = (
 
 PROVIDER_MODELS: Dict[str, List[str]] = {
     "Google": [
-        "gemini-3.1-pro-preview",
+        "gemini-3.5-flash",
         "gemini-3.1-flash-lite",
+        "gemini-3.1-pro-preview",
         "gemini-3-flash-preview",
         "gemini-2.5-pro",
         "gemini-2.5-flash",
@@ -188,6 +189,7 @@ DEFAULT_SETTINGS = {
     "verbosity": "low",  # GPT-5 series only: controls response verbosity (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "enable_code_execution": False,  # Enable Gemini's code execution for image zoom/inspection.
+    "gemini_3_custom_sampling": True,
     "image_detail": "auto",  # OpenAI image detail (auto/high/low/original)
     "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
     "media_resolution_bubbles": "auto",  # Gemini 3 models
@@ -281,6 +283,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "effort",
     "verbosity",
     "enable_web_search",
+    "gemini_3_custom_sampling",
     "image_detail",
     "special_instructions",
     "batch_special_instructions",

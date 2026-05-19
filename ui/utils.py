@@ -520,10 +520,10 @@ def get_reasoning_effort_config(
 
         if is_gemini_3_model(model_name):
             if "flash" in lm:
-                return True, ["high", "medium", "low", "minimal"], "high"
+                return True, ["high", "medium", "low", "minimal"], "medium"
             if "gemini-3.1" in lm:
-                return True, ["high", "medium", "low"], "high"
-            return True, ["high", "low"], "high"
+                return True, ["high", "medium", "low"], "medium"
+            return True, ["high", "medium", "low"], "medium"
 
         if is_gemini_25_flash_model(model_name) or is_gemini_25_pro_model(model_name):
             return True, ["auto", "high", "medium", "low", "minimal", "none"], "auto"
@@ -602,7 +602,7 @@ def get_reasoning_effort_config(
             if is_gemma_model(model_name):
                 return True, ["high", "minimal"], "high"
 
-            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "low"
+            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
 
         try:
             is_reasoning = openrouter_is_reasoning_model(model_name, debug=False)
@@ -713,6 +713,13 @@ def get_media_resolution_config(
     return False, ["auto"], ""
 
 
+def is_gemini_3_custom_sampling_visible(
+    provider: str, model_name: Optional[str]
+) -> bool:
+    """Check if Gemini 3 custom sampling toggle should be visible."""
+    return provider in ("Google", "OpenRouter") and is_gemini_3_model(model_name)
+
+
 def get_image_detail_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], str, str]:
@@ -741,12 +748,15 @@ def is_code_execution_visible(provider: str, model_name: Optional[str]) -> bool:
     return provider == "Google" and is_gemini_3_flash_model(model_name)
 
 
-def update_translation_ui(provider: str, _current_temp: float, ocr_method: str = "LLM"):
+def update_translation_ui(
+    provider: str,
+    ocr_method: str = "LLM",
+    gemini_3_custom_sampling: bool = True,
+):
     """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity.
 
     Args:
         provider: The selected translation provider
-        _current_temp: Current temperature value (unused but kept for compatibility)
         ocr_method: OCR method ("LLM", "manga-ocr", or "paddleocr-vl"). Used to filter vision-only models.
     """
     saved_settings = get_saved_settings()
@@ -814,6 +824,14 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
     if not sampling_ok:
         top_p_interactive = False
 
+    if (
+        is_gemini_3_custom_sampling_visible(provider, remembered_model)
+        and not gemini_3_custom_sampling
+    ):
+        temp_interactive = False
+        top_p_interactive = False
+        top_k_interactive = False
+
     temp_update = gr.update(
         maximum=temp_max, value=new_temp_value, interactive=temp_interactive
     )
@@ -847,6 +865,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
     )
 
     is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
+    gemini_3_custom_sampling_update = gr.update(visible=is_gemini_3)
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
@@ -952,6 +971,7 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
         top_p_update,
         top_k_update,
         max_tokens_update,
+        gemini_3_custom_sampling_update,
         enable_web_search_update,
         enable_code_execution_update,
         image_detail_update,
@@ -965,7 +985,10 @@ def update_translation_ui(provider: str, _current_temp: float, ocr_method: str =
 
 
 def update_params_for_model(
-    provider: str, model_name: Optional[str], current_temp: float
+    provider: str,
+    model_name: Optional[str],
+    current_temp: float,
+    gemini_3_custom_sampling: bool = True,
 ):
     """Adjusts temp/top_k sliders and visibility toggles based on selected provider/model."""
     if not provider:
@@ -977,6 +1000,16 @@ def update_params_for_model(
 
     if provider == "Anthropic":
         temp_max = 1.0
+    elif provider == "OpenRouter":
+        is_anthropic_model = model_name and (
+            "anthropic/" in model_name or model_name.startswith("claude-")
+        )
+        if is_anthropic_model:
+            temp_max = 1.0
+    elif provider == "OpenAI-Compatible":
+        pass
+
+    if provider == "Anthropic":
         top_k_interactive = False
         top_p_interactive = False
     elif provider in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI"):
@@ -989,18 +1022,23 @@ def update_params_for_model(
             "anthropic/" in model_name or model_name.startswith("claude-")
         )
         if is_anthropic_model:
-            temp_max = 1.0
             top_p_interactive = False
         if is_openai_model or is_anthropic_model:
             top_k_interactive = False
-    elif provider == "OpenAI-Compatible":
-        pass
 
     temp_interactive, sampling_ok = get_sampling_interactivity_for_effort(
         provider, model_name
     )
     if not sampling_ok:
         top_p_interactive = False
+
+    if (
+        is_gemini_3_custom_sampling_visible(provider, model_name)
+        and not gemini_3_custom_sampling
+    ):
+        temp_interactive = False
+        top_p_interactive = False
+        top_k_interactive = False
 
     new_temp_value = min(current_temp, temp_max)
     temp_update = gr.update(
@@ -1062,6 +1100,7 @@ def update_params_for_model(
     )
 
     is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
+    gemini_3_custom_sampling_update = gr.update(visible=is_gemini_3)
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
@@ -1122,6 +1161,7 @@ def update_params_for_model(
         top_p_update,
         top_k_update,
         max_tokens_update,
+        gemini_3_custom_sampling_update,
         enable_web_search_update,
         enable_code_execution_update,
         image_detail_update,
@@ -1161,7 +1201,6 @@ def fetch_and_update_openrouter_models(
     Args:
         ocr_method: "LLM" for vision-capable models, "manga-ocr"/"paddleocr-vl" for text-only models
     """
-    global OPENROUTER_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
 
     # Check if we have cached raw response
@@ -1249,7 +1288,6 @@ def fetch_and_update_compatible_models(
         current_model: Currently selected model in the dropdown to preserve when available.
         force_refresh: If True, bypass cache and re-fetch models from the endpoint.
     """
-    global COMPATIBLE_MODEL_CACHE
     verbose = get_saved_settings().get("verbose", False)
     if not url or not url.startswith(("http://", "https://")):
         gr.Warning(
@@ -1383,7 +1421,7 @@ def format_thinking_status(
     thinking_status_str = ""
     if provider == "Google" and model_name:
         if is_gemini_3_model(model_name):
-            effort = reasoning_effort or "high"
+            effort = reasoning_effort or "medium"
             thinking_status_str = f" (thinking: {effort})"
         elif is_gemini_25_flash_model(model_name):
             effort = reasoning_effort or "auto"
@@ -1392,7 +1430,7 @@ def format_thinking_status(
             else:
                 thinking_status_str = f" (thinking: {effort})"
     elif provider == "OpenRouter" and is_gemini_3_model(model_name):
-        effort = reasoning_effort or "high"
+        effort = reasoning_effort or "medium"
         thinking_status_str = f" (thinking: {effort})"
     elif provider == "Anthropic" and model_name:
         lm = model_name.lower()

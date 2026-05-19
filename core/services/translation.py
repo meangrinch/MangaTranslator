@@ -53,7 +53,6 @@ from utils.model_metadata import (
     is_xai_reasoning_model,
     is_zai_reasoning_model,
     supports_openai_original_image_detail,
-    supports_xai_reasoning_parameter,
 )
 
 TRANSLATION_PATTERN = re.compile(
@@ -361,11 +360,16 @@ def _build_generation_config(
         is_gemini_3 = is_gemini_3_model(model_name)
         is_gemma = is_gemma_model(model_name)
         generation_config = {
-            "temperature": temperature,
-            "topP": top_p,
-            "topK": top_k,
             "maxOutputTokens": max_tokens_value,
         }
+        if not is_gemini_3 or config.gemini_3_custom_sampling:
+            generation_config.update(
+                {
+                    "temperature": temperature,
+                    "topP": top_p,
+                    "topK": top_k,
+                }
+            )
         if not is_gemini_3:
             media_resolution_mapping = {
                 "auto": "MEDIA_RESOLUTION_UNSPECIFIED",
@@ -378,7 +382,7 @@ def _build_generation_config(
             )
             generation_config["media_resolution"] = backend_media_resolution
         if is_gemini_3 or is_gemma:
-            reasoning_effort = config.reasoning_effort or "high"
+            reasoning_effort = config.reasoning_effort or "medium"
             generation_config["thinkingConfig"] = {"thinkingLevel": reasoning_effort}
             log_message(
                 f"Using reasoning effort '{reasoning_effort}' for {model_name}",
@@ -535,12 +539,15 @@ def _build_generation_config(
         is_grok_model = "grok-4" in model_lower
         is_gemini_3 = is_gemini_3_model(model_name)
 
-        generation_config = {
-            "temperature": temperature,
-            "top_p": top_p if not is_anthropic_model else None,
-            "top_k": top_k,
-            "max_tokens": max_tokens_value,
-        }
+        generation_config = {"max_tokens": max_tokens_value}
+        if not is_gemini_3 or config.gemini_3_custom_sampling:
+            generation_config.update(
+                {
+                    "temperature": temperature,
+                    "top_p": top_p if not is_anthropic_model else None,
+                    "top_k": top_k,
+                }
+            )
         if is_openai_model:
             generation_config["image_detail"] = normalize_image_detail()
 
@@ -639,6 +646,7 @@ def _call_llm_endpoint(
                 system_prompt=system_prompt,
                 debug=debug,
                 enable_web_search=config.enable_web_search,
+                enable_code_execution=config.enable_code_execution,
             )
         elif provider == "OpenAI":
             api_key = config.openai_api_key

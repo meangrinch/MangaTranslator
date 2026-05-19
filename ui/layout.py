@@ -1055,6 +1055,42 @@ def create_layout(
                                 elem_id="media_resolution_context_dropdown",
                             )
 
+                            initial_gemini_3_custom_sampling_value = saved_settings.get(
+                                "gemini_3_custom_sampling", True
+                            )
+                            initial_gemini_3_custom_sampling_visible = (
+                                utils.is_gemini_3_custom_sampling_visible(
+                                    config_initial_provider,
+                                    config_initial_model_name,
+                                )
+                            )
+                            initial_sampling_disabled = (
+                                initial_gemini_3_custom_sampling_visible
+                                and not initial_gemini_3_custom_sampling_value
+                            )
+                            initial_temp_interactive = not initial_sampling_disabled
+                            initial_top_p_interactive = not initial_sampling_disabled
+                            initial_top_k_interactive = (
+                                config_initial_provider
+                                not in (
+                                    "OpenAI",
+                                    "xAI",
+                                    "DeepSeek",
+                                    "Moonshot AI",
+                                )
+                                and not initial_sampling_disabled
+                            )
+
+                            gemini_3_custom_sampling_checkbox = gr.Checkbox(
+                                label="Use Custom Sampling Parameters",
+                                value=initial_gemini_3_custom_sampling_value,
+                                info=(
+                                    "Send custom temperature, top-p, and top-k values for Gemini 3.x models. "
+                                    "Disabling might improve translation quality."
+                                ),
+                                visible=initial_gemini_3_custom_sampling_visible,
+                                elem_id="gemini_3_custom_sampling_checkbox",
+                            )
                             temperature = gr.Slider(
                                 0,
                                 2.0,
@@ -1062,6 +1098,7 @@ def create_layout(
                                 step=0.05,
                                 label="Temperature",
                                 info="Controls creativity. Lower = deterministic; higher = random.",
+                                interactive=initial_temp_interactive,
                                 elem_id="config_temperature",
                             )
                             top_p = gr.Slider(
@@ -1071,6 +1108,7 @@ def create_layout(
                                 step=0.05,
                                 label="Top P",
                                 info="Controls diversity. Lower = focused; higher = random.",
+                                interactive=initial_top_p_interactive,
                                 elem_id="config_top_p",
                             )
                             top_k = gr.Slider(
@@ -1080,10 +1118,7 @@ def create_layout(
                                 step=1,
                                 label="Top K",
                                 info="Limits sampling pool to top K tokens.",
-                                interactive=(
-                                    config_initial_provider
-                                    not in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI")
-                                ),
+                                interactive=initial_top_k_interactive,
                                 elem_id="config_top_k",
                             )
                             max_tokens = gr.Slider(
@@ -1945,6 +1980,7 @@ def create_layout(
             temperature,
             top_p,
             top_k,
+            gemini_3_custom_sampling_checkbox,
             max_tokens,
             config_translation_mode,
             ocr_method_radio,
@@ -2059,6 +2095,7 @@ def create_layout(
             temperature,
             top_p,
             top_k,
+            gemini_3_custom_sampling_checkbox,
             max_tokens,
             config_translation_mode,
             ocr_method_radio,
@@ -2169,6 +2206,7 @@ def create_layout(
             temperature,
             top_p,
             top_k,
+            gemini_3_custom_sampling_checkbox,
             max_tokens,
             config_reading_direction,
             config_translation_mode,
@@ -2285,6 +2323,7 @@ def create_layout(
             temperature,
             top_p,
             top_k,
+            gemini_3_custom_sampling_checkbox,
             max_tokens,
             config_reading_direction,
             config_translation_mode,
@@ -2442,7 +2481,11 @@ def create_layout(
 
         provider_selector.change(
             fn=callbacks.handle_provider_change,
-            inputs=[provider_selector, temperature, ocr_method_radio],
+            inputs=[
+                provider_selector,
+                ocr_method_radio,
+                gemini_3_custom_sampling_checkbox,
+            ],
             outputs=[
                 google_api_key,
                 openai_api_key,
@@ -2459,6 +2502,7 @@ def create_layout(
                 top_p,
                 top_k,
                 max_tokens,
+                gemini_3_custom_sampling_checkbox,
                 enable_web_search_checkbox,
                 enable_code_execution_checkbox,
                 image_detail_dropdown,
@@ -2500,12 +2544,18 @@ def create_layout(
 
         config_model_name.change(
             fn=callbacks.handle_model_change,
-            inputs=[provider_selector, config_model_name, temperature],
+            inputs=[
+                provider_selector,
+                config_model_name,
+                temperature,
+                gemini_3_custom_sampling_checkbox,
+            ],
             outputs=[
                 temperature,
                 top_p,
                 top_k,
                 max_tokens,
+                gemini_3_custom_sampling_checkbox,
                 enable_web_search_checkbox,
                 enable_code_execution_checkbox,
                 image_detail_dropdown,
@@ -2522,8 +2572,25 @@ def create_layout(
         # Reasoning effort change → update temp/top_p slider interactivity
         reasoning_effort_dropdown.change(
             fn=callbacks.handle_reasoning_effort_change,
-            inputs=[provider_selector, config_model_name, reasoning_effort_dropdown],
+            inputs=[
+                provider_selector,
+                config_model_name,
+                reasoning_effort_dropdown,
+                gemini_3_custom_sampling_checkbox,
+            ],
             outputs=[temperature, top_p],
+            queue=False,
+        )
+
+        gemini_3_custom_sampling_checkbox.change(
+            fn=callbacks.handle_gemini_3_custom_sampling_change,
+            inputs=[
+                provider_selector,
+                config_model_name,
+                temperature,
+                gemini_3_custom_sampling_checkbox,
+            ],
+            outputs=[temperature, top_p, top_k],
             queue=False,
         )
 
