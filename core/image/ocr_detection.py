@@ -452,9 +452,8 @@ class OutsideTextDetector:
                                 best_intersection = intersection
                                 best_bubble = yolo_box
 
-                if (
-                    best_bubble is None
-                    or not self.text_box_meaningfully_matches_bubble(bbox, best_bubble)
+                if best_bubble is None or not self.text_box_meaningfully_matches_bubble(
+                    bbox, best_bubble
                 ):
                     filtered_results.append(ocr_result)
 

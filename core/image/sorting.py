@@ -313,7 +313,7 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
             if rtl:
                 columns.sort(key=lambda c: -((c["x_min"] + c["x_max"]) / 2.0))
             else:
-                columns.sort(key=lambda c: ((c["x_min"] + c["x_max"]) / 2.0))
+                columns.sort(key=lambda c: (c["x_min"] + c["x_max"]) / 2.0)
 
             for col in columns:
                 col["items"].sort(key=lambda e: e["cy"])

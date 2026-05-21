@@ -207,7 +207,6 @@ def create_layout(
     with gr.Blocks(
         title="MangaTranslator", js=js_credits, css_paths=str(css_path)
     ) as app:
-
         gr.Markdown("# MangaTranslator")
 
         font_choices, initial_default_font = utils.get_available_font_packs(

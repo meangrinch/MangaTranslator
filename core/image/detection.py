@@ -1735,7 +1735,7 @@ def detect_speech_bubbles(
                 parts.append(f"{synth_parent_count} synthetic conjoined parents")
             if len(parts) > 1:
                 log_message(
-                    f"Processing {total_boxes} bubbles " f"({' + '.join(parts)})...",
+                    f"Processing {total_boxes} bubbles ({' + '.join(parts)})...",
                     verbose=verbose,
                 )
             else:

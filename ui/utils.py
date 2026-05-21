@@ -152,7 +152,7 @@ def validate_image(image: Any) -> tuple[bool, str]:
         if isinstance(image, (str, Path)):
             img = Image.open(image)
             filepath = Path(image)
-            if not filepath.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+            if filepath.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
                 return False, "Unsupported image format. Please use JPEG, PNG or WEBP."
         elif isinstance(image, Image.Image):
             img = image

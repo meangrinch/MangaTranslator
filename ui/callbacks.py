@@ -1667,7 +1667,9 @@ def handle_ocr_method_change(
     current_provider = (
         provider
         if provider in available_providers
-        else available_providers[0] if available_providers else "Google"
+        else available_providers[0]
+        if available_providers
+        else "Google"
     )
     provider_selector_update = gr.update(
         choices=available_providers, value=current_provider

@@ -44,9 +44,6 @@ from utils.model_metadata import (
     is_gpt5_series,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
-)
-from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
-from utils.model_metadata import (
     is_opus_45_model,
     is_opus_47_model,
     is_rosetta_model,
@@ -54,6 +51,7 @@ from utils.model_metadata import (
     is_zai_reasoning_model,
     supports_openai_original_image_detail,
 )
+from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
 
 TRANSLATION_PATTERN = re.compile(
     r'^\s*(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*:|\s*$)',
