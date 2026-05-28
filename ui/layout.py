@@ -863,7 +863,7 @@ def create_layout(
                                 elem_id="reasoning_effort_dropdown",
                             )
 
-                            # Effort dropdown (Claude Opus 4.5/4.6/4.7 and Sonnet 4.6)
+                            # Effort dropdown (Claude Opus 4.5+ and Sonnet 4.6)
                             (
                                 _initial_effort_visible,
                                 _initial_effort_choices,
@@ -886,7 +886,7 @@ def create_layout(
                                 choices=_initial_effort_choices,
                                 label="Effort",
                                 value=_initial_effort_value,
-                                info="Controls token spending eagerness. Opus 4.5/4.6/4.7, Sonnet 4.6 only.",
+                                info="Controls token spending eagerness. Opus 4.5+, Sonnet 4.6 only.",
                                 visible=_initial_effort_visible,
                                 elem_id="effort_dropdown",
                             )

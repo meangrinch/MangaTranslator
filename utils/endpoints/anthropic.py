@@ -200,8 +200,14 @@ def call_anthropic_endpoint(
 
                 else:
                     stop_reason = result.get("stop_reason")
+                    stop_details_text = ""
+                    if stop_reason == "refusal" and result.get("stop_details"):
+                        stop_details_text = (
+                            f". Stop details: "
+                            f"{json.dumps(result['stop_details'], ensure_ascii=False)}"
+                        )
                     log_message(
-                        f"No text content in Anthropic response. Stop reason: {stop_reason}",
+                        f"No text content in Anthropic response. Stop reason: {stop_reason}{stop_details_text}",
                         always_print=True,
                     )
                     log_message(

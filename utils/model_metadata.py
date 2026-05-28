@@ -9,7 +9,7 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
     Returns:
         - 32768 for OpenAI GPT 4.1 models
         - 16384 for OpenAI GPT 4o models and models with "chat" in the name
-        - 31744 for Anthropic Claude Opus 4/4.1 models (not 4.5/4.6/4.7)
+        - 31744 for Anthropic Claude Opus 4/4.1 models (not 4.5+)
         - 23552 for Z.ai "glm-4.6v" model
         - 16384 for Z.ai "glm-4.5v" model
         - None for all other models (no cap, use existing 63488 max)
@@ -32,6 +32,7 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
             and "claude-opus-4-5" not in model_lower
             and "claude-opus-4-6" not in model_lower
             and "claude-opus-4-7" not in model_lower
+            and "claude-opus-4-8" not in model_lower
         ):
             return 31744
     elif provider == "OpenRouter":
@@ -53,6 +54,7 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
                 and "claude-opus-4.5" not in model_lower
                 and "claude-opus-4.6" not in model_lower
                 and "claude-opus-4.7" not in model_lower
+                and "claude-opus-4.8" not in model_lower
             ):
                 return 31744
         if "glm-4.6v" in model_lower:
@@ -263,6 +265,16 @@ def is_opus_47_model(model_name: Optional[str]) -> bool:
     if "claude" not in lm or "opus" not in lm:
         return False
     return ("4.7" in lm) or ("4-7" in lm)
+
+
+def is_opus_48_model(model_name: Optional[str]) -> bool:
+    """Check if a model is Claude Opus 4.8 (same API constraints as Opus 4.7)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    if "claude" not in lm or "opus" not in lm:
+        return False
+    return ("4.8" in lm) or ("4-8" in lm)
 
 
 def is_sonnet_46_model(model_name: Optional[str]) -> bool:

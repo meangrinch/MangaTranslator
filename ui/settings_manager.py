@@ -60,6 +60,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "o1-pro-2025-03-19",
     ],
     "Anthropic": [
+        "claude-opus-4-8",
         "claude-opus-4-7",
         "claude-opus-4-6",
         "claude-sonnet-4-6",
@@ -185,7 +186,7 @@ DEFAULT_SETTINGS = {
     "upscaling_only": False,
     "test_mode": False,
     "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
-    "effort": "medium",  # Opus 4.5/4.6/4.7, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)
+    "effort": "medium",  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)
     "verbosity": "low",  # GPT-5 series only: controls response verbosity (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "enable_code_execution": False,  # Enable Gemini's code execution for image zoom/inspection.

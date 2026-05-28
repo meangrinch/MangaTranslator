@@ -66,7 +66,7 @@ class TranslationConfig:
         None  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
     )
     effort: Optional[str] = (
-        None  # Opus 4.5/4.6/4.7, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)
+        None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)
     )
     verbosity: Optional[str] = (
         None  # GPT-5 series only: controls response verbosity (high/medium/low)

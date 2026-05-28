@@ -172,7 +172,7 @@ class UIGeneralSettings:
     media_resolution_context: str = "auto"  # Gemini 3 models
     reasoning_effort: Optional[str] = None
     effort: Optional[str] = (
-        None  # Opus 4.5/4.6/4.7, Sonnet 4.6 only: token spending eagerness
+        None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness
     )
     verbosity: Optional[str] = (
         None  # GPT-5 series only: controls response verbosity (high/medium/low)
