@@ -178,6 +178,7 @@ def call_openrouter_endpoint(
     # OpenRouter verbosity parameter: used by both Claude (effort) and GPT-5 (verbosity)
     is_opus_45 = metadata.get("is_opus_45", False)
     is_46 = metadata.get("is_46_model", False)
+    is_47 = metadata.get("is_47_model", False)
     effort = generation_config.get("effort")
 
     is_gpt5_model = metadata.get("is_gpt5_model", False)
@@ -196,8 +197,11 @@ def call_openrouter_endpoint(
     except Exception:
         is_reasoning_model = False
 
-    # For Claude 4.6/4.7 models, reasoning.effort is ignored and adaptive thinking is used by default
-    if reasoning_effort and is_reasoning_model and not is_46:
+    # For Claude Opus 4.7+, reasoning.effort is ignored; reasoning.enabled turns on adaptive thinking.
+    if reasoning_effort and is_47:
+        if reasoning_effort != "none":
+            reasoning_config["enabled"] = True
+    elif reasoning_effort and is_reasoning_model and not is_46:
         reasoning_config["effort"] = reasoning_effort
 
     if reasoning_config:

@@ -419,6 +419,10 @@ def get_reasoning_effort_info_text(
         if is_gemini_3_model(model_name) or is_gemma_model(model_name):
             return "Controls model's internal reasoning effort."
         base_text = "Controls reasoning token allocation relative to 'max_tokens'"
+    elif provider == "Anthropic":
+        if is_opus_47_model(model_name) or is_opus_48_model(model_name):
+            return "Enables or disables adaptive thinking (auto=model decides, none=disabled)."
+        base_text = "Controls reasoning token allocation relative to 'max_tokens'"
     elif provider == "OpenAI":
         return "Controls model's internal reasoning effort."
     elif provider == "xAI":
@@ -440,6 +444,11 @@ def get_reasoning_effort_info_text(
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "OpenRouter" and model_name:
         lm = model_name.lower()
+        is_anthropic_model = "anthropic/" in lm or lm.startswith("claude-")
+        if is_anthropic_model and (
+            is_opus_47_model(model_name) or is_opus_48_model(model_name)
+        ):
+            return "Enables or disables adaptive thinking (auto=model decides, none=disabled)."
         is_openai_reasoning = (
             "gpt-5" in lm or "o1" in lm or "o3" in lm or "o4-mini" in lm
         )
@@ -609,6 +618,12 @@ def get_reasoning_effort_config(
 
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
 
+        is_anthropic_model = "anthropic/" in lm or lm.startswith("claude-")
+        if is_anthropic_model and (
+            is_opus_47_model(model_name) or is_opus_48_model(model_name)
+        ):
+            return True, ["auto", "none"], "auto"
+
         try:
             is_reasoning = openrouter_is_reasoning_model(model_name, debug=False)
         except Exception:
@@ -617,7 +632,6 @@ def get_reasoning_effort_config(
         if is_reasoning:
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "low"
 
-        is_anthropic_model = "anthropic/" in lm or lm.startswith("claude-")
         if is_anthropic_model:
             return False, [], "none"
         else:
