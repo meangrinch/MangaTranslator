@@ -7,6 +7,15 @@ import numpy as np
 # Markdown-like style pattern: ***bold italic***, **bold**, *italic*
 STYLE_PATTERN = re.compile(r"(\*{1,3})(.*?)(\1)")
 NO_SPACE_BEFORE_MARKER = "\uf000"
+KOREAN_NO_LINE_START_SYLLABLES = {
+    "랑",  # rang
+    "께",  # ke/kke
+    "란",  # ran
+    "게",  # ge
+    "서",  # se/seo
+    "럼",  # rum/reom
+    "면",  # myeon
+}
 
 
 def is_rtl_script(text: str) -> bool:
@@ -130,7 +139,10 @@ def split_hangul_word_for_wrapping(token: str) -> Optional[List[str]]:
             if current_non_hangul:
                 units.append(current_non_hangul)
                 current_non_hangul = ""
-            units.append(ch)
+            if units and ch in KOREAN_NO_LINE_START_SYLLABLES:
+                units[-1] += ch
+            else:
+                units.append(ch)
         elif unicodedata.combining(ch) and units:
             units[-1] += ch
         else:
