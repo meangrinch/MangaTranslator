@@ -1170,6 +1170,7 @@ def translate_and_render(
                     if "image_b64" in bubble and "mime_type" in bubble
                 ]
                 translated_texts = []
+                current_ocr_texts: List[str] = []
                 _provider_tag = f"[{config.translation.provider}:"
                 if not bubble_images_b64:
                     log_message("No valid bubbles after sorting", always_print=True)
@@ -1235,9 +1236,11 @@ def translate_and_render(
                                 bubble_metadata=sorted_bubble_data,
                                 previous_context_images=previous_context_images,
                                 previous_context_texts=previous_context_texts,
-                                ocr_texts_output=ocr_texts_out,
+                                ocr_texts_output=current_ocr_texts,
                                 debug=verbose,
                             )
+                            if current_ocr_texts and ocr_texts_out is not None:
+                                ocr_texts_out.extend(current_ocr_texts)
                         except TranslationError as e:
                             error_str = str(e).lower()
                             critical_tokens = (
@@ -1285,6 +1288,18 @@ def translate_and_render(
                         if bubble_images_b64 and not valid_translations:
                             raise TranslationError("All bubbles failed.")
 
+                if current_ocr_texts:
+                    if len(current_ocr_texts) == len(sorted_bubble_data):
+                        for bubble, ocr_text in zip(
+                            sorted_bubble_data, current_ocr_texts
+                        ):
+                            bubble["ocr_text"] = ocr_text
+                    else:
+                        log_message(
+                            "OCR/translation count mismatch; OSB unchanged-text restore disabled",
+                            verbose=verbose,
+                        )
+
                 # Render Translations
                 bubble_render_info_map = {
                     tuple(info["bbox"]): {
@@ -1301,16 +1316,15 @@ def translate_and_render(
                 }
                 log_message("Rendering translations...", verbose=verbose)
                 if len(translated_texts) == len(sorted_bubble_data):
+                    invalid_translation_values = {
+                        "[OCR FAILED]",
+                        "[Empty response / no content]",
+                    }
                     for i, bubble in enumerate(sorted_bubble_data):
                         bubble["translation"] = translated_texts[i]
                         bbox = bubble["bbox"]
                         text = bubble.get("translation", "")
                         is_outside_text = bubble.get("is_outside_text", False)
-
-                        # Convert OSB text to uppercase
-                        if is_outside_text and text:
-                            text = text.upper()
-                            bubble["translation"] = text
 
                         if (
                             not text
@@ -1318,11 +1332,7 @@ def translate_and_render(
                             or text.startswith("[Translation Error]")
                             or text.startswith("[Translation Error:")
                             or text.startswith(_provider_tag)
-                            or text.strip()
-                            in {
-                                "[OCR FAILED]",
-                                "[Empty response / no content]",
-                            }
+                            or text.strip() in invalid_translation_values
                         ):
                             entry_type = "outside text" if is_outside_text else "bubble"
                             log_message(
@@ -1330,6 +1340,30 @@ def translate_and_render(
                                 verbose=verbose,
                             )
                             continue
+
+                        if is_outside_text:
+                            ocr_text = (bubble.get("ocr_text") or "").strip()
+                            if (
+                                ocr_text
+                                and ocr_text not in invalid_translation_values
+                                and ocr_text == text.strip()
+                                and "original_crop_pil" in bubble
+                            ):
+                                log_message(
+                                    "Restoring original OSB patch because OCR matches translation "
+                                    f"for {bbox}",
+                                    verbose=verbose,
+                                    always_print=True,
+                                )
+                                rendered_image = pil_cleaned_image.copy()
+                                original_patch = bubble["original_crop_pil"]
+                                rendered_image.paste(original_patch, (bbox[0], bbox[1]))
+                                pil_cleaned_image = rendered_image
+                                final_image_to_save = pil_cleaned_image
+                                continue
+
+                            text = text.upper()
+                            bubble["translation"] = text
 
                         # Use OSB-specific settings for outside text, regular settings for speech bubbles
                         if is_outside_text:
