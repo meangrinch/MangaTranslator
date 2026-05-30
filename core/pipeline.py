@@ -698,6 +698,7 @@ def translate_and_render(
     get_cache().set_current_image(pil_image_processed, verbose)
 
     original_cv_image = pil_to_cv2(pil_image_processed)
+    full_page_context_source = pil_image_processed.copy()
 
     # Detect speech bubbles first so OSB processing can respect bubble regions
     log_message("Detecting speech bubbles...", verbose=verbose)
@@ -774,7 +775,7 @@ def translate_and_render(
     if config.translation.send_full_page_context:
         try:
             # processing_scale is intentionally not used for context_image_max_side_pixels
-            context_image_pil = cv2_to_pil(original_cv_image)
+            context_image_pil = full_page_context_source.copy()
             effective_context_max_side = scale_length(
                 config.translation.context_image_max_side_pixels,
                 None,
