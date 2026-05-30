@@ -1,3 +1,5 @@
+[English](README.md) | [简体中文](docs/translations/README_zh.md) | [한국어](docs/translations/README_ko.md) | [日本語](docs/translations/README_ja.md)
+
 ## MangaTranslator
 
 Gradio-based web application for automating the translation of manga/comic page images using AI. Targets speech bubbles and text outside of speech bubbles. Supports 59 languages and custom font pack usage.
