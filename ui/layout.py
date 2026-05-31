@@ -1328,7 +1328,7 @@ def create_layout(
                                 100,
                                 2000,
                                 value=saved_settings.get("hyphen_penalty", 1000.0),
-                                step=100,
+                                step=50,
                                 label="Hyphen Penalty",
                                 info="Penalty for hyphenated line breaks in text layout. "
                                 "Increase to discourage hyphenation.",
