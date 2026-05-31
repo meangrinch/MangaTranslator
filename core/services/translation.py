@@ -630,6 +630,16 @@ def _call_llm_endpoint(
     provider = config.provider
     model_name = config.model_name
     api_parts = parts + [{"text": prompt_text}]
+    coordinator = getattr(config, "request_coordinator", None)
+    if coordinator is not None and not coordinator.in_slot():
+        return coordinator.run(
+            _call_llm_endpoint,
+            config,
+            parts,
+            prompt_text,
+            debug,
+            system_prompt,
+        )
 
     try:
         if provider == "Google":

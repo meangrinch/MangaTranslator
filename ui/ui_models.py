@@ -171,9 +171,7 @@ class UIGeneralSettings:
     media_resolution_bubbles: str = "auto"  # Gemini 3 models
     media_resolution_context: str = "auto"  # Gemini 3 models
     reasoning_effort: Optional[str] = None
-    effort: Optional[str] = (
-        None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness
-    )
+    effort: Optional[str] = None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness
     verbosity: Optional[str] = (
         None  # GPT-5 series only: controls response verbosity (high/medium/low)
     )
@@ -206,6 +204,7 @@ class UIConfigState:
     batch_font_pack: Optional[str] = None
     batch_special_instructions: Optional[str] = None
     batch_parallel_requests: int = 1
+    batch_parallel_within_pages: bool = False
     batch_previous_context_image_count: int = 0
     batch_previous_context_text_count: int = 3
 
@@ -330,6 +329,7 @@ class UIConfigState:
             "batch_font_pack": self.batch_font_pack,
             "batch_special_instructions": self.batch_special_instructions or "",
             "batch_parallel_requests": self.batch_parallel_requests,
+            "batch_parallel_within_pages": self.batch_parallel_within_pages,
             "batch_previous_context_image_count": (
                 self.batch_previous_context_image_count
                 if (
@@ -635,6 +635,9 @@ class UIConfigState:
             batch_font_pack=data.get("batch_font_pack"),
             batch_special_instructions=data.get("batch_special_instructions") or None,
             batch_parallel_requests=int(data.get("batch_parallel_requests", 1)),
+            batch_parallel_within_pages=bool(
+                data.get("batch_parallel_within_pages", False)
+            ),
             batch_previous_context_image_count=int(
                 data.get("batch_previous_context_image_count", 0)
             ),
@@ -824,6 +827,9 @@ def map_ui_to_backend_config(
         upscaling_only=ui_state.general.upscaling_only,
         test_mode=ui_state.general.test_mode,
         parallel_requests=ui_state.batch_parallel_requests if is_batch else 1,
+        batch_parallel_within_pages=(
+            bool(ui_state.batch_parallel_within_pages) if is_batch else False
+        ),
     )
 
     return backend_config

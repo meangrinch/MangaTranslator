@@ -12,6 +12,11 @@ import numpy as np
 from PIL import Image
 from sklearn.cluster import KMeans
 
+from core.batch_coordinator import (
+    expanded_mask_bbox,
+    partition_non_overlapping_waves,
+    paste_image_region,
+)
 from core.config import MangaTranslatorConfig
 from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
 from core.image.inpainting import FluxKleinInpainter, FluxKontextInpainter
@@ -488,6 +493,178 @@ def process_outside_text(
                 none_skips = 0
                 group_flux_regions = bool(config.outside_text.flux_group_regions)
                 grouped_flux_candidates = []
+                request_coordinator = getattr(config, "request_coordinator", None)
+                pending_flux_candidates = []
+
+                def apply_candidate_simple_fill(candidate, color_to_use):
+                    new_img = current_image.copy()
+                    candidate_group = candidate["group"]
+                    candidate_mask = candidate["mask"]
+                    candidate_original_bbox = candidate["original_bbox_dict"]
+                    c_ox0, c_oy0, c_ox1, c_oy1 = candidate["original_bounds"]
+
+                    mask_indices = candidate_group.get("mask_indices", [])
+                    if mask_indices and outside_text_results:
+                        p_x0 = max(
+                            0,
+                            int(
+                                min(
+                                    [
+                                        outside_text_results[idx][0][0]
+                                        for idx in mask_indices
+                                    ]
+                                )
+                            ),
+                        )
+                        p_y0 = max(
+                            0,
+                            int(
+                                min(
+                                    [
+                                        outside_text_results[idx][0][1]
+                                        for idx in mask_indices
+                                    ]
+                                )
+                            ),
+                        )
+                        p_x1 = min(
+                            img_w,
+                            int(
+                                max(
+                                    [
+                                        outside_text_results[idx][0][2]
+                                        for idx in mask_indices
+                                    ]
+                                )
+                            ),
+                        )
+                        p_y1 = min(
+                            img_h,
+                            int(
+                                max(
+                                    [
+                                        outside_text_results[idx][0][3]
+                                        for idx in mask_indices
+                                    ]
+                                )
+                            ),
+                        )
+                    elif (
+                        candidate_original_bbox
+                        and c_ox1 is not None
+                        and c_ox0 is not None
+                        and c_oy1 is not None
+                        and c_oy0 is not None
+                    ):
+                        p_x0, p_y0, p_x1, p_y1 = c_ox0, c_oy0, c_ox1, c_oy1
+                    else:
+                        mask_pil = Image.fromarray(
+                            (candidate_mask * 255).astype(np.uint8), mode="L"
+                        )
+                        patch = Image.new("RGB", new_img.size, color_to_use)
+                        new_img.paste(patch, (0, 0), mask=mask_pil)
+                        return new_img
+
+                    if p_x1 > p_x0 and p_y1 > p_y0:
+                        rect_mask = np.zeros((img_h, img_w), dtype=bool)
+                        rect_mask[p_y0:p_y1, p_x0:p_x1] = True
+                        rect_mask = np.logical_and(
+                            rect_mask, np.logical_not(total_bubble_mask)
+                        )
+
+                        region_mask = rect_mask[p_y0:p_y1, p_x0:p_x1]
+                        if np.any(region_mask):
+                            mask_pil = Image.fromarray(
+                                (region_mask * 255).astype(np.uint8), mode="L"
+                            )
+                            patch = Image.new(
+                                "RGB", (p_x1 - p_x0, p_y1 - p_y0), color_to_use
+                            )
+                            new_img.paste(patch, (p_x0, p_y0), mask=mask_pil)
+
+                    return new_img
+
+                def flush_pending_flux_candidates():
+                    nonlocal current_image, flux_inpaints, cv2_inpaints
+                    if not pending_flux_candidates:
+                        return
+
+                    candidates = list(pending_flux_candidates)
+                    pending_flux_candidates.clear()
+                    waves = partition_non_overlapping_waves(
+                        candidates,
+                        lambda candidate: candidate["context_bbox"],
+                    )
+                    log_message(
+                        f"Scheduling OSB Flux in {len(waves)} wave(s)",
+                        verbose=verbose,
+                    )
+
+                    for wave in waves:
+                        base_image = current_image
+
+                        def make_job(candidate):
+                            def job():
+                                image_for_job = base_image.copy()
+                                try:
+                                    result_image = inpainter.inpaint_mask(
+                                        image_for_job,
+                                        candidate["mask"],
+                                        seed=candidate["seed"],
+                                        verbose=verbose,
+                                        strict_mask_clipping=True,
+                                        composite_clip_bbox=candidate[
+                                            "composite_clip_bbox"
+                                        ],
+                                    )
+                                    if result_image is image_for_job:
+                                        raise RuntimeError(
+                                            "Flux returned original image (no inpaint)"
+                                        )
+                                    return {
+                                        "candidate": candidate,
+                                        "image": result_image,
+                                        "error": None,
+                                    }
+                                except Exception as e:
+                                    return {
+                                        "candidate": candidate,
+                                        "image": None,
+                                        "error": e,
+                                    }
+
+                            return job
+
+                        results = request_coordinator.map_ordered(
+                            [make_job(candidate) for candidate in wave]
+                        )
+                        for result in results:
+                            candidate = result["candidate"]
+                            if result["error"] is not None:
+                                fallback_color_to_use = candidate["fallback_color"]
+                                log_message(
+                                    f"Flux failed for OSB region {candidate['index']}"
+                                    f" (Flux inpainting error: {result['error']}); "
+                                    f"falling back to CV2 fill ({fallback_color_to_use})",
+                                    always_print=True,
+                                )
+                                current_image = apply_candidate_simple_fill(
+                                    candidate, fallback_color_to_use
+                                )
+                                cv2_inpaints += 1
+                                continue
+
+                            context_bbox = candidate["context_bbox"]
+                            if context_bbox is None:
+                                current_image = result["image"]
+                            else:
+                                current_image = paste_image_region(
+                                    current_image,
+                                    result["image"],
+                                    context_bbox,
+                                )
+                            flux_inpaints += 1
+
                 for i, group in enumerate(mask_groups):
                     log_message(
                         f"Inpainting outside text region {i + 1}/{len(mask_groups)}",
@@ -931,6 +1108,7 @@ def process_outside_text(
                         return new_img
 
                     if fill_color is not None:
+                        flush_pending_flux_candidates()
                         current_image = apply_simple_fill(fill_color)
                         cv2_inpaints += 1
                         continue
@@ -946,6 +1124,7 @@ def process_outside_text(
                         continue
 
                     if group_flux_regions and inpainter is not None:
+                        flush_pending_flux_candidates()
                         grouped_mask = combined_mask.copy()
                         if composite_clip_bbox is not None:
                             clip_x1, clip_y1, clip_x2, clip_y2 = composite_clip_bbox
@@ -981,6 +1160,33 @@ def process_outside_text(
                         )
                         log_message(
                             f"Queued OSB region {i + 1} for grouped Flux inpainting",
+                            verbose=verbose,
+                        )
+                        continue
+
+                    if request_coordinator is not None and inpainter is not None:
+                        fallback_color_to_use = (
+                            fallback_fill_color
+                            if fallback_fill_color
+                            else (255, 255, 255)
+                        )
+                        pending_flux_candidates.append(
+                            {
+                                "index": i + 1,
+                                "mask": combined_mask.copy(),
+                                "seed": region_seed,
+                                "composite_clip_bbox": composite_clip_bbox,
+                                "fallback_color": fallback_color_to_use,
+                                "group": group,
+                                "original_bbox_dict": original_bbox_dict,
+                                "original_bounds": (ox0, oy0, ox1, oy1),
+                                "context_bbox": expanded_mask_bbox(
+                                    combined_mask, current_image.size
+                                ),
+                            }
+                        )
+                        log_message(
+                            f"Queued OSB region {i + 1} for intra-page Flux scheduling",
                             verbose=verbose,
                         )
                         continue
@@ -1060,6 +1266,8 @@ def process_outside_text(
                     else:
                         current_image = inpainted_image
 
+                flush_pending_flux_candidates()
+
                 if grouped_flux_candidates:
                     grouped_mask = np.zeros((img_h, img_w), dtype=bool)
                     for candidate in grouped_flux_candidates:
@@ -1073,17 +1281,28 @@ def process_outside_text(
                         )
                         try:
                             group_seed = base_seed if base_seed > 0 else base_seed
-                            inpainted_image = inpainter.inpaint_mask(
-                                current_image,
-                                grouped_mask,
-                                seed=group_seed,
-                                verbose=verbose,
-                                strict_mask_clipping=True,
-                                ocr_params={
+                            inpaint_kwargs = {
+                                "seed": group_seed,
+                                "verbose": verbose,
+                                "strict_mask_clipping": True,
+                                "ocr_params": {
                                     "type": "outside_text_group",
                                     "regions": len(grouped_flux_candidates),
                                 },
-                            )
+                            }
+                            if request_coordinator is not None:
+                                inpainted_image = request_coordinator.run(
+                                    inpainter.inpaint_mask,
+                                    current_image,
+                                    grouped_mask,
+                                    **inpaint_kwargs,
+                                )
+                            else:
+                                inpainted_image = inpainter.inpaint_mask(
+                                    current_image,
+                                    grouped_mask,
+                                    **inpaint_kwargs,
+                                )
                             if inpainted_image is current_image:
                                 raise RuntimeError(
                                     "Flux returned original image (no inpaint)"

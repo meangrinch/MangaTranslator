@@ -178,6 +178,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         special_instructions_val,
         batch_special_instructions_val,
         batch_parallel_requests_val,
+        batch_parallel_within_pages_val,
         batch_previous_context_image_count_val,
         batch_previous_context_text_count_val,
     ) = args
@@ -330,6 +331,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_output_language=batch_output_language,
         batch_font_pack=batch_font_dropdown,
         batch_parallel_requests=int(batch_parallel_requests_val),
+        batch_parallel_within_pages=bool(batch_parallel_within_pages_val),
         batch_previous_context_image_count=int(batch_previous_context_image_count_val),
         batch_previous_context_text_count=int(batch_previous_context_text_count_val),
     )
@@ -1016,6 +1018,7 @@ def handle_save_config_click(*args: Any) -> str:
         image_upscale_model_val,
         auto_scale_val,
         batch_parallel_requests_val,
+        batch_parallel_within_pages_val,
         batch_previous_context_image_count_val,
         batch_previous_context_text_count_val,
     ) = args
@@ -1161,6 +1164,7 @@ def handle_save_config_click(*args: Any) -> str:
         batch_font_pack=b_font,
         batch_special_instructions=batch_special_instructions_val,
         batch_parallel_requests=int(batch_parallel_requests_val),
+        batch_parallel_within_pages=bool(batch_parallel_within_pages_val),
         batch_previous_context_image_count=int(batch_previous_context_image_count_val),
         batch_previous_context_text_count=int(batch_previous_context_text_count_val),
     )
@@ -1437,6 +1441,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         ),
         default_ui_state.general.auto_scale,
         default_ui_state.batch_parallel_requests,
+        default_ui_state.batch_parallel_within_pages,
         default_ui_state.batch_previous_context_image_count,
         default_ui_state.batch_previous_context_text_count,
     ]

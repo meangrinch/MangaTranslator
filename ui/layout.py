@@ -380,7 +380,22 @@ def create_layout(
                             value=int(saved_settings.get("batch_parallel_requests", 1)),
                             step=1,
                             label="Parallel Requests",
-                            info="Number of images to process simultaneously. Does not affect translation quality.",
+                            info=(
+                                "Controls the number of parallel workers, "
+                                "one per page. Does not affect translation "
+                                "quality."
+                            ),
+                        )
+                        batch_parallel_within_pages = gr.Checkbox(
+                            label="Use Parallel Requests Within Pages",
+                            value=bool(
+                                saved_settings.get("batch_parallel_within_pages", False)
+                            ),
+                            info=(
+                                "Allows parallel workers to be shared with "
+                                "independent LLM and Flux work within each "
+                                "page."
+                            ),
                         )
                         batch_previous_context_image_count = gr.Slider(
                             minimum=0,
@@ -2061,6 +2076,7 @@ def create_layout(
             image_upscale_model,
             auto_scale,
             batch_parallel_requests,
+            batch_parallel_within_pages,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -2172,6 +2188,7 @@ def create_layout(
             image_upscale_model,
             auto_scale,
             batch_parallel_requests,
+            batch_parallel_within_pages,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -2288,6 +2305,7 @@ def create_layout(
             special_instructions,
             batch_special_instructions,
             batch_parallel_requests,
+            batch_parallel_within_pages,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -2405,6 +2423,7 @@ def create_layout(
             special_instructions,
             batch_special_instructions,
             batch_parallel_requests,
+            batch_parallel_within_pages,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]

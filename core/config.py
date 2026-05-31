@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 
@@ -90,6 +90,7 @@ class TranslationConfig:
     osb_min_side_pixels: int = 128
     special_instructions: Optional[str] = None
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl"
+    request_coordinator: Optional[Any] = None
 
 
 @dataclass
@@ -188,6 +189,8 @@ class MangaTranslatorConfig:
     test_mode: bool = False
     processing_scale: float = 1.0
     parallel_requests: int = 1
+    batch_parallel_within_pages: bool = False
+    request_coordinator: Optional[Any] = None
 
     def __post_init__(self):
         # Load API keys from environment variables if not already set

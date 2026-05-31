@@ -32,7 +32,17 @@ def main():
         "--parallel-requests",
         type=int,
         default=1,
-        help="Batch only: number of images to process simultaneously (1-10, default: 1)",
+        help=(
+            "Batch only: number of parallel workers, one per page (1-10, default: 1)"
+        ),
+    )
+    parser.add_argument(
+        "--batch-parallel-within-pages",
+        action="store_true",
+        help=(
+            "Batch only: allows parallel workers to be shared with "
+            "independent LLM/Flux work within each page"
+        ),
     )
     parser.add_argument(
         "--batch-previous-context-images",
@@ -904,6 +914,9 @@ def main():
         cleaning_only=args.cleaning_only,
         upscaling_only=args.upscaling_only,
         parallel_requests=args.parallel_requests,
+        batch_parallel_within_pages=bool(
+            args.batch and args.batch_parallel_within_pages
+        ),
         detection=DetectionConfig(
             confidence=args.confidence,
             conjoined_confidence=args.conjoined_confidence,

@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from core.batch_coordinator import BatchRequestCoordinator
 from core.caching import get_cache
 from core.config import MangaTranslatorConfig, PreprocessingConfig, RenderingConfig
 from core.scaling import scale_font_size, scale_length, scale_scalar
@@ -598,6 +599,9 @@ def translate_and_render(
     device = config.device
     previous_context_images = previous_context_images or []
     previous_context_texts = previous_context_texts or []
+    config.translation.request_coordinator = getattr(
+        config, "request_coordinator", None
+    )
 
     log_message(f"Using device: {device}", verbose=verbose)
 
@@ -895,6 +899,7 @@ def translate_and_render(
                     flux_luminance_correction=config.outside_text.flux_luminance_correction,
                     flux_upscale_small_crops=config.outside_text.flux_upscale_small_crops,
                     bubble_detector_model=config.detection.bubble_detector_model,
+                    request_coordinator=getattr(config, "request_coordinator", None),
                 )
             except CleaningError as e:
                 log_message(f"Cleaning failed: {e}", always_print=True)
@@ -1855,6 +1860,20 @@ async def _batch_translate_parallel(
         f"{n_workers} parallel workers",
         always_print=True,
     )
+
+    if getattr(config, "batch_parallel_within_pages", False):
+        request_coordinator = BatchRequestCoordinator(
+            n_workers, cancellation_manager=cancellation_manager
+        )
+        config.request_coordinator = request_coordinator
+        config.translation.request_coordinator = request_coordinator
+        log_message(
+            "Intra-page parallel requests enabled",
+            always_print=True,
+        )
+    else:
+        config.request_coordinator = None
+        config.translation.request_coordinator = None
 
     # -- Phase 1: process the first image sequentially to warm up models --
     first_img = image_files[0]

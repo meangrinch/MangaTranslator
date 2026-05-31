@@ -3,12 +3,17 @@ import os
 import random
 import tempfile
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import cv2
 import numpy as np
 from PIL import Image
 
+from core.batch_coordinator import (
+    expanded_mask_bbox,
+    partition_non_overlapping_waves,
+    paste_image_region,
+)
 from core.scaling import scale_area, scale_kernel, scale_scalar
 from utils.exceptions import CleaningError, ImageProcessingError, ValidationError
 from utils.logging import log_message
@@ -45,6 +50,110 @@ def _normalize_mask(mask: np.ndarray) -> np.ndarray:
     if mask.dtype != np.uint8:
         mask = mask.astype(np.uint8)
     return np.where(mask > 0, 255, 0).astype(np.uint8)
+
+
+def _resample_inpainted_bubble_color(
+    pil_working: Image.Image,
+    bubble_info: Dict[str, Any],
+    mask_bool: np.ndarray,
+) -> None:
+    cv_after = cv2.cvtColor(np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR)
+    masked_after = cv_after[mask_bool]
+    if masked_after.size > 0:
+        mean_val = int(np.clip(np.mean(masked_after), 0, 255))
+        bubble_info["color"] = (mean_val, mean_val, mean_val)
+
+
+def _inpaint_colored_bubbles_with_coordinator(
+    pil_working: Image.Image,
+    colored_bubbles: List[Dict[str, Any]],
+    inpainter: Any,
+    base_seed: int,
+    verbose: bool,
+    request_coordinator: Any,
+) -> Image.Image:
+    candidates = []
+    for idx, bubble_info in enumerate(colored_bubbles):
+        mask_np = bubble_info["mask"]
+        mask_bool = mask_np.astype(bool)
+        context_bbox = expanded_mask_bbox(mask_bool, pil_working.size)
+        candidates.append(
+            {
+                "index": idx,
+                "bubble_info": bubble_info,
+                "mask": mask_bool,
+                "seed": base_seed + idx if base_seed > 0 else base_seed,
+                "bbox_tuple": bubble_info.get("bbox"),
+                "context_bbox": context_bbox,
+            }
+        )
+
+    waves = partition_non_overlapping_waves(
+        candidates,
+        lambda candidate: candidate["context_bbox"],
+    )
+    log_message(
+        f"Scheduling colored-bubble Flux in {len(waves)} wave(s)",
+        verbose=verbose,
+    )
+
+    for wave in waves:
+        base_image = pil_working
+
+        def make_job(candidate):
+            def job():
+                image_for_job = base_image.copy()
+                try:
+                    result_image = inpainter.inpaint_mask(
+                        image_for_job,
+                        candidate["mask"],
+                        seed=candidate["seed"],
+                        verbose=verbose,
+                        ocr_params={
+                            "type": "colored_bubble",
+                            "bbox": candidate["bbox_tuple"],
+                        },
+                    )
+                    return {
+                        "candidate": candidate,
+                        "image": result_image,
+                        "error": None,
+                    }
+                except Exception as e:
+                    return {
+                        "candidate": candidate,
+                        "image": None,
+                        "error": e,
+                    }
+
+            return job
+
+        results = request_coordinator.map_ordered([make_job(c) for c in wave])
+        for result in results:
+            candidate = result["candidate"]
+            bubble_info = candidate["bubble_info"]
+            if result["error"] is not None:
+                log_message(
+                    f"Flux inpainting failed for bubble {candidate['bbox_tuple']}: "
+                    f"{result['error']}; falling back to standard fill",
+                    always_print=True,
+                )
+                continue
+
+            result_image = result["image"]
+            context_bbox = candidate["context_bbox"]
+            if context_bbox is None:
+                pil_working = result_image
+            else:
+                pil_working = paste_image_region(
+                    pil_working, result_image, context_bbox
+                )
+            bubble_info["inpainted"] = True
+            _resample_inpainted_bubble_color(
+                pil_working, bubble_info, candidate["mask"]
+            )
+
+    return pil_working
 
 
 def _build_adaptive_shrink_mask(
@@ -428,6 +537,7 @@ def clean_speech_bubbles(
     flux_luminance_correction: bool = True,
     flux_upscale_small_crops: bool = True,
     bubble_detector_model: str = "yolo_1",
+    request_coordinator: Optional[Any] = None,
 ):
     """
     Clean speech bubbles using YOLO/SAM masks and optional Flux inpainting for colored bubbles.
@@ -784,60 +894,81 @@ def clean_speech_bubbles(
                             backend=kontext_backend,
                             low_vram=low_vram,
                         )
-                    for idx, bubble_info in enumerate(colored_bubbles):
-                        mask_np = bubble_info["mask"]
-                        mask_bool = mask_np.astype(bool)
-                        region_seed = base_seed + idx if base_seed > 0 else base_seed
-                        bbox_tuple = bubble_info.get("bbox")
-                        ocr_params = {"type": "colored_bubble", "bbox": bbox_tuple}
-                        try:
-                            pil_working = inpainter.inpaint_mask(
-                                pil_working,
-                                mask_bool,
-                                seed=region_seed,
-                                verbose=verbose,
-                                ocr_params=ocr_params,
+                    if request_coordinator is not None and len(colored_bubbles) > 1:
+                        pil_working = _inpaint_colored_bubbles_with_coordinator(
+                            pil_working,
+                            colored_bubbles,
+                            inpainter,
+                            base_seed,
+                            verbose,
+                            request_coordinator,
+                        )
+                    else:
+                        for idx, bubble_info in enumerate(colored_bubbles):
+                            mask_np = bubble_info["mask"]
+                            mask_bool = mask_np.astype(bool)
+                            region_seed = (
+                                base_seed + idx if base_seed > 0 else base_seed
                             )
-                            bubble_info["inpainted"] = True
-                            # Re-sample background brightness after inpaint for accurate text contrast
-                            cv_after = cv2.cvtColor(
-                                np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR
-                            )
-                            masked_after = cv_after[mask_bool]
-                            if masked_after.size > 0:
-                                mean_val = int(np.clip(np.mean(masked_after), 0, 255))
-                                bubble_info["color"] = (mean_val, mean_val, mean_val)
-                        except Exception as e:
-                            log_message(
-                                f"Flux inpainting failed for bubble {bbox_tuple}: {e}; falling back to standard fill",
-                                always_print=True,
-                            )
-                            continue
-
-                        # Save intermediate result to disk to free memory when multiple regions
-                        if idx < len(colored_bubbles) - 1:
-                            temp_file = None
+                            bbox_tuple = bubble_info.get("bbox")
+                            ocr_params = {
+                                "type": "colored_bubble",
+                                "bbox": bbox_tuple,
+                            }
                             try:
-                                temp_fd, temp_file = tempfile.mkstemp(suffix=".png")
-                                os.close(temp_fd)
-                                pil_working.save(temp_file, format="PNG")
-                                log_message(
-                                    "Saved intermediate inpainting result to disk",
-                                    verbose=verbose,
+                                inpaint_call = inpainter.inpaint_mask
+                                if request_coordinator is not None:
+                                    pil_working = request_coordinator.run(
+                                        inpaint_call,
+                                        pil_working,
+                                        mask_bool,
+                                        seed=region_seed,
+                                        verbose=verbose,
+                                        ocr_params=ocr_params,
+                                    )
+                                else:
+                                    pil_working = inpaint_call(
+                                        pil_working,
+                                        mask_bool,
+                                        seed=region_seed,
+                                        verbose=verbose,
+                                        ocr_params=ocr_params,
+                                    )
+                                bubble_info["inpainted"] = True
+                                _resample_inpainted_bubble_color(
+                                    pil_working, bubble_info, mask_bool
                                 )
-                                temp_files.append(temp_file)
-                                with Image.open(temp_file) as img_tmp:
-                                    img_tmp.load()
-                                    pil_working = img_tmp.copy()
-                                gc.collect()
                             except Exception as e:
                                 log_message(
-                                    f"Warning: Failed to save intermediate inpainting result: {e}",
-                                    verbose=verbose,
+                                    f"Flux inpainting failed for bubble {bbox_tuple}: {e}; falling back to standard fill",
+                                    always_print=True,
                                 )
-                                if temp_file and temp_file in temp_files:
-                                    temp_files.remove(temp_file)
-                                # fall through with in-memory image
+                                continue
+
+                            # Save intermediate result to disk to free memory when multiple regions
+                            if idx < len(colored_bubbles) - 1:
+                                temp_file = None
+                                try:
+                                    temp_fd, temp_file = tempfile.mkstemp(suffix=".png")
+                                    os.close(temp_fd)
+                                    pil_working.save(temp_file, format="PNG")
+                                    log_message(
+                                        "Saved intermediate inpainting result to disk",
+                                        verbose=verbose,
+                                    )
+                                    temp_files.append(temp_file)
+                                    with Image.open(temp_file) as img_tmp:
+                                        img_tmp.load()
+                                        pil_working = img_tmp.copy()
+                                    gc.collect()
+                                except Exception as e:
+                                    log_message(
+                                        f"Warning: Failed to save intermediate inpainting result: {e}",
+                                        verbose=verbose,
+                                    )
+                                    if temp_file and temp_file in temp_files:
+                                        temp_files.remove(temp_file)
+                                    # fall through with in-memory image
 
                     cleaned_image = cv2.cvtColor(
                         np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR
