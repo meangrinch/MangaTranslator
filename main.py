@@ -5,6 +5,8 @@ import time
 import zipfile
 from pathlib import Path
 
+from utils.archive import safe_extract_zip
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -1128,7 +1130,7 @@ def main():
                 zip_temp_dir_obj = temp_dir_obj
 
                 with zipfile.ZipFile(input_path, "r") as zip_ref:
-                    zip_ref.extractall(temp_dir_path)
+                    safe_extract_zip(zip_ref, temp_dir_path)
 
                 log_message(
                     "Extracted ZIP archive to temporary directory",
@@ -1173,9 +1175,11 @@ def main():
                 exit(1)
 
         try:
-            batch_translate_images(
+            results = batch_translate_images(
                 input_path, config, output_dir, preserve_structure=preserve_structure
             )
+            if results.get("error_count", 0) > 0:
+                raise SystemExit(1)
         finally:
             if zip_temp_dir_obj:
                 try:
@@ -1198,10 +1202,23 @@ def main():
             exit(1)
 
         output_path_arg = args.output
+        original_ext = input_path.suffix.lower()
+        output_format = args.output_format
+        if output_format == "auto":
+            output_ext = (
+                original_ext
+                if original_ext in [".jpg", ".jpeg", ".png", ".webp"]
+                else ".png"
+            )
+        elif output_format == "png":
+            output_ext = ".png"
+        elif output_format == "jpeg":
+            output_ext = ".jpg"
+        else:
+            output_ext = ".png"
+
         if not output_path_arg:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
-            original_ext = input_path.suffix.lower()
-            output_ext = original_ext
             output_dir = Path("./output")
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = (
@@ -1213,6 +1230,8 @@ def main():
             )
         else:
             output_path = Path(output_path_arg)
+            if args.output_format != "auto" or not output_path.suffix:
+                output_path = output_path.with_suffix(output_ext)
             if not output_path.parent.exists():
                 log_message(
                     f"Creating directory for output file: {output_path.parent}",
@@ -1229,6 +1248,7 @@ def main():
             )
         except Exception as e:
             log_message(f"Error processing {input_path}: {e}", always_print=True)
+            raise SystemExit(1) from e
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from PIL import Image
 from core.config import MangaTranslatorConfig, RenderingConfig
 from core.pipeline import batch_translate_images, translate_and_render
 from core.validation import validate_batch_input_path, validate_core_inputs
+from utils.archive import safe_extract_zip
 from utils.exceptions import (
     CancellationError,
     CleaningError,
@@ -61,7 +62,7 @@ def extract_zip_to_temp(
 
     try:
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(temp_dir_path)
+            safe_extract_zip(zip_ref, temp_dir_path)
 
         log_message(
             f"Extracted ZIP archive '{zip_path.name}' to temporary directory",
