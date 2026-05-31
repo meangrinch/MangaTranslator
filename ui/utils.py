@@ -602,7 +602,7 @@ def get_reasoning_effort_config(
             return False, [], None
         if "multi-agent" in lm:
             return True, ["xhigh", "high", "medium", "low"], "high"
-        return True, ["high", "medium", "low", "none"], "low"
+        return True, ["high", "medium", "low", "none"], "medium"
 
     elif provider == "DeepSeek":
         is_reasoning = is_deepseek_reasoning_model(model_name)
@@ -652,7 +652,7 @@ def get_reasoning_effort_config(
             is_reasoning = False
 
         if is_reasoning:
-            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "low"
+            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
 
         if is_anthropic_model:
             return False, [], "none"
