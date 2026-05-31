@@ -376,7 +376,7 @@ def create_layout(
                         )
                         batch_parallel_requests = gr.Slider(
                             minimum=1,
-                            maximum=10,
+                            maximum=20,
                             value=int(saved_settings.get("batch_parallel_requests", 1)),
                             step=1,
                             label="Parallel Requests",

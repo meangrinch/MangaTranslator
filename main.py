@@ -33,7 +33,7 @@ def main():
         type=int,
         default=1,
         help=(
-            "Batch only: number of parallel workers, one per page (1-10, default: 1)"
+            "Batch only: number of parallel workers, one per page (1-20, default: 1)"
         ),
     )
     parser.add_argument(
