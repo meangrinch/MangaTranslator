@@ -607,9 +607,17 @@ def _format_batch_success_message(
             + llm_params_str
         )
 
-    error_summary = ""
+    failure_details = ""
     if error_count > 0:
-        error_summary = f"\n• Warning: {error_count} image(s) failed to process."
+        failed_pages = results.get("errors", {})
+        failure_parts = [f"• Warning: {error_count} image(s) failed to process.\n"]
+        if failed_pages:
+            failure_parts.append("\nFailed pages:\n")
+            failure_parts.extend(
+                f"• {filename}: {error_msg}\n"
+                for filename, error_msg in failed_pages.items()
+            )
+        failure_details = "".join(failure_parts)
 
     if backend_config.cleaning_only:
         processing_mode_str = "Cleaning Only"
@@ -708,7 +716,8 @@ def _format_batch_success_message(
 
     msg_parts.extend(
         [
-            f"• Successful Translations: {success_count}/{total_images}{error_summary}\n",
+            f"• Successful Translations: {success_count}/{total_images}\n",
+            failure_details,
             f"• Total Processing Time: {processing_time:.2f} seconds ({seconds_per_image:.2f} seconds/image)\n",
             f"• Saved To: {output_path}",
         ]
