@@ -1,4 +1,4 @@
-[English](../../README.md) | [简体中文](README_zh.md) | [한국어](README_ko.md) | [日本語](README_ja.md)
+[English]../../../README.md) | [简体中文](README.md) | [한국어](../ko/README.md) | [日本語](../ja/README.md)
 
 ## MangaTranslator
 
@@ -11,8 +11,8 @@
       <th style="text-align: left">翻译后（一键完成）</th>
     </tr>
     <tr>
-      <td><img src="../images/example_original.jpg" width="400" /></td>
-      <td><img src="../images/example_translation.jpg" width="400" /></td>
+      <td><img src="../../images/example_original.jpg" width="400" /></td>
+      <td><img src="../../images/example_translation.jpg" width="400" /></td>
     </tr>
   </table>
 </div>
@@ -237,9 +237,9 @@ python main.py --help
 
 ## 文档
 
-- [硬件运行要求](../HARDWARE_REQUIREMENTS.md)
-- [推荐字体](../FONTS.md)
-- [常见问题与故障排除](../TROUBLESHOOTING.md)
+- [硬件运行要求](HARDWARE_REQUIREMENTS.md)
+- [推荐字体](FONTS.md)
+- [常见问题与故障排除](TROUBLESHOOTING.md)
 
 ## 更新
 
@@ -259,7 +259,7 @@ pip install -r requirements.txt  # 如果有虚拟环境，请先激活虚拟环
 
 ## 许可证和鸣谢
 
-- 许可证：Apache-2.0 (见 [LICENSE](../../LICENSE))
+- 许可证：Apache-2.0 (见 [LICENSE](../../../LICENSE))
 - 作者：[grinnch](https://github.com/meangrinch)
 
 <details>

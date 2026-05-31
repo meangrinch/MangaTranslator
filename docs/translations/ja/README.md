@@ -1,4 +1,4 @@
-[English](../../README.md) | [简体中文](README_zh.md) | [한국어](README_ko.md) | [日本語](README_ja.md)
+[English]../../../README.md) | [简体中文](../zh/README.md) | [한국어](../ko/README.md) | [日本語](README.md)
 
 ## MangaTranslator
 
@@ -11,8 +11,8 @@ AIを使用して漫画やコミックページの画像翻訳を自動化する
       <th style="text-align: left">翻訳後（ワンクリックで完了）</th>
     </tr>
     <tr>
-      <td><img src="../images/example_original.jpg" width="400" /></td>
-      <td><img src="../images/example_translation.jpg" width="400" /></td>
+      <td><img src="../../images/example_original.jpg" width="400" /></td>
+      <td><img src="../../images/example_translation.jpg" width="400" /></td>
     </tr>
   </table>
 </div>
@@ -165,7 +165,7 @@ fonts/
 - OpenAI互換のデフォルトURL：`http://localhost:8080/v1`
 
 > [!NOTE]
-> OpenAI互換プロバイダーを介してYanoljaNEXT-Rosettaモデル（例：`yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`）を使用する場合、自動的に検出されて最適化されたプロンプトが適用されます。これらはテキスト専用モデルであるため、2ステップ翻訳モードとローカルOCRモデルを有効にする必要があります。「特別指示 (Special Instructions)」フィールドはRosettaの翻訳用語集にマッピングされます（1行に1エントリ、例：`Yanolja NEXT -> 야놀자넥스트`）。
+> OpenAI互換プロバイダーを介してYanoljaNEXT-Rosettaモデル（例：`yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`）を使用する場合、自動的に検出されて最適化されたプロンプトが適用されます。これらはテキスト専用モデルであるため、2ステップ翻訳モードとローカルOCRモデルを有効にする必要があります。「特別指示 (Special Instructions)」フィールドはRosetta의 翻訳用語集にマッピングされます（1行に1エントリ、例：`Yanolja NEXT -> 야놀자넥스트`）。
 
 ### 吹き出し外（OSB）テキストのセットアップ（任意）
 
@@ -210,7 +210,7 @@ fonts/
 python main.py --input <画像パス> \
   --font-dir "fonts/Komika" --provider Google --google-api-key <AIキー...>
 
-# フォルダ内の一括処理、翻訳言語の指定、OpenAI互換プロバイダー (llama.cpp) 使用
+# フォルダ内の一括処理、翻訳言語の指定、OpenAI互換プロバイダー (llama.cpp) 사용
 python main.py --input <フォルダパス> --batch \
   --font-dir "fonts/Komika" \
   --input-language <翻訳元言語> --output-language <翻訳先言語> \
@@ -237,9 +237,9 @@ python main.py --help
 
 ## ドキュメント
 
-- [動作に必要な動作環境（ハードウェア）](../HARDWARE_REQUIREMENTS.md)
-- [おすすめのフォント](../FONTS.md)
-- [トラブルシューティング](../TROUBLESHOOTING.md)
+- [動作に必要な動作環境（ハードウェア）](HARDWARE_REQUIREMENTS.md)
+- [おすすめのフォント](FONTS.md)
+- [トラブルシューティング](TROUBLESHOOTING.md)
 
 ## アップデート
 
@@ -259,7 +259,7 @@ pip install -r requirements.txt  # 仮想環境を使用している場合は先
 
 ## ライセンスとクレジット
 
-- ライセンス：Apache-2.0（詳細は [LICENSE](../../LICENSE) を参照）
+- ライセンス：Apache-2.0（詳細は [LICENSE](../../../LICENSE) を参照）
 - 開発者：[grinnch](https://github.com/meangrinch)
 
 <details>
