@@ -71,10 +71,11 @@ AIを使用して漫画やコミックページの画像翻訳を自動化する
 同梱フォントパック：
 
 - _Komika_（通常のセリフ用）
-- _Cookies_（吹き出し外の書き文字用）
-- _Comicka_（両方に対応）
+- _Comicka_（通常/OSBテキスト用）
 - _Roboto_（アクセント記号対応）
-- _Noto Sans SC_（簡体字中国語対応）
+- _Noto Sans SC_（簡体字中国語）
+- _Noto Sans KR_（韓国語）
+- _Noto Sans JP_（日本語）
 
 > [!TIP]
 > 新しいポータブルパッケージにデータを移行する必要がある場合：
@@ -105,22 +106,25 @@ source venv/bin/activate
 
 ```bash
 # 例 (CUDA 13.0)
-pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
+pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
 # 例 (ROCm 7.1)
-pip install torch==2.10.0+rocm7.1 torchvision==0.25.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
+pip install torch==2.11.0+rocm7.1 torchvision==0.26.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
 # 例 (XPU)
-pip install torch==2.10.0+xpu torchvision==0.25.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
+pip install torch==2.11.0+xpu torchvision==0.26.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
 # 例 (MPS/CPU)
-pip install torch==2.10.0 torchvision==0.25.0
+pip install torch==2.11.0 torchvision==0.26.0
 ```
 
 4. Nunchakuのインストール（任意、Flux.1 Kontext Nunchakuバックエンド用）
 
-- NunchakuのwheelファイルはPyPIにはありません。OSとPythonのバージョンに一致するものを、v1.2.1のGitHubリリースURLから直接インストールしてください。CUDA専用で、RTX 2000シリーズ以降のグラフィックボードが必要です。
+- NunchakuのwheelファイルはPyPIにはありません。OSとPythonのバージョンに一致するものを、v1.3.0dev20260213のGitHubリリースURLから直接インストールしてください。CUDA専用で、RTX 2000シリーズ以降のグラフィックボードが必要です。
 
 ```bash
-# 例 (Windows, Python 3.13, PyTorch 2.10.0, CUDA 13.0)
-pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp313-cp313-win_amd64.whl
+# 例 (Windows, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-win_amd64.whl
+
+# 例 (Linux, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-linux_x86_64.whl
 ```
 
 > [!NOTE]

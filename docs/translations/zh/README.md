@@ -71,10 +71,11 @@
 包含的字体包：
 
 - _Komika_（普通文本）
-- _Cookies_（对话框外文本）
-- _Comicka_（两者皆可）
+- _Comicka_（普通/OSB文本）
 - _Roboto_（支持变音符号）
-- _Noto Sans SC_（支持简体中文）
+- _Noto Sans SC_（简体中文）
+- _Noto Sans KR_（韩语）
+- _Noto Sans JP_（日语）
 
 > [!TIP]
 > 如果您需要迁移到新的便携版：
@@ -105,22 +106,25 @@ source venv/bin/activate
 
 ```bash
 # 示例 (CUDA 13.0)
-pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
+pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
 # 示例 (ROCm 7.1)
-pip install torch==2.10.0+rocm7.1 torchvision==0.25.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
+pip install torch==2.11.0+rocm7.1 torchvision==0.26.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
 # 示例 (XPU)
-pip install torch==2.10.0+xpu torchvision==0.25.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
+pip install torch==2.11.0+xpu torchvision==0.26.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
 # 示例 (MPS/CPU)
-pip install torch==2.10.0 torchvision==0.25.0
+pip install torch==2.11.0 torchvision==0.26.0
 ```
 
 4. 安装 Nunchaku（可选，用于 Flux.1 Kontext Nunchaku 后端）
 
-- Nunchaku 的 wheel 包未发布在 PyPI 上。请直接从 v1.2.1 GitHub release URL 安装适配您系统和 Python 版本的包。仅支持 CUDA，且需要 2000 系列及以上的显卡。
+- Nunchaku 的 wheel 包未发布在 PyPI 上。请直接从 v1.3.0dev20260213 GitHub release URL 安装适配您系统和 Python 版本的包。仅支持 CUDA，且需要 2000 系列及以上的显卡。
 
 ```bash
-# 示例 (Windows, Python 3.13, PyTorch 2.10.0, CUDA 13.0)
-pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp313-cp313-win_amd64.whl
+# 示例 (Windows, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-win_amd64.whl
+
+# 示例 (Linux, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-linux_x86_64.whl
 ```
 
 > [!NOTE]

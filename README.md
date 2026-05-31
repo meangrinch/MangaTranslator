@@ -71,10 +71,11 @@ Download the standalone zip from the releases page: [Portable Build](https://git
 Included font packs:
 
 - _Komika_ (normal text)
-- _Cookies_ (OSB text)
-- _Comicka_ (either)
+- _Comicka_ (normal/OSB text)
 - _Roboto_ (supports accents)
-- _Noto Sans SC_ (supports Simplified Chinese)
+- _Noto Sans SC_ (Simplified Chinese)
+- _Noto Sans KR_ (Korean)
+- _Noto Sans JP_ (Japanese)
 
 > [!TIP]
 > In the event that you need to transfer to a fresh portable package:
@@ -105,22 +106,25 @@ source venv/bin/activate
 
 ```bash
 # Example (CUDA 13.0)
-pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
+pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
 # Example (ROCm 7.1)
-pip install torch==2.10.0+rocm7.1 torchvision==0.25.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
+pip install torch==2.11.0+rocm7.1 torchvision==0.26.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
 # Example (XPU)
-pip install torch==2.10.0+xpu torchvision==0.25.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
+pip install torch==2.11.0+xpu torchvision==0.26.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
 # Example (MPS/CPU)
-pip install torch==2.10.0 torchvision==0.25.0
+pip install torch==2.11.0 torchvision==0.26.0
 ```
 
 4. Install Nunchaku (optional, for Flux.1 Kontext Nunchaku backend)
 
-- Nunchaku wheels are not on PyPI. Install directly from the v1.2.1 GitHub release URL, matching your OS and Python version. CUDA only, and requires a 2000-series card or newer.
+- Nunchaku wheels are not on PyPI. Install directly from the v1.3.0dev20260213 GitHub release URL, matching your OS and Python version. CUDA only, and requires a 2000-series card or newer.
 
 ```bash
-# Example (Windows, Python 3.13, PyTorch 2.10.0, CUDA 13.0)
-pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.10-cp313-cp313-win_amd64.whl
+# Example (Windows, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-win_amd64.whl
+
+# Example (Linux, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
+pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-linux_x86_64.whl
 ```
 
 > [!NOTE]
