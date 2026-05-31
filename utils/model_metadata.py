@@ -237,6 +237,21 @@ def is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
     return "kimi-k2." in model_name.lower()
 
 
+def is_mimo_multimodal_model(model_name: Optional[str]) -> bool:
+    """Check if a MiMo model supports multimodal (image) input."""
+    if not model_name:
+        return False
+    return model_name.lower() == "mimo-v2.5"
+
+
+def is_mimo_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if a MiMo model is reasoning-capable (hybrid thinking)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return lm in ("mimo-v2.5-pro", "mimo-v2.5")
+
+
 def is_opus_45_model(model_name: Optional[str]) -> bool:
     """Check if a model is Claude Opus 4.5 (supports effort parameter)."""
     if not model_name:

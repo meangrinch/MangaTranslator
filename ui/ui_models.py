@@ -52,6 +52,7 @@ class UITranslationProviderSettings:
     deepseek_api_key: Optional[str] = ""
     zai_api_key: Optional[str] = ""
     moonshot_api_key: Optional[str] = ""
+    mimo_api_key: Optional[str] = ""
     openrouter_api_key: Optional[str] = ""
     openai_compatible_url: str = "http://localhost:8080/v1"
     openai_compatible_api_key: Optional[str] = ""
@@ -232,6 +233,7 @@ class UIConfigState:
             "deepseek_api_key": self.provider_settings.deepseek_api_key,
             "zai_api_key": self.provider_settings.zai_api_key,
             "moonshot_api_key": self.provider_settings.moonshot_api_key,
+            "mimo_api_key": self.provider_settings.mimo_api_key,
             "openrouter_api_key": self.provider_settings.openrouter_api_key,
             "openai_compatible_url": self.provider_settings.openai_compatible_url,
             "openai_compatible_api_key": self.provider_settings.openai_compatible_api_key,
@@ -489,6 +491,7 @@ class UIConfigState:
                 moonshot_api_key=data.get(
                     "moonshot_api_key", defaults.get("moonshot_api_key", "")
                 ),
+                mimo_api_key=data.get("mimo_api_key", defaults.get("mimo_api_key", "")),
                 openrouter_api_key=data.get(
                     "openrouter_api_key", defaults["openrouter_api_key"]
                 ),
@@ -692,6 +695,7 @@ def map_ui_to_backend_config(
         deepseek_api_key=ui_state.provider_settings.deepseek_api_key or "",
         zai_api_key=ui_state.provider_settings.zai_api_key or "",
         moonshot_api_key=ui_state.provider_settings.moonshot_api_key or "",
+        mimo_api_key=ui_state.provider_settings.mimo_api_key or "",
         openrouter_api_key=ui_state.provider_settings.openrouter_api_key or "",
         openai_compatible_url=ui_state.provider_settings.openai_compatible_url,
         openai_compatible_api_key=ui_state.provider_settings.openai_compatible_api_key,

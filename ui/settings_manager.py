@@ -96,6 +96,10 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "kimi-k2.6",
         "kimi-k2.5",
     ],
+    "Xiaomi MiMo": [
+        "mimo-v2.5-pro",
+        "mimo-v2.5",
+    ],
     "OpenRouter": [],
     "OpenAI-Compatible": [],
 }
@@ -112,6 +116,7 @@ DEFAULT_SETTINGS = {
     "deepseek_api_key": "",
     "zai_api_key": "",
     "moonshot_api_key": "",
+    "mimo_api_key": "",
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:8080/v1",
     "openai_compatible_api_key": "",
@@ -134,6 +139,11 @@ DEFAULT_SETTINGS = {
         "Moonshot AI": (
             PROVIDER_MODELS["Moonshot AI"][0]
             if PROVIDER_MODELS["Moonshot AI"]
+            else None
+        ),
+        "Xiaomi MiMo": (
+            PROVIDER_MODELS["Xiaomi MiMo"][0]
+            if PROVIDER_MODELS["Xiaomi MiMo"]
             else None
         ),
         "OpenRouter": None,
@@ -267,6 +277,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "deepseek_api_key",
     "zai_api_key",
     "moonshot_api_key",
+    "mimo_api_key",
     "openrouter_api_key",
     "openai_compatible_url",
     "openai_compatible_api_key",
@@ -619,6 +630,7 @@ def reset_to_defaults() -> Dict[str, Any]:
             "deepseek_api_key",
             "zai_api_key",
             "moonshot_api_key",
+            "mimo_api_key",
             "openrouter_api_key",
             "openai_compatible_api_key",
             "outside_text_huggingface_token",

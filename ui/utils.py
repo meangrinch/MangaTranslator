@@ -25,6 +25,7 @@ from utils.model_metadata import (
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
+    is_mimo_reasoning_model,
     is_moonshot_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
@@ -85,6 +86,7 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         "OpenRouter": "OPENROUTER_API_KEY",
         "DeepSeek": "DEEPSEEK_API_KEY",
         "Moonshot AI": "MOONSHOT_API_KEY",
+        "Xiaomi MiMo": "MIMO_API_KEY",
         "Z.ai": "ZAI_API_KEY",
         "OpenAI-Compatible": "OPENAI_COMPATIBLE_API_KEY",
     }
@@ -125,6 +127,13 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         return False, "Invalid DeepSeek API key format (should start with 'sk-')"
     if provider == "Moonshot AI" and not api_key.startswith("sk-"):
         return False, "Invalid Moonshot AI API key format (should start with 'sk-')"
+    if provider == "Xiaomi MiMo" and not (
+        (api_key.startswith("sk-") or api_key.startswith("tp-")) and len(api_key) >= 8
+    ):
+        return (
+            False,
+            "Invalid Xiaomi MiMo API key format (should start with 'sk-' or 'tp-')",
+        )
     # No specific format check for Z.ai or OpenAI-Compatible keys
 
     return True, f"{provider} API key format looks valid"
@@ -297,6 +306,8 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return is_zai_reasoning_model(model_name)
     elif provider == "Moonshot AI":
         return _is_moonshot_reasoning_model(model_name)
+    elif provider == "Xiaomi MiMo":
+        return is_mimo_reasoning_model(model_name)
     elif provider == "OpenRouter":
         try:
             return openrouter_is_reasoning_model(model_name, debug=False)
@@ -350,6 +361,10 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
         ),
         "Moonshot AI": (
             "Use Moonshot AI's web search tool for up-to-date information. "
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
+        ),
+        "Xiaomi MiMo": (
+            "Use Xiaomi MiMo's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
     }
@@ -435,7 +450,9 @@ def get_reasoning_effort_info_text(
             return "Controls model's internal reasoning effort."
         return "Grok reasons automatically; no configurable reasoning effort is sent."
     elif provider == "Moonshot AI":
-        return "Enables or disables model thinking (high=enabled, none=disabled)."
+        return "Enables or disables model thinking (auto=enabled, none=disabled)."
+    elif provider == "Xiaomi MiMo":
+        return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "DeepSeek":
         return (
             "Controls thinking mode (high=default, max=deep reasoning, none=disabled)."
@@ -602,7 +619,12 @@ def get_reasoning_effort_config(
 
     elif provider == "Moonshot AI":
         if "kimi-k2." in lm:
-            return True, ["high", "none"], "high"
+            return True, ["auto", "none"], "auto"
+        return False, [], None
+
+    elif provider == "Xiaomi MiMo":
+        if is_mimo_reasoning_model(model_name):
+            return True, ["auto", "none"], "auto"
         return False, [], None
 
     elif provider == "OpenRouter":
@@ -790,6 +812,8 @@ def update_translation_ui(
         models = [m for m in models if "v" in m]
     elif provider == "Moonshot AI" and ocr_method == "LLM":
         models = [m for m in models if "kimi-k2." in m.lower()]
+    elif provider == "Xiaomi MiMo" and ocr_method == "LLM":
+        models = [m for m in models if m.lower() == "mimo-v2.5"]
 
     selected_model = (
         remembered_model
@@ -805,6 +829,7 @@ def update_translation_ui(
     deepseek_visible_update = gr.update(visible=(provider == "DeepSeek"))
     zai_visible_update = gr.update(visible=(provider == "Z.ai"))
     moonshot_visible_update = gr.update(visible=(provider == "Moonshot AI"))
+    mimo_visible_update = gr.update(visible=(provider == "Xiaomi MiMo"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
     openai_compatible_url_visible_update = gr.update(
         visible=(provider == "OpenAI-Compatible")
@@ -835,6 +860,7 @@ def update_translation_ui(
         "DeepSeek",
         "Z.ai",
         "Moonshot AI",
+        "Xiaomi MiMo",
     )
     top_p_interactive = provider != "Anthropic"
     temp_interactive, sampling_ok = get_sampling_interactivity_for_effort(
@@ -982,6 +1008,7 @@ def update_translation_ui(
         deepseek_visible_update,
         zai_visible_update,
         moonshot_visible_update,
+        mimo_visible_update,
         openrouter_visible_update,
         openai_compatible_url_visible_update,
         openai_compatible_key_visible_update,
@@ -1031,7 +1058,7 @@ def update_params_for_model(
     if provider == "Anthropic":
         top_k_interactive = False
         top_p_interactive = False
-    elif provider in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI"):
+    elif provider in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI", "Xiaomi MiMo"):
         top_k_interactive = False
     elif provider == "OpenRouter":
         is_openai_model = model_name and (

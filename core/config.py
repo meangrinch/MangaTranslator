@@ -47,6 +47,7 @@ class TranslationConfig:
     deepseek_api_key: str = ""
     zai_api_key: str = ""
     moonshot_api_key: str = ""
+    mimo_api_key: str = ""
     openrouter_api_key: str = ""
     openai_compatible_url: str = "http://localhost:8080/v1"
     openai_compatible_api_key: Optional[str] = ""
@@ -212,6 +213,8 @@ class MangaTranslatorConfig:
             self.translation.zai_api_key = os.environ.get("ZAI_API_KEY", "")
         if not self.translation.moonshot_api_key:
             self.translation.moonshot_api_key = os.environ.get("MOONSHOT_API_KEY", "")
+        if not self.translation.mimo_api_key:
+            self.translation.mimo_api_key = os.environ.get("MIMO_API_KEY", "")
         if not self.translation.openrouter_api_key:
             self.translation.openrouter_api_key = os.environ.get(
                 "OPENROUTER_API_KEY", ""

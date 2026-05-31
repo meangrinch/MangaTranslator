@@ -779,6 +779,19 @@ def create_layout(
                                 elem_id="moonshot_api_key",
                                 info="Stored locally. Or set via MOONSHOT_API_KEY env var.",
                             )
+                            mimo_api_key = gr.Textbox(
+                                label="Xiaomi MiMo API Key",
+                                placeholder="Enter MiMo API key (starts with sk-... or tp-...)",
+                                type="password",
+                                value=saved_settings.get("mimo_api_key", ""),
+                                show_copy_button=False,
+                                visible=(config_initial_provider == "Xiaomi MiMo"),
+                                elem_id="mimo_api_key",
+                                info=(
+                                    "Stored locally. Or set via MIMO_API_KEY env var. "
+                                    "Pay-as-you-go keys start with sk-; Token Plan keys start with tp-."
+                                ),
+                            )
                             openrouter_api_key = gr.Textbox(
                                 label="OpenRouter API Key",
                                 placeholder="Enter OpenRouter API key (starts with sk-or-...)",
@@ -1091,6 +1104,7 @@ def create_layout(
                                     "xAI",
                                     "DeepSeek",
                                     "Moonshot AI",
+                                    "Xiaomi MiMo",
                                 )
                                 and not initial_sampling_disabled
                             )
@@ -1987,6 +2001,7 @@ def create_layout(
             deepseek_api_key,
             zai_api_key,
             moonshot_api_key,
+            mimo_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2103,6 +2118,7 @@ def create_layout(
             deepseek_api_key,
             zai_api_key,
             moonshot_api_key,
+            mimo_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2215,6 +2231,7 @@ def create_layout(
             deepseek_api_key,
             zai_api_key,
             moonshot_api_key,
+            mimo_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2333,6 +2350,7 @@ def create_layout(
             deepseek_api_key,
             zai_api_key,
             moonshot_api_key,
+            mimo_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2512,6 +2530,7 @@ def create_layout(
                 deepseek_api_key,
                 zai_api_key,
                 moonshot_api_key,
+                mimo_api_key,
                 openrouter_api_key,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,

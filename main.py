@@ -72,6 +72,7 @@ def main():
             "DeepSeek",
             "Z.ai",
             "Moonshot AI",
+            "Xiaomi MiMo",
             "OpenRouter",
             "OpenAI-Compatible",
         ],
@@ -119,6 +120,15 @@ def main():
         type=str,
         default=None,
         help="Moonshot API key (overrides MOONSHOT_API_KEY env var if --provider is Moonshot)",
+    )
+    parser.add_argument(
+        "--mimo-api-key",
+        type=str,
+        default=None,
+        help=(
+            "Xiaomi MiMo API key, sk-... (pay-as-you-go) or tp-... (Token Plan); "
+            "overrides MIMO_API_KEY env var if --provider is Xiaomi MiMo"
+        ),
     )
     parser.add_argument(
         "--openrouter-api-key",
@@ -853,6 +863,11 @@ def main():
         api_key_arg_name = "--moonshot-api-key"
         api_key_env_var = "MOONSHOT_API_KEY"
         default_model = "kimi-k2.6"
+    elif provider == "Xiaomi MiMo":
+        api_key = args.mimo_api_key or os.environ.get("MIMO_API_KEY")
+        api_key_arg_name = "--mimo-api-key"
+        api_key_env_var = "MIMO_API_KEY"
+        default_model = "mimo-v2.5"
     elif provider == "OpenRouter":
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
@@ -963,6 +978,11 @@ def main():
                 api_key
                 if provider == "Moonshot AI"
                 else os.environ.get("MOONSHOT_API_KEY", "")
+            ),
+            mimo_api_key=(
+                api_key
+                if provider == "Xiaomi MiMo"
+                else os.environ.get("MIMO_API_KEY", "")
             ),
             openrouter_api_key=(
                 api_key

@@ -19,6 +19,7 @@ from utils.endpoints import (
     call_anthropic_endpoint,
     call_deepseek_endpoint,
     call_gemini_endpoint,
+    call_mimo_endpoint,
     call_moonshot_endpoint,
     call_openai_compatible_endpoint,
     call_openai_endpoint,
@@ -42,6 +43,7 @@ from utils.model_metadata import (
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
+    is_mimo_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
     is_opus_45_model,
@@ -349,6 +351,8 @@ def _build_generation_config(
         elif provider == "Moonshot AI":
             lm = (model_name or "").lower()
             is_reasoning = "kimi-k2." in lm
+        elif provider == "Xiaomi MiMo":
+            is_reasoning = is_mimo_reasoning_model(model_name)
         max_tokens_value = 16384 if is_reasoning else 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, model_name)
@@ -524,9 +528,24 @@ def _build_generation_config(
         }
 
         if is_reasoning:
-            # Map reasoning_effort: "high" -> enabled, "none" -> disabled
-            reasoning_effort = config.reasoning_effort or "high"
-            thinking_type = "enabled" if reasoning_effort == "high" else "disabled"
+            # Map reasoning_effort: "auto" -> enabled, "none" -> disabled
+            reasoning_effort = config.reasoning_effort or "auto"
+            thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
+            generation_config["thinking"] = {"type": thinking_type}
+        return generation_config
+
+    elif provider == "Xiaomi MiMo":
+        is_reasoning = is_mimo_reasoning_model(model_name)
+
+        generation_config = {
+            "temperature": min(temperature, 1.0),
+            "top_p": top_p,
+            "max_tokens": max_tokens_value,
+        }
+
+        if is_reasoning:
+            reasoning_effort = config.reasoning_effort or "auto"
+            thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
             generation_config["thinking"] = {"type": thinking_type}
         return generation_config
 
@@ -746,6 +765,22 @@ def _call_llm_endpoint(
                 provider, model_name, config, debug
             )
             return call_moonshot_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                system_prompt=system_prompt,
+                debug=debug,
+                enable_web_search=config.enable_web_search,
+            )
+        elif provider == "Xiaomi MiMo":
+            api_key = config.mimo_api_key
+            if not api_key:
+                raise TranslationError("MiMo API key is missing.")
+            generation_config = _build_generation_config(
+                provider, model_name, config, debug
+            )
+            return call_mimo_endpoint(
                 api_key=api_key,
                 model_name=model_name,
                 parts=api_parts,
