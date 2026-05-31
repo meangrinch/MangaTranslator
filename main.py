@@ -763,6 +763,15 @@ def main():
         ),
     )
     parser.add_argument(
+        "--osb-min-area-ignore-ratio",
+        type=float,
+        default=0.0,
+        help=(
+            "Skip OSB regions whose bounding-box area is below this ratio of the image "
+            "(0.0-0.05)"
+        ),
+    )
+    parser.add_argument(
         "--bubble-min-side-pixels",
         type=int,
         default=128,
@@ -1064,6 +1073,7 @@ def main():
             enable_page_number_filtering=args.osb_filter_page_numbers,
             page_filter_margin_threshold=args.osb_page_filter_margin,
             page_filter_min_area_ratio=args.osb_page_filter_min_area,
+            min_area_ignore_ratio=args.osb_min_area_ignore_ratio,
             huggingface_token=args.osb_hf_token or os.environ.get("HF_TOKEN", ""),
             inpainting_method=args.osb_inpainting_method,
             kontext_backend=args.osb_kontext_backend,

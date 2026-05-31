@@ -119,6 +119,7 @@ class UIOutsideTextSettings:
     enable_page_number_filtering: bool = False
     page_filter_margin_threshold: float = 0.1
     page_filter_min_area_ratio: float = 0.05
+    min_area_ignore_ratio: float = 0.0
     seed: int = 1  # -1 = random
     huggingface_token: str = ""
     inpainting_method: str = (
@@ -281,6 +282,7 @@ class UIConfigState:
             "outside_text_enable_page_number_filtering": self.outside_text.enable_page_number_filtering,
             "outside_text_page_filter_margin_threshold": self.outside_text.page_filter_margin_threshold,
             "outside_text_page_filter_min_area_ratio": self.outside_text.page_filter_min_area_ratio,
+            "outside_text_min_area_ignore_ratio": self.outside_text.min_area_ignore_ratio,
             "outside_text_osb_font_pack": self.outside_text.osb_font_dir,
             "outside_text_osb_max_font_size": self.outside_text.osb_max_font_size,
             "outside_text_osb_min_font_size": self.outside_text.osb_min_font_size,
@@ -410,6 +412,10 @@ class UIConfigState:
                 page_filter_min_area_ratio=data.get(
                     "outside_text_page_filter_min_area_ratio",
                     defaults.get("outside_text_page_filter_min_area_ratio", 0.05),
+                ),
+                min_area_ignore_ratio=data.get(
+                    "outside_text_min_area_ignore_ratio",
+                    defaults.get("outside_text_min_area_ignore_ratio", 0.0),
                 ),
                 seed=data.get("outside_text_seed", 1),
                 huggingface_token=data.get("outside_text_huggingface_token", ""),
@@ -783,6 +789,7 @@ def map_ui_to_backend_config(
         enable_page_number_filtering=ui_state.outside_text.enable_page_number_filtering,
         page_filter_margin_threshold=ui_state.outside_text.page_filter_margin_threshold,
         page_filter_min_area_ratio=ui_state.outside_text.page_filter_min_area_ratio,
+        min_area_ignore_ratio=ui_state.outside_text.min_area_ignore_ratio,
         seed=ui_state.outside_text.seed,
         huggingface_token=ui_state.outside_text.huggingface_token,
         inpainting_method=ui_state.outside_text.inpainting_method,

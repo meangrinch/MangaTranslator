@@ -38,6 +38,7 @@ SETTING_CONSTRAINTS: Dict[str, Tuple[float, float]] = {
     "outside_text_text_box_proximity_ratio": (0.01, 0.1),
     "outside_text_page_filter_margin_threshold": (0.0, 0.3),
     "outside_text_page_filter_min_area_ratio": (0.0, 0.2),
+    "outside_text_min_area_ignore_ratio": (0.0, 0.05),
     "outside_text_flux_num_inference_steps": (1, 30),
     "outside_text_flux_residual_diff_threshold": (0.0, 1.0),
     "outside_text_osb_max_font_size": (5, 96),
@@ -101,6 +102,7 @@ _CONFIG_ATTR_PATHS: Dict[str, Tuple[Tuple[str, ...], ...]] = {
     "outside_text_page_filter_min_area_ratio": (
         ("outside_text", "page_filter_min_area_ratio"),
     ),
+    "outside_text_min_area_ignore_ratio": (("outside_text", "min_area_ignore_ratio"),),
     "outside_text_flux_num_inference_steps": (
         ("outside_text", "flux_num_inference_steps"),
     ),

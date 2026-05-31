@@ -86,6 +86,36 @@ def process_outside_text(
 
         img_w, img_h = pil_image.size
 
+        min_ignore = max(0.0, min(0.05, config.outside_text.min_area_ignore_ratio))
+        if min_ignore > 0.0:
+            image_area = float(img_w * img_h)
+            kept_results = []
+            removed_count = 0
+            for bbox, conf in outside_text_results:
+                x1, y1, x2, y2 = bbox
+                area_ratio = ((x2 - x1) * (y2 - y1)) / max(1.0, image_area)
+                if area_ratio < min_ignore:
+                    removed_count += 1
+                    log_message(
+                        f"Skipping small OSB region (area {area_ratio:.4%} < {min_ignore:.4%})",
+                        verbose=verbose,
+                    )
+                    continue
+                kept_results.append((bbox, conf))
+            outside_text_results = kept_results
+            if removed_count:
+                log_message(
+                    f"Filtered {removed_count} OSB region(s) below min area threshold "
+                    f"({min_ignore:.2%} of image); {len(outside_text_results)} remaining",
+                    verbose=verbose,
+                )
+            if not outside_text_results:
+                log_message(
+                    "No outside text regions remaining after min area filter",
+                    verbose=verbose,
+                )
+                return pil_image, []
+
         # Filter out probable page numbers
         # Only run OCR on "suspicious" detections (small & in margin)
         if config.outside_text.enable_page_number_filtering and outside_text_results:

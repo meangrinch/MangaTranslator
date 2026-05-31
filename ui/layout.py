@@ -1444,6 +1444,20 @@ def create_layout(
                                         "Increase to group more distant boxes together."
                                     ),
                                 )
+                                outside_text_min_area_ignore_ratio_percent = gr.Slider(
+                                    0.0,
+                                    5.0,
+                                    value=saved_settings.get(
+                                        "outside_text_min_area_ignore_ratio", 0.0
+                                    )
+                                    * 100.0,
+                                    step=0.1,
+                                    label="Ignore Regions Below Area (%)",
+                                    info=(
+                                        "Skip OSB regions whose bounding-box area is below this "
+                                        "percentage of the image."
+                                    ),
+                                )
                                 outside_text_enable_page_number_filtering = gr.Checkbox(
                                     value=saved_settings.get(
                                         "outside_text_enable_page_number_filtering",
@@ -2068,6 +2082,7 @@ def create_layout(
             outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
             outside_text_page_filter_min_area_ratio,
@@ -2181,6 +2196,7 @@ def create_layout(
             outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
             outside_text_page_filter_min_area_ratio,
@@ -2294,6 +2310,7 @@ def create_layout(
             outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
             outside_text_page_filter_min_area_ratio,
@@ -2413,6 +2430,7 @@ def create_layout(
             outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
             outside_text_page_filter_min_area_ratio,
