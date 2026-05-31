@@ -187,7 +187,7 @@ fonts/
 3. 在 Hugging Face 设置中创建一个新的 Access Token，并赋予对受门控仓库的只读权限（"Read access to contents of public gated repos"）
 4. 将 Token 添加到应用程序中：
    - Web UI：在 Config 中设置 `hf_token`
-   - 环境变量（替代方案）：设置 `HUGGINGFACE_TOKEN`
+   - 环境变量（替代方案）：设置 `HF_TOKEN`
 5. 保存配置以在以后的会话中保留 Token
 
 ## 运行

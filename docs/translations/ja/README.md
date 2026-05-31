@@ -187,7 +187,7 @@ fonts/
 3. Hugging Faceの設定で、ゲート付きリポジトリへの読み取り権限（"Read access to contents of public gated repos"）を持つ新しいAccess Tokenを作成します。
 4. トークンをアプリケーションに追加します：
    - Web UI：Configタブの `hf_token` に入力します。
-   - 環境変数（代替案）：`HUGGINGFACE_TOKEN` を設定します。
+   - 環境変数（代替案）：`HF_TOKEN` を設定します。
 5. セッション間でトークンを保持するため、設定を保存（Save Config）します。
 
 ## 実行

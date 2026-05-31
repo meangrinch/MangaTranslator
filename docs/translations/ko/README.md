@@ -187,7 +187,7 @@ fonts/
 3. Hugging Face 계정 설정에서 제한된 저장소의 읽기 권한을 가진 새 Access Token을 만듭니다 ("Read access to contents of public gated repos").
 4. 생성한 토큰을 앱에 추가합니다:
    - 웹 UI: Config 탭에서 `hf_token` 설정
-   - 환경 변수 (대체 방법): `HUGGINGFACE_TOKEN` 설정
+   - 환경 변수 (대체 방법): `HF_TOKEN` 설정
 5. 세션 간 설정을 유지하기 위해 설정을 저장(Save Config)합니다.
 
 ## 실행

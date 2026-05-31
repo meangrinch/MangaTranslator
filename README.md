@@ -187,7 +187,7 @@ If you want to use the OSB text pipeline, you need a Hugging Face token with acc
 3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
 4. Add the token to the app:
    - Web UI: set `hf_token` in Config
-   - Env var (alternative): set `HUGGINGFACE_TOKEN`
+   - Env var (alternative): set `HF_TOKEN`
 5. Save config to preserve the token across sessions
 
 ## Run
