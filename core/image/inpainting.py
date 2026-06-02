@@ -901,10 +901,13 @@ class FluxKleinInpainter:
     KLEIN_DEFAULT_STEPS = 4  # Recommended default
     KLEIN_GUIDANCE_SCALE = 1.0  # Fixed CFG for Klein
     KLEIN_PROMPT = (
-        "Remove all text. Preserve all character line art, screentones, panel borders, "
-        "and background details exactly as they appear. Maintain the original black-and-white "
-        "contrast and shading, ensuring character expressions and environmental textures "
-        "remain unchanged while leaving the text areas completely blank."
+        "Remove all text. Fill the removed text area using only "
+        "the surrounding original artwork as reference. Match the local line art, tones, "
+        "screentones, shadows, highlights, panel borders, texture, and color palette "
+        "exactly. Preserve all characters, faces, expressions, clothing, outlines, "
+        "composition, and lighting unchanged. The edited area should contain only the "
+        "natural background or artwork that belongs behind the text, with no letters, "
+        "symbols, or new details."
     )
 
     # Resolution constraints: 64x64 to 2048x2048, multiple of 16
