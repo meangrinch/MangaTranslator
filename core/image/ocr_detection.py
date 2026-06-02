@@ -169,6 +169,7 @@ class OutsideTextDetector:
         existing_bubbles: Optional[List] = None,
         text_free_boxes: Optional[List] = None,
         bubble_detector_model: str = "yolo_1",
+        min_area_ignore_ratio: float = 0.0,
     ):
         """Detect non-dialogue text by subtracting YOLO speech bubbles from OCR results.
 
@@ -464,9 +465,19 @@ class OutsideTextDetector:
             )
             final_results = filtered_results
 
-        log_message(
-            f"Found {len(final_results)} outside text regions", always_print=True
-        )
+        found_count = len(final_results)
+        min_ignore = max(0.0, min(0.05, min_area_ignore_ratio))
+        if min_ignore > 0.0:
+            image_area = float(image_pil.width * image_pil.height)
+            ignored_count = sum(
+                1
+                for bbox, _ in final_results
+                if ((bbox[2] - bbox[0]) * (bbox[3] - bbox[1])) / max(1.0, image_area)
+                < min_ignore
+            )
+            found_count -= ignored_count
+
+        log_message(f"Found {found_count} outside text regions", always_print=True)
 
         return final_results
 

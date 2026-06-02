@@ -78,6 +78,7 @@ def process_outside_text(
             existing_bubbles=bubble_data,
             text_free_boxes=text_free_boxes,
             bubble_detector_model=config.detection.bubble_detector_model,
+            min_area_ignore_ratio=config.outside_text.min_area_ignore_ratio,
         )
 
         if not outside_text_results:
