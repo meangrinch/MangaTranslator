@@ -155,8 +155,6 @@ def clamp_settings(settings: Any) -> Any:
     for key, paths in _CONFIG_ATTR_PATHS.items():
         if not hasattr(settings, "__dict__"):
             break
-        if key not in SETTING_CONSTRAINTS:
-            continue
         min_val, max_val = SETTING_CONSTRAINTS[key]
         for path in paths:
             target = settings
@@ -316,28 +314,6 @@ def validate_config(config: MangaTranslatorConfig) -> None:
         and config.outside_text.flux_backend == "nunchaku"
     ):
         raise ValidationError("Nunchaku backend is only supported with Flux.1 Kontext.")
-
-
-def normalize_zip_file_input(zip_input: Any) -> str:
-    """
-    Normalizes ZIP file input from Gradio (handles both string and file-like objects).
-
-    Args:
-        zip_input: ZIP file input from Gradio (can be str or file-like object).
-
-    Returns:
-        str: Normalized file path as string.
-
-    Raises:
-        ValidationError: If the input format is invalid.
-    """
-    if isinstance(zip_input, str):
-        return zip_input
-    elif hasattr(zip_input, "name"):
-        zip_path = zip_input.name
-        return zip_path if isinstance(zip_path, str) else str(zip_path)
-    else:
-        raise ValidationError("Invalid ZIP file format.")
 
 
 def validate_zip_file(zip_path: Union[str, Path]) -> Path:

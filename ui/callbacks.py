@@ -9,7 +9,6 @@ from PIL import Image
 
 from core.config import MangaTranslatorConfig
 from core.validation import (
-    normalize_zip_file_input,
     validate_mutually_exclusive_modes,
     validate_zip_file,
 )
@@ -818,8 +817,7 @@ def handle_batch_click(
         zip_file_path = None
         if input_zip:
             try:
-                zip_path_str = normalize_zip_file_input(input_zip)
-                zip_file_path = validate_zip_file(zip_path_str)
+                zip_file_path = validate_zip_file(input_zip)
             except (ValidationError, FileNotFoundError) as e:
                 raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
 
