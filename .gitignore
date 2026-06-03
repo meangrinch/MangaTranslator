@@ -23,6 +23,7 @@ start-webui.sh
 /models/yolo/
 /models/manga-ocr-base/
 /models/paddleocr-vl/
+/models/sdcpp/
 /output/
 .DS_Store
 Thumbs.db

@@ -18,6 +18,7 @@ from core.batch_coordinator import BatchRequestCoordinator
 from core.caching import get_cache
 from core.config import MangaTranslatorConfig, PreprocessingConfig, RenderingConfig
 from core.scaling import scale_font_size, scale_length, scale_scalar
+from core.validation import validate_config
 from utils.exceptions import (
     CancellationError,
     CleaningError,
@@ -594,6 +595,7 @@ def translate_and_render(
         PIL.Image: Final translated image
     """
     start_time = time.time()
+    validate_config(config)
     image_path = Path(image_path)
     verbose = config.verbose
     device = config.device
@@ -894,8 +896,9 @@ def translate_and_render(
                     osb_text_verification=config.detection.use_osb_text_verification,
                     osb_text_hf_token=config.outside_text.huggingface_token,
                     inpaint_method=config.outside_text.inpainting_method,
-                    kontext_backend=config.outside_text.kontext_backend,
+                    flux_backend=config.outside_text.flux_backend,
                     flux_low_vram=config.outside_text.flux_low_vram,
+                    flux_sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
                     flux_luminance_correction=config.outside_text.flux_luminance_correction,
                     flux_upscale_small_crops=config.outside_text.flux_upscale_small_crops,
                     bubble_detector_model=config.detection.bubble_detector_model,

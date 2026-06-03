@@ -130,8 +130,9 @@ class OutsideTextConfig:
     inpainting_method: str = (
         "flux_klein_4b"  # flux_klein_9b, flux_klein_4b, flux_kontext, opencv, none
     )
-    kontext_backend: str = "sdnq"  # "sdnq" (cross-platform) or "nunchaku" (CUDA-only)
-    flux_low_vram: bool = False  # Use sequential CPU offload for Klein/Kontext SDNQ
+    flux_backend: str = "sdnq"  # "sdcpp", "sdnq", "nunchaku" (Kontext only)
+    flux_low_vram: bool = False  # Use CPU offload for SDNQ
+    flux_sdcpp_cache_mode: str = "none"
     flux_num_inference_steps: int = 8
     flux_luminance_correction: bool = (
         True  # Match patch luminance to surrounding context

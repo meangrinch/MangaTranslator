@@ -1,6 +1,7 @@
 import os
 import shutil
 import threading
+import time
 import urllib.request
 from enum import Enum
 from pathlib import Path
@@ -18,6 +19,7 @@ from transformers import (
 from ultralytics import YOLO
 
 from core.device import empty_cache, get_best_device, get_best_dtype, get_device_info
+from core.ml.sdcpp_server import SDCppServerManager
 from utils.exceptions import ModelError
 from utils.logging import log_message
 
@@ -42,6 +44,16 @@ class ModelType(Enum):
     FLUX_KONTEXT_SDNQ_PIPELINE = "flux_kontext_sdnq_pipeline"
     FLUX_KLEIN_9B_PIPELINE = "flux_klein_9b_pipeline"
     FLUX_KLEIN_4B_PIPELINE = "flux_klein_4b_pipeline"
+    SDCPP_SERVER = "sdcpp_server"
+    FLUX_KLEIN_4B_SDCPP_DIFFUSION = "flux_klein_4b_sdcpp_diffusion"
+    FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER = "flux_klein_4b_sdcpp_text_encoder"
+    FLUX_KLEIN_9B_SDCPP_DIFFUSION = "flux_klein_9b_sdcpp_diffusion"
+    FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER = "flux_klein_9b_sdcpp_text_encoder"
+    FLUX_KLEIN_SDCPP_VAE = "flux_klein_sdcpp_vae"
+    FLUX_KONTEXT_SDCPP_DIFFUSION = "flux_kontext_sdcpp_diffusion"
+    FLUX_KONTEXT_SDCPP_CLIP_L = "flux_kontext_sdcpp_clip_l"
+    FLUX_KONTEXT_SDCPP_T5XXL = "flux_kontext_sdcpp_t5xxl"
+    FLUX_KONTEXT_SDCPP_VAE = "flux_kontext_sdcpp_vae"
 
 
 class ModelManager:
@@ -78,6 +90,9 @@ class ModelManager:
             self.hf_token = None
             self.flux_hf_token = None
             self.flux_residual_diff_threshold = 0.15
+            self.sdcpp_server_manager = SDCppServerManager(
+                self.model_paths[ModelType.SDCPP_SERVER]
+            )
 
             # Serializes Flux pipeline inference across threads (CPU offload is not thread-safe)
             self.flux_inference_lock = threading.Lock()
@@ -90,6 +105,8 @@ class ModelManager:
     def _init_model_paths(self):
         """Initialize model file paths."""
         model_dir = Path("./models").resolve()
+        flux_sdcpp_dir = model_dir / "flux" / "sdcpp"
+        flux_kontext_sdcpp_dir = flux_sdcpp_dir / "kontext"
         return {
             ModelType.UPSCALE: (
                 model_dir / "upscale" / "2x-AnimeSharpV4_RCAN.safetensors"
@@ -112,6 +129,34 @@ class ModelManager:
             ),
             ModelType.MANGA_OCR: (model_dir / "manga-ocr-base"),
             ModelType.PADDLE_OCR_VL: (model_dir / "paddleocr-vl"),
+            ModelType.SDCPP_SERVER: (
+                model_dir / "sdcpp" / SDCppServerManager.RELEASE_TAG
+            ),
+            ModelType.FLUX_KLEIN_4B_SDCPP_DIFFUSION: (
+                flux_sdcpp_dir / "flux-2-klein-4b-Q6_K.gguf"
+            ),
+            ModelType.FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER: (
+                flux_sdcpp_dir / "Qwen3-4B-UD-Q4_K_XL.gguf"
+            ),
+            ModelType.FLUX_KLEIN_9B_SDCPP_DIFFUSION: (
+                flux_sdcpp_dir / "flux-2-klein-9b-Q6_K.gguf"
+            ),
+            ModelType.FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER: (
+                flux_sdcpp_dir / "Qwen3-8B-UD-Q4_K_XL.gguf"
+            ),
+            ModelType.FLUX_KLEIN_SDCPP_VAE: (flux_sdcpp_dir / "flux2-vae.safetensors"),
+            ModelType.FLUX_KONTEXT_SDCPP_DIFFUSION: (
+                flux_kontext_sdcpp_dir / "flux1-kontext-dev-Q6_K.gguf"
+            ),
+            ModelType.FLUX_KONTEXT_SDCPP_CLIP_L: (
+                flux_kontext_sdcpp_dir / "clip_l.safetensors"
+            ),
+            ModelType.FLUX_KONTEXT_SDCPP_T5XXL: (
+                flux_kontext_sdcpp_dir / "t5-v1_1-xxl-encoder-Q6_K.gguf"
+            ),
+            ModelType.FLUX_KONTEXT_SDCPP_VAE: (
+                flux_kontext_sdcpp_dir / "ae.safetensors"
+            ),
         }
 
     def _init_model_urls(self):
@@ -124,6 +169,42 @@ class ModelManager:
             ModelType.UPSCALE_LITE: (
                 "https://huggingface.co/Kim2091/2x-AnimeSharpV4/resolve/main/"
                 "2x-AnimeSharpV4_Fast_RCAN_PU.safetensors"
+            ),
+            ModelType.FLUX_KLEIN_4B_SDCPP_DIFFUSION: (
+                "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/main/"
+                "flux-2-klein-4b-Q6_K.gguf"
+            ),
+            ModelType.FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER: (
+                "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/"
+                "Qwen3-4B-UD-Q4_K_XL.gguf"
+            ),
+            ModelType.FLUX_KLEIN_9B_SDCPP_DIFFUSION: (
+                "https://huggingface.co/unsloth/FLUX.2-klein-9B-GGUF/resolve/main/"
+                "flux-2-klein-9b-Q6_K.gguf"
+            ),
+            ModelType.FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER: (
+                "https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/main/"
+                "Qwen3-8B-UD-Q4_K_XL.gguf"
+            ),
+            ModelType.FLUX_KLEIN_SDCPP_VAE: (
+                "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/"
+                "split_files/vae/flux2-vae.safetensors"
+            ),
+            ModelType.FLUX_KONTEXT_SDCPP_DIFFUSION: (
+                "https://huggingface.co/unsloth/FLUX.1-Kontext-dev-GGUF/resolve/main/"
+                "flux1-kontext-dev-Q6_K.gguf"
+            ),
+            ModelType.FLUX_KONTEXT_SDCPP_CLIP_L: (
+                "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/"
+                "clip_l.safetensors"
+            ),
+            ModelType.FLUX_KONTEXT_SDCPP_T5XXL: (
+                "https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/"
+                "t5-v1_1-xxl-encoder-Q6_K.gguf"
+            ),
+            ModelType.FLUX_KONTEXT_SDCPP_VAE: (
+                "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/"
+                "split_files/vae/ae.safetensors"
             ),
         }
 
@@ -197,8 +278,48 @@ class ModelManager:
         repos[ModelType.FLUX_KLEIN_4B_PIPELINE] = {
             "repo_id": "Disty0/FLUX.2-klein-4B-SDNQ-4bit-dynamic",
         }
+        repos[ModelType.FLUX_KLEIN_4B_SDCPP_DIFFUSION] = {
+            "repo_id": "unsloth/FLUX.2-klein-4B-GGUF",
+            "filename": "flux-2-klein-4b-Q6_K.gguf",
+        }
+        repos[ModelType.FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER] = {
+            "repo_id": "unsloth/Qwen3-4B-GGUF",
+            "filename": "Qwen3-4B-UD-Q4_K_XL.gguf",
+        }
+        repos[ModelType.FLUX_KLEIN_9B_SDCPP_DIFFUSION] = {
+            "repo_id": "unsloth/FLUX.2-klein-9B-GGUF",
+            "filename": "flux-2-klein-9b-Q6_K.gguf",
+        }
+        repos[ModelType.FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER] = {
+            "repo_id": "unsloth/Qwen3-8B-GGUF",
+            "filename": "Qwen3-8B-UD-Q4_K_XL.gguf",
+        }
+        repos[ModelType.FLUX_KLEIN_SDCPP_VAE] = {
+            "repo_id": "Comfy-Org/flux2-dev",
+            "filename": "split_files/vae/flux2-vae.safetensors",
+        }
+        repos[ModelType.FLUX_KONTEXT_SDCPP_DIFFUSION] = {
+            "repo_id": "unsloth/FLUX.1-Kontext-dev-GGUF",
+            "filename": "flux1-kontext-dev-Q6_K.gguf",
+        }
+        repos[ModelType.FLUX_KONTEXT_SDCPP_CLIP_L] = {
+            "repo_id": "comfyanonymous/flux_text_encoders",
+            "filename": "clip_l.safetensors",
+        }
+        repos[ModelType.FLUX_KONTEXT_SDCPP_T5XXL] = {
+            "repo_id": "city96/t5-v1_1-xxl-encoder-gguf",
+            "filename": "t5-v1_1-xxl-encoder-Q6_K.gguf",
+        }
+        repos[ModelType.FLUX_KONTEXT_SDCPP_VAE] = {
+            "repo_id": "Comfy-Org/Lumina_Image_2.0_Repackaged",
+            "filename": "split_files/vae/ae.safetensors",
+        }
 
         return repos
+
+    def _enable_hf_xet_high_performance(self) -> None:
+        if "HF_XET_HIGH_PERFORMANCE" not in os.environ:
+            os.environ["HF_XET_HIGH_PERFORMANCE"] = "1"
 
     def _ensure_file(self, path: Path, url: str, verbose: bool = False) -> None:
         """Download file from URL if it doesn't exist.
@@ -211,16 +332,143 @@ class ModelManager:
         if path.exists():
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        log_message(f"Downloading {path.name}...", verbose=verbose)
+        log_message(f"Downloading {path.name}...", always_print=True)
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req) as response, open(path, "wb") as f:
-                shutil.copyfileobj(response, f)
-            log_message(f"Downloaded {path.name} successfully.", verbose=verbose)
+                total = int(response.headers.get("Content-Length") or 0)
+                downloaded = 0
+                last_log = time.monotonic()
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    now = time.monotonic()
+                    if now - last_log >= 5:
+                        if total:
+                            percent = min(100.0, downloaded * 100.0 / total)
+                            log_message(
+                                f"  - {path.name}: {downloaded / (1024**2):.1f}/"
+                                f"{total / (1024**2):.1f} MiB ({percent:.1f}%)",
+                                always_print=True,
+                            )
+                        else:
+                            log_message(
+                                f"  - {path.name}: {downloaded / (1024**2):.1f} MiB",
+                                always_print=True,
+                            )
+                        last_log = now
+            log_message(f"Downloaded {path.name} successfully.", always_print=True)
         except Exception as e:
             if path.exists():
                 path.unlink()
             raise ModelError(f"Failed to download {path.name}: {e}")
+
+    def _remove_empty_child_dirs(self, root: Path, verbose: bool = False) -> None:
+        if not root.exists():
+            return
+        for path in sorted(
+            (child for child in root.rglob("*") if child.is_dir()),
+            key=lambda child: len(child.parts),
+            reverse=True,
+        ):
+            try:
+                path.rmdir()
+                log_message(
+                    f"Removed empty download directory {path}.", verbose=verbose
+                )
+            except OSError:
+                pass
+
+    def _flux_sdcpp_asset_spec(self, model_key: str) -> dict:
+        specs = {
+            "flux_klein_4b": {
+                "label": "Flux.2 Klein 4B",
+                "model_types": {
+                    "diffusion_model": ModelType.FLUX_KLEIN_4B_SDCPP_DIFFUSION,
+                    "llm": ModelType.FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER,
+                    "vae": ModelType.FLUX_KLEIN_SDCPP_VAE,
+                },
+                "server_args": ("--llm", "llm"),
+            },
+            "flux_klein_9b": {
+                "label": "Flux.2 Klein 9B",
+                "model_types": {
+                    "diffusion_model": ModelType.FLUX_KLEIN_9B_SDCPP_DIFFUSION,
+                    "llm": ModelType.FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER,
+                    "vae": ModelType.FLUX_KLEIN_SDCPP_VAE,
+                },
+                "server_args": ("--llm", "llm"),
+            },
+            "flux_kontext": {
+                "label": "Flux.1 Kontext",
+                "model_types": {
+                    "diffusion_model": ModelType.FLUX_KONTEXT_SDCPP_DIFFUSION,
+                    "clip_l": ModelType.FLUX_KONTEXT_SDCPP_CLIP_L,
+                    "t5xxl": ModelType.FLUX_KONTEXT_SDCPP_T5XXL,
+                    "vae": ModelType.FLUX_KONTEXT_SDCPP_VAE,
+                },
+                "server_args": ("--clip_l", "clip_l", "--t5xxl", "t5xxl"),
+            },
+        }
+        if model_key not in specs:
+            raise ModelError(f"Unknown sd.cpp Flux model key: {model_key}")
+        return specs[model_key]
+
+    def ensure_flux_sdcpp_assets(
+        self, model_key: str = "flux_klein_4b", verbose: bool = False
+    ) -> dict:
+        """Ensure sd.cpp server and Flux GGUF assets are available."""
+        with self._lock:
+            spec = self._flux_sdcpp_asset_spec(model_key)
+            log_message(f"Preparing {spec['label']} sd.cpp assets...", verbose=verbose)
+            assets = {
+                "executable": self.sdcpp_server_manager.ensure_server_executable(
+                    verbose=verbose
+                ),
+                "model_key": model_key,
+                "label": spec["label"],
+                "server_args": spec["server_args"],
+            }
+            for key, model_type in spec["model_types"].items():
+                assets[key] = self.model_paths[model_type]
+                hf_info = self.model_hf_repos[model_type]
+                self._ensure_hf_file(
+                    hf_info["repo_id"],
+                    hf_info["filename"],
+                    assets[key],
+                    token=self.flux_hf_token,
+                    verbose=verbose,
+                )
+
+            return assets
+
+    def ensure_flux_sdcpp_server(
+        self,
+        model_key: str = "flux_klein_4b",
+        cache_mode: str = "none",
+        num_inference_steps: int = 4,
+        verbose: bool = False,
+    ) -> dict:
+        """Start or reuse a persistent sd.cpp server for a Flux model."""
+        assets = self.ensure_flux_sdcpp_assets(model_key, verbose=verbose)
+        return self.sdcpp_server_manager.ensure_flux_server(
+            model_key,
+            assets,
+            cache_mode=cache_mode,
+            num_inference_steps=num_inference_steps,
+            verbose=verbose,
+        )
+
+    def shutdown_sdcpp_server(self, model_key: str, verbose: bool = False) -> None:
+        with self.flux_inference_lock:
+            self.sdcpp_server_manager.shutdown_server(model_key, verbose=verbose)
+
+    def shutdown_sdcpp_servers(self, verbose: bool = False) -> None:
+        with self.flux_inference_lock:
+            self.sdcpp_server_manager.shutdown_servers(verbose=verbose)
 
     def _ensure_hf_file(
         self,
@@ -240,13 +488,17 @@ class ModelManager:
             verbose: Whether to print verbose logging
         """
         if target.exists():
+            self._remove_empty_child_dirs(target.parent, verbose=verbose)
             return target
         target.parent.mkdir(parents=True, exist_ok=True)
         log_message(
             f"Downloading {target.name} from Hugging Face ({repo_id})...",
             verbose=verbose,
         )
-        effective_token = token if token is not None else self.hf_token
+        self._enable_hf_xet_high_performance()
+        effective_token = token or self.hf_token or os.environ.get("HF_TOKEN")
+        if effective_token:
+            os.environ["HF_TOKEN"] = effective_token
         downloaded = hf_hub_download(
             repo_id=repo_id,
             filename=filename,
@@ -255,7 +507,6 @@ class ModelManager:
         )
         downloaded_path = Path(downloaded)
         if downloaded_path != target:
-            downloaded_parent = downloaded_path.parent
             try:
                 downloaded_path.replace(target)
             except Exception:
@@ -265,13 +516,7 @@ class ModelManager:
                 except Exception:
                     pass
 
-            # Clean up empty directory if it was created by hf_hub_download
-            if downloaded_parent != target.parent and downloaded_parent.exists():
-                try:
-                    if not any(downloaded_parent.iterdir()):
-                        downloaded_parent.rmdir()
-                except (OSError, PermissionError):
-                    pass
+            self._remove_empty_child_dirs(target.parent, verbose=verbose)
         log_message(f"Downloaded {target.name} successfully.", verbose=verbose)
         return target
 
@@ -319,7 +564,10 @@ class ModelManager:
             ),
             verbose=verbose,
         )
-        effective_token = token if token is not None else self.hf_token
+        self._enable_hf_xet_high_performance()
+        effective_token = token or self.hf_token or os.environ.get("HF_TOKEN")
+        if effective_token:
+            os.environ["HF_TOKEN"] = effective_token
         try:
             snapshot_download(
                 repo_id=repo_id,
@@ -784,8 +1032,8 @@ class ModelManager:
             self.hf_token = token if token else None
             if self.hf_token:
                 os.environ["HF_TOKEN"] = self.hf_token
-                if enable_fast_download and "HF_XET_HIGH_PERFORMANCE" not in os.environ:
-                    os.environ["HF_XET_HIGH_PERFORMANCE"] = "1"
+                if enable_fast_download:
+                    self._enable_hf_xet_high_performance()
             elif "HF_TOKEN" in os.environ:
                 del os.environ["HF_TOKEN"]
 
@@ -795,7 +1043,11 @@ class ModelManager:
         Args:
             token: HuggingFace API token
         """
-        self.flux_hf_token = token if token else None
+        with self._lock:
+            self.flux_hf_token = token if token else None
+            if self.flux_hf_token:
+                os.environ["HF_TOKEN"] = self.flux_hf_token
+            self._enable_hf_xet_high_performance()
 
     def set_flux_residual_diff_threshold(self, threshold: float):
         """Set the residual diff threshold for Flux caching.
@@ -1170,6 +1422,7 @@ class ModelManager:
         self.unload_model(ModelType.FLUX_TRANSFORMER, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.FLUX_TEXT_ENCODER, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.FLUX_PIPELINE, force_gc=True, verbose=verbose)
+        self.shutdown_sdcpp_server("flux_kontext", verbose=verbose)
 
         if models_unloaded:
             log_message("Flux.1 Kontext models unloaded.", verbose=verbose)
@@ -1196,14 +1449,17 @@ class ModelManager:
         self.unload_model(
             ModelType.FLUX_KLEIN_4B_PIPELINE, force_gc=True, verbose=verbose
         )
+        self.shutdown_sdcpp_server("flux_klein_9b", verbose=verbose)
+        self.shutdown_sdcpp_server("flux_klein_4b", verbose=verbose)
 
         if models_unloaded:
             log_message("Flux.2 Klein models unloaded.", verbose=verbose)
 
     def unload_all(self, verbose: bool = False):
         """Unload all models and free all GPU memory."""
+        log_message("Unloading all models...", verbose=verbose)
+        self.shutdown_sdcpp_servers(verbose=verbose)
         with self._lock:
-            log_message("Unloading all models...", verbose=verbose)
             for model_type in list(self.models.keys()):
                 if self.is_loaded(model_type):
                     del self.models[model_type]

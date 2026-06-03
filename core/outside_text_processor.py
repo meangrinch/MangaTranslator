@@ -423,9 +423,9 @@ def process_outside_text(
         # Create inpainter based on selected method
         inpainting_method = config.outside_text.inpainting_method
         inpainter = None
-
         if inpainting_method == "flux_klein_9b":
             try:
+                backend = config.outside_text.flux_backend
                 inpainter = FluxKleinInpainter(
                     variant="9b",
                     device=config.device,
@@ -434,9 +434,15 @@ def process_outside_text(
                     low_vram=config.outside_text.flux_low_vram,
                     luminance_correction=config.outside_text.flux_luminance_correction,
                     upscale_small_crops=config.outside_text.flux_upscale_small_crops,
+                    backend=backend,
+                    sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
                     verbose=verbose,
                 )
-                log_message("Using Flux.2 Klein 9B for inpainting", verbose=verbose)
+                backend_label = "sd.cpp" if backend == "sdcpp" else "SDNQ"
+                log_message(
+                    f"Using Flux.2 Klein 9B ({backend_label}) for inpainting",
+                    verbose=verbose,
+                )
             except Exception as e:
                 log_message(
                     f"Flux Klein 9B unavailable ({e}), falling back to OpenCV",
@@ -445,6 +451,7 @@ def process_outside_text(
 
         if inpainting_method == "flux_klein_4b":
             try:
+                backend = config.outside_text.flux_backend
                 inpainter = FluxKleinInpainter(
                     variant="4b",
                     device=config.device,
@@ -453,9 +460,15 @@ def process_outside_text(
                     low_vram=config.outside_text.flux_low_vram,
                     luminance_correction=config.outside_text.flux_luminance_correction,
                     upscale_small_crops=config.outside_text.flux_upscale_small_crops,
+                    backend=backend,
+                    sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
                     verbose=verbose,
                 )
-                log_message("Using Flux.2 Klein 4B for inpainting", verbose=verbose)
+                backend_label = "sd.cpp" if backend == "sdcpp" else "SDNQ"
+                log_message(
+                    f"Using Flux.2 Klein 4B ({backend_label}) for inpainting",
+                    verbose=verbose,
+                )
             except Exception as e:
                 log_message(
                     f"Flux Klein 4B unavailable ({e}), falling back to OpenCV",
@@ -464,8 +477,7 @@ def process_outside_text(
 
         if inpainting_method == "flux_kontext":
             try:
-                # Determine backend from config
-                backend = config.outside_text.kontext_backend
+                backend = config.outside_text.flux_backend
                 low_vram = (
                     config.outside_text.flux_low_vram if backend == "sdnq" else False
                 )
@@ -476,8 +488,13 @@ def process_outside_text(
                     residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
                     backend=backend,
                     low_vram=low_vram,
+                    sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
                 )
-                backend_label = "SDNQ" if backend == "sdnq" else "Nunchaku"
+                backend_label = {
+                    "sdnq": "SDNQ",
+                    "sdcpp": "sd.cpp",
+                    "nunchaku": "Nunchaku",
+                }[backend]
                 log_message(
                     f"Using Flux.1 Kontext ({backend_label}) for inpainting",
                     verbose=verbose,

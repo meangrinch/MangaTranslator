@@ -532,8 +532,9 @@ def clean_speech_bubbles(
     osb_text_verification: bool = False,
     osb_text_hf_token: str = "",
     inpaint_method: str = "flux_kontext",
-    kontext_backend: str = "nunchaku",
+    flux_backend: str = "sdnq",
     flux_low_vram: bool = False,
+    flux_sdcpp_cache_mode: str = "none",
     flux_luminance_correction: bool = True,
     flux_upscale_small_crops: bool = True,
     bubble_detector_model: str = "yolo_1",
@@ -846,7 +847,7 @@ def clean_speech_bubbles(
             colored_bubbles = [
                 b for b in processed_bubbles if b.get("is_colored", False)
             ]
-            if colored_bubbles and flux_hf_token:
+            if colored_bubbles:
                 log_message(
                     f"Inpainting {len(colored_bubbles)} colored bubbles with Flux",
                     always_print=True,
@@ -862,6 +863,7 @@ def clean_speech_bubbles(
                 temp_files = []
                 try:
                     if inpaint_method == "flux_klein_9b":
+                        backend = flux_backend
                         inpainter = FluxKleinInpainter(
                             variant="9b",
                             device=device,
@@ -870,9 +872,12 @@ def clean_speech_bubbles(
                             low_vram=flux_low_vram,
                             luminance_correction=flux_luminance_correction,
                             upscale_small_crops=flux_upscale_small_crops,
+                            backend=backend,
+                            sdcpp_cache_mode=flux_sdcpp_cache_mode,
                             verbose=verbose,
                         )
                     elif inpaint_method == "flux_klein_4b":
+                        backend = flux_backend
                         inpainter = FluxKleinInpainter(
                             variant="4b",
                             device=device,
@@ -881,18 +886,21 @@ def clean_speech_bubbles(
                             low_vram=flux_low_vram,
                             luminance_correction=flux_luminance_correction,
                             upscale_small_crops=flux_upscale_small_crops,
+                            backend=backend,
+                            sdcpp_cache_mode=flux_sdcpp_cache_mode,
                             verbose=verbose,
                         )
                     else:
                         # Default to Flux Kontext
-                        low_vram = flux_low_vram if kontext_backend == "sdnq" else False
+                        low_vram = flux_low_vram if flux_backend == "sdnq" else False
                         inpainter = FluxKontextInpainter(
                             device=device,
                             huggingface_token=flux_hf_token,
                             num_inference_steps=int(flux_num_inference_steps),
                             residual_diff_threshold=float(flux_residual_diff_threshold),
-                            backend=kontext_backend,
+                            backend=flux_backend,
                             low_vram=low_vram,
+                            sdcpp_cache_mode=flux_sdcpp_cache_mode,
                         )
                     if request_coordinator is not None and len(colored_bubbles) > 1:
                         pil_working = _inpaint_colored_bubbles_with_coordinator(

@@ -311,6 +311,11 @@ def validate_config(config: MangaTranslatorConfig) -> None:
     validate_mutually_exclusive_modes(
         config.cleaning_only, config.upscaling_only, config.test_mode
     )
+    if (
+        config.outside_text.inpainting_method in ("flux_klein_9b", "flux_klein_4b")
+        and config.outside_text.flux_backend == "nunchaku"
+    ):
+        raise ValidationError("Nunchaku backend is only supported with Flux.1 Kontext.")
 
 
 def normalize_zip_file_input(zip_input: Any) -> str:

@@ -125,8 +125,9 @@ class UIOutsideTextSettings:
     inpainting_method: str = (
         "flux_klein_4b"  # flux_klein_9b, flux_klein_4b, flux_kontext, opencv, none
     )
-    kontext_backend: str = "sdnq"  # "sdnq" (cross-platform) or "nunchaku" (CUDA)
-    flux_low_vram: bool = False  # Use sequential CPU offload for Klein/Kontext SDNQ
+    flux_backend: str = "sdnq"  # "sdcpp", "sdnq", "nunchaku" (Kontext only)
+    flux_low_vram: bool = False  # Use CPU offload for SDNQ
+    flux_sdcpp_cache_mode: str = "none"
     flux_num_inference_steps: int = 8
     flux_luminance_correction: bool = (
         True  # Match patch luminance to surrounding context
@@ -271,8 +272,9 @@ class UIConfigState:
             "outside_text_seed": self.outside_text.seed,
             "outside_text_huggingface_token": self.outside_text.huggingface_token,
             "outside_text_inpainting_method": self.outside_text.inpainting_method,
-            "outside_text_kontext_backend": self.outside_text.kontext_backend,
+            "outside_text_flux_backend": self.outside_text.flux_backend,
             "outside_text_flux_low_vram": self.outside_text.flux_low_vram,
+            "outside_text_flux_sdcpp_cache_mode": self.outside_text.flux_sdcpp_cache_mode,
             "outside_text_flux_num_inference_steps": self.outside_text.flux_num_inference_steps,
             "outside_text_flux_luminance_correction": self.outside_text.flux_luminance_correction,
             "outside_text_flux_upscale_small_crops": self.outside_text.flux_upscale_small_crops,
@@ -423,11 +425,15 @@ class UIConfigState:
                     "outside_text_inpainting_method",
                     defaults.get("outside_text_inpainting_method", "flux_klein_4b"),
                 ),
-                kontext_backend=data.get(
-                    "outside_text_kontext_backend",
-                    defaults.get("outside_text_kontext_backend", "sdnq"),
+                flux_backend=data.get(
+                    "outside_text_flux_backend",
+                    defaults.get("outside_text_flux_backend", "sdnq"),
                 ),
                 flux_low_vram=data.get("outside_text_flux_low_vram", False),
+                flux_sdcpp_cache_mode=data.get(
+                    "outside_text_flux_sdcpp_cache_mode",
+                    defaults.get("outside_text_flux_sdcpp_cache_mode", "none"),
+                ),
                 flux_num_inference_steps=data.get(
                     "outside_text_flux_num_inference_steps", 8
                 ),
@@ -793,8 +799,9 @@ def map_ui_to_backend_config(
         seed=ui_state.outside_text.seed,
         huggingface_token=ui_state.outside_text.huggingface_token,
         inpainting_method=ui_state.outside_text.inpainting_method,
-        kontext_backend=ui_state.outside_text.kontext_backend,
+        flux_backend=ui_state.outside_text.flux_backend,
         flux_low_vram=ui_state.outside_text.flux_low_vram,
+        flux_sdcpp_cache_mode=ui_state.outside_text.flux_sdcpp_cache_mode,
         flux_num_inference_steps=ui_state.outside_text.flux_num_inference_steps,
         flux_luminance_correction=ui_state.outside_text.flux_luminance_correction,
         flux_upscale_small_crops=ui_state.outside_text.flux_upscale_small_crops,

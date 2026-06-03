@@ -593,20 +593,30 @@ def main():
         help="Inpainting method for outside text removal.",
     )
     parser.add_argument(
-        "--osb-kontext-backend",
+        "--osb-flux-backend",
         type=str,
-        choices=["sdnq", "nunchaku"],
+        choices=["sdcpp", "sdnq", "nunchaku"],
         default="sdnq",
         help=(
-            "Backend for Flux.1 Kontext model. "
-            "'sdnq' is cross-platform (Nvidia/AMD/Intel/macOS), "
-            "'nunchaku' is CUDA-only but faster"
+            "Backend for Flux inpainting. "
+            "'sdcpp' and 'sdnq' support Flux Klein/Kontext; "
+            "'nunchaku' is CUDA-only and Kontext-only."
         ),
     )
     parser.add_argument(
         "--osb-flux-low-vram",
         action="store_true",
-        help="Enable sequential CPU offload for Flux Klein/Kontext SDNQ models (reduces VRAM usage)",
+        help="Enable CPU offload for Flux SDNQ models (reduces VRAM usage)",
+    )
+    parser.add_argument(
+        "--osb-flux-sdcpp-cache-mode",
+        type=str,
+        choices=["spectrum", "cache-dit", "taylorseer", "dbcache", "none"],
+        default="none",
+        help=(
+            "Caching method for Flux via sd.cpp. Ordered from fastest/worst quality to slowest/best quality."
+            "Warmup is 25%% of the selected step count."
+        ),
     )
     parser.add_argument(
         "--osb-no-flux-upscale-small-crops",
@@ -642,7 +652,7 @@ def main():
         "--osb-flux-residual-threshold",
         type=float,
         default=0.15,
-        help="Residual diff threshold for Flux.1 Kontext inference (0.0-1.0)",
+        help="Residual diff threshold for Flux.1 Kontext via Nunchaku (0.0-1.0)",
     )
     parser.add_argument(
         "--osb-seed",
@@ -803,6 +813,15 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.osb_flux_backend == "nunchaku" and args.osb_inpainting_method in (
+        "flux_klein_9b",
+        "flux_klein_4b",
+    ):
+        parser.error(
+            "--osb-flux-backend nunchaku is only supported with "
+            "--osb-inpainting-method flux_kontext."
+        )
 
     import torch
 
@@ -1078,8 +1097,9 @@ def main():
             min_area_ignore_ratio=args.osb_min_area_ignore_ratio,
             huggingface_token=args.osb_hf_token or os.environ.get("HF_TOKEN", ""),
             inpainting_method=args.osb_inpainting_method,
-            kontext_backend=args.osb_kontext_backend,
+            flux_backend=args.osb_flux_backend,
             flux_low_vram=args.osb_flux_low_vram,
+            flux_sdcpp_cache_mode=args.osb_flux_sdcpp_cache_mode,
             flux_num_inference_steps=args.osb_flux_steps,
             flux_luminance_correction=args.osb_flux_luminance_correction,
             flux_upscale_small_crops=args.osb_flux_upscale_small_crops,
@@ -1115,7 +1135,6 @@ def main():
     )
 
     clamp_settings(config)
-
     # --- Execute ---
     if args.batch:
         input_path = Path(args.input)

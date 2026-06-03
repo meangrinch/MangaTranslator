@@ -1518,47 +1518,103 @@ def create_layout(
                                     ],
                                     label="Inpainting Method",
                                     info=(
-                                        "Klein models are faster and cross-platform, but may introduce minor color "
-                                        "shifts. Kontext models do not shift colors, but are larger and slower. "
-                                        "Models are downloaded in 4-bit quantization."
+                                        "Klein models are newer, but may introduce minor color "
+                                        "shifts. Kontext does not shift colors, but is more dated."
                                     ),
                                 )
                                 _initial_method = saved_settings.get(
                                     "outside_text_inpainting_method", "flux_klein_4b"
                                 )
                                 _is_kontext = _initial_method == "flux_kontext"
-                                outside_text_kontext_backend = gr.Radio(
-                                    choices=[
-                                        ("SDNQ (cross-platform)", "sdnq"),
-                                        ("Nunchaku (CUDA)", "nunchaku"),
-                                    ],
-                                    value=saved_settings.get(
-                                        "outside_text_kontext_backend", "sdnq"
-                                    ),
-                                    label="Kontext Backend",
-                                    info=(
-                                        "SDNQ: cross-platform, no HF token. "
-                                        "Nunchaku: CUDA-only, HF token required."
-                                    ),
-                                    visible=_is_kontext,
-                                )
                                 _is_klein_model = _initial_method in (
                                     "flux_klein_9b",
                                     "flux_klein_4b",
                                 )
+                                if _is_klein_model:
+                                    _backend_choices = [
+                                        ("sd.cpp", "sdcpp"),
+                                        ("SDNQ", "sdnq"),
+                                    ]
+                                    _backend_visible = True
+                                elif _is_kontext:
+                                    _backend_choices = [
+                                        ("sd.cpp", "sdcpp"),
+                                        ("SDNQ", "sdnq"),
+                                        ("Nunchaku (CUDA)", "nunchaku"),
+                                    ]
+                                    _backend_visible = True
+                                else:
+                                    _backend_choices = [("SDNQ", "sdnq")]
+                                    _backend_visible = False
                                 _initial_backend = saved_settings.get(
-                                    "outside_text_kontext_backend", "sdnq"
+                                    "outside_text_flux_backend", "sdnq"
                                 )
-                                _show_low_vram = _is_klein_model or (
-                                    _is_kontext and _initial_backend == "sdnq"
+                                if _initial_backend not in {
+                                    choice[1] for choice in _backend_choices
+                                }:
+                                    _initial_backend = "sdnq"
+                                outside_text_flux_backend = gr.Radio(
+                                    choices=_backend_choices,
+                                    value=_initial_backend,
+                                    label="Flux Backend",
+                                    info=(
+                                        "SDNQ/sd.cpp: cross-platform, no HF token. "
+                                        "Nunchaku: CUDA-only, HF token required."
+                                    ),
+                                    visible=_backend_visible,
                                 )
+                                outside_text_flux_residual_diff_threshold = gr.Slider(
+                                    0.0,
+                                    1.0,
+                                    value=saved_settings.get(
+                                        "outside_text_flux_residual_diff_threshold",
+                                        0.15,
+                                    ),
+                                    step=0.01,
+                                    label="Residual Diff Threshold",
+                                    info=(
+                                        "First Block Caching threshold for Kontext via Nunchaku. "
+                                        "Higher = faster, but lower quality."
+                                    ),
+                                    interactive=(
+                                        _is_kontext and _initial_backend == "nunchaku"
+                                    ),
+                                    visible=(
+                                        _is_kontext and _initial_backend == "nunchaku"
+                                    ),
+                                )
+                                _show_low_vram = (
+                                    _is_klein_model or _is_kontext
+                                ) and _initial_backend == "sdnq"
                                 outside_text_flux_low_vram = gr.Checkbox(
                                     value=saved_settings.get(
                                         "outside_text_flux_low_vram", False
                                     ),
                                     label="Low VRAM Mode",
-                                    info="Sequential CPU offload for lower memory usage (slower).",
+                                    info="Sequential CPU offload for SDNQ.",
                                     visible=_show_low_vram,
+                                )
+                                outside_text_flux_sdcpp_cache_mode = gr.Radio(
+                                    choices=[
+                                        ("Spectrum", "spectrum"),
+                                        ("Cache-DiT", "cache-dit"),
+                                        ("TaylorSeer", "taylorseer"),
+                                        ("DBCache", "dbcache"),
+                                        ("None", "none"),
+                                    ],
+                                    value=saved_settings.get(
+                                        "outside_text_flux_sdcpp_cache_mode",
+                                        "none",
+                                    ),
+                                    label="Cache Method",
+                                    info=(
+                                        "Caching methods for Flux via sd.cpp. Ordered fastest/worst quality -> slowest/best quality. "
+                                        "Warmup is 25% of the selected step count."
+                                    ),
+                                    visible=(
+                                        (_is_klein_model or _is_kontext)
+                                        and _initial_backend == "sdcpp"
+                                    ),
                                 )
                                 outside_text_flux_num_inference_steps = gr.Slider(
                                     1,
@@ -1656,26 +1712,6 @@ def create_layout(
                                         "flux_klein_4b",
                                     )
                                     not in ("opencv", "none"),
-                                )
-                                outside_text_flux_residual_diff_threshold = gr.Slider(
-                                    0.0,
-                                    1.0,
-                                    value=saved_settings.get(
-                                        "outside_text_flux_residual_diff_threshold",
-                                        0.15,
-                                    ),
-                                    step=0.01,
-                                    label="Residual Diff Threshold",
-                                    info=(
-                                        "First Block Caching threshold for Flux.1 Kontext. "
-                                        "Higher = faster, but lower quality."
-                                    ),
-                                    interactive=saved_settings.get(
-                                        "outside_text_inpainting_method",
-                                        "flux_klein_4b",
-                                    )
-                                    == "flux_kontext",
-                                    visible=_is_kontext,
                                 )
                                 outside_text_seed = gr.Number(
                                     value=saved_settings.get("outside_text_seed", 1),
@@ -2074,8 +2110,9 @@ def create_layout(
             outside_text_enabled,
             outside_text_seed,
             outside_text_inpainting_method,
-            outside_text_kontext_backend,
+            outside_text_flux_backend,
             outside_text_flux_low_vram,
+            outside_text_flux_sdcpp_cache_mode,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
@@ -2188,8 +2225,9 @@ def create_layout(
             outside_text_enabled,
             outside_text_seed,
             outside_text_inpainting_method,
-            outside_text_kontext_backend,
+            outside_text_flux_backend,
             outside_text_flux_low_vram,
+            outside_text_flux_sdcpp_cache_mode,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
@@ -2302,8 +2340,9 @@ def create_layout(
             outside_text_enabled,
             outside_text_seed,
             outside_text_inpainting_method,
-            outside_text_kontext_backend,
+            outside_text_flux_backend,
             outside_text_flux_low_vram,
+            outside_text_flux_sdcpp_cache_mode,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
@@ -2422,8 +2461,9 @@ def create_layout(
             outside_text_enabled,
             outside_text_seed,
             outside_text_inpainting_method,
-            outside_text_kontext_backend,
+            outside_text_flux_backend,
             outside_text_flux_low_vram,
+            outside_text_flux_sdcpp_cache_mode,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
@@ -2733,8 +2773,35 @@ def create_layout(
                 max_steps = 12
                 default_steps = 4
 
-            show_low_vram = is_klein or (is_kontext and current_backend == "sdnq")
-            residual_interactive = is_kontext and current_backend == "nunchaku"
+            if is_klein:
+                backend_choices = [
+                    ("sd.cpp", "sdcpp"),
+                    ("SDNQ", "sdnq"),
+                ]
+                valid_backends = {"sdcpp", "sdnq"}
+                backend_value = (
+                    current_backend if current_backend in valid_backends else "sdnq"
+                )
+                backend_visible = True
+            elif is_kontext:
+                backend_choices = [
+                    ("sd.cpp", "sdcpp"),
+                    ("SDNQ", "sdnq"),
+                    ("Nunchaku (CUDA)", "nunchaku"),
+                ]
+                valid_backends = {"sdcpp", "sdnq", "nunchaku"}
+                backend_value = (
+                    current_backend if current_backend in valid_backends else "sdnq"
+                )
+                backend_visible = True
+            else:
+                backend_choices = [("SDNQ", "sdnq")]
+                backend_value = current_backend
+                backend_visible = False
+
+            show_low_vram = (is_klein or is_kontext) and backend_value == "sdnq"
+            show_sdcpp_cache = (is_klein or is_kontext) and backend_value == "sdcpp"
+            residual_interactive = is_kontext and backend_value == "nunchaku"
             luminance_interactive = (
                 is_klein and bool(upscale_small_crops) and not bool(group_regions)
             )
@@ -2747,8 +2814,13 @@ def create_layout(
                 )
 
             return (
-                gr.update(visible=is_kontext),
+                gr.update(
+                    visible=backend_visible,
+                    choices=backend_choices,
+                    value=backend_value,
+                ),
                 gr.update(visible=show_low_vram),
+                gr.update(visible=show_sdcpp_cache),
                 gr.update(
                     interactive=(not is_no_flux),
                     maximum=max_steps,
@@ -2757,7 +2829,10 @@ def create_layout(
                 luminance_update,
                 gr.update(visible=(not is_no_flux), interactive=is_klein),
                 gr.update(visible=(not is_no_flux), interactive=(not is_no_flux)),
-                gr.update(visible=is_kontext, interactive=residual_interactive),
+                gr.update(
+                    visible=residual_interactive,
+                    interactive=residual_interactive,
+                ),
                 gr.update(interactive=(not is_no_flux)),
                 gr.update(interactive=(not is_no_flux)),
             )
@@ -2766,14 +2841,15 @@ def create_layout(
             fn=_update_inpainting_controls,
             inputs=[
                 outside_text_inpainting_method,
-                outside_text_kontext_backend,
+                outside_text_flux_backend,
                 outside_text_flux_num_inference_steps,
                 outside_text_flux_upscale_small_crops,
                 outside_text_flux_group_regions,
             ],
             outputs=[
-                outside_text_kontext_backend,
+                outside_text_flux_backend,
                 outside_text_flux_low_vram,
+                outside_text_flux_sdcpp_cache_mode,
                 outside_text_flux_num_inference_steps,
                 outside_text_flux_luminance_correction,
                 outside_text_flux_upscale_small_crops,
@@ -2816,20 +2892,31 @@ def create_layout(
                 queue=False,
             )
 
-        # Kontext backend change -> update Low VRAM and Residual diff visibility
-        def _update_kontext_backend_controls(backend: str):
-            """Update controls when Kontext backend changes."""
-            is_sdnq = backend == "sdnq"
+        # Flux backend change -> update Low VRAM, sd.cpp cache, and Residual diff visibility
+        def _update_flux_backend_controls(backend: str, method: str):
+            """Update controls when Flux backend changes."""
+            is_kontext = method == "flux_kontext"
+            is_klein = method in ("flux_klein_9b", "flux_klein_4b")
+            show_low_vram = (is_klein or is_kontext) and backend == "sdnq"
+            show_sdcpp_cache = (is_klein or is_kontext) and backend == "sdcpp"
             return (
-                gr.update(visible=is_sdnq),
-                gr.update(interactive=(not is_sdnq)),
+                gr.update(visible=show_low_vram),
+                gr.update(visible=show_sdcpp_cache),
+                gr.update(
+                    visible=(is_kontext and backend == "nunchaku"),
+                    interactive=(is_kontext and backend == "nunchaku"),
+                ),
             )
 
-        outside_text_kontext_backend.change(
-            fn=_update_kontext_backend_controls,
-            inputs=outside_text_kontext_backend,
+        outside_text_flux_backend.change(
+            fn=_update_flux_backend_controls,
+            inputs=[
+                outside_text_flux_backend,
+                outside_text_inpainting_method,
+            ],
             outputs=[
                 outside_text_flux_low_vram,
+                outside_text_flux_sdcpp_cache_mode,
                 outside_text_flux_residual_diff_threshold,
             ],
             queue=False,
