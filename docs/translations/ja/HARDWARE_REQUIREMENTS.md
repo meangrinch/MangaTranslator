@@ -1,30 +1,260 @@
 # 動作に必要な動作環境（ハードウェア）
 
-### 基本スペック
+## 基本スペック
 
 - **CPU:** 4コア CPU (8コア以上を推奨)
 - **RAM:** 8 GB (16 GB以上を推奨)
 - **VRAM:** 0 GB (4 GB以上を推奨)
 - **ストレージ:** 5 GB
 
-### 吹き出し外 (OSB) インペインティング (Flux モデル)
+## 吹き出し外 (OSB) インペインティング (Flux モデル)
 
-- **FLUX.2-klein-4B-SDNQ:**
-  - **VRAM:** +5 GB (低VRAMモード時は ~1.5-2.5 GB に減少)
-  - **RAM:** +6 GB
-  - **ストレージ:** +5.2 GB
+基本スペックに追加される必要環境。VRAMの数値は概算であり、ハードウェア環境に依存します。
 
-- **FLUX.2-klein-9B-SDNQ:**
-  - **VRAM:** +8 GB (低VRAMモード時は ~2.5-3.5 GB に減少)
-  - **RAM:** +9 GB
-  - **ストレージ:** +12.0 GB
+### SDNQ バックエンド
 
-- **FLUX.1-Kontext-dev (Nunchaku バックエンド):**
-  - **VRAM:** +5.5–6.5 GB
-  - **RAM:** +10 GB
-  - **ストレージ:** +9.8 GB
+| モデル | VRAM | VRAM (低VRAM) | RAM | ストレージ |
+| --- | --- | --- | --- | --- |
+| FLUX.2 Klein 4B | +5.0 GB | +2.0 GB | +6 GB | +5.1 GB |
+| FLUX.2 Klein 9B | +8.0 GB | +3.0 GB | +13 GB | +11.7 GB |
+| FLUX.1 Kontext | +9.0 GB | +4.0 GB | +14 GB | +12.6 GB |
 
-- **FLUX.1-Kontext-dev-SDNQ:**
-  - **VRAM:** +9 GB (低VRAMモード時は ~3.5-4 GB に減少)
-  - **RAM:** +10 GB
-  - **ストレージ:** +12.9 GB
+### sd.cpp バックエンド
+
+<table>
+  <thead>
+    <tr>
+      <th>モデル</th>
+      <th>量子化</th>
+      <th>VRAM</th>
+      <th>RAM</th>
+      <th>ストレージ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="5" valign="middle"><strong>FLUX.2 Klein 4B</strong></td>
+      <td>Q8_0</td>
+      <td>+7.3 GB</td>
+      <td>+5.5 GB</td>
+      <td>+4.0 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K</td>
+      <td>+6.5 GB</td>
+      <td>+4.7 GB</td>
+      <td>+3.2 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_M</td>
+      <td>+6.2 GB</td>
+      <td>+4.4 GB</td>
+      <td>+2.9 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_M</td>
+      <td>+5.7 GB</td>
+      <td>+3.9 GB</td>
+      <td>+2.4 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_M</td>
+      <td>+5.3 GB</td>
+      <td>+3.5 GB</td>
+      <td>+2.0 GB</td>
+    </tr>
+    <tr>
+      <td rowspan="5" valign="middle"><strong>Qwen3-4B</strong><br><small>(テキストエンコーダー)</small></td>
+      <td>Q8_0</td>
+      <td>-</td>
+      <td>+4.0 GB</td>
+      <td>+4.0 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K_XL</td>
+      <td>-</td>
+      <td>+3.4 GB</td>
+      <td>+3.4 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_XL</td>
+      <td>-</td>
+      <td>+2.7 GB</td>
+      <td>+2.7 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_XL</td>
+      <td>-</td>
+      <td>+2.4 GB</td>
+      <td>+2.4 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_XL</td>
+      <td>-</td>
+      <td>+2.0 GB</td>
+      <td>+2.0 GB</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+<table>
+  <thead>
+    <tr>
+      <th>モデル</th>
+      <th>量子化</th>
+      <th>VRAM</th>
+      <th>RAM</th>
+      <th>ストレージ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="5" valign="middle"><strong>FLUX.2 Klein 9B</strong></td>
+      <td>Q8_0</td>
+      <td>+12.6 GB</td>
+      <td>+10.8 GB</td>
+      <td>+9.3 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K</td>
+      <td>+10.6 GB</td>
+      <td>+8.8 GB</td>
+      <td>+7.3 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_M</td>
+      <td>+9.8 GB</td>
+      <td>+8.0 GB</td>
+      <td>+6.5 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_M</td>
+      <td>+8.8 GB</td>
+      <td>+7.0 GB</td>
+      <td>+5.5 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_M</td>
+      <td>+7.7 GB</td>
+      <td>+5.9 GB</td>
+      <td>+4.4 GB</td>
+    </tr>
+    <tr>
+      <td rowspan="5" valign="middle"><strong>Qwen3-8B</strong><br><small>(テキストエンコーダー)</small></td>
+      <td>Q8_0</td>
+      <td>-</td>
+      <td>+8.1 GB</td>
+      <td>+8.1 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K_XL</td>
+      <td>-</td>
+      <td>+7.0 GB</td>
+      <td>+7.0 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_XL</td>
+      <td>-</td>
+      <td>+5.5 GB</td>
+      <td>+5.5 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_XL</td>
+      <td>-</td>
+      <td>+4.8 GB</td>
+      <td>+4.8 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_XL</td>
+      <td>-</td>
+      <td>+4.0 GB</td>
+      <td>+4.0 GB</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+<table>
+  <thead>
+    <tr>
+      <th>モデル</th>
+      <th>量子化</th>
+      <th>VRAM</th>
+      <th>RAM</th>
+      <th>ストレージ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="5" valign="middle"><strong>FLUX.1 Kontext</strong></td>
+      <td>Q8_0</td>
+      <td>+15.1 GB</td>
+      <td>+13.3 GB</td>
+      <td>+11.8 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K</td>
+      <td>+12.5 GB</td>
+      <td>+10.7 GB</td>
+      <td>+9.2 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_M</td>
+      <td>+11.1 GB</td>
+      <td>+9.3 GB</td>
+      <td>+7.8 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_M</td>
+      <td>+9.8 GB</td>
+      <td>+8.0 GB</td>
+      <td>+6.5 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_M</td>
+      <td>+8.3 GB</td>
+      <td>+6.5 GB</td>
+      <td>+5.0 GB</td>
+    </tr>
+    <tr>
+      <td rowspan="5" valign="middle"><strong>T5</strong><br><small>(テキストエンコーダー)</small></td>
+      <td>Q8_0</td>
+      <td>-</td>
+      <td>+4.7 GB</td>
+      <td>+4.7 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K</td>
+      <td>-</td>
+      <td>+3.6 GB</td>
+      <td>+3.6 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_M</td>
+      <td>-</td>
+      <td>+3.2 GB</td>
+      <td>+3.2 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_M</td>
+      <td>-</td>
+      <td>+2.7 GB</td>
+      <td>+2.7 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_M</td>
+      <td>-</td>
+      <td>+2.1 GB</td>
+      <td>+2.1 GB</td>
+    </tr>
+  </tbody>
+</table>
+
+### Nunchaku バックエンド
+
+| モデル | VRAM | RAM | ストレージ |
+| --- | --- | --- | --- |
+| FLUX.1 Kontext | +6.0 GB | +11 GB | +9.7 GB |
