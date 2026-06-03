@@ -13,6 +13,10 @@ from core.ml.model_manager import get_model_manager
 from core.ml.sdcpp_server import pil_to_base64_png, run_image_job
 from utils.exceptions import ModelError
 from utils.logging import log_message
+from utils.model_metadata import (
+    flux_sdcpp_quant_default,
+    flux_sdcpp_text_encoder_default,
+)
 
 # Blur Parameters
 BLUR_SCALE_FACTOR = (
@@ -93,6 +97,8 @@ class FluxKontextInpainter:
         backend: str = "nunchaku",
         low_vram: bool = False,
         sdcpp_cache_mode: str = "none",
+        sdcpp_diffusion_quant: str = "",
+        sdcpp_text_encoder_quant: str = "",
     ):
         """Initialize the Flux Kontext Inpaint class.
 
@@ -104,6 +110,8 @@ class FluxKontextInpainter:
             backend: "nunchaku" (CUDA + Nunchaku + HF token), "sdnq", or "sdcpp".
             low_vram: If True, use sequential CPU offload for SDNQ.
             sdcpp_cache_mode: sd.cpp cache mode to use when backend is "sdcpp".
+            sdcpp_diffusion_quant: Flux sd.cpp diffusion model quant.
+            sdcpp_text_encoder_quant: Flux sd.cpp T5 text encoder quant.
         """
         self.DEVICE = device if device is not None else get_best_device()
         self.DTYPE = get_best_dtype(self.DEVICE)
@@ -118,6 +126,12 @@ class FluxKontextInpainter:
             )
         self.low_vram = low_vram
         self.sdcpp_cache_mode = sdcpp_cache_mode
+        self.sdcpp_diffusion_quant = sdcpp_diffusion_quant or flux_sdcpp_quant_default(
+            "flux_kontext", "diffusion_model"
+        )
+        self.sdcpp_text_encoder_quant = (
+            sdcpp_text_encoder_quant or flux_sdcpp_text_encoder_default("flux_kontext")
+        )
         self.manager = get_model_manager()
         self.cache = get_cache()
 
@@ -176,6 +190,8 @@ class FluxKontextInpainter:
             self.sdcpp_assets = self.manager.ensure_flux_sdcpp_server(
                 "flux_kontext",
                 cache_mode=self.sdcpp_cache_mode,
+                diffusion_quant=self.sdcpp_diffusion_quant,
+                text_encoder_quant=self.sdcpp_text_encoder_quant,
                 num_inference_steps=self.num_inference_steps,
                 verbose=True,
             )
@@ -770,6 +786,8 @@ class FluxKontextInpainter:
         }
         if self.backend == "sdcpp":
             cache_params["sdcpp_cache"] = self.sdcpp_cache_mode
+            cache_params["sdcpp_diffusion_quant"] = self.sdcpp_diffusion_quant
+            cache_params["sdcpp_text_encoder_quant"] = self.sdcpp_text_encoder_quant
         if strict_mask_clipping:
             cache_params["strict_clip"] = True
         if composite_clip_bbox is not None:
@@ -995,6 +1013,8 @@ class FluxKleinInpainter:
         upscale_small_crops: bool = True,
         backend: str = "sdnq",
         sdcpp_cache_mode: str = "none",
+        sdcpp_diffusion_quant: str = "",
+        sdcpp_text_encoder_quant: str = "",
         verbose: bool = False,
     ):
         """Initialize the Flux Klein Inpainter.
@@ -1009,6 +1029,8 @@ class FluxKleinInpainter:
             upscale_small_crops: If True, scale small crops to ~1MP before inference.
             backend: "sdnq" for Diffusers/SDNQ or "sdcpp" for stable-diffusion.cpp.
             sdcpp_cache_mode: sd.cpp cache mode to use when backend is "sdcpp".
+            sdcpp_diffusion_quant: Flux sd.cpp diffusion model quant.
+            sdcpp_text_encoder_quant: Flux sd.cpp Qwen text encoder quant.
             verbose: Whether to print verbose logging.
         """
         self.variant = variant.lower()
@@ -1026,6 +1048,13 @@ class FluxKleinInpainter:
         self.luminance_correction = luminance_correction
         self.upscale_small_crops = upscale_small_crops
         self.sdcpp_cache_mode = sdcpp_cache_mode
+        _model_key = f"flux_klein_{self.variant}"
+        self.sdcpp_diffusion_quant = sdcpp_diffusion_quant or flux_sdcpp_quant_default(
+            _model_key, "diffusion_model"
+        )
+        self.sdcpp_text_encoder_quant = (
+            sdcpp_text_encoder_quant or flux_sdcpp_text_encoder_default(_model_key)
+        )
         self.verbose = verbose
 
         self.DEVICE = device if device is not None else get_best_device()
@@ -1050,6 +1079,8 @@ class FluxKleinInpainter:
             self.sdcpp_assets = self.manager.ensure_flux_sdcpp_server(
                 f"flux_klein_{self.variant}",
                 cache_mode=self.sdcpp_cache_mode,
+                diffusion_quant=self.sdcpp_diffusion_quant,
+                text_encoder_quant=self.sdcpp_text_encoder_quant,
                 num_inference_steps=self.num_inference_steps,
                 verbose=self.verbose,
             )
@@ -1421,6 +1452,8 @@ class FluxKleinInpainter:
         }
         if self.backend == "sdcpp":
             cache_params["sdcpp_cache"] = self.sdcpp_cache_mode
+            cache_params["sdcpp_diffusion_quant"] = self.sdcpp_diffusion_quant
+            cache_params["sdcpp_text_encoder_quant"] = self.sdcpp_text_encoder_quant
         if strict_mask_clipping:
             cache_params["strict_clip"] = True
         if composite_clip_bbox is not None:

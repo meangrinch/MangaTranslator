@@ -899,6 +899,8 @@ def translate_and_render(
                     flux_backend=config.outside_text.flux_backend,
                     flux_low_vram=config.outside_text.flux_low_vram,
                     flux_sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
+                    flux_sdcpp_diffusion_quant=config.outside_text.flux_sdcpp_diffusion_quant,
+                    flux_sdcpp_text_encoder_quant=config.outside_text.flux_sdcpp_text_encoder_quant,
                     flux_luminance_correction=config.outside_text.flux_luminance_correction,
                     flux_upscale_small_crops=config.outside_text.flux_upscale_small_crops,
                     bubble_detector_model=config.detection.bubble_detector_model,

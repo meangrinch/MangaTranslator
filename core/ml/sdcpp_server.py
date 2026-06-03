@@ -600,7 +600,8 @@ class SDCppServerManager:
         num_inference_steps: int = 4,
         verbose: bool = False,
     ) -> dict:
-        server_key = self._server_key(model_key, cache_mode, num_inference_steps)
+        server_key_model = assets.get("server_model_key", model_key)
+        server_key = self._server_key(server_key_model, cache_mode, num_inference_steps)
         with self._lock:
             server = self._servers.get(server_key)
             if server is not None:
@@ -646,6 +647,8 @@ class SDCppServerManager:
                 "2.5" if model_key == "flux_kontext" else "1.0",
                 "--sampling-method",
                 "euler",
+                "--scheduler",
+                "simple",
                 "--steps",
                 str(steps),
                 "--offload-to-cpu",

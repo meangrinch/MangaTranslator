@@ -22,6 +22,7 @@ from core.device import empty_cache, get_best_device, get_best_dtype, get_device
 from core.ml.sdcpp_server import SDCppServerManager
 from utils.exceptions import ModelError
 from utils.logging import log_message
+from utils.model_metadata import FLUX_SDCPP_QUANT_FILES
 
 
 class ModelType(Enum):
@@ -45,14 +46,8 @@ class ModelType(Enum):
     FLUX_KLEIN_9B_PIPELINE = "flux_klein_9b_pipeline"
     FLUX_KLEIN_4B_PIPELINE = "flux_klein_4b_pipeline"
     SDCPP_SERVER = "sdcpp_server"
-    FLUX_KLEIN_4B_SDCPP_DIFFUSION = "flux_klein_4b_sdcpp_diffusion"
-    FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER = "flux_klein_4b_sdcpp_text_encoder"
-    FLUX_KLEIN_9B_SDCPP_DIFFUSION = "flux_klein_9b_sdcpp_diffusion"
-    FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER = "flux_klein_9b_sdcpp_text_encoder"
     FLUX_KLEIN_SDCPP_VAE = "flux_klein_sdcpp_vae"
-    FLUX_KONTEXT_SDCPP_DIFFUSION = "flux_kontext_sdcpp_diffusion"
     FLUX_KONTEXT_SDCPP_CLIP_L = "flux_kontext_sdcpp_clip_l"
-    FLUX_KONTEXT_SDCPP_T5XXL = "flux_kontext_sdcpp_t5xxl"
     FLUX_KONTEXT_SDCPP_VAE = "flux_kontext_sdcpp_vae"
 
 
@@ -102,10 +97,15 @@ class ModelManager:
                 f"Model Manager initialized on device: {self.device}", always_print=True
             )
 
+    @staticmethod
+    def _flux_sdcpp_base_dir() -> Path:
+        """Base directory for sd.cpp Flux GGUF assets."""
+        return Path("./models").resolve() / "flux" / "sdcpp"
+
     def _init_model_paths(self):
         """Initialize model file paths."""
         model_dir = Path("./models").resolve()
-        flux_sdcpp_dir = model_dir / "flux" / "sdcpp"
+        flux_sdcpp_dir = self._flux_sdcpp_base_dir()
         flux_kontext_sdcpp_dir = flux_sdcpp_dir / "kontext"
         return {
             ModelType.UPSCALE: (
@@ -132,27 +132,9 @@ class ModelManager:
             ModelType.SDCPP_SERVER: (
                 model_dir / "sdcpp" / SDCppServerManager.RELEASE_TAG
             ),
-            ModelType.FLUX_KLEIN_4B_SDCPP_DIFFUSION: (
-                flux_sdcpp_dir / "flux-2-klein-4b-Q6_K.gguf"
-            ),
-            ModelType.FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER: (
-                flux_sdcpp_dir / "Qwen3-4B-UD-Q4_K_XL.gguf"
-            ),
-            ModelType.FLUX_KLEIN_9B_SDCPP_DIFFUSION: (
-                flux_sdcpp_dir / "flux-2-klein-9b-Q6_K.gguf"
-            ),
-            ModelType.FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER: (
-                flux_sdcpp_dir / "Qwen3-8B-UD-Q4_K_XL.gguf"
-            ),
             ModelType.FLUX_KLEIN_SDCPP_VAE: (flux_sdcpp_dir / "flux2-vae.safetensors"),
-            ModelType.FLUX_KONTEXT_SDCPP_DIFFUSION: (
-                flux_kontext_sdcpp_dir / "flux1-kontext-dev-Q6_K.gguf"
-            ),
             ModelType.FLUX_KONTEXT_SDCPP_CLIP_L: (
                 flux_kontext_sdcpp_dir / "clip_l.safetensors"
-            ),
-            ModelType.FLUX_KONTEXT_SDCPP_T5XXL: (
-                flux_kontext_sdcpp_dir / "t5-v1_1-xxl-encoder-Q6_K.gguf"
             ),
             ModelType.FLUX_KONTEXT_SDCPP_VAE: (
                 flux_kontext_sdcpp_dir / "ae.safetensors"
@@ -170,37 +152,13 @@ class ModelManager:
                 "https://huggingface.co/Kim2091/2x-AnimeSharpV4/resolve/main/"
                 "2x-AnimeSharpV4_Fast_RCAN_PU.safetensors"
             ),
-            ModelType.FLUX_KLEIN_4B_SDCPP_DIFFUSION: (
-                "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/main/"
-                "flux-2-klein-4b-Q6_K.gguf"
-            ),
-            ModelType.FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER: (
-                "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/"
-                "Qwen3-4B-UD-Q4_K_XL.gguf"
-            ),
-            ModelType.FLUX_KLEIN_9B_SDCPP_DIFFUSION: (
-                "https://huggingface.co/unsloth/FLUX.2-klein-9B-GGUF/resolve/main/"
-                "flux-2-klein-9b-Q6_K.gguf"
-            ),
-            ModelType.FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER: (
-                "https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/main/"
-                "Qwen3-8B-UD-Q4_K_XL.gguf"
-            ),
             ModelType.FLUX_KLEIN_SDCPP_VAE: (
                 "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/"
                 "split_files/vae/flux2-vae.safetensors"
             ),
-            ModelType.FLUX_KONTEXT_SDCPP_DIFFUSION: (
-                "https://huggingface.co/unsloth/FLUX.1-Kontext-dev-GGUF/resolve/main/"
-                "flux1-kontext-dev-Q6_K.gguf"
-            ),
             ModelType.FLUX_KONTEXT_SDCPP_CLIP_L: (
                 "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/"
                 "clip_l.safetensors"
-            ),
-            ModelType.FLUX_KONTEXT_SDCPP_T5XXL: (
-                "https://huggingface.co/city96/t5-v1_1-xxl-encoder-gguf/resolve/main/"
-                "t5-v1_1-xxl-encoder-Q6_K.gguf"
             ),
             ModelType.FLUX_KONTEXT_SDCPP_VAE: (
                 "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/main/"
@@ -278,37 +236,13 @@ class ModelManager:
         repos[ModelType.FLUX_KLEIN_4B_PIPELINE] = {
             "repo_id": "Disty0/FLUX.2-klein-4B-SDNQ-4bit-dynamic",
         }
-        repos[ModelType.FLUX_KLEIN_4B_SDCPP_DIFFUSION] = {
-            "repo_id": "unsloth/FLUX.2-klein-4B-GGUF",
-            "filename": "flux-2-klein-4b-Q6_K.gguf",
-        }
-        repos[ModelType.FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER] = {
-            "repo_id": "unsloth/Qwen3-4B-GGUF",
-            "filename": "Qwen3-4B-UD-Q4_K_XL.gguf",
-        }
-        repos[ModelType.FLUX_KLEIN_9B_SDCPP_DIFFUSION] = {
-            "repo_id": "unsloth/FLUX.2-klein-9B-GGUF",
-            "filename": "flux-2-klein-9b-Q6_K.gguf",
-        }
-        repos[ModelType.FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER] = {
-            "repo_id": "unsloth/Qwen3-8B-GGUF",
-            "filename": "Qwen3-8B-UD-Q4_K_XL.gguf",
-        }
         repos[ModelType.FLUX_KLEIN_SDCPP_VAE] = {
             "repo_id": "Comfy-Org/flux2-dev",
             "filename": "split_files/vae/flux2-vae.safetensors",
         }
-        repos[ModelType.FLUX_KONTEXT_SDCPP_DIFFUSION] = {
-            "repo_id": "unsloth/FLUX.1-Kontext-dev-GGUF",
-            "filename": "flux1-kontext-dev-Q6_K.gguf",
-        }
         repos[ModelType.FLUX_KONTEXT_SDCPP_CLIP_L] = {
             "repo_id": "comfyanonymous/flux_text_encoders",
             "filename": "clip_l.safetensors",
-        }
-        repos[ModelType.FLUX_KONTEXT_SDCPP_T5XXL] = {
-            "repo_id": "city96/t5-v1_1-xxl-encoder-gguf",
-            "filename": "t5-v1_1-xxl-encoder-Q6_K.gguf",
         }
         repos[ModelType.FLUX_KONTEXT_SDCPP_VAE] = {
             "repo_id": "Comfy-Org/Lumina_Image_2.0_Repackaged",
@@ -382,32 +316,67 @@ class ModelManager:
             except OSError:
                 pass
 
-    def _flux_sdcpp_asset_spec(self, model_key: str) -> dict:
+    def _flux_sdcpp_quant_asset(
+        self, model_key: str, asset_key: str, quant: str
+    ) -> dict:
+        quant_spec = FLUX_SDCPP_QUANT_FILES[model_key][asset_key]
+        selected_quant = quant or quant_spec["default"]
+        filenames = quant_spec["filenames"]
+        if selected_quant not in filenames:
+            options = ", ".join(filenames)
+            raise ModelError(
+                f"Invalid sd.cpp quant '{selected_quant}' for {model_key} "
+                f"{asset_key}. Choose one of: {options}."
+            )
+
+        base_dir = self._flux_sdcpp_base_dir()
+        if quant_spec.get("subdir"):
+            base_dir = base_dir / quant_spec["subdir"]
+        filename = filenames[selected_quant]
+        return {
+            "repo_id": quant_spec["repo_id"],
+            "filename": filename,
+            "path": base_dir / filename,
+            "quant": selected_quant,
+        }
+
+    def _flux_sdcpp_asset_spec(
+        self,
+        model_key: str,
+        diffusion_quant: str = "",
+        text_encoder_quant: str = "",
+    ) -> dict:
         specs = {
             "flux_klein_4b": {
                 "label": "Flux.2 Klein 4B",
-                "model_types": {
-                    "diffusion_model": ModelType.FLUX_KLEIN_4B_SDCPP_DIFFUSION,
-                    "llm": ModelType.FLUX_KLEIN_4B_SDCPP_TEXT_ENCODER,
+                "quant_models": {
+                    "diffusion_model": diffusion_quant,
+                    "llm": text_encoder_quant,
+                },
+                "fixed_model_types": {
                     "vae": ModelType.FLUX_KLEIN_SDCPP_VAE,
                 },
                 "server_args": ("--llm", "llm"),
             },
             "flux_klein_9b": {
                 "label": "Flux.2 Klein 9B",
-                "model_types": {
-                    "diffusion_model": ModelType.FLUX_KLEIN_9B_SDCPP_DIFFUSION,
-                    "llm": ModelType.FLUX_KLEIN_9B_SDCPP_TEXT_ENCODER,
+                "quant_models": {
+                    "diffusion_model": diffusion_quant,
+                    "llm": text_encoder_quant,
+                },
+                "fixed_model_types": {
                     "vae": ModelType.FLUX_KLEIN_SDCPP_VAE,
                 },
                 "server_args": ("--llm", "llm"),
             },
             "flux_kontext": {
                 "label": "Flux.1 Kontext",
-                "model_types": {
-                    "diffusion_model": ModelType.FLUX_KONTEXT_SDCPP_DIFFUSION,
+                "quant_models": {
+                    "diffusion_model": diffusion_quant,
+                    "t5xxl": text_encoder_quant,
+                },
+                "fixed_model_types": {
                     "clip_l": ModelType.FLUX_KONTEXT_SDCPP_CLIP_L,
-                    "t5xxl": ModelType.FLUX_KONTEXT_SDCPP_T5XXL,
                     "vae": ModelType.FLUX_KONTEXT_SDCPP_VAE,
                 },
                 "server_args": ("--clip_l", "clip_l", "--t5xxl", "t5xxl"),
@@ -415,15 +384,37 @@ class ModelManager:
         }
         if model_key not in specs:
             raise ModelError(f"Unknown sd.cpp Flux model key: {model_key}")
-        return specs[model_key]
+        spec = specs[model_key]
+        spec["quant_assets"] = {
+            key: self._flux_sdcpp_quant_asset(model_key, key, quant)
+            for key, quant in spec["quant_models"].items()
+        }
+        return spec
 
     def ensure_flux_sdcpp_assets(
-        self, model_key: str = "flux_klein_4b", verbose: bool = False
+        self,
+        model_key: str = "flux_klein_4b",
+        diffusion_quant: str = "",
+        text_encoder_quant: str = "",
+        verbose: bool = False,
     ) -> dict:
         """Ensure sd.cpp server and Flux GGUF assets are available."""
         with self._lock:
-            spec = self._flux_sdcpp_asset_spec(model_key)
-            log_message(f"Preparing {spec['label']} sd.cpp assets...", verbose=verbose)
+            spec = self._flux_sdcpp_asset_spec(
+                model_key,
+                diffusion_quant=diffusion_quant,
+                text_encoder_quant=text_encoder_quant,
+            )
+            quant_label = "/".join(
+                asset["quant"] for asset in spec["quant_assets"].values()
+            )
+            server_quant_key = "-".join(
+                asset["quant"] for asset in spec["quant_assets"].values()
+            )
+            log_message(
+                f"Preparing {spec['label']} sd.cpp assets ({quant_label})...",
+                verbose=verbose,
+            )
             assets = {
                 "executable": self.sdcpp_server_manager.ensure_server_executable(
                     verbose=verbose
@@ -431,8 +422,19 @@ class ModelManager:
                 "model_key": model_key,
                 "label": spec["label"],
                 "server_args": spec["server_args"],
+                "server_model_key": f"{model_key}-{server_quant_key}",
             }
-            for key, model_type in spec["model_types"].items():
+            for key, asset in spec["quant_assets"].items():
+                assets[key] = asset["path"]
+                self._ensure_hf_file(
+                    asset["repo_id"],
+                    asset["filename"],
+                    assets[key],
+                    token=self.flux_hf_token,
+                    verbose=verbose,
+                )
+
+            for key, model_type in spec["fixed_model_types"].items():
                 assets[key] = self.model_paths[model_type]
                 hf_info = self.model_hf_repos[model_type]
                 self._ensure_hf_file(
@@ -449,11 +451,18 @@ class ModelManager:
         self,
         model_key: str = "flux_klein_4b",
         cache_mode: str = "none",
+        diffusion_quant: str = "",
+        text_encoder_quant: str = "",
         num_inference_steps: int = 4,
         verbose: bool = False,
     ) -> dict:
         """Start or reuse a persistent sd.cpp server for a Flux model."""
-        assets = self.ensure_flux_sdcpp_assets(model_key, verbose=verbose)
+        assets = self.ensure_flux_sdcpp_assets(
+            model_key,
+            diffusion_quant=diffusion_quant,
+            text_encoder_quant=text_encoder_quant,
+            verbose=verbose,
+        )
         return self.sdcpp_server_manager.ensure_flux_server(
             model_key,
             assets,

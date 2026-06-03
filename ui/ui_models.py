@@ -14,6 +14,10 @@ from core.config import (
     RenderingConfig,
     TranslationConfig,
 )
+from utils.model_metadata import (
+    flux_sdcpp_valid_text_encoder_quant,
+    flux_valid_backend,
+)
 
 
 @dataclass
@@ -128,6 +132,8 @@ class UIOutsideTextSettings:
     flux_backend: str = "sdnq"  # "sdcpp", "sdnq", "nunchaku" (Kontext only)
     flux_low_vram: bool = False  # Use CPU offload for SDNQ
     flux_sdcpp_cache_mode: str = "none"
+    flux_sdcpp_diffusion_quant: str = "Q4_K_M"
+    flux_sdcpp_text_encoder_quant: str = "Q4_K_XL"
     flux_num_inference_steps: int = 8
     flux_luminance_correction: bool = (
         True  # Match patch luminance to surrounding context
@@ -150,6 +156,14 @@ class UIOutsideTextSettings:
     osb_render_expansion_aspect_ratio_threshold: float = 0.4
     osb_render_expansion_area_ratio_threshold: float = 0.005
     text_box_proximity_ratio: float = 0.02
+
+    def __post_init__(self) -> None:
+        self.flux_backend = flux_valid_backend(
+            self.inpainting_method, self.flux_backend
+        )
+        self.flux_sdcpp_text_encoder_quant = flux_sdcpp_valid_text_encoder_quant(
+            self.inpainting_method, self.flux_sdcpp_text_encoder_quant
+        )
 
 
 @dataclass
@@ -275,6 +289,8 @@ class UIConfigState:
             "outside_text_flux_backend": self.outside_text.flux_backend,
             "outside_text_flux_low_vram": self.outside_text.flux_low_vram,
             "outside_text_flux_sdcpp_cache_mode": self.outside_text.flux_sdcpp_cache_mode,
+            "outside_text_flux_sdcpp_diffusion_quant": self.outside_text.flux_sdcpp_diffusion_quant,
+            "outside_text_flux_sdcpp_text_encoder_quant": self.outside_text.flux_sdcpp_text_encoder_quant,
             "outside_text_flux_num_inference_steps": self.outside_text.flux_num_inference_steps,
             "outside_text_flux_luminance_correction": self.outside_text.flux_luminance_correction,
             "outside_text_flux_upscale_small_crops": self.outside_text.flux_upscale_small_crops,
@@ -433,6 +449,16 @@ class UIConfigState:
                 flux_sdcpp_cache_mode=data.get(
                     "outside_text_flux_sdcpp_cache_mode",
                     defaults.get("outside_text_flux_sdcpp_cache_mode", "none"),
+                ),
+                flux_sdcpp_diffusion_quant=data.get(
+                    "outside_text_flux_sdcpp_diffusion_quant",
+                    defaults.get("outside_text_flux_sdcpp_diffusion_quant", "Q4_K_M"),
+                ),
+                flux_sdcpp_text_encoder_quant=data.get(
+                    "outside_text_flux_sdcpp_text_encoder_quant",
+                    defaults.get(
+                        "outside_text_flux_sdcpp_text_encoder_quant", "Q4_K_XL"
+                    ),
                 ),
                 flux_num_inference_steps=data.get(
                     "outside_text_flux_num_inference_steps", 8
@@ -802,6 +828,8 @@ def map_ui_to_backend_config(
         flux_backend=ui_state.outside_text.flux_backend,
         flux_low_vram=ui_state.outside_text.flux_low_vram,
         flux_sdcpp_cache_mode=ui_state.outside_text.flux_sdcpp_cache_mode,
+        flux_sdcpp_diffusion_quant=ui_state.outside_text.flux_sdcpp_diffusion_quant,
+        flux_sdcpp_text_encoder_quant=ui_state.outside_text.flux_sdcpp_text_encoder_quant,
         flux_num_inference_steps=ui_state.outside_text.flux_num_inference_steps,
         flux_luminance_correction=ui_state.outside_text.flux_luminance_correction,
         flux_upscale_small_crops=ui_state.outside_text.flux_upscale_small_crops,

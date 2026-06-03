@@ -4,7 +4,35 @@ from typing import Any
 
 import gradio as gr
 
+from utils.model_metadata import (
+    FLUX_SDCPP_DIFFUSION_QUANTS,
+    flux_sdcpp_text_encoder_default,
+    flux_sdcpp_text_encoder_quants,
+    flux_sdcpp_valid_text_encoder_quant,
+    flux_valid_backend,
+)
+
 from . import callbacks, settings_manager, utils
+
+_FLUX_BACKEND_CHOICES_KLEIN = [
+    ("sd.cpp", "sdcpp"),
+    ("SDNQ", "sdnq"),
+]
+_FLUX_BACKEND_CHOICES_KONTEXT = [
+    ("sd.cpp", "sdcpp"),
+    ("SDNQ", "sdnq"),
+    ("Nunchaku (CUDA)", "nunchaku"),
+]
+_FLUX_BACKEND_CHOICES_DEFAULT = [("SDNQ", "sdnq")]
+
+
+def _flux_backend_choices(method: str):
+    if method in ("flux_klein_9b", "flux_klein_4b"):
+        return _FLUX_BACKEND_CHOICES_KLEIN
+    if method == "flux_kontext":
+        return _FLUX_BACKEND_CHOICES_KONTEXT
+    return _FLUX_BACKEND_CHOICES_DEFAULT
+
 
 _ALPHABETICAL_LANGUAGES = [
     "Afrikaans",
@@ -1530,31 +1558,18 @@ def create_layout(
                                     "flux_klein_9b",
                                     "flux_klein_4b",
                                 )
-                                if _is_klein_model:
-                                    _backend_choices = [
-                                        ("sd.cpp", "sdcpp"),
-                                        ("SDNQ", "sdnq"),
-                                    ]
-                                    _backend_visible = True
-                                elif _is_kontext:
-                                    _backend_choices = [
-                                        ("sd.cpp", "sdcpp"),
-                                        ("SDNQ", "sdnq"),
-                                        ("Nunchaku (CUDA)", "nunchaku"),
-                                    ]
-                                    _backend_visible = True
-                                else:
-                                    _backend_choices = [("SDNQ", "sdnq")]
-                                    _backend_visible = False
-                                _initial_backend = saved_settings.get(
-                                    "outside_text_flux_backend", "sdnq"
+                                _backend_visible = _is_klein_model or _is_kontext
+                                _initial_backend = flux_valid_backend(
+                                    _initial_method,
+                                    saved_settings.get(
+                                        "outside_text_flux_backend", "sdnq"
+                                    ),
                                 )
-                                if _initial_backend not in {
-                                    choice[1] for choice in _backend_choices
-                                }:
-                                    _initial_backend = "sdnq"
+                                outside_text_flux_backend_state = gr.State(
+                                    _initial_backend
+                                )
                                 outside_text_flux_backend = gr.Radio(
-                                    choices=_backend_choices,
+                                    choices=_flux_backend_choices(_initial_method),
                                     value=_initial_backend,
                                     label="Flux Backend",
                                     info=(
@@ -1586,6 +1601,9 @@ def create_layout(
                                 _show_low_vram = (
                                     _is_klein_model or _is_kontext
                                 ) and _initial_backend == "sdnq"
+                                _show_sdcpp_quant = (
+                                    _is_klein_model or _is_kontext
+                                ) and _initial_backend == "sdcpp"
                                 outside_text_flux_low_vram = gr.Checkbox(
                                     value=saved_settings.get(
                                         "outside_text_flux_low_vram", False
@@ -1615,6 +1633,69 @@ def create_layout(
                                         (_is_klein_model or _is_kontext)
                                         and _initial_backend == "sdcpp"
                                     ),
+                                )
+                                _saved_diffusion_quant = saved_settings.get(
+                                    "outside_text_flux_sdcpp_diffusion_quant",
+                                    "Q4_K_M",
+                                )
+                                _initial_diffusion_quant = (
+                                    _saved_diffusion_quant
+                                    if _saved_diffusion_quant
+                                    in FLUX_SDCPP_DIFFUSION_QUANTS
+                                    else "Q4_K_M"
+                                )
+                                outside_text_flux_sdcpp_diffusion_quant = gr.Radio(
+                                    choices=[
+                                        (quant, quant)
+                                        for quant in FLUX_SDCPP_DIFFUSION_QUANTS
+                                    ],
+                                    value=_initial_diffusion_quant,
+                                    label="Flux Model Quant",
+                                    info=(
+                                        "Quantization level for the model. Ordered from "
+                                        "largest/best quality to smallest/lowest quality."
+                                    ),
+                                    visible=_show_sdcpp_quant,
+                                )
+                                outside_text_flux_sdcpp_diffusion_quant_state = (
+                                    gr.State(_initial_diffusion_quant)
+                                )
+                                _available_text_encoder_quants = (
+                                    flux_sdcpp_text_encoder_quants(_initial_method)
+                                )
+                                _text_encoder_quants = (
+                                    _available_text_encoder_quants
+                                    or flux_sdcpp_text_encoder_quants("flux_klein_4b")
+                                )
+                                _text_encoder_default = flux_sdcpp_text_encoder_default(
+                                    _initial_method
+                                )
+                                _saved_text_encoder_quant = saved_settings.get(
+                                    "outside_text_flux_sdcpp_text_encoder_quant",
+                                    _text_encoder_default,
+                                )
+                                _initial_text_encoder_quant = (
+                                    flux_sdcpp_valid_text_encoder_quant(
+                                        _initial_method, _saved_text_encoder_quant
+                                    )
+                                )
+                                outside_text_flux_sdcpp_text_encoder_quant = gr.Radio(
+                                    choices=[
+                                        (quant, quant) for quant in _text_encoder_quants
+                                    ],
+                                    value=_initial_text_encoder_quant,
+                                    label="Text Encoder Model Quant",
+                                    info=(
+                                        "Quantization level for the model. Ordered from "
+                                        "largest/best quality to smallest/lowest quality."
+                                    ),
+                                    visible=(
+                                        _show_sdcpp_quant
+                                        and bool(_available_text_encoder_quants)
+                                    ),
+                                )
+                                outside_text_flux_sdcpp_text_encoder_quant_state = (
+                                    gr.State(_initial_text_encoder_quant)
                                 )
                                 outside_text_flux_num_inference_steps = gr.Slider(
                                     1,
@@ -2110,9 +2191,11 @@ def create_layout(
             outside_text_enabled,
             outside_text_seed,
             outside_text_inpainting_method,
-            outside_text_flux_backend,
+            outside_text_flux_backend_state,
             outside_text_flux_low_vram,
             outside_text_flux_sdcpp_cache_mode,
+            outside_text_flux_sdcpp_diffusion_quant_state,
+            outside_text_flux_sdcpp_text_encoder_quant_state,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
@@ -2226,8 +2309,13 @@ def create_layout(
             outside_text_seed,
             outside_text_inpainting_method,
             outside_text_flux_backend,
+            outside_text_flux_backend_state,
             outside_text_flux_low_vram,
             outside_text_flux_sdcpp_cache_mode,
+            outside_text_flux_sdcpp_diffusion_quant,
+            outside_text_flux_sdcpp_diffusion_quant_state,
+            outside_text_flux_sdcpp_text_encoder_quant,
+            outside_text_flux_sdcpp_text_encoder_quant_state,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
@@ -2340,9 +2428,11 @@ def create_layout(
             outside_text_enabled,
             outside_text_seed,
             outside_text_inpainting_method,
-            outside_text_flux_backend,
+            outside_text_flux_backend_state,
             outside_text_flux_low_vram,
             outside_text_flux_sdcpp_cache_mode,
+            outside_text_flux_sdcpp_diffusion_quant_state,
+            outside_text_flux_sdcpp_text_encoder_quant_state,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
@@ -2461,9 +2551,11 @@ def create_layout(
             outside_text_enabled,
             outside_text_seed,
             outside_text_inpainting_method,
-            outside_text_flux_backend,
+            outside_text_flux_backend_state,
             outside_text_flux_low_vram,
             outside_text_flux_sdcpp_cache_mode,
+            outside_text_flux_sdcpp_diffusion_quant_state,
+            outside_text_flux_sdcpp_text_encoder_quant_state,
             outside_text_flux_num_inference_steps,
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
@@ -2755,6 +2847,8 @@ def create_layout(
         def _update_inpainting_controls(
             method: str,
             current_backend: str,
+            current_diffusion_quant: str,
+            current_text_encoder_quant: str,
             current_steps: int,
             upscale_small_crops: bool,
             group_regions: bool,
@@ -2774,33 +2868,30 @@ def create_layout(
                 default_steps = 4
 
             if is_klein:
-                backend_choices = [
-                    ("sd.cpp", "sdcpp"),
-                    ("SDNQ", "sdnq"),
-                ]
-                valid_backends = {"sdcpp", "sdnq"}
-                backend_value = (
-                    current_backend if current_backend in valid_backends else "sdnq"
-                )
+                backend_value = flux_valid_backend(method, current_backend)
                 backend_visible = True
             elif is_kontext:
-                backend_choices = [
-                    ("sd.cpp", "sdcpp"),
-                    ("SDNQ", "sdnq"),
-                    ("Nunchaku (CUDA)", "nunchaku"),
-                ]
-                valid_backends = {"sdcpp", "sdnq", "nunchaku"}
-                backend_value = (
-                    current_backend if current_backend in valid_backends else "sdnq"
-                )
+                backend_value = flux_valid_backend(method, current_backend)
                 backend_visible = True
             else:
-                backend_choices = [("SDNQ", "sdnq")]
-                backend_value = current_backend
+                backend_value = flux_valid_backend(method, current_backend)
                 backend_visible = False
 
             show_low_vram = (is_klein or is_kontext) and backend_value == "sdnq"
             show_sdcpp_cache = (is_klein or is_kontext) and backend_value == "sdcpp"
+            available_text_encoder_quants = flux_sdcpp_text_encoder_quants(method)
+            text_encoder_quants = (
+                available_text_encoder_quants
+                or flux_sdcpp_text_encoder_quants("flux_klein_4b")
+            )
+            diffusion_quant_value = (
+                current_diffusion_quant
+                if current_diffusion_quant in FLUX_SDCPP_DIFFUSION_QUANTS
+                else "Q4_K_M"
+            )
+            text_encoder_quant_value = flux_sdcpp_valid_text_encoder_quant(
+                method, current_text_encoder_quant
+            )
             residual_interactive = is_kontext and backend_value == "nunchaku"
             luminance_interactive = (
                 is_klein and bool(upscale_small_crops) and not bool(group_regions)
@@ -2816,11 +2907,24 @@ def create_layout(
             return (
                 gr.update(
                     visible=backend_visible,
-                    choices=backend_choices,
+                    choices=_flux_backend_choices(method),
                     value=backend_value,
                 ),
+                backend_value,
                 gr.update(visible=show_low_vram),
                 gr.update(visible=show_sdcpp_cache),
+                gr.update(
+                    choices=[(quant, quant) for quant in FLUX_SDCPP_DIFFUSION_QUANTS],
+                    value=diffusion_quant_value,
+                    visible=show_sdcpp_cache,
+                ),
+                diffusion_quant_value,
+                gr.update(
+                    choices=[(quant, quant) for quant in text_encoder_quants],
+                    value=text_encoder_quant_value,
+                    visible=show_sdcpp_cache and bool(available_text_encoder_quants),
+                ),
+                text_encoder_quant_value,
                 gr.update(
                     interactive=(not is_no_flux),
                     maximum=max_steps,
@@ -2841,15 +2945,22 @@ def create_layout(
             fn=_update_inpainting_controls,
             inputs=[
                 outside_text_inpainting_method,
-                outside_text_flux_backend,
+                outside_text_flux_backend_state,
+                outside_text_flux_sdcpp_diffusion_quant_state,
+                outside_text_flux_sdcpp_text_encoder_quant_state,
                 outside_text_flux_num_inference_steps,
                 outside_text_flux_upscale_small_crops,
                 outside_text_flux_group_regions,
             ],
             outputs=[
                 outside_text_flux_backend,
+                outside_text_flux_backend_state,
                 outside_text_flux_low_vram,
                 outside_text_flux_sdcpp_cache_mode,
+                outside_text_flux_sdcpp_diffusion_quant,
+                outside_text_flux_sdcpp_diffusion_quant_state,
+                outside_text_flux_sdcpp_text_encoder_quant,
+                outside_text_flux_sdcpp_text_encoder_quant_state,
                 outside_text_flux_num_inference_steps,
                 outside_text_flux_luminance_correction,
                 outside_text_flux_upscale_small_crops,
@@ -2892,19 +3003,39 @@ def create_layout(
                 queue=False,
             )
 
-        # Flux backend change -> update Low VRAM, sd.cpp cache, and Residual diff visibility
-        def _update_flux_backend_controls(backend: str, method: str):
+        # Flux backend change -> update sd.cpp-specific, Low VRAM, and Residual diff visibility
+        def _update_flux_backend_controls(
+            backend: str, method: str, current_text_encoder_quant: str
+        ):
             """Update controls when Flux backend changes."""
             is_kontext = method == "flux_kontext"
             is_klein = method in ("flux_klein_9b", "flux_klein_4b")
-            show_low_vram = (is_klein or is_kontext) and backend == "sdnq"
-            show_sdcpp_cache = (is_klein or is_kontext) and backend == "sdcpp"
+            backend_value = flux_valid_backend(method, backend)
+            show_low_vram = (is_klein or is_kontext) and backend_value == "sdnq"
+            show_sdcpp_cache = (is_klein or is_kontext) and backend_value == "sdcpp"
+            text_encoder_quants = flux_sdcpp_text_encoder_quants(method)
+            text_encoder_quant_value = flux_sdcpp_valid_text_encoder_quant(
+                method, current_text_encoder_quant
+            )
             return (
+                gr.update(
+                    choices=_flux_backend_choices(method),
+                    value=backend_value,
+                    visible=is_klein or is_kontext,
+                ),
+                backend_value,
                 gr.update(visible=show_low_vram),
                 gr.update(visible=show_sdcpp_cache),
+                gr.update(visible=show_sdcpp_cache),
                 gr.update(
-                    visible=(is_kontext and backend == "nunchaku"),
-                    interactive=(is_kontext and backend == "nunchaku"),
+                    choices=[(quant, quant) for quant in text_encoder_quants],
+                    value=text_encoder_quant_value,
+                    visible=show_sdcpp_cache and bool(text_encoder_quants),
+                ),
+                text_encoder_quant_value,
+                gr.update(
+                    visible=(is_kontext and backend_value == "nunchaku"),
+                    interactive=(is_kontext and backend_value == "nunchaku"),
                 ),
             )
 
@@ -2913,12 +3044,35 @@ def create_layout(
             inputs=[
                 outside_text_flux_backend,
                 outside_text_inpainting_method,
+                outside_text_flux_sdcpp_text_encoder_quant_state,
             ],
             outputs=[
+                outside_text_flux_backend,
+                outside_text_flux_backend_state,
                 outside_text_flux_low_vram,
                 outside_text_flux_sdcpp_cache_mode,
+                outside_text_flux_sdcpp_diffusion_quant,
+                outside_text_flux_sdcpp_text_encoder_quant,
+                outside_text_flux_sdcpp_text_encoder_quant_state,
                 outside_text_flux_residual_diff_threshold,
             ],
+            queue=False,
+        )
+
+        outside_text_flux_sdcpp_diffusion_quant.change(
+            fn=lambda quant: quant,
+            inputs=outside_text_flux_sdcpp_diffusion_quant,
+            outputs=outside_text_flux_sdcpp_diffusion_quant_state,
+            queue=False,
+        )
+
+        outside_text_flux_sdcpp_text_encoder_quant.change(
+            fn=lambda quant, method: flux_sdcpp_valid_text_encoder_quant(method, quant),
+            inputs=[
+                outside_text_flux_sdcpp_text_encoder_quant,
+                outside_text_inpainting_method,
+            ],
+            outputs=outside_text_flux_sdcpp_text_encoder_quant_state,
             queue=False,
         )
 

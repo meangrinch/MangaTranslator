@@ -6,6 +6,11 @@ import zipfile
 from pathlib import Path
 
 from utils.archive import safe_extract_zip
+from utils.model_metadata import (
+    FLUX_SDCPP_DIFFUSION_QUANTS,
+    FLUX_SDCPP_TEXT_ENCODER_QUANTS,
+    flux_sdcpp_text_encoder_quants,
+)
 
 
 def main():
@@ -619,6 +624,27 @@ def main():
         ),
     )
     parser.add_argument(
+        "--osb-flux-sdcpp-diffusion-quant",
+        type=str,
+        choices=FLUX_SDCPP_DIFFUSION_QUANTS,
+        default="Q4_K_M",
+        help=(
+            "Quantization level for the Flux model via sd.cpp. "
+            "Ordered from largest/best quality to smallest/lowest quality."
+        ),
+    )
+    parser.add_argument(
+        "--osb-flux-sdcpp-text-encoder-quant",
+        type=str,
+        choices=FLUX_SDCPP_TEXT_ENCODER_QUANTS,
+        default=None,
+        help=(
+            "Quantization level for the text encoder model via sd.cpp. "
+            "Ordered from largest/best quality to smallest/lowest quality. "
+            "(defaults: Q4_K_XL for Klein and Q4_K_M for Kontext)."
+        ),
+    )
+    parser.add_argument(
         "--osb-no-flux-upscale-small-crops",
         dest="osb_flux_upscale_small_crops",
         action="store_false",
@@ -822,6 +848,21 @@ def main():
             "--osb-flux-backend nunchaku is only supported with "
             "--osb-inpainting-method flux_kontext."
         )
+    if args.osb_flux_backend == "sdcpp" and args.osb_flux_sdcpp_text_encoder_quant:
+        valid_text_encoder_quants = flux_sdcpp_text_encoder_quants(
+            args.osb_inpainting_method
+        )
+        if (
+            not valid_text_encoder_quants
+            or args.osb_flux_sdcpp_text_encoder_quant not in valid_text_encoder_quants
+        ):
+            parser.error(
+                "--osb-flux-sdcpp-text-encoder-quant "
+                f"{args.osb_flux_sdcpp_text_encoder_quant} is not available for "
+                f"{args.osb_inpainting_method}. "
+                "Valid text encoder quants: "
+                f"{', '.join(valid_text_encoder_quants) or 'none'}."
+            )
 
     import torch
 
@@ -1100,6 +1141,8 @@ def main():
             flux_backend=args.osb_flux_backend,
             flux_low_vram=args.osb_flux_low_vram,
             flux_sdcpp_cache_mode=args.osb_flux_sdcpp_cache_mode,
+            flux_sdcpp_diffusion_quant=args.osb_flux_sdcpp_diffusion_quant,
+            flux_sdcpp_text_encoder_quant=args.osb_flux_sdcpp_text_encoder_quant or "",
             flux_num_inference_steps=args.osb_flux_steps,
             flux_luminance_correction=args.osb_flux_luminance_correction,
             flux_upscale_small_crops=args.osb_flux_upscale_small_crops,

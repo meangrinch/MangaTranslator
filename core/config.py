@@ -133,6 +133,8 @@ class OutsideTextConfig:
     flux_backend: str = "sdnq"  # "sdcpp", "sdnq", "nunchaku" (Kontext only)
     flux_low_vram: bool = False  # Use CPU offload for SDNQ
     flux_sdcpp_cache_mode: str = "none"
+    flux_sdcpp_diffusion_quant: str = "Q4_K_M"
+    flux_sdcpp_text_encoder_quant: str = ""
     flux_num_inference_steps: int = 8
     flux_luminance_correction: bool = (
         True  # Match patch luminance to surrounding context

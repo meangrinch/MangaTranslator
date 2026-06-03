@@ -436,6 +436,8 @@ def process_outside_text(
                     upscale_small_crops=config.outside_text.flux_upscale_small_crops,
                     backend=backend,
                     sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
+                    sdcpp_diffusion_quant=config.outside_text.flux_sdcpp_diffusion_quant,
+                    sdcpp_text_encoder_quant=config.outside_text.flux_sdcpp_text_encoder_quant,
                     verbose=verbose,
                 )
                 backend_label = "sd.cpp" if backend == "sdcpp" else "SDNQ"
@@ -462,6 +464,8 @@ def process_outside_text(
                     upscale_small_crops=config.outside_text.flux_upscale_small_crops,
                     backend=backend,
                     sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
+                    sdcpp_diffusion_quant=config.outside_text.flux_sdcpp_diffusion_quant,
+                    sdcpp_text_encoder_quant=config.outside_text.flux_sdcpp_text_encoder_quant,
                     verbose=verbose,
                 )
                 backend_label = "sd.cpp" if backend == "sdcpp" else "SDNQ"
@@ -489,6 +493,8 @@ def process_outside_text(
                     backend=backend,
                     low_vram=low_vram,
                     sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
+                    sdcpp_diffusion_quant=config.outside_text.flux_sdcpp_diffusion_quant,
+                    sdcpp_text_encoder_quant=config.outside_text.flux_sdcpp_text_encoder_quant,
                 )
                 backend_label = {
                     "sdnq": "SDNQ",

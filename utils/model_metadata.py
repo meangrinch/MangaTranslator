@@ -1,6 +1,145 @@
 import re
 from typing import Optional
 
+FLUX_SDCPP_QUANT_FILES = {
+    "flux_klein_4b": {
+        "diffusion_model": {
+            "repo_id": "unsloth/FLUX.2-klein-4B-GGUF",
+            "default": "Q4_K_M",
+            "filenames": {
+                "Q8_0": "flux-2-klein-4b-Q8_0.gguf",
+                "Q6_K": "flux-2-klein-4b-Q6_K.gguf",
+                "Q5_K_M": "flux-2-klein-4b-Q5_K_M.gguf",
+                "Q4_K_M": "flux-2-klein-4b-Q4_K_M.gguf",
+                "Q3_K_M": "flux-2-klein-4b-Q3_K_M.gguf",
+            },
+        },
+        "llm": {
+            "repo_id": "unsloth/Qwen3-4B-GGUF",
+            "default": "Q4_K_XL",
+            "filenames": {
+                "Q8_0": "Qwen3-4B-Q8_0.gguf",
+                "Q6_K_XL": "Qwen3-4B-UD-Q6_K_XL.gguf",
+                "Q5_K_XL": "Qwen3-4B-UD-Q5_K_XL.gguf",
+                "Q4_K_XL": "Qwen3-4B-UD-Q4_K_XL.gguf",
+                "Q3_K_XL": "Qwen3-4B-UD-Q3_K_XL.gguf",
+            },
+        },
+    },
+    "flux_klein_9b": {
+        "diffusion_model": {
+            "repo_id": "unsloth/FLUX.2-klein-9B-GGUF",
+            "default": "Q4_K_M",
+            "filenames": {
+                "Q8_0": "flux-2-klein-9b-Q8_0.gguf",
+                "Q6_K": "flux-2-klein-9b-Q6_K.gguf",
+                "Q5_K_M": "flux-2-klein-9b-Q5_K_M.gguf",
+                "Q4_K_M": "flux-2-klein-9b-Q4_K_M.gguf",
+                "Q3_K_M": "flux-2-klein-9b-Q3_K_M.gguf",
+            },
+        },
+        "llm": {
+            "repo_id": "unsloth/Qwen3-8B-GGUF",
+            "default": "Q4_K_XL",
+            "filenames": {
+                "Q8_0": "Qwen3-8B-Q8_0.gguf",
+                "Q6_K_XL": "Qwen3-8B-UD-Q6_K_XL.gguf",
+                "Q5_K_XL": "Qwen3-8B-UD-Q5_K_XL.gguf",
+                "Q4_K_XL": "Qwen3-8B-UD-Q4_K_XL.gguf",
+                "Q3_K_XL": "Qwen3-8B-UD-Q3_K_XL.gguf",
+            },
+        },
+    },
+    "flux_kontext": {
+        "diffusion_model": {
+            "repo_id": "unsloth/FLUX.1-Kontext-dev-GGUF",
+            "default": "Q4_K_M",
+            "subdir": "kontext",
+            "filenames": {
+                "Q8_0": "flux1-kontext-dev-Q8_0.gguf",
+                "Q6_K": "flux1-kontext-dev-Q6_K.gguf",
+                "Q5_K_M": "flux1-kontext-dev-Q5_K_M.gguf",
+                "Q4_K_M": "flux1-kontext-dev-Q4_K_M.gguf",
+                "Q3_K_M": "flux1-kontext-dev-Q3_K_M.gguf",
+            },
+        },
+        "t5xxl": {
+            "repo_id": "city96/t5-v1_1-xxl-encoder-gguf",
+            "default": "Q4_K_M",
+            "subdir": "kontext",
+            "filenames": {
+                "Q8_0": "t5-v1_1-xxl-encoder-Q8_0.gguf",
+                "Q6_K": "t5-v1_1-xxl-encoder-Q6_K.gguf",
+                "Q5_K_M": "t5-v1_1-xxl-encoder-Q5_K_M.gguf",
+                "Q4_K_M": "t5-v1_1-xxl-encoder-Q4_K_M.gguf",
+                "Q3_K_M": "t5-v1_1-xxl-encoder-Q3_K_M.gguf",
+            },
+        },
+    },
+}
+
+FLUX_SDCPP_DIFFUSION_QUANTS = tuple(
+    FLUX_SDCPP_QUANT_FILES["flux_klein_4b"]["diffusion_model"]["filenames"]
+)
+FLUX_SDCPP_QWEN_QUANTS = tuple(
+    FLUX_SDCPP_QUANT_FILES["flux_klein_4b"]["llm"]["filenames"]
+)
+FLUX_SDCPP_T5_QUANTS = tuple(
+    FLUX_SDCPP_QUANT_FILES["flux_kontext"]["t5xxl"]["filenames"]
+)
+FLUX_SDCPP_TEXT_ENCODER_QUANTS = FLUX_SDCPP_QWEN_QUANTS + tuple(
+    quant for quant in FLUX_SDCPP_T5_QUANTS if quant not in FLUX_SDCPP_QWEN_QUANTS
+)
+FLUX_BACKENDS = ("sdcpp", "sdnq", "nunchaku")
+
+
+def flux_sdcpp_text_encoder_asset_key(model_key: str) -> Optional[str]:
+    """Map a Flux model key to its sd.cpp text-encoder asset key."""
+    if model_key == "flux_kontext":
+        return "t5xxl"
+    if model_key in ("flux_klein_4b", "flux_klein_9b"):
+        return "llm"
+    return None
+
+
+def flux_sdcpp_quant_default(model_key: str, asset_key: str) -> str:
+    """Default quant for a model/asset, sourced from FLUX_SDCPP_QUANT_FILES."""
+    spec = FLUX_SDCPP_QUANT_FILES.get(model_key, {}).get(asset_key)
+    return spec["default"] if spec else ""
+
+
+def flux_sdcpp_text_encoder_quants(model_key: str) -> tuple[str, ...]:
+    asset_key = flux_sdcpp_text_encoder_asset_key(model_key)
+    if asset_key is None:
+        return ()
+    return tuple(FLUX_SDCPP_QUANT_FILES[model_key][asset_key]["filenames"])
+
+
+def flux_sdcpp_text_encoder_default(model_key: str) -> str:
+    asset_key = flux_sdcpp_text_encoder_asset_key(model_key)
+    if asset_key is None:
+        return flux_sdcpp_quant_default("flux_klein_4b", "llm")
+    return flux_sdcpp_quant_default(model_key, asset_key)
+
+
+def flux_sdcpp_valid_text_encoder_quant(model_key: str, quant: str) -> str:
+    """Return a text-encoder quant that is valid for the selected Flux model."""
+    quants = flux_sdcpp_text_encoder_quants(model_key) or FLUX_SDCPP_TEXT_ENCODER_QUANTS
+    default = flux_sdcpp_text_encoder_default(model_key)
+    if quant in quants:
+        return quant
+    if default in quants:
+        return default
+    return quants[0] if quants else ""
+
+
+def flux_valid_backend(model_key: str, backend: str) -> str:
+    if model_key in ("flux_klein_4b", "flux_klein_9b"):
+        return backend if backend in ("sdcpp", "sdnq") else "sdnq"
+    if model_key == "flux_kontext":
+        return backend if backend in FLUX_BACKENDS else "sdnq"
+    return backend if backend in FLUX_BACKENDS else "sdnq"
+
 
 def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int]:
     """

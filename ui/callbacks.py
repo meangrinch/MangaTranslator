@@ -13,6 +13,11 @@ from core.validation import (
     validate_zip_file,
 )
 from utils.exceptions import CancellationError, ValidationError
+from utils.model_metadata import (
+    FLUX_SDCPP_DIFFUSION_QUANTS,
+    flux_sdcpp_text_encoder_quants,
+    flux_sdcpp_valid_text_encoder_quant,
+)
 
 from . import logic, settings_manager, utils
 from .cancellation import CancellationManager
@@ -33,6 +38,22 @@ ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
 
 CANCELLATION_MANAGER: Optional[CancellationManager] = None
+
+
+def _radio_choices(values):
+    return [(value, value) for value in values]
+
+
+def _flux_backend_choices(method: str):
+    if method in ("flux_klein_9b", "flux_klein_4b"):
+        return [("sd.cpp", "sdcpp"), ("SDNQ", "sdnq")]
+    if method == "flux_kontext":
+        return [
+            ("sd.cpp", "sdcpp"),
+            ("SDNQ", "sdnq"),
+            ("Nunchaku (CUDA)", "nunchaku"),
+        ]
+    return [("SDNQ", "sdnq")]
 
 
 def _clean_error_message(message: Any) -> str:
@@ -145,6 +166,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_flux_backend_val,
         outside_text_flux_low_vram_val,
         outside_text_flux_sdcpp_cache_mode_val,
+        outside_text_flux_sdcpp_diffusion_quant_val,
+        outside_text_flux_sdcpp_text_encoder_quant_val,
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_luminance_correction_val,
         outside_text_flux_upscale_small_crops_val,
@@ -217,6 +240,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             flux_backend=outside_text_flux_backend_val,
             flux_low_vram=outside_text_flux_low_vram_val,
             flux_sdcpp_cache_mode=outside_text_flux_sdcpp_cache_mode_val,
+            flux_sdcpp_diffusion_quant=outside_text_flux_sdcpp_diffusion_quant_val,
+            flux_sdcpp_text_encoder_quant=outside_text_flux_sdcpp_text_encoder_quant_val,
             flux_num_inference_steps=int(outside_text_flux_num_inference_steps_val),
             flux_luminance_correction=outside_text_flux_luminance_correction_val,
             flux_upscale_small_crops=outside_text_flux_upscale_small_crops_val,
@@ -1007,6 +1032,8 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_flux_backend_val,
         outside_text_flux_low_vram_val,
         outside_text_flux_sdcpp_cache_mode_val,
+        outside_text_flux_sdcpp_diffusion_quant_val,
+        outside_text_flux_sdcpp_text_encoder_quant_val,
         outside_text_flux_num_inference_steps_val,
         outside_text_flux_luminance_correction_val,
         outside_text_flux_upscale_small_crops_val,
@@ -1066,6 +1093,8 @@ def handle_save_config_click(*args: Any) -> str:
             flux_backend=outside_text_flux_backend_val,
             flux_low_vram=outside_text_flux_low_vram_val,
             flux_sdcpp_cache_mode=outside_text_flux_sdcpp_cache_mode_val,
+            flux_sdcpp_diffusion_quant=outside_text_flux_sdcpp_diffusion_quant_val,
+            flux_sdcpp_text_encoder_quant=outside_text_flux_sdcpp_text_encoder_quant_val,
             flux_num_inference_steps=int(outside_text_flux_num_inference_steps_val),
             flux_luminance_correction=outside_text_flux_luminance_correction_val,
             flux_upscale_small_crops=outside_text_flux_upscale_small_crops_val,
@@ -1288,6 +1317,13 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     effort_val = effort_update.get("value", default_ui_state.general.effort)
     verbosity_visible = verbosity_update.get("visible", False)
     verbosity_val = verbosity_update.get("value", default_ui_state.general.verbosity)
+    text_encoder_quant = flux_sdcpp_valid_text_encoder_quant(
+        default_ui_state.outside_text.inpainting_method,
+        default_ui_state.outside_text.flux_sdcpp_text_encoder_quant,
+    )
+    text_encoder_quants = flux_sdcpp_text_encoder_quants(
+        default_ui_state.outside_text.inpainting_method
+    )
 
     return [
         default_ui_state.detection.confidence,
@@ -1426,9 +1462,25 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.enabled,
         default_ui_state.outside_text.seed,
         gr.update(value=default_ui_state.outside_text.inpainting_method),
-        gr.update(value=default_ui_state.outside_text.flux_backend),
+        gr.update(
+            value=default_ui_state.outside_text.flux_backend,
+            choices=_flux_backend_choices(
+                default_ui_state.outside_text.inpainting_method
+            ),
+        ),
+        default_ui_state.outside_text.flux_backend,
         default_ui_state.outside_text.flux_low_vram,
         default_ui_state.outside_text.flux_sdcpp_cache_mode,
+        gr.update(
+            value=default_ui_state.outside_text.flux_sdcpp_diffusion_quant,
+            choices=_radio_choices(FLUX_SDCPP_DIFFUSION_QUANTS),
+        ),
+        default_ui_state.outside_text.flux_sdcpp_diffusion_quant,
+        gr.update(
+            value=text_encoder_quant,
+            choices=_radio_choices(text_encoder_quants),
+        ),
+        text_encoder_quant,
         default_ui_state.outside_text.flux_num_inference_steps,
         default_ui_state.outside_text.flux_luminance_correction,
         default_ui_state.outside_text.flux_upscale_small_crops,

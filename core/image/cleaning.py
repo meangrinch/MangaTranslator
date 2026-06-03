@@ -535,6 +535,8 @@ def clean_speech_bubbles(
     flux_backend: str = "sdnq",
     flux_low_vram: bool = False,
     flux_sdcpp_cache_mode: str = "none",
+    flux_sdcpp_diffusion_quant: str = "Q4_K_M",
+    flux_sdcpp_text_encoder_quant: str = "",
     flux_luminance_correction: bool = True,
     flux_upscale_small_crops: bool = True,
     bubble_detector_model: str = "yolo_1",
@@ -874,6 +876,8 @@ def clean_speech_bubbles(
                             upscale_small_crops=flux_upscale_small_crops,
                             backend=backend,
                             sdcpp_cache_mode=flux_sdcpp_cache_mode,
+                            sdcpp_diffusion_quant=flux_sdcpp_diffusion_quant,
+                            sdcpp_text_encoder_quant=flux_sdcpp_text_encoder_quant,
                             verbose=verbose,
                         )
                     elif inpaint_method == "flux_klein_4b":
@@ -888,6 +892,8 @@ def clean_speech_bubbles(
                             upscale_small_crops=flux_upscale_small_crops,
                             backend=backend,
                             sdcpp_cache_mode=flux_sdcpp_cache_mode,
+                            sdcpp_diffusion_quant=flux_sdcpp_diffusion_quant,
+                            sdcpp_text_encoder_quant=flux_sdcpp_text_encoder_quant,
                             verbose=verbose,
                         )
                     else:
@@ -901,6 +907,8 @@ def clean_speech_bubbles(
                             backend=flux_backend,
                             low_vram=low_vram,
                             sdcpp_cache_mode=flux_sdcpp_cache_mode,
+                            sdcpp_diffusion_quant=flux_sdcpp_diffusion_quant,
+                            sdcpp_text_encoder_quant=flux_sdcpp_text_encoder_quant,
                         )
                     if request_coordinator is not None and len(colored_bubbles) > 1:
                         pil_working = _inpaint_colored_bubbles_with_coordinator(
