@@ -117,23 +117,25 @@
   - `hf_token` が設定されていることを確認してください（セットアップ/セットアップ後の設定を参照）。
 
 - **VRAM 不足 / CUDA エラー:**
-  - 「低 VRAM モード（Low VRAM Mode）」を有効にしてください。
+  - 「低 VRAM モード（Low VRAM Mode）」を有効にしてください（SDNQ のみ）。
+  - より低い Flux/text_encoder 量子化を選択してください（sd.cpp のみ）。
   - 「Klein クロップ領域を ~1MP にアップスケール（Upscale Klein Crops to ~1MP）」を無効にしてください。
-  - Flux.2 Klein 4B（最も小さいモデル）を使用してください。
+  - Flux.2 Klein 4B（最も小さいモデル）に切り替えてください。
   - OpenCV を使用してください（VRAM 不要）。
 
 - **Flux OSB インペイントが遅い:**
   - 「Flux 領域のグループ化（Group Flux Regions）」を有効にして、1回の Flux パスで複数の OSB マスクをインペイントします（品質が低下する場合があります）。
   - 「Klein クロップ領域を ~1MP にアップスケール（Upscale Klein Crops to ~1MP）」を無効にしてください（品質が低下する場合があります）。
+  - 別のモデル/バックエンドに切り替えてみてください。
 
 - **インペイント領域のわずかな色ズレ:**
   - Flux.2 Klein モデルはわずかな色の変化を導入する場合があります。「輝度補正（Luminance Correction）」の有効/無効を切り替えてみてください。
-  - 色ズレを目立たなくするために、Flux.1 Kontext（SDNQ または Nunchaku バックエンド）を使用してください。
+  - 色ズレを目立たなくするために、Flux.1 Kontext を使用してください。
 
 - **インペイントの品質が低い:**
+  - より高い Flux/text_encoder 量子化を選択してください（sd.cpp のみ）。
   - 「Klein クロップ領域を ~1MP にアップスケール（Upscale Klein Crops to ~1MP）」を有効のままにしてください。
   - 推論ステップ（inference steps）数を増やしてください（Flux.1 Kontext の場合）。
 
 - **Flux.1 Kontext Nunchaku バックエンドが利用できない:**
-  - Nunchaku には Nvidia GPU (CUDA) と個別のインストールが必要です。
-  - 代わりに SDNQ バックエンド（クロスプラットフォーム）または Flux.2 Klein を使用してください。
+  - Nunchaku には Nvidia GPU (CUDA) と個別のインストールが必要です。インストールするか、代わりに sd.cpp/SDNQ バックエンドを使用してください。

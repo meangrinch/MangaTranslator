@@ -117,23 +117,25 @@
   - `hf_token`이 설정되어 있는지 확인하세요 (설치/설치 후 설정 참고).
 
 - **VRAM 부족 / CUDA 에러 발생:**
-  - "저비디오메모리 모드 (Low VRAM Mode)"를 활성화하세요.
+  - "저비디오메모리 모드 (Low VRAM Mode)"를 활성화하세요 (SDNQ 전용).
+  - 더 낮은 Flux/text_encoder 양자화(quant) 버전을 선택하세요 (sd.cpp 전용).
   - "Klein 자르기 영역을 ~1MP로 업스케일 (Upscale Klein Crops to ~1MP)" 옵션을 비활성화하세요.
-  - Flux.2 Klein 4B(가장 작고 가벼운 모델)를 사용하세요.
+  - Flux.2 Klein 4B(가장 작고 가벼운 모델)로 전환하세요.
   - OpenCV를 사용하세요 (VRAM을 사용하지 않음).
 
 - **Flux OSB 인페인팅이 너무 느림:**
   - "Flux 영역 그룹화 (Group Flux Regions)"를 활성화하여 한 번의 Flux 패스로 여러 OSB 마스크를 한 번에 처리하도록 하세요 (품질은 약간 저하될 수 있습니다).
   - "Klein 자르기 영역을 ~1MP로 업스케일 (Upscale Klein Crops to ~1MP)" 옵션을 비활성화하세요 (품질 저하 가능).
+  - 다른 모델/백엔드로 전환해 보세요.
 
 - **인페인팅된 영역의 미세한 색감 차이:**
   - Flux.2 Klein 모델은 약간의 색감 변화를 일으킬 수 있습니다. "조도 보정 (Luminance Correction)" 옵션을 활성화하거나 비활성화해 보며 테스트하세요.
-  - 색감 차이를 최소화하려면 Flux.1 Kontext (SDNQ 또는 Nunchaku 백엔드)를 사용하세요.
+  - 색감 차이를 최소화하려면 Flux.1 Kontext를 사용하세요.
 
 - **인페인팅 결과물의 품질이 낮음:**
+  - 더 높은 Flux/text_encoder 양자화(quant) 버전을 선택하세요 (sd.cpp 전용).
   - "Klein 자르기 영역을 ~1MP로 업스케일 (Upscale Klein Crops to ~1MP)" 옵션을 활성화 상태로 유지하세요.
   - 추론 단계(inference steps) 수를 늘리세요 (Flux.1 Kontext 사용 시).
 
 - **Flux.1 Kontext Nunchaku 백엔드를 사용할 수 없음:**
-  - Nunchaku 백엔드는 NVIDIA GPU (CUDA) 및 전용 별도 설치가 필요합니다.
-  - 크로스 플랫폼을 지원하는 SDNQ 백엔드나 Flux.2 Klein을 대신 사용하세요.
+  - Nunchaku 백엔드는 NVIDIA GPU (CUDA) 및 전용 별도 설치가 필요합니다. 별도로 설치하거나 대신 sd.cpp/SDNQ 백엔드를 사용하세요.

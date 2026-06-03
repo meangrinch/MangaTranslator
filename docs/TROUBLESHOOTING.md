@@ -118,23 +118,25 @@
   - Ensure hf_token is set (see Installation/Post-Install Setup)
 
 - **Out of VRAM / CUDA errors:**
-  - Enable "Low VRAM Mode"
+  - Enable "Low VRAM Mode" (SDNQ only)
+  - Select a lower Flux/text_encoder quant (sd.cpp only)
   - Disable "Upscale Klein Crops to ~1MP"
-  - Use Flux.2 Klein 4B (smallest model)
+  - Switch to Flux.2 Klein 4B (smallest model)
   - Use OpenCV (no VRAM required)
 
 - **Slow Flux OSB inpainting:**
   - Enable "Group Flux Regions" to inpaint multiple OSB masks in one Flux pass (at the cost of quality)
   - Disable "Upscale Klein Crops to ~1MP" (at the cost of quality)
+  - Try switching to a different model/backend
 
 - **Minor color shifts in inpainted regions:**
   - Flux.2 Klein models may introduce slight color changes; try enabling/disabling "Luminance Correction"
-  - Use Flux.1 Kontext (SDNQ or Nunchaku) for less noticeable color shifts
+  - Use Flux.1 Kontext for less noticeable color shifts
 
 - **Poor inpainting quality:**
+  - Select a higher Flux/text_encoder quant (sd.cpp only)
   - Keep "Upscale Klein Crops to ~1MP" enabled
   - Increase inference steps (for Flux.1 Kontext)
 
 - **Flux.1 Kontext Nunchaku backend not available:**
-  - Nunchaku requires an Nvidia GPU (CUDA) and separate installation
-  - Use the SDNQ backend (cross-platform) or Flux.2 Klein instead
+  - Nunchaku requires an Nvidia GPU (CUDA) and separate installation; install it or use the sd.cpp/SDNQ backends instead
