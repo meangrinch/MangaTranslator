@@ -30,8 +30,8 @@
 
 ## 功能特点
 
-- **检测**：对话框（气泡框）检测与分割（YOLO + SAM 2.1/3）
-- **擦除**：擦除对话框和对话框外 (OSB) 的文本（Flux.2 Klein、Flux.1 Kontext 或 OpenCV）
+- **检测**：对话框（气泡框）检测与分割（YOLO、SAM 2.1/3）
+- **擦除**：擦除对话框和对话框外 (OSB) 的文本（FLUX.2 Klein、FLUX.1 Kontext 或 OpenCV）
 - **翻译**：基于大语言模型 (LLM) 的 OCR 与翻译（支持 59 种语言）
 - **渲染**：支持排版对齐和自定义字体包的文本渲染
 - **超分辨率**：使用 2x-AnimeSharpV4 提升输出图像质量
@@ -115,7 +115,7 @@ pip install torch==2.11.0+xpu torchvision==0.26.0+xpu --extra-index-url https://
 pip install torch==2.11.0 torchvision==0.26.0
 ```
 
-4. 安装 Nunchaku（可选，用于 Flux.1 Kontext Nunchaku 后端）
+4. 安装 Nunchaku（可选，用于通过 Nunchaku 后端运行 FLUX.1 Kontext）
 
 - Nunchaku 的 wheel 包未发布在 PyPI 上。请直接从 v1.3.0dev20260213 GitHub release URL 安装适配您系统和 Python 版本的包。仅支持 CUDA，且需要 2000 系列及以上的显卡。
 
@@ -182,7 +182,7 @@ fonts/
 1. 登录或创建一个 Hugging Face 账号
 2. 访问并接受以下仓库的许可协议：
    - [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo)
-   - [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)（可选，如果使用带有 Nunchaku 的 Kontext）
+   - [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)（可选，如果通过 Nunchaku 后端使用 FLUX.1 Kontext）
    - [SAM 3](https://huggingface.co/facebook/sam3)（可选，如果使用 SAM 3）
 3. 在 Hugging Face 设置中创建一个新的 Access Token，并赋予对受门控仓库的只读权限（"Read access to contents of public gated repos"）
 4. 将 Token 添加到应用程序中：

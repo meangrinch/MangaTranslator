@@ -30,8 +30,8 @@ Gradio-based web application for automating the translation of manga/comic page 
 
 ## Features
 
-- **Detection**: Speech bubble detection & segmentation (YOLO + SAM 2.1/3)
-- **Cleaning**: Inpaint speech bubbles and OSB text (Flux.2 Klein, Flux.1 Kontext, or OpenCV)
+- **Detection**: Speech bubble detection & segmentation (YOLO, SAM 2.1/3)
+- **Cleaning**: Inpaint speech bubbles and OSB text (FLUX.2 Klein, FLUX.1 Kontext, or OpenCV)
 - **Translation**: LLM-powered OCR & translation (59 languages)
 - **Rendering**: Text rendering with alignment and custom font packs
 - **Upscaling**: 2x-AnimeSharpV4 for enhanced output quality
@@ -115,7 +115,7 @@ pip install torch==2.11.0+xpu torchvision==0.26.0+xpu --extra-index-url https://
 pip install torch==2.11.0 torchvision==0.26.0
 ```
 
-4. Install Nunchaku (optional, for Flux.1 Kontext Nunchaku backend)
+4. Install Nunchaku (optional, for FLUX.1 Kontext via Nunchaku backend)
 
 - Nunchaku wheels are not on PyPI. Install directly from the v1.3.0dev20260213 GitHub release URL, matching your OS and Python version. CUDA only, and requires a 2000-series card or newer.
 
@@ -182,7 +182,7 @@ If you want to use the OSB text pipeline, you need a Hugging Face token with acc
 1. Sign in or create a Hugging Face account
 2. Visit and accept the terms on:
    - [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo)
-   - [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev) (optional, if using Kontext with Nunchaku)
+   - [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev) (optional, if using FLUX.1 Kontext via Nunchaku backend)
    - [SAM 3](https://huggingface.co/facebook/sam3) (optional, if using SAM 3)
 3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
 4. Add the token to the app:

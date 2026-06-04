@@ -30,8 +30,8 @@ AIを使用して漫画やコミックページの画像翻訳を自動化する
 
 ## 主な機能
 
-- **検出**: 吹き出しの検出とセグメンテーション（YOLO + SAM 2.1/3）
-- **クリーニング**: 吹き出し内および吹き出し外（OSB）テキストのインペインティング（Flux.2 Klein、Flux.1 Kontext、またはOpenCV）
+- **検出**: 吹き出しの検出とセグメンテーション（YOLO、SAM 2.1/3）
+- **クリーニング**: 吹き出し内および吹き出し外（OSB）テキストのインペインティング（FLUX.2 Klein、FLUX.1 Kontext、またはOpenCV）
 - **翻訳**: LLMを活用したOCRと翻訳（59言語対応）
 - **レンダリング**: 位置合わせやカスタムフォントパックをサポートしたテキスト描画
 - **アップスケーリング**: 画質向上のための2x-AnimeSharpV4対応
@@ -115,7 +115,7 @@ pip install torch==2.11.0+xpu torchvision==0.26.0+xpu --extra-index-url https://
 pip install torch==2.11.0 torchvision==0.26.0
 ```
 
-4. Nunchakuのインストール（任意、Flux.1 Kontext Nunchakuバックエンド用）
+4. Nunchakuのインストール（任意、Nunchakuバックエンド経由のFLUX.1 Kontext用）
 
 - NunchakuのwheelファイルはPyPIにはありません。OSとPythonのバージョンに一致するものを、v1.3.0dev20260213のGitHubリリースURLから直接インストールしてください。CUDA専用で、RTX 2000シリーズ以降のグラフィックボードが必要です。
 
@@ -182,7 +182,7 @@ fonts/
 1. Hugging Faceアカウントにサインインするか、新規作成します。
 2. 以下のページにアクセスし、利用規約に同意します：
    - [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo)
-   - [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)（NunchakuでKontextを使用する場合は必須）
+   - [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)（任意、Nunchakuバックエンド経由でFLUX.1 Kontextを使用する場合）
    - [SAM 3](https://huggingface.co/facebook/sam3)（SAM 3を使用する場合は任意）
 3. Hugging Faceの設定で、ゲート付きリポジトリへの読み取り権限（"Read access to contents of public gated repos"）を持つ新しいAccess Tokenを作成します。
 4. トークンをアプリケーションに追加します：
