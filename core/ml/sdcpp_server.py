@@ -166,6 +166,8 @@ class SDCppServerManager:
     RELEASE_BASE_URL = (
         "https://github.com/leejet/stable-diffusion.cpp/releases/download"
     )
+    SERVER_LOG_GLOB = "*-server.log"
+    SERVER_LOG_RETENTION_COUNT = 3
     BINARY_ENV = "MANGATRANSLATOR_SDCPP_BINARY"
     SERVER_BINARY_ENV = "MANGATRANSLATOR_SDCPP_SERVER_BINARY"
     RELEASE_ASSET_ENV = "MANGATRANSLATOR_SDCPP_RELEASE_ASSET"
@@ -227,6 +229,46 @@ class SDCppServerManager:
             log_message(
                 f"Warning: Could not remove sd.cpp archive {archive_path}: {e}",
                 always_print=True,
+            )
+
+    def _cleanup_stale_logs(
+        self, current_log_path: Optional[Path] = None, verbose: bool = False
+    ) -> None:
+        if not self.install_dir.exists():
+            return
+
+        logs = []
+        for log_path in self.install_dir.glob(self.SERVER_LOG_GLOB):
+            try:
+                if log_path.is_file():
+                    logs.append((log_path.stat().st_mtime, log_path))
+            except OSError as e:
+                log_message(
+                    f"Warning: Could not inspect sd.cpp log {log_path}: {e}",
+                    verbose=verbose,
+                )
+
+        logs.sort(key=lambda item: item[0], reverse=True)
+        retained = {current_log_path} if current_log_path is not None else set()
+        removed = 0
+        for _, log_path in logs:
+            if log_path in retained:
+                continue
+            if len(retained) < self.SERVER_LOG_RETENTION_COUNT:
+                retained.add(log_path)
+                continue
+            try:
+                log_path.unlink()
+                removed += 1
+            except OSError as e:
+                log_message(
+                    f"Warning: Could not remove stale sd.cpp log {log_path}: {e}",
+                    verbose=verbose,
+                )
+        if removed:
+            log_message(
+                f"Removed {removed} stale sd.cpp server log file(s).",
+                verbose=verbose,
             )
 
     def _select_archive_name(self) -> str:
@@ -623,6 +665,7 @@ class SDCppServerManager:
             log_path = (
                 self.install_dir / f"{self._safe_server_key(server_key)}-server.log"
             )
+            self._cleanup_stale_logs(log_path, verbose=verbose)
             log_file = open(log_path, "ab")
             cache_args, normalized_cache_mode, warmup, steps = self._cache_args(
                 cache_mode, num_inference_steps
