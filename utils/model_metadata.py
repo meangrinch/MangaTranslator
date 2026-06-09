@@ -1,5 +1,5 @@
 import re
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 FLUX_SDCPP_QUANT_FILES = {
     "flux_klein_4b": {
@@ -148,7 +148,6 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
     Returns:
         - 32768 for OpenAI GPT 4.1 models
         - 16384 for OpenAI GPT 4o models and models with "chat" in the name
-        - 31744 for Anthropic Claude Opus 4/4.1 models (not 4.5+)
         - 23552 for Z.ai "glm-4.6v" model
         - 16384 for Z.ai "glm-4.5v" model
         - None for all other models (no cap, use existing 63488 max)
@@ -165,20 +164,8 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
             return 16384
         if "chat" in model_lower:
             return 16384
-    elif provider == "Anthropic":
-        if (
-            "claude-opus-4" in model_lower
-            and "claude-opus-4-5" not in model_lower
-            and "claude-opus-4-6" not in model_lower
-            and "claude-opus-4-7" not in model_lower
-            and "claude-opus-4-8" not in model_lower
-        ):
-            return 31744
     elif provider == "OpenRouter":
         is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
-        is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith(
-            "claude-"
-        )
 
         if is_openai_model:
             if "gpt-4.1" in model_lower:
@@ -187,15 +174,6 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
                 return 16384
             if "chat" in model_lower:
                 return 16384
-        if is_anthropic_model:
-            if (
-                "claude-opus-4" in model_lower
-                and "claude-opus-4.5" not in model_lower
-                and "claude-opus-4.6" not in model_lower
-                and "claude-opus-4.7" not in model_lower
-                and "claude-opus-4.8" not in model_lower
-            ):
-                return 31744
         if "glm-4.6v" in model_lower:
             return 23552
         if "glm-4.5v" in model_lower:
@@ -238,14 +216,26 @@ def is_openai_model_family(model_name: Optional[str]) -> bool:
     return (
         "openai/" in lm
         or lm.startswith("gpt-")
-        or lm.startswith("o1")
         or lm.startswith("o3")
-        or lm.startswith("o4-mini")
         or "/gpt-" in lm
-        or "/o1" in lm
         or "/o3" in lm
-        or "/o4-mini" in lm
     )
+
+
+def is_google_model_family(model_name: Optional[str]) -> bool:
+    """Check if a model name is Google/Gemini-family, including OpenRouter-prefixed IDs."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "google/" in lm or "gemini" in lm or "gemma" in lm
+
+
+def is_anthropic_model_family(model_name: Optional[str]) -> bool:
+    """Check if a model name is Anthropic/Claude-family, including OpenRouter-prefixed IDs."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "anthropic/" in lm or lm.startswith("claude-")
 
 
 _GPT5_GEN_RE = re.compile(r"gpt-(5(?:\.\d+)?)", re.IGNORECASE)
@@ -284,19 +274,12 @@ def get_gpt5_generation(model_name: Optional[str]) -> Optional[str]:
 
 
 def is_openai_reasoning_model(model_name: Optional[str]) -> bool:
-    """Check if an OpenAI model is reasoning-capable (GPT-5 series, o1, o3, o4-mini)."""
+    """Check if an OpenAI model is reasoning-capable (GPT-5 series, o3)."""
     if not model_name:
         return False
     lm = model_name.lower()
     return (
-        lm.startswith("gpt-5")
-        or "/gpt-5" in lm
-        or lm.startswith("o1")
-        or "/o1" in lm
-        or lm.startswith("o3")
-        or "/o3" in lm
-        or lm.startswith("o4-mini")
-        or "/o4-mini" in lm
+        lm.startswith("gpt-5") or "/gpt-5" in lm or lm.startswith("o3") or "/o3" in lm
     )
 
 
@@ -363,6 +346,7 @@ def is_anthropic_reasoning_model(model_name: Optional[str]) -> bool:
         or "claude-sonnet-4" in lm
         or "claude-haiku-4-5" in lm
         or "claude-haiku-4.5" in lm
+        or is_fable_5_model(model_name)
     )
 
 
@@ -429,6 +413,94 @@ def is_opus_48_model(model_name: Optional[str]) -> bool:
     if "claude" not in lm or "opus" not in lm:
         return False
     return ("4.8" in lm) or ("4-8" in lm)
+
+
+def is_fable_5_model(model_name: Optional[str]) -> bool:
+    """Check if a model is Claude Fable 5 (always-on adaptive thinking, no sampling params)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "claude-fable-5" in lm
+
+
+def anthropic_model_flags(model_name: Optional[str]) -> Dict[str, bool]:
+    """Cumulative Claude API capability flags for generation_config / OpenRouter metadata.
+
+    Tiers (each includes the capabilities of tiers below):
+    - Opus 4.5: is_claude_effort
+    - 4.6 (Opus/Sonnet): + is_claude_effort_max
+    - 4.7/4.8: + is_claude_effort_xhigh (also strips sampling params)
+    - Fable 5: same as 4.7+ plus is_claude_omit_thinking
+    """
+    if not model_name:
+        return {}
+    if is_fable_5_model(model_name):
+        return {
+            "is_claude_effort": True,
+            "is_claude_effort_max": True,
+            "is_claude_effort_xhigh": True,
+            "is_claude_omit_thinking": True,
+        }
+    if is_opus_47_model(model_name) or is_opus_48_model(model_name):
+        return {
+            "is_claude_effort": True,
+            "is_claude_effort_max": True,
+            "is_claude_effort_xhigh": True,
+        }
+    if is_46_model(model_name):
+        return {
+            "is_claude_effort": True,
+            "is_claude_effort_max": True,
+        }
+    if is_opus_45_model(model_name):
+        return {"is_claude_effort": True}
+    return {}
+
+
+def is_anthropic_no_sampling_model(model_name: Optional[str]) -> bool:
+    """Anthropic models that reject temperature/top_k at the API."""
+    return anthropic_model_flags(model_name).get("is_claude_effort_xhigh", False)
+
+
+def anthropic_omits_thinking_config(model_name: Optional[str]) -> bool:
+    """Models with always-on thinking that omit reasoning-effort API config (e.g. Fable 5)."""
+    return anthropic_model_flags(model_name).get("is_claude_omit_thinking", False)
+
+
+def anthropic_uses_adaptive_thinking_info(model_name: Optional[str]) -> bool:
+    """Whether reasoning-effort UI should offer/describe adaptive (auto/none) thinking."""
+    flags = anthropic_model_flags(model_name)
+    return bool(
+        flags.get("is_claude_effort_max") and not flags.get("is_claude_omit_thinking")
+    )
+
+
+def anthropic_reasoning_effort_config(
+    model_name: Optional[str],
+) -> Tuple[bool, List[str], Optional[str]]:
+    """Reasoning-effort dropdown config for Anthropic and OpenRouter Claude models."""
+    if anthropic_omits_thinking_config(model_name):
+        return False, [], None
+    if not is_anthropic_reasoning_model(model_name):
+        return False, [], None
+    flags = anthropic_model_flags(model_name)
+    if flags.get("is_claude_effort_max"):
+        return True, ["auto", "none"], "auto"
+    return True, ["high", "medium", "low", "none"], "low"
+
+
+def anthropic_effort_config(
+    model_name: Optional[str],
+) -> Tuple[bool, List[str], Optional[str]]:
+    """Effort dropdown config for Anthropic and OpenRouter Claude models."""
+    flags = anthropic_model_flags(model_name)
+    if not flags.get("is_claude_effort"):
+        return False, [], None
+    if flags.get("is_claude_effort_xhigh"):
+        return True, ["max", "xhigh", "high", "medium", "low"], "medium"
+    if flags.get("is_claude_effort_max"):
+        return True, ["max", "high", "medium", "low"], "medium"
+    return True, ["high", "medium", "low"], "medium"
 
 
 def is_sonnet_46_model(model_name: Optional[str]) -> bool:

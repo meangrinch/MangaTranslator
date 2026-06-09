@@ -12,9 +12,14 @@ from utils.endpoints import openrouter_is_reasoning_model
 from utils.exceptions import ValidationError
 from utils.logging import log_message
 from utils.model_metadata import (
+    anthropic_effort_config,
+    anthropic_omits_thinking_config,
+    anthropic_reasoning_effort_config,
+    anthropic_uses_adaptive_thinking_info,
     get_gpt5_generation,
     get_max_tokens_cap,
-    is_46_model,
+    is_anthropic_model_family,
+    is_anthropic_no_sampling_model,
     is_anthropic_reasoning_model,
     is_deepseek_reasoning_model,
     is_gemini_3_flash_model,
@@ -22,6 +27,7 @@ from utils.model_metadata import (
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
     is_gemma_model,
+    is_google_model_family,
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
@@ -30,9 +36,6 @@ from utils.model_metadata import (
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
     is_openai_reasoning_model,
-    is_opus_45_model,
-    is_opus_47_model,
-    is_opus_48_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
     supports_openai_original_image_detail,
@@ -419,11 +422,15 @@ def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) 
     ):
         return "Thinking Budget"
     elif provider == "OpenRouter":
-        lm = model_name.lower()
-        is_google_model = "google/" in lm or "gemini" in lm
-        if is_google_model and is_reasoning_model(provider, model_name) and not gemini3:
+        if (
+            is_google_model_family(model_name)
+            and is_reasoning_model(provider, model_name)
+            and not gemini3
+        ):
             return "Thinking Budget"
-        elif _is_anthropic_reasoning_model(model_name):
+        elif is_anthropic_model_family(model_name) and _is_anthropic_reasoning_model(
+            model_name
+        ):
             return "Extended Thinking"
     elif provider == "Anthropic" and _is_anthropic_reasoning_model(model_name):
         return "Extended Thinking"
@@ -444,7 +451,7 @@ def get_reasoning_effort_info_text(
             return "Controls model's internal reasoning effort."
         base_text = "Controls reasoning token allocation relative to 'max_tokens'"
     elif provider == "Anthropic":
-        if is_opus_47_model(model_name) or is_opus_48_model(model_name):
+        if anthropic_uses_adaptive_thinking_info(model_name):
             return "Enables or disables adaptive thinking (auto=model decides, none=disabled)."
         base_text = "Controls reasoning token allocation relative to 'max_tokens'"
     elif provider == "OpenAI":
@@ -469,22 +476,24 @@ def get_reasoning_effort_info_text(
     elif provider == "Z.ai":
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "OpenRouter" and model_name:
-        lm = model_name.lower()
-        is_anthropic_model = "anthropic/" in lm or lm.startswith("claude-")
-        if is_anthropic_model and (
-            is_opus_47_model(model_name) or is_opus_48_model(model_name)
-        ):
-            return "Enables or disables adaptive thinking (auto=model decides, none=disabled)."
-        is_openai_reasoning = (
-            "gpt-5" in lm or "o1" in lm or "o3" in lm or "o4-mini" in lm
-        )
-        uses_thinking_level = is_gemini_3_model(model_name) or is_gemma_model(
+        if is_anthropic_model_family(
             model_name
-        )
-        if (
-            is_openai_reasoning
+        ) and anthropic_uses_adaptive_thinking_info(model_name):
+            return "Enables or disables adaptive thinking (auto=model decides, none=disabled)."
+        elif (
+            is_anthropic_model_family(model_name)
+            and is_anthropic_reasoning_model(model_name)
+            and not anthropic_omits_thinking_config(model_name)
+        ):
+            base_text = "Controls reasoning token allocation relative to 'max_tokens'"
+        elif (
+            (
+                is_openai_model_family(model_name)
+                and is_openai_reasoning_model(model_name)
+            )
             or is_xai_reasoning_model(model_name)
-            or uses_thinking_level
+            or is_gemini_3_model(model_name)
+            or is_gemma_model(model_name)
         ):
             return "Controls model's internal reasoning effort."
         else:
@@ -589,28 +598,17 @@ def get_reasoning_effort_config(
         if gen == "5":
             return True, ["high", "medium", "low", "minimal"], "medium"
 
-        # o1, o3, o4-mini
+        # o3
         return True, ["high", "medium", "low"], "medium"
 
     elif provider == "Anthropic":
-        is_reasoning = _is_anthropic_reasoning_model(model_name)
-        if not is_reasoning:
-            return False, [], None
-        # Claude 4.6+ models use adaptive thinking
-        if (
-            is_46_model(model_name)
-            or is_opus_47_model(model_name)
-            or is_opus_48_model(model_name)
-        ):
-            return True, ["auto", "none"], "auto"
-        # Older models use budget-based thinking
-        return True, ["high", "medium", "low", "none"], "low"
+        return anthropic_reasoning_effort_config(model_name)
 
     elif provider == "xAI":
         if not supports_xai_reasoning_parameter(model_name):
             return False, [], None
         if "multi-agent" in lm:
-            return True, ["xhigh", "high", "medium", "low"], "high"
+            return True, ["xhigh", "high", "medium", "low"], "medium"
         return True, ["high", "medium", "low", "none"], "medium"
 
     elif provider == "DeepSeek":
@@ -637,9 +635,8 @@ def get_reasoning_effort_config(
         return False, [], None
 
     elif provider == "OpenRouter":
-        is_google_model = "google/" in lm or "gemini" in lm or "gemma" in lm
-
-        if is_google_model:
+        lm = model_name.lower()
+        if is_google_model_family(model_name):
             is_reasoning = is_reasoning_model(provider, model_name)
             if not is_reasoning:
                 return False, [], None
@@ -649,11 +646,8 @@ def get_reasoning_effort_config(
 
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
 
-        is_anthropic_model = "anthropic/" in lm or lm.startswith("claude-")
-        if is_anthropic_model and (
-            is_opus_47_model(model_name) or is_opus_48_model(model_name)
-        ):
-            return True, ["auto", "none"], "auto"
+        if is_anthropic_model_family(model_name):
+            return anthropic_reasoning_effort_config(model_name)
 
         try:
             is_reasoning = openrouter_is_reasoning_model(model_name, debug=False)
@@ -663,10 +657,7 @@ def get_reasoning_effort_config(
         if is_reasoning:
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
 
-        if is_anthropic_model:
-            return False, [], "none"
-        else:
-            return False, [], None
+        return False, [], None
 
     elif provider == "OpenAI-Compatible":
         return False, [], None
@@ -685,16 +676,10 @@ def get_effort_config(
     """
     if provider not in ("Anthropic", "OpenRouter"):
         return False, [], None
-
-    if is_opus_47_model(model_name) or is_opus_48_model(model_name):
-        return True, ["max", "xhigh", "high", "medium", "low"], "medium"
-    elif is_46_model(model_name):
-        # Claude 4.6 models (Opus/Sonnet) support "max" effort level
-        return True, ["max", "high", "medium", "low"], "medium"
-    elif is_opus_45_model(model_name):
-        return True, ["high", "medium", "low"], "medium"
-    else:
+    if provider == "OpenRouter" and not is_anthropic_model_family(model_name):
         return False, [], None
+
+    return anthropic_effort_config(model_name)
 
 
 def get_verbosity_config(
@@ -721,7 +706,7 @@ def get_sampling_interactivity_for_effort(
     """Whether temp/top_p sliders should be interactive given the current reasoning effort.
 
     For GPT-5 series (non-chat): only allowed when effort is 'none' or 'minimal'.
-    For other OpenAI reasoning models (o1, o3, o4-mini): never allowed.
+    For other OpenAI reasoning models (o3): never allowed.
     For DeepSeek reasoning models: only allowed when effort is 'none'.
     Returns (temp_interactive, top_p_interactive).
     """
@@ -742,27 +727,14 @@ def get_sampling_interactivity_for_effort(
     return False, False
 
 
-def _is_openrouter_anthropic_model(model_name: Optional[str]) -> bool:
-    if not model_name:
-        return False
-    lm = model_name.lower()
-    return "anthropic/" in lm or lm.startswith("claude-")
-
-
-def _is_openrouter_openai_model(model_name: Optional[str]) -> bool:
-    if not model_name:
-        return False
-    return "openai/" in model_name or model_name.startswith("gpt-")
-
-
 def _model_disallows_all_sampling_params(
     provider: str, model_name: Optional[str]
 ) -> bool:
     """Models that reject temperature/top-k at the API (e.g. Claude Opus 4.7+)."""
     if provider == "Anthropic":
-        return is_opus_47_model(model_name) or is_opus_48_model(model_name)
-    if provider == "OpenRouter" and _is_openrouter_anthropic_model(model_name):
-        return is_opus_47_model(model_name) or is_opus_48_model(model_name)
+        return is_anthropic_no_sampling_model(model_name)
+    if provider == "OpenRouter" and is_anthropic_model_family(model_name):
+        return is_anthropic_no_sampling_model(model_name)
     return False
 
 
@@ -794,8 +766,8 @@ def get_sampling_slider_interactivity(
     ):
         top_k_interactive = False
     elif provider == "OpenRouter":
-        is_anthropic_model = _is_openrouter_anthropic_model(model_name)
-        is_openai_model = _is_openrouter_openai_model(model_name)
+        is_anthropic_model = is_anthropic_model_family(model_name)
+        is_openai_model = is_openai_model_family(model_name)
         if is_anthropic_model:
             top_p_interactive = False
         if is_openai_model or is_anthropic_model:
@@ -821,7 +793,7 @@ def is_use_custom_sampling_visible(
 
 
 def get_temperature_max(provider: str, model_name: Optional[str]) -> float:
-    if provider == "Anthropic" or _is_openrouter_anthropic_model(model_name):
+    if provider == "Anthropic" or is_anthropic_model_family(model_name):
         return 1.0
     return 2.0
 
@@ -1511,13 +1483,11 @@ def format_thinking_status(
     elif provider == "OpenRouter" and is_gemini_3_model(model_name):
         effort = reasoning_effort or "medium"
         thinking_status_str = f" (thinking: {effort})"
-    elif provider == "Anthropic" and model_name:
-        lm = model_name.lower()
-        if (
-            lm.startswith("claude-opus-4")
-            or lm.startswith("claude-sonnet-4")
-            or lm.startswith("claude-haiku-4-5")
-        ):
+    elif (
+        provider == "Anthropic"
+        or (provider == "OpenRouter" and is_anthropic_model_family(model_name))
+    ) and is_anthropic_reasoning_model(model_name):
+        if not anthropic_omits_thinking_config(model_name):
             effort = reasoning_effort or "none"
             if effort == "none":
                 thinking_status_str = " (no thinking)"

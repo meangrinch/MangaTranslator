@@ -96,12 +96,7 @@ def call_openai_endpoint(
         is_chat_variant = "chat" in lower_model
         is_gpt5 = is_gpt5_series(model_name)
         gen = get_gpt5_generation(model_name)
-        is_reasoning_capable = (
-            is_gpt5
-            or lower_model.startswith("o1")
-            or lower_model.startswith("o3")
-            or lower_model.startswith("o4-mini")
-        )
+        is_reasoning_capable = is_gpt5 or lower_model.startswith("o3")
 
         if is_reasoning_capable and not is_chat_variant:
             effort = generation_config.get("reasoning_effort")
@@ -135,7 +130,7 @@ def call_openai_endpoint(
                 payload.pop("top_p", None)
 
         elif is_reasoning_capable and not is_chat_variant:
-            # Non-GPT-5 reasoning models (o1, o3, o4-mini) don't support temp/top_p
+            # Non-GPT-5 reasoning models (o3) don't support temp/top_p
             payload.pop("temperature", None)
             payload.pop("top_p", None)
     except Exception:

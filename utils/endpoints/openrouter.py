@@ -176,14 +176,12 @@ def call_openrouter_endpoint(
         payload["top_k"] = top_k
 
     # OpenRouter verbosity parameter: used by both Claude (effort) and GPT-5 (verbosity)
-    is_opus_45 = metadata.get("is_opus_45", False)
-    is_46 = metadata.get("is_46_model", False)
-    is_47 = metadata.get("is_47_model", False)
+    claude_effort = metadata.get("is_claude_effort", False)
     effort = generation_config.get("effort")
 
     is_gpt5_model = metadata.get("is_gpt5_model", False)
 
-    if effort and (is_46 or is_opus_45):
+    if effort and claude_effort:
         payload["verbosity"] = effort
     elif is_gpt5_model and generation_config.get("verbosity"):
         payload["verbosity"] = generation_config["verbosity"]
@@ -197,11 +195,18 @@ def call_openrouter_endpoint(
     except Exception:
         is_reasoning_model = False
 
-    # For Claude Opus 4.7+, reasoning.effort is ignored; reasoning.enabled turns on adaptive thinking.
-    if reasoning_effort and is_47:
+    # Claude 4.6/4.7/4.8: reasoning.enabled turns on adaptive thinking.
+    # Fable 5 has always-on thinking; omit reasoning config entirely.
+    is_claude_max = metadata.get("is_claude_effort_max", False)
+    is_claude_xhigh = metadata.get("is_claude_effort_xhigh", False)
+    omit_thinking = metadata.get("is_claude_omit_thinking", False)
+    if reasoning_effort and is_claude_xhigh and not omit_thinking:
         if reasoning_effort != "none":
             reasoning_config["enabled"] = True
-    elif reasoning_effort and is_reasoning_model and not is_46:
+    elif reasoning_effort and is_claude_max and not is_claude_xhigh:
+        if reasoning_effort == "auto":
+            reasoning_config["enabled"] = True
+    elif reasoning_effort and is_reasoning_model and not is_claude_max:
         reasoning_config["effort"] = reasoning_effort
 
     if reasoning_config:

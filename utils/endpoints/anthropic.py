@@ -9,6 +9,13 @@ from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 
 
+def _claude_capability_flag(generation_config: Dict[str, Any], key: str) -> bool:
+    metadata = generation_config.get("_metadata")
+    if isinstance(metadata, dict) and key in metadata:
+        return bool(metadata[key])
+    return bool(generation_config.get(key))
+
+
 def call_anthropic_endpoint(
     api_key: str,
     model_name: str,
@@ -112,40 +119,38 @@ def call_anthropic_endpoint(
         "max_tokens": generation_config.get("max_tokens", 4096),
     }
 
-    # Opus 4.7: sampling parameters removed (temperature, top_k return 400)
-    is_47 = generation_config.get("is_47_model", False)
-    if is_47:
+    if _claude_capability_flag(generation_config, "is_claude_effort_xhigh"):
         payload.pop("temperature", None)
         payload.pop("top_k", None)
 
-    try:
-        thinking_type = generation_config.get("thinking_type")
-        reasoning_effort = generation_config.get("reasoning_effort")
-        if thinking_type == "adaptive":
-            # Opus 4.6: Adaptive thinking - Claude decides reasoning depth
-            payload["thinking"] = {"type": "adaptive"}
-        elif thinking_type == "enabled":
-            # Older models: Budget-based thinking
-            if reasoning_effort and reasoning_effort != "none":
-                max_tokens_value = generation_config.get("max_tokens", 4096)
-                budget_tokens = calculate_reasoning_budget(
-                    max_tokens_value, reasoning_effort
-                )
-                payload["thinking"] = {
-                    "type": "enabled",
-                    "budget_tokens": budget_tokens,
-                }
-            elif reasoning_effort == "none":
-                payload["thinking"] = {"type": "enabled", "budget_tokens": 0}
-    except Exception:
-        pass
+    if not _claude_capability_flag(generation_config, "is_claude_omit_thinking"):
+        try:
+            thinking_type = generation_config.get("thinking_type")
+            reasoning_effort = generation_config.get("reasoning_effort")
+            if thinking_type == "adaptive":
+                # Opus 4.6+: Adaptive thinking - Claude decides reasoning depth
+                payload["thinking"] = {"type": "adaptive"}
+            elif thinking_type == "enabled":
+                # Older models: Budget-based thinking
+                if reasoning_effort and reasoning_effort != "none":
+                    max_tokens_value = generation_config.get("max_tokens", 4096)
+                    budget_tokens = calculate_reasoning_budget(
+                        max_tokens_value, reasoning_effort
+                    )
+                    payload["thinking"] = {
+                        "type": "enabled",
+                        "budget_tokens": budget_tokens,
+                    }
+                elif reasoning_effort == "none":
+                    payload["thinking"] = {"type": "enabled", "budget_tokens": 0}
+        except Exception:
+            pass
 
     try:
         effort = generation_config.get("effort")
-        is_46 = generation_config.get("is_46_model", False)
-        if is_47:
+        if _claude_capability_flag(generation_config, "is_claude_effort_xhigh"):
             valid_efforts = ("max", "xhigh", "high", "medium", "low")
-        elif is_46:
+        elif _claude_capability_flag(generation_config, "is_claude_effort_max"):
             valid_efforts = ("max", "high", "medium", "low")
         else:
             valid_efforts = ("high", "medium", "low")

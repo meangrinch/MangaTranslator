@@ -17,6 +17,8 @@ from utils.model_metadata import (
     FLUX_SDCPP_DIFFUSION_QUANTS,
     flux_sdcpp_text_encoder_quants,
     flux_sdcpp_valid_text_encoder_quant,
+    is_anthropic_model_family,
+    is_openai_model_family,
 )
 
 from . import logic, settings_manager, utils
@@ -469,9 +471,7 @@ def _format_single_success_message(
     elif provider == "OpenAI":
         param_notes = " (Top-K N/A)"
     elif provider == "OpenRouter":
-        is_openai_model = "openai/" in model_name
-        is_anthropic_model = "anthropic/" in model_name
-        if is_openai_model or is_anthropic_model:
+        if is_openai_model_family(model_name) or is_anthropic_model_family(model_name):
             param_notes = " (Temp clamped <= 1.0, Top-K N/A)"
         else:
             llm_params_str += f", Top-K={top_k_val}"
@@ -615,11 +615,7 @@ def _format_batch_success_message(
     elif provider == "OpenAI":
         param_notes = " (Top-K N/A)"
     elif provider == "OpenRouter":
-        is_openai_model = "openai/" in model_name or model_name.startswith("gpt-")
-        is_anthropic_model = "anthropic/" in model_name or model_name.startswith(
-            "claude-"
-        )
-        if is_openai_model or is_anthropic_model:
+        if is_openai_model_family(model_name) or is_anthropic_model_family(model_name):
             param_notes = " (Temp clamped <= 1.0, Top-K N/A)"
         else:
             llm_params_str += f", Top-K={top_k_val}"

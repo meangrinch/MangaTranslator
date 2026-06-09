@@ -31,24 +31,24 @@ from utils.endpoints import (
 from utils.exceptions import TranslationError
 from utils.logging import log_message
 from utils.model_metadata import (
+    anthropic_model_flags,
     get_gpt5_generation,
     get_max_tokens_cap,
-    is_46_model,
+    is_anthropic_model_family,
     is_anthropic_reasoning_model,
     is_deepseek_reasoning_model,
     is_gemini_3_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
     is_gemma_model,
+    is_google_model_family,
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
     is_mimo_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
-    is_opus_45_model,
-    is_opus_47_model,
-    is_opus_48_model,
+    is_openai_reasoning_model,
     is_rosetta_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
@@ -456,12 +456,10 @@ def _build_generation_config(
 
     elif provider == "Anthropic":
         is_reasoning = _is_reasoning_model_anthropic(model_name)
-        is_opus_45 = is_opus_45_model(model_name)
-        is_46 = is_46_model(model_name)
-        is_47 = is_opus_47_model(model_name)
-        is_48 = is_opus_48_model(model_name)
+        anthropic_flags = anthropic_model_flags(model_name)
         generation_config = {
             "max_tokens": max_tokens_value,
+            "_metadata": dict(anthropic_flags),
         }
         if use_sampling:
             generation_config.update(
@@ -473,17 +471,15 @@ def _build_generation_config(
         if is_reasoning:
             reasoning_effort = config.reasoning_effort or "none"
             generation_config["reasoning_effort"] = reasoning_effort
-            # Claude 4.6+ models use adaptive thinking; older models use budget-based
-            if is_46 or is_47 or is_48:
+            omit_thinking = anthropic_flags.get("is_claude_omit_thinking", False)
+            if anthropic_flags.get("is_claude_effort_max") and not omit_thinking:
                 if reasoning_effort == "auto":
                     generation_config["thinking_type"] = "adaptive"
-            else:
+            elif not omit_thinking:
                 if reasoning_effort != "none":
                     generation_config["thinking_type"] = "enabled"
-        if (is_opus_45 or is_46 or is_47 or is_48) and config.effort:
+        if anthropic_flags and config.effort:
             generation_config["effort"] = config.effort
-            generation_config["is_46_model"] = is_46 or is_47 or is_48
-            generation_config["is_47_model"] = is_47 or is_48
         return generation_config
 
     elif provider == "xAI":
@@ -587,11 +583,10 @@ def _build_generation_config(
     elif provider == "OpenRouter":
         model_lower = (model_name or "").lower()
         is_openai_model = is_openai_model_family(model_name)
-        is_anthropic_model = "anthropic/" in model_lower or model_lower.startswith(
-            "claude-"
-        )
+        is_anthropic_model = is_anthropic_model_family(model_name)
         is_grok_model = "grok-4" in model_lower
         is_gemini_3 = is_gemini_3_model(model_name)
+        is_google_model = is_google_model_family(model_name)
 
         generation_config = {"max_tokens": max_tokens_value}
         if use_sampling:
@@ -605,12 +600,7 @@ def _build_generation_config(
         if is_openai_model:
             generation_config["image_detail"] = normalize_image_detail()
 
-        is_openai_reasoning = is_openai_model and (
-            "gpt-5" in model_lower
-            or "o1" in model_lower
-            or "o3" in model_lower
-            or "o4-mini" in model_lower
-        )
+        is_openai_reasoning = is_openai_model and is_openai_reasoning_model(model_name)
         is_gpt5_model = is_openai_model and is_gpt5_series(model_name)
         is_gpt5_1 = is_openai_model and "gpt-5.1" in model_lower
         is_gpt5 = is_openai_model and "gpt-5" in model_lower and not is_gpt5_1
@@ -618,41 +608,40 @@ def _build_generation_config(
         # OpenRouter Grok metadata omit explicit reasoning tags in name
         is_grok_reasoning = is_grok_model and "non-reasoning" not in model_lower
 
-        is_opus_45 = is_opus_45_model(model_name)
-        is_46 = is_46_model(model_name)
-        is_47 = is_opus_47_model(model_name)
-        is_48 = is_opus_48_model(model_name)
+        anthropic_flags = anthropic_model_flags(model_name)
         generation_config["_metadata"] = {
             "is_openai_model": is_openai_model,
             "is_anthropic_model": is_anthropic_model,
             "is_grok_model": is_grok_model,
             "is_gemini_3": is_gemini_3,
-            "is_google_model": "google/" in model_lower or "gemini" in model_lower,
+            "is_google_model": is_google_model,
             "is_openai_reasoning": is_openai_reasoning,
             "is_anthropic_reasoning": is_anthropic_reasoning,
             "is_grok_reasoning": is_grok_reasoning,
             "is_gpt5_1": is_gpt5_1,
             "is_gpt5": is_gpt5,
             "is_gpt5_model": is_gpt5_model,
-            "is_opus_45": is_opus_45,
-            "is_46_model": is_46 or is_47 or is_48,
-            "is_47_model": is_47 or is_48,
+            **anthropic_flags,
         }
 
         if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
             if is_anthropic_reasoning:
-                reasoning_effort = config.reasoning_effort or "none"
+                is_claude_46 = anthropic_flags.get(
+                    "is_claude_effort_max"
+                ) and not anthropic_flags.get("is_claude_effort_xhigh")
+                reasoning_effort = config.reasoning_effort or (
+                    "auto" if is_claude_46 else "none"
+                )
                 generation_config["reasoning_effort"] = reasoning_effort
             elif is_gpt5_1:
                 generation_config["reasoning_effort"] = config.reasoning_effort
             elif config.reasoning_effort and config.reasoning_effort != "none":
                 generation_config["reasoning_effort"] = config.reasoning_effort
-        elif "gemini" in model_lower or "google/" in model_lower:
+        elif is_google_model:
             if config.reasoning_effort:
                 generation_config["reasoning_effort"] = config.reasoning_effort
 
-        # Opus 4.5+, Sonnet 4.6 effort parameter
-        if (is_opus_45 or is_46 or is_47 or is_48) and config.effort:
+        if anthropic_flags and config.effort:
             generation_config["effort"] = config.effort
 
         # GPT-5 series verbosity
