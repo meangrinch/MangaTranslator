@@ -180,7 +180,7 @@ class UIGeneralSettings:
     enable_code_execution: bool = (
         False  # Enable Gemini's code execution for image zoom/inspection.
     )
-    gemini_3_custom_sampling: bool = True
+    use_custom_sampling: bool = True
     image_detail: str = "auto"  # OpenAI image detail (auto/high/low/original)
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)
@@ -335,7 +335,7 @@ class UIConfigState:
             "test_mode": self.general.test_mode,
             "enable_web_search": self.general.enable_web_search,
             "enable_code_execution": self.general.enable_code_execution,
-            "gemini_3_custom_sampling": self.general.gemini_3_custom_sampling,
+            "use_custom_sampling": self.general.use_custom_sampling,
             "image_detail": self.general.image_detail,
             "media_resolution": self.general.media_resolution,
             "media_resolution_bubbles": self.general.media_resolution_bubbles,
@@ -637,9 +637,9 @@ class UIConfigState:
                     "enable_code_execution",
                     defaults.get("enable_code_execution", False),
                 ),
-                gemini_3_custom_sampling=data.get(
-                    "gemini_3_custom_sampling",
-                    defaults.get("gemini_3_custom_sampling", True),
+                use_custom_sampling=data.get(
+                    "use_custom_sampling",
+                    defaults.get("use_custom_sampling", True),
                 ),
                 image_detail=data.get(
                     "image_detail",
@@ -749,7 +749,7 @@ def map_ui_to_backend_config(
         ocr_method=ui_state.llm_settings.ocr_method,
         enable_web_search=ui_state.general.enable_web_search,
         enable_code_execution=ui_state.general.enable_code_execution,
-        gemini_3_custom_sampling=ui_state.general.gemini_3_custom_sampling,
+        use_custom_sampling=ui_state.general.use_custom_sampling,
         image_detail=ui_state.general.image_detail,
         media_resolution=ui_state.general.media_resolution,
         media_resolution_bubbles=ui_state.general.media_resolution_bubbles,

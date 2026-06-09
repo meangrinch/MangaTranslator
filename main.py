@@ -506,12 +506,12 @@ def main():
         help="Enable Gemini's code execution tool for image zoom/inspection (Gemini 3 Flash only)",
     )
     parser.add_argument(
-        "--no-gemini-3-custom-sampling",
-        dest="gemini_3_custom_sampling",
+        "--no-custom-sampling",
+        dest="use_custom_sampling",
         action="store_false",
-        help="Omit temperature, top-p, and top-k for Gemini 3.x models",
+        help="Omit temperature, top-p, and top-k from API requests",
     )
-    parser.set_defaults(gemini_3_custom_sampling=True)
+    parser.set_defaults(use_custom_sampling=True)
     parser.add_argument(
         "--media-resolution",
         type=str,
@@ -1077,7 +1077,7 @@ def main():
             translation_mode=args.translation_mode,
             enable_web_search=args.enable_web_search,
             enable_code_execution=args.enable_code_execution,
-            gemini_3_custom_sampling=args.gemini_3_custom_sampling,
+            use_custom_sampling=args.use_custom_sampling,
             image_detail=args.image_detail,
             media_resolution=args.media_resolution,
             media_resolution_bubbles=args.media_resolution_bubbles,

@@ -116,7 +116,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         temperature,
         top_p,
         top_k,
-        gemini_3_custom_sampling_val,
+        use_custom_sampling_val,
         max_tokens,
         config_reading_direction,
         config_translation_mode,
@@ -345,7 +345,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             test_mode=test_mode_toggle,
             enable_web_search=enable_web_search_val,
             enable_code_execution=enable_code_execution_val,
-            gemini_3_custom_sampling=gemini_3_custom_sampling_val,
+            use_custom_sampling=use_custom_sampling_val,
             image_detail=image_detail_val,
             media_resolution=media_resolution_val,
             media_resolution_bubbles=media_resolution_bubbles_val,
@@ -978,7 +978,7 @@ def handle_save_config_click(*args: Any) -> str:
         temp,
         tp,
         tk,
-        gemini_3_custom_sampling_val,
+        use_custom_sampling_val,
         max_tokens,
         trans_mode,
         ocr_method_val,
@@ -1198,7 +1198,7 @@ def handle_save_config_click(*args: Any) -> str:
             test_mode=test_mode_val,
             enable_web_search=enable_web_search_val,
             enable_code_execution=enable_code_execution_val,
-            gemini_3_custom_sampling=gemini_3_custom_sampling_val,
+            use_custom_sampling=use_custom_sampling_val,
             image_detail=image_detail_val,
             media_resolution=media_resolution_val,
             media_resolution_bubbles=media_resolution_bubbles_val,
@@ -1276,7 +1276,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         top_p_update,
         top_k_update,
         _,  # max_tokens_update - unused (using saved default instead)
-        gemini_3_custom_sampling_update,
+        use_custom_sampling_update,
         enable_web_search_update,
         enable_code_execution_update,
         image_detail_update,
@@ -1294,9 +1294,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     top_p_interactive = top_p_update.get("interactive", True)
     top_k_interactive = top_k_update.get("interactive", True)
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
-    gemini_3_custom_sampling_visible = gemini_3_custom_sampling_update.get(
-        "visible", False
-    )
+    use_custom_sampling_visible = use_custom_sampling_update.get("visible", True)
     is_reasoning = utils.is_reasoning_model(default_provider, default_model_name)
     max_tokens_val = 16384 if is_reasoning else 4096
     enable_web_search_visible = enable_web_search_update.get("visible", False)
@@ -1393,8 +1391,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         ),
         gr.update(value=top_k_val, interactive=top_k_interactive),
         gr.update(
-            value=default_ui_state.general.gemini_3_custom_sampling,
-            visible=gemini_3_custom_sampling_visible,
+            value=default_ui_state.general.use_custom_sampling,
+            visible=use_custom_sampling_visible,
         ),
         gr.update(value=max_tokens_val),
         gr.update(value=default_ui_state.llm_settings.translation_mode),
@@ -1532,7 +1530,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
 def handle_provider_change(
     provider: str,
     ocr_method: str = "LLM",
-    gemini_3_custom_sampling: bool = True,
+    use_custom_sampling: bool = True,
 ):
     """Handles changes in the provider selector."""
     from core.caching import get_cache
@@ -1540,7 +1538,7 @@ def handle_provider_change(
     cache = get_cache()
     cache.clear_translation_cache()
     cache.clear_manga_ocr_cache()
-    return utils.update_translation_ui(provider, ocr_method, gemini_3_custom_sampling)
+    return utils.update_translation_ui(provider, ocr_method, use_custom_sampling)
 
 
 def handle_output_format_change(output_format_value: str):
@@ -1577,7 +1575,7 @@ def handle_model_change(
     provider: str,
     model_name: Optional[str],
     current_temp: float,
-    gemini_3_custom_sampling: bool = True,
+    use_custom_sampling: bool = True,
 ):
     """Handles changes in the model name dropdown."""
     from core.caching import get_cache
@@ -1586,7 +1584,7 @@ def handle_model_change(
     cache.clear_translation_cache()
     cache.clear_manga_ocr_cache()
     return utils.update_params_for_model(
-        provider, model_name, current_temp, gemini_3_custom_sampling
+        provider, model_name, current_temp, use_custom_sampling
     )
 
 
@@ -1594,30 +1592,35 @@ def handle_reasoning_effort_change(
     provider: str,
     model_name: Optional[str],
     reasoning_effort: Optional[str],
-    gemini_3_custom_sampling: bool = True,
+    use_custom_sampling: bool = True,
 ):
     """Updates temp/top_p slider interactivity when reasoning effort changes."""
-    temp_ok, top_p_ok = utils.get_sampling_interactivity_for_effort(
+    temp_ok, top_p_ok, top_k_ok = utils.get_sampling_slider_interactivity(
+        provider,
+        model_name,
+        reasoning_effort,
+        use_custom_sampling=use_custom_sampling,
+    )
+    visible = utils.is_use_custom_sampling_visible(
         provider, model_name, reasoning_effort
     )
-    if (
-        utils.is_gemini_3_custom_sampling_visible(provider, model_name)
-        and not gemini_3_custom_sampling
-    ):
-        temp_ok = False
-        top_p_ok = False
-    return gr.update(interactive=temp_ok), gr.update(interactive=top_p_ok)
+    return (
+        gr.update(interactive=temp_ok),
+        gr.update(interactive=top_p_ok),
+        gr.update(interactive=top_k_ok),
+        gr.update(visible=visible),
+    )
 
 
-def handle_gemini_3_custom_sampling_change(
+def handle_use_custom_sampling_change(
     provider: str,
     model_name: Optional[str],
     current_temp: float,
-    gemini_3_custom_sampling: bool,
+    use_custom_sampling: bool,
 ):
-    """Updates sampling slider interactivity when Gemini 3 custom sampling changes."""
+    """Updates sampling slider interactivity when custom sampling is toggled."""
     updates = utils.update_params_for_model(
-        provider, model_name, current_temp, gemini_3_custom_sampling
+        provider, model_name, current_temp, use_custom_sampling
     )
     return updates[0], updates[1], updates[2]
 

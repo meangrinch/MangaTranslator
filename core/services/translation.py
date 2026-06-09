@@ -317,6 +317,7 @@ def _build_generation_config(
     temperature = config.temperature
     top_p = config.top_p
     top_k = config.top_k
+    use_sampling = config.use_custom_sampling
 
     def normalize_image_detail() -> str:
         image_detail = (config.image_detail or "auto").lower()
@@ -365,7 +366,7 @@ def _build_generation_config(
         generation_config = {
             "maxOutputTokens": max_tokens_value,
         }
-        if not is_gemini_3 or config.gemini_3_custom_sampling:
+        if use_sampling:
             generation_config.update(
                 {
                     "temperature": temperature,
@@ -429,10 +430,15 @@ def _build_generation_config(
 
     elif provider == "OpenAI":
         generation_config = {
-            "temperature": temperature,
-            "top_p": top_p,
             "max_output_tokens": max_tokens_value,
-        }  # top_k not supported by OpenAI
+        }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": temperature,
+                    "top_p": top_p,
+                }
+            )  # top_k not supported by OpenAI
         generation_config["image_detail"] = normalize_image_detail()
         if config.reasoning_effort:
             gen = get_gpt5_generation(model_name)
@@ -454,12 +460,16 @@ def _build_generation_config(
         is_46 = is_46_model(model_name)
         is_47 = is_opus_47_model(model_name)
         is_48 = is_opus_48_model(model_name)
-        clamped_temp = min(temperature, 1.0)  # Anthropic caps at 1.0
         generation_config = {
-            "temperature": clamped_temp,
-            "top_k": top_k,
             "max_tokens": max_tokens_value,
         }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": min(temperature, 1.0),
+                    "top_k": top_k,
+                }
+            )
         if is_reasoning:
             reasoning_effort = config.reasoning_effort or "none"
             generation_config["reasoning_effort"] = reasoning_effort
@@ -478,11 +488,16 @@ def _build_generation_config(
 
     elif provider == "xAI":
         generation_config = {
-            "temperature": temperature,
-            "top_p": top_p,
             "max_tokens": max_tokens_value,
             "media_resolution": config.media_resolution,
         }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": temperature,
+                    "top_p": top_p,
+                }
+            )
         if config.reasoning_effort:
             generation_config["reasoning_effort"] = config.reasoning_effort
         return generation_config
@@ -490,10 +505,15 @@ def _build_generation_config(
     elif provider == "DeepSeek":
         is_reasoning = is_deepseek_reasoning_model(model_name)
         generation_config = {
-            "temperature": temperature,
-            "top_p": top_p,
             "max_tokens": max_tokens_value,
         }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": temperature,
+                    "top_p": top_p,
+                }
+            )
         if is_reasoning:
             reasoning_effort = config.reasoning_effort or "high"
             thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
@@ -505,10 +525,15 @@ def _build_generation_config(
     elif provider == "Z.ai":
         is_reasoning = is_zai_reasoning_model(model_name)
         generation_config = {
-            "temperature": temperature,
-            "top_p": top_p,
             "max_tokens": max_tokens_value,
         }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": temperature,
+                    "top_p": top_p,
+                }
+            )
         if is_reasoning:
             # Z.ai uses thinking parameter with {"type": "enabled"} or {"type": "disabled"}
             # Map reasoning_effort: "auto" -> enabled, "none" -> disabled
@@ -522,10 +547,15 @@ def _build_generation_config(
         is_reasoning = "kimi-k2." in lm
 
         generation_config = {
-            "temperature": min(temperature, 1.0),  # Moonshot caps at 1.0
-            "top_p": top_p,
             "max_tokens": max_tokens_value,
         }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": min(temperature, 1.0),
+                    "top_p": top_p,
+                }
+            )
 
         if is_reasoning:
             # Map reasoning_effort: "auto" -> enabled, "none" -> disabled
@@ -538,10 +568,15 @@ def _build_generation_config(
         is_reasoning = is_mimo_reasoning_model(model_name)
 
         generation_config = {
-            "temperature": min(temperature, 1.0),
-            "top_p": top_p,
             "max_tokens": max_tokens_value,
         }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": min(temperature, 1.0),
+                    "top_p": top_p,
+                }
+            )
 
         if is_reasoning:
             reasoning_effort = config.reasoning_effort or "auto"
@@ -559,7 +594,7 @@ def _build_generation_config(
         is_gemini_3 = is_gemini_3_model(model_name)
 
         generation_config = {"max_tokens": max_tokens_value}
-        if not is_gemini_3 or config.gemini_3_custom_sampling:
+        if use_sampling:
             generation_config.update(
                 {
                     "temperature": temperature,
@@ -627,12 +662,16 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "OpenAI-Compatible":
-        return {
-            "temperature": temperature,
-            "top_p": top_p,
-            "top_k": top_k,
-            "max_tokens": max_tokens_value,
-        }
+        generation_config = {"max_tokens": max_tokens_value}
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "top_k": top_k,
+                }
+            )
+        return generation_config
 
     else:
         raise TranslationError(f"Unknown provider for generation config: {provider}")

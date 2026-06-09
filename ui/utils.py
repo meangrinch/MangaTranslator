@@ -742,6 +742,90 @@ def get_sampling_interactivity_for_effort(
     return False, False
 
 
+def _is_openrouter_anthropic_model(model_name: Optional[str]) -> bool:
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "anthropic/" in lm or lm.startswith("claude-")
+
+
+def _is_openrouter_openai_model(model_name: Optional[str]) -> bool:
+    if not model_name:
+        return False
+    return "openai/" in model_name or model_name.startswith("gpt-")
+
+
+def _model_disallows_all_sampling_params(
+    provider: str, model_name: Optional[str]
+) -> bool:
+    """Models that reject temperature/top-k at the API (e.g. Claude Opus 4.7+)."""
+    if provider == "Anthropic":
+        return is_opus_47_model(model_name) or is_opus_48_model(model_name)
+    if provider == "OpenRouter" and _is_openrouter_anthropic_model(model_name):
+        return is_opus_47_model(model_name) or is_opus_48_model(model_name)
+    return False
+
+
+def get_sampling_slider_interactivity(
+    provider: str,
+    model_name: Optional[str],
+    reasoning_effort: Optional[str] = None,
+    use_custom_sampling: bool = True,
+) -> Tuple[bool, bool, bool]:
+    """Return (temp, top_p, top_k) slider interactivity for the current provider/model."""
+    if not use_custom_sampling:
+        return False, False, False
+
+    temp_interactive, top_p_interactive = get_sampling_interactivity_for_effort(
+        provider, model_name, reasoning_effort
+    )
+    top_k_interactive = True
+
+    if provider == "Anthropic":
+        top_k_interactive = False
+        top_p_interactive = False
+    elif provider in (
+        "OpenAI",
+        "xAI",
+        "DeepSeek",
+        "Z.ai",
+        "Moonshot AI",
+        "Xiaomi MiMo",
+    ):
+        top_k_interactive = False
+    elif provider == "OpenRouter":
+        is_anthropic_model = _is_openrouter_anthropic_model(model_name)
+        is_openai_model = _is_openrouter_openai_model(model_name)
+        if is_anthropic_model:
+            top_p_interactive = False
+        if is_openai_model or is_anthropic_model:
+            top_k_interactive = False
+
+    if _model_disallows_all_sampling_params(provider, model_name):
+        temp_interactive = False
+        top_k_interactive = False
+
+    return temp_interactive, top_p_interactive, top_k_interactive
+
+
+def is_use_custom_sampling_visible(
+    provider: str,
+    model_name: Optional[str],
+    reasoning_effort: Optional[str] = None,
+) -> bool:
+    """Show the toggle only when at least one sampling slider can be adjusted."""
+    temp, top_p, top_k = get_sampling_slider_interactivity(
+        provider, model_name, reasoning_effort, use_custom_sampling=True
+    )
+    return temp or top_p or top_k
+
+
+def get_temperature_max(provider: str, model_name: Optional[str]) -> float:
+    if provider == "Anthropic" or _is_openrouter_anthropic_model(model_name):
+        return 1.0
+    return 2.0
+
+
 def get_media_resolution_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], str]:
@@ -761,13 +845,6 @@ def get_media_resolution_config(
         return (True, ["auto", "high", "low"], "Resolution for Grok to process images.")
 
     return False, ["auto"], ""
-
-
-def is_gemini_3_custom_sampling_visible(
-    provider: str, model_name: Optional[str]
-) -> bool:
-    """Check if Gemini 3 custom sampling toggle should be visible."""
-    return provider in ("Google", "OpenRouter") and is_gemini_3_model(model_name)
 
 
 def get_image_detail_config(
@@ -801,7 +878,7 @@ def is_code_execution_visible(provider: str, model_name: Optional[str]) -> bool:
 def update_translation_ui(
     provider: str,
     ocr_method: str = "LLM",
-    gemini_3_custom_sampling: bool = True,
+    use_custom_sampling: bool = True,
 ):
     """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity.
 
@@ -859,38 +936,24 @@ def update_translation_ui(
     default_top_p = float(sampling_defaults["top_p"])
     default_top_k = int(sampling_defaults["top_k"])
 
-    temp_max = 1.0 if provider == "Anthropic" else 2.0
+    temp_max = get_temperature_max(provider, remembered_model)
     new_temp_value = min(default_temp, temp_max)
 
-    top_k_interactive = provider not in (
-        "OpenAI",
-        "Anthropic",
-        "xAI",
-        "DeepSeek",
-        "Z.ai",
-        "Moonshot AI",
-        "Xiaomi MiMo",
+    temp_interactive, top_p_interactive, top_k_interactive = (
+        get_sampling_slider_interactivity(
+            provider, remembered_model, use_custom_sampling=use_custom_sampling
+        )
     )
-    top_p_interactive = provider != "Anthropic"
-    temp_interactive, sampling_ok = get_sampling_interactivity_for_effort(
+    use_custom_sampling_visible = is_use_custom_sampling_visible(
         provider, remembered_model
     )
-    if not sampling_ok:
-        top_p_interactive = False
-
-    if (
-        is_gemini_3_custom_sampling_visible(provider, remembered_model)
-        and not gemini_3_custom_sampling
-    ):
-        temp_interactive = False
-        top_p_interactive = False
-        top_k_interactive = False
 
     temp_update = gr.update(
         maximum=temp_max, value=new_temp_value, interactive=temp_interactive
     )
     top_k_update = gr.update(interactive=top_k_interactive, value=default_top_k)
     top_p_update = gr.update(value=default_top_p, interactive=top_p_interactive)
+    use_custom_sampling_update = gr.update(visible=use_custom_sampling_visible)
 
     if remembered_model:
         is_reasoning = is_reasoning_model(provider, remembered_model)
@@ -919,7 +982,6 @@ def update_translation_ui(
     )
 
     is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
-    gemini_3_custom_sampling_update = gr.update(visible=is_gemini_3)
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
@@ -1026,7 +1088,7 @@ def update_translation_ui(
         top_p_update,
         top_k_update,
         max_tokens_update,
-        gemini_3_custom_sampling_update,
+        use_custom_sampling_update,
         enable_web_search_update,
         enable_code_execution_update,
         image_detail_update,
@@ -1043,57 +1105,19 @@ def update_params_for_model(
     provider: str,
     model_name: Optional[str],
     current_temp: float,
-    gemini_3_custom_sampling: bool = True,
+    use_custom_sampling: bool = True,
 ):
     """Adjusts temp/top_k sliders and visibility toggles based on selected provider/model."""
     if not provider:
         return gr.update(), gr.update()
 
-    temp_max = 2.0
-    top_k_interactive = True
-    top_p_interactive = True
-
-    if provider == "Anthropic":
-        temp_max = 1.0
-    elif provider == "OpenRouter":
-        is_anthropic_model = model_name and (
-            "anthropic/" in model_name or model_name.startswith("claude-")
+    temp_max = get_temperature_max(provider, model_name)
+    temp_interactive, top_p_interactive, top_k_interactive = (
+        get_sampling_slider_interactivity(
+            provider, model_name, use_custom_sampling=use_custom_sampling
         )
-        if is_anthropic_model:
-            temp_max = 1.0
-    elif provider == "OpenAI-Compatible":
-        pass
-
-    if provider == "Anthropic":
-        top_k_interactive = False
-        top_p_interactive = False
-    elif provider in ("OpenAI", "xAI", "DeepSeek", "Moonshot AI", "Xiaomi MiMo"):
-        top_k_interactive = False
-    elif provider == "OpenRouter":
-        is_openai_model = model_name and (
-            "openai/" in model_name or model_name.startswith("gpt-")
-        )
-        is_anthropic_model = model_name and (
-            "anthropic/" in model_name or model_name.startswith("claude-")
-        )
-        if is_anthropic_model:
-            top_p_interactive = False
-        if is_openai_model or is_anthropic_model:
-            top_k_interactive = False
-
-    temp_interactive, sampling_ok = get_sampling_interactivity_for_effort(
-        provider, model_name
     )
-    if not sampling_ok:
-        top_p_interactive = False
-
-    if (
-        is_gemini_3_custom_sampling_visible(provider, model_name)
-        and not gemini_3_custom_sampling
-    ):
-        temp_interactive = False
-        top_p_interactive = False
-        top_k_interactive = False
+    use_custom_sampling_visible = is_use_custom_sampling_visible(provider, model_name)
 
     new_temp_value = min(current_temp, temp_max)
     temp_update = gr.update(
@@ -1102,6 +1126,7 @@ def update_params_for_model(
 
     top_k_update = gr.update(interactive=top_k_interactive)
     top_p_update = gr.update(interactive=top_p_interactive)
+    use_custom_sampling_update = gr.update(visible=use_custom_sampling_visible)
 
     is_gemini_3_google = provider == "Google" and is_gemini_3_model(model_name)
     is_gemini_3_openrouter = provider == "OpenRouter" and is_gemini_3_model(model_name)
@@ -1155,7 +1180,6 @@ def update_params_for_model(
     )
 
     is_gemini_3 = is_gemini_3_google or is_gemini_3_openrouter
-    gemini_3_custom_sampling_update = gr.update(visible=is_gemini_3)
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
@@ -1216,7 +1240,7 @@ def update_params_for_model(
         top_p_update,
         top_k_update,
         max_tokens_update,
-        gemini_3_custom_sampling_update,
+        use_custom_sampling_update,
         enable_web_search_update,
         enable_code_execution_update,
         image_detail_update,
