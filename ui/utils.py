@@ -76,6 +76,15 @@ def get_available_font_packs(fonts_base_dir: Path) -> Tuple[List[str], Optional[
     return font_dirs, default_font
 
 
+def is_valid_google_api_key(api_key: str) -> bool:
+    """Return True for legacy traffic keys (AI...) or auth keys (AQ...)."""
+    if api_key.startswith("AI") and len(api_key) == 39:
+        return True
+    if api_key.startswith("AQ") and len(api_key) == 53:
+        return True
+    return False
+
+
 def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     """Validate API key format based on provider."""
     env_var_map = {
@@ -106,10 +115,10 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     elif not api_key and provider == "OpenAI-Compatible":
         return True, f"{provider} API key is optional and not provided."  # Valid state
 
-    if provider == "Google" and not (api_key.startswith("AI") and len(api_key) == 39):
+    if provider == "Google" and not is_valid_google_api_key(api_key):
         return (
             False,
-            "Invalid Google API key format (should start with 'AI' and be 39 chars)",
+            "Invalid Google API key format (should start with 'AI' and be 39 chars, or start with 'AQ' and be 53 chars)",
         )
     if provider == "OpenAI" and not (api_key.startswith("sk-") and len(api_key) >= 48):
         return False, "Invalid OpenAI API key format (should start with 'sk-')"
