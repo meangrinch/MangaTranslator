@@ -27,7 +27,7 @@ def call_zai_endpoint(
         api_key (str): Z.ai API key.
         model_name (str): Z.ai model to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
-        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens, thinking).
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens, thinking, reasoning_effort).
         system_prompt (Optional[str]): System prompt for the model.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
@@ -106,6 +106,10 @@ def call_zai_endpoint(
     thinking_config = generation_config.get("thinking")
     if thinking_config:
         payload["thinking"] = thinking_config
+
+    reasoning_effort = generation_config.get("reasoning_effort")
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
 
     # Handle web search
     if enable_web_search:

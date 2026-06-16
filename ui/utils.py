@@ -40,6 +40,7 @@ from utils.model_metadata import (
     is_zai_reasoning_model,
     supports_openai_original_image_detail,
     supports_xai_reasoning_parameter,
+    supports_zai_reasoning_effort,
 )
 
 from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_settings
@@ -470,10 +471,10 @@ def get_reasoning_effort_info_text(
     elif provider == "Xiaomi MiMo":
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "DeepSeek":
-        return (
-            "Controls thinking mode (high=default, max=deep reasoning, none=disabled)."
-        )
+        return "Controls model's internal reasoning effort."
     elif provider == "Z.ai":
+        if supports_zai_reasoning_effort(model_name):
+            return "Controls model's internal reasoning effort."
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "OpenRouter" and model_name:
         if is_anthropic_model_family(
@@ -621,7 +622,8 @@ def get_reasoning_effort_config(
         is_reasoning = is_zai_reasoning_model(model_name)
         if not is_reasoning:
             return False, [], None
-        # Z.ai supports enabled/disabled thinking, mapped to auto/none
+        if supports_zai_reasoning_effort(model_name):
+            return True, ["max", "high", "none"], "high"
         return True, ["auto", "none"], "auto"
 
     elif provider == "Moonshot AI":
@@ -1493,5 +1495,11 @@ def format_thinking_status(
                 thinking_status_str = " (no thinking)"
             else:
                 thinking_status_str = f" (thinking: {effort})"
+    elif provider == "Z.ai" and supports_zai_reasoning_effort(model_name):
+        effort = reasoning_effort or "high"
+        if effort == "none":
+            thinking_status_str = " (no thinking)"
+        else:
+            thinking_status_str = f" (thinking: {effort})"
 
     return thinking_status_str

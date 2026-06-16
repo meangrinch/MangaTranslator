@@ -149,7 +149,6 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
         - 32768 for OpenAI GPT 4.1 models
         - 16384 for OpenAI GPT 4o models and models with "chat" in the name
         - 23552 for Z.ai "glm-4.6v" model
-        - 16384 for Z.ai "glm-4.5v" model
         - None for all other models (no cap, use existing 63488 max)
     """
     if not model_name:
@@ -176,13 +175,9 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
                 return 16384
         if "glm-4.6v" in model_lower:
             return 23552
-        if "glm-4.5v" in model_lower:
-            return 16384
     elif provider == "Z.ai":
         if model_lower == "glm-4.6v":
             return 23552
-        if model_lower == "glm-4.5v":
-            return 16384
     elif provider == "Moonshot AI":
         if "kimi-k2." in model_lower:
             return 32768
@@ -305,6 +300,14 @@ def is_zai_reasoning_model(model_name: Optional[str]) -> bool:
         return False
     lm = model_name.lower()
     return lm.startswith("glm-4.") or lm.startswith("glm-5")
+
+
+def supports_zai_reasoning_effort(model_name: Optional[str]) -> bool:
+    """Check if a Z.ai model supports the reasoning_effort API parameter."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return lm == "glm-5.2" or lm.startswith("glm-5.2-")
 
 
 def is_xai_reasoning_model(model_name: Optional[str]) -> bool:

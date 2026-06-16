@@ -69,6 +69,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "deepseek-v4-flash",
     ],
     "Z.ai": [
+        "glm-5.2",
         "glm-5.1",
         "glm-5v-turbo",
         "glm-5-turbo",
@@ -76,8 +77,6 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "glm-4.7",
         "glm-4.6",
         "glm-4.6v",
-        "glm-4.5",
-        "glm-4.5v",
     ],
     "Moonshot AI": [
         "kimi-k2.6",

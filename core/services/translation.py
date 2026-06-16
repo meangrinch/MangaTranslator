@@ -44,6 +44,7 @@ from utils.model_metadata import (
     is_google_model_family,
     is_google_reasoning_model,
     is_gpt5_chat_variant,
+    is_gpt5_pro,
     is_gpt5_series,
     is_mimo_reasoning_model,
     is_openai_compatible_reasoning_model,
@@ -53,6 +54,8 @@ from utils.model_metadata import (
     is_xai_reasoning_model,
     is_zai_reasoning_model,
     supports_openai_original_image_detail,
+    supports_xai_reasoning_parameter,
+    supports_zai_reasoning_effort,
 )
 from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
 
@@ -440,15 +443,18 @@ def _build_generation_config(
                 }
             )  # top_k not supported by OpenAI
         generation_config["image_detail"] = normalize_image_detail()
-        if config.reasoning_effort:
+        is_chat = is_gpt5_chat_variant(model_name)
+        if _is_reasoning_model_openai(model_name) and not is_chat:
             gen = get_gpt5_generation(model_name)
-            is_chat = is_gpt5_chat_variant(model_name)
+            reasoning_effort = config.reasoning_effort or (
+                "high" if is_gpt5_pro(model_name) and gen == "5" else "medium"
+            )
             xhigh_capable = gen in ("5.2", "5.3", "5.4", "5.5")
-            effort = config.reasoning_effort
+            effort = reasoning_effort
             if effort == "xhigh" and not xhigh_capable:
                 effort = "high"
             none_capable = gen is not None and gen != "5"
-            if not is_chat and (none_capable or effort != "none"):
+            if none_capable or effort != "none":
                 generation_config["reasoning_effort"] = effort
         if is_gpt5_series(model_name) and not is_gpt5_chat_variant(model_name):
             generation_config["verbosity"] = config.verbosity or "low"
@@ -494,8 +500,9 @@ def _build_generation_config(
                     "top_p": top_p,
                 }
             )
-        if config.reasoning_effort:
-            generation_config["reasoning_effort"] = config.reasoning_effort
+        if supports_xai_reasoning_parameter(model_name):
+            reasoning_effort = config.reasoning_effort or "medium"
+            generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     elif provider == "DeepSeek":
@@ -531,11 +538,13 @@ def _build_generation_config(
                 }
             )
         if is_reasoning:
-            # Z.ai uses thinking parameter with {"type": "enabled"} or {"type": "disabled"}
-            # Map reasoning_effort: "auto" -> enabled, "none" -> disabled
-            reasoning_effort = config.reasoning_effort or "auto"
+            reasoning_effort = config.reasoning_effort or (
+                "high" if supports_zai_reasoning_effort(model_name) else "auto"
+            )
             thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
             generation_config["thinking"] = {"type": thinking_type}
+            if thinking_type == "enabled" and supports_zai_reasoning_effort(model_name):
+                generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     elif provider == "Moonshot AI":
