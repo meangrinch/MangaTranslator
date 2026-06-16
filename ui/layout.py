@@ -621,7 +621,7 @@ def create_layout(
                                 choices=["rtl", "ltr"],
                                 label="Reading Direction",
                                 value=saved_settings.get("reading_direction", "rtl"),
-                                info="Order for sorting bubbles (rtl=Manga, ltr=Comic).",
+                                info="Order for sorting bubbles (rtl=Manga, ltr=Comic/Manhwa/Manhua).",
                                 elem_id="config_reading_direction",
                             )
                         setting_groups.append(group_detection)
