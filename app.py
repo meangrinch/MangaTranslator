@@ -1,5 +1,9 @@
 import argparse
 import os
+
+# Suppress OpenBLAS NUM_THREADS warnings on machines with >24 logical cores.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "24")
+
 import sys
 from pathlib import Path
 from threading import Thread
