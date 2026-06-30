@@ -161,7 +161,10 @@ def call_openrouter_endpoint(
     is_anthropic_model = metadata.get("is_anthropic_model", False)
 
     temp = generation_config.get("temperature")
-    if temp is not None:
+    no_sampling = metadata.get("is_claude_effort_xhigh", False) or metadata.get(
+        "is_claude_no_sampling", False
+    )
+    if temp is not None and not (is_anthropic_model and no_sampling):
         if is_anthropic_model or is_openai_model:
             payload["temperature"] = min(temp, 1.0)
         else:
@@ -195,12 +198,15 @@ def call_openrouter_endpoint(
     except Exception:
         is_reasoning_model = False
 
-    # Claude 4.6/4.7/4.8: reasoning.enabled turns on adaptive thinking.
+    # Claude 4.6/4.7/4.8/5: reasoning.enabled turns on adaptive thinking.
     # Fable 5 has always-on thinking; omit reasoning config entirely.
     is_claude_max = metadata.get("is_claude_effort_max", False)
     is_claude_xhigh = metadata.get("is_claude_effort_xhigh", False)
+    is_claude_adaptive_default = metadata.get("is_claude_adaptive_default", False)
     omit_thinking = metadata.get("is_claude_omit_thinking", False)
-    if reasoning_effort and is_claude_xhigh and not omit_thinking:
+    if reasoning_effort and is_claude_adaptive_default and not omit_thinking:
+        reasoning_config["enabled"] = reasoning_effort != "none"
+    elif reasoning_effort and is_claude_xhigh and not omit_thinking:
         if reasoning_effort != "none":
             reasoning_config["enabled"] = True
     elif reasoning_effort and is_claude_max and not is_claude_xhigh:

@@ -119,7 +119,9 @@ def call_anthropic_endpoint(
         "max_tokens": generation_config.get("max_tokens", 4096),
     }
 
-    if _claude_capability_flag(generation_config, "is_claude_effort_xhigh"):
+    if _claude_capability_flag(generation_config, "is_claude_effort_xhigh") or (
+        _claude_capability_flag(generation_config, "is_claude_no_sampling")
+    ):
         payload.pop("temperature", None)
         payload.pop("top_k", None)
 
@@ -130,6 +132,9 @@ def call_anthropic_endpoint(
             if thinking_type == "adaptive":
                 # Opus 4.6+: Adaptive thinking - Claude decides reasoning depth
                 payload["thinking"] = {"type": "adaptive"}
+            elif thinking_type == "disabled":
+                # Sonnet 5: Explicitly turn off adaptive thinking (on by default)
+                payload["thinking"] = {"type": "disabled"}
             elif thinking_type == "enabled":
                 # Older models: Budget-based thinking
                 if reasoning_effort and reasoning_effort != "none":

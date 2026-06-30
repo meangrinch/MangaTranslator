@@ -475,10 +475,17 @@ def _build_generation_config(
                 }
             )
         if is_reasoning:
-            reasoning_effort = config.reasoning_effort or "none"
-            generation_config["reasoning_effort"] = reasoning_effort
             omit_thinking = anthropic_flags.get("is_claude_omit_thinking", False)
-            if anthropic_flags.get("is_claude_effort_max") and not omit_thinking:
+            adaptive_default = anthropic_flags.get("is_claude_adaptive_default", False)
+            reasoning_effort = config.reasoning_effort or (
+                "auto" if adaptive_default else "none"
+            )
+            generation_config["reasoning_effort"] = reasoning_effort
+            if adaptive_default and not omit_thinking:
+                generation_config["thinking_type"] = (
+                    "disabled" if reasoning_effort == "none" else "adaptive"
+                )
+            elif anthropic_flags.get("is_claude_effort_max") and not omit_thinking:
                 if reasoning_effort == "auto":
                     generation_config["thinking_type"] = "adaptive"
             elif not omit_thinking:
@@ -635,11 +642,16 @@ def _build_generation_config(
 
         if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
             if is_anthropic_reasoning:
-                is_claude_46 = anthropic_flags.get(
-                    "is_claude_effort_max"
-                ) and not anthropic_flags.get("is_claude_effort_xhigh")
+                is_claude_adaptive_default = anthropic_flags.get(
+                    "is_claude_adaptive_default", False
+                )
+                is_claude_46 = (
+                    anthropic_flags.get("is_claude_effort_max")
+                    and not anthropic_flags.get("is_claude_effort_xhigh")
+                    and not is_claude_adaptive_default
+                )
                 reasoning_effort = config.reasoning_effort or (
-                    "auto" if is_claude_46 else "none"
+                    "auto" if (is_claude_46 or is_claude_adaptive_default) else "none"
                 )
                 generation_config["reasoning_effort"] = reasoning_effort
             elif is_gpt5_1:

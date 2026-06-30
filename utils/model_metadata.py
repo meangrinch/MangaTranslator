@@ -350,6 +350,7 @@ def is_anthropic_reasoning_model(model_name: Optional[str]) -> bool:
         or "claude-haiku-4-5" in lm
         or "claude-haiku-4.5" in lm
         or is_fable_5_model(model_name)
+        or is_sonnet_5_model(model_name)
     )
 
 
@@ -426,13 +427,24 @@ def is_fable_5_model(model_name: Optional[str]) -> bool:
     return "claude-fable-5" in lm
 
 
+def is_sonnet_5_model(model_name: Optional[str]) -> bool:
+    """Check if a model is Claude Sonnet 5 (adaptive thinking on by default, no sampling params)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    if "claude" not in lm or "sonnet" not in lm:
+        return False
+    return "claude-sonnet-5" in lm
+
+
 def anthropic_model_flags(model_name: Optional[str]) -> Dict[str, bool]:
     """Cumulative Claude API capability flags for generation_config / OpenRouter metadata.
 
     Tiers (each includes the capabilities of tiers below):
     - Opus 4.5: is_claude_effort
     - 4.6 (Opus/Sonnet): + is_claude_effort_max
-    - 4.7/4.8: + is_claude_effort_xhigh (also strips sampling params)
+    - 4.7/4.8/Sonnet 5: + is_claude_effort_xhigh (also strips sampling params)
+    - Sonnet 5: + is_claude_adaptive_default
     - Fable 5: same as 4.7+ plus is_claude_omit_thinking
     """
     if not model_name:
@@ -443,6 +455,13 @@ def anthropic_model_flags(model_name: Optional[str]) -> Dict[str, bool]:
             "is_claude_effort_max": True,
             "is_claude_effort_xhigh": True,
             "is_claude_omit_thinking": True,
+        }
+    if is_sonnet_5_model(model_name):
+        return {
+            "is_claude_effort": True,
+            "is_claude_effort_max": True,
+            "is_claude_effort_xhigh": True,
+            "is_claude_adaptive_default": True,
         }
     if is_opus_47_model(model_name) or is_opus_48_model(model_name):
         return {
@@ -462,7 +481,10 @@ def anthropic_model_flags(model_name: Optional[str]) -> Dict[str, bool]:
 
 def is_anthropic_no_sampling_model(model_name: Optional[str]) -> bool:
     """Anthropic models that reject temperature/top_k at the API."""
-    return anthropic_model_flags(model_name).get("is_claude_effort_xhigh", False)
+    flags = anthropic_model_flags(model_name)
+    return flags.get("is_claude_effort_xhigh", False) or flags.get(
+        "is_claude_no_sampling", False
+    )
 
 
 def anthropic_omits_thinking_config(model_name: Optional[str]) -> bool:

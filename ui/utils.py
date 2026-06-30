@@ -13,6 +13,7 @@ from utils.exceptions import ValidationError
 from utils.logging import log_message
 from utils.model_metadata import (
     anthropic_effort_config,
+    anthropic_model_flags,
     anthropic_omits_thinking_config,
     anthropic_reasoning_effort_config,
     anthropic_uses_adaptive_thinking_info,
@@ -1490,7 +1491,10 @@ def format_thinking_status(
         or (provider == "OpenRouter" and is_anthropic_model_family(model_name))
     ) and is_anthropic_reasoning_model(model_name):
         if not anthropic_omits_thinking_config(model_name):
-            effort = reasoning_effort or "none"
+            flags = anthropic_model_flags(model_name)
+            effort = reasoning_effort or (
+                "auto" if flags.get("is_claude_adaptive_default") else "none"
+            )
             if effort == "none":
                 thinking_status_str = " (no thinking)"
             else:
