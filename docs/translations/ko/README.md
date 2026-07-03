@@ -1,4 +1,4 @@
-[English]../../../README.md) | [简体中文](../zh/README.md) | [한국어](README.md) | [日本語](../ja/README.md)
+[English](../../../README.md) | [简体中文](../zh/README.md) | [한국어](README.md) | [日本語](../ja/README.md)
 
 ## MangaTranslator
 
