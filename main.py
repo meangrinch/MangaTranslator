@@ -917,12 +917,12 @@ def main():
         api_key = args.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
         api_key_arg_name = "--anthropic-api-key"
         api_key_env_var = "ANTHROPIC_API_KEY"
-        default_model = "claude-sonnet-4-6"
+        default_model = "claude-sonnet-5"
     elif provider == "xAI":
         api_key = args.xai_api_key or os.environ.get("XAI_API_KEY")
         api_key_arg_name = "--xai-api-key"
         api_key_env_var = "XAI_API_KEY"
-        default_model = "grok-4.3"
+        default_model = "grok-4.5"
     elif provider == "DeepSeek":
         api_key = args.deepseek_api_key or os.environ.get("DEEPSEEK_API_KEY")
         api_key_arg_name = "--deepseek-api-key"
