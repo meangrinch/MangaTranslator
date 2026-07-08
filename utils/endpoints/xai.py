@@ -119,12 +119,16 @@ def call_xai_endpoint(
 
     payload["max_output_tokens"] = generation_config.get("max_tokens", 4096)
 
+    prompt_cache_key = generation_config.get("prompt_cache_key")
+    if prompt_cache_key:
+        payload["prompt_cache_key"] = prompt_cache_key
+
     model_lower = (model_name or "").lower()
     reasoning_effort = generation_config.get("reasoning_effort")
     if "multi-agent" in model_lower:
         if reasoning_effort in ("low", "medium", "high", "xhigh"):
             payload["reasoning"] = {"effort": reasoning_effort}
-    elif model_lower.startswith("grok-4.3"):
+    elif model_lower.startswith("grok-4.3") or model_lower.startswith("grok-4.5"):
         if reasoning_effort in ("none", "low", "medium", "high"):
             payload["reasoning"] = {"effort": reasoning_effort}
 

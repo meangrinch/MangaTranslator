@@ -298,6 +298,7 @@ def _build_generation_config(
     model_name: str,
     config: TranslationConfig,
     debug: bool = False,
+    prompt_cache_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Build provider-specific generation config dictionary.
@@ -500,6 +501,8 @@ def _build_generation_config(
             "max_tokens": max_tokens_value,
             "media_resolution": config.media_resolution,
         }
+        if prompt_cache_key:
+            generation_config["prompt_cache_key"] = prompt_cache_key
         if use_sampling:
             generation_config.update(
                 {
@@ -693,6 +696,7 @@ def _call_llm_endpoint(
     prompt_text: str,
     debug: bool = False,
     system_prompt: Optional[str] = None,
+    prompt_cache_key: Optional[str] = None,
 ) -> Optional[str]:
     """Internal helper to dispatch API calls based on provider."""
     provider = config.provider
@@ -707,6 +711,7 @@ def _call_llm_endpoint(
             prompt_text,
             debug,
             system_prompt,
+            prompt_cache_key,
         )
 
     try:
@@ -764,7 +769,7 @@ def _call_llm_endpoint(
             if not api_key:
                 raise TranslationError("xAI API key is missing.")
             generation_config = _build_generation_config(
-                provider, model_name, config, debug
+                provider, model_name, config, debug, prompt_cache_key=prompt_cache_key
             )
             return call_xai_endpoint(
                 api_key=api_key,
@@ -1313,6 +1318,7 @@ def _perform_llm_ocr(
     input_language: Optional[str],
     reading_direction: str,
     debug: bool = False,
+    prompt_cache_key: Optional[str] = None,
 ) -> List[str]:
     """Perform OCR using vision LLM.
 
@@ -1350,6 +1356,7 @@ def _perform_llm_ocr(
         ocr_prompt,
         debug,
         system_prompt=ocr_system,
+        prompt_cache_key=prompt_cache_key,
     )
     extracted_texts = _parse_llm_response_unified(
         ocr_response_text,
@@ -1411,6 +1418,9 @@ def call_translation_api_batch(
         RuntimeError: If an API call fails irrecoverably after retries (raised by endpoint functions).
     """
     provider = config.provider
+    import uuid
+
+    session_prompt_cache_key = f"manga-translation-{uuid.uuid4()}"
     input_language = config.input_language
     output_language = config.output_language
     reading_direction = config.reading_direction
@@ -1554,6 +1564,7 @@ Apply your OCR transcription rules to each image provided.{special_instructions_
                     input_language,
                     reading_direction,
                     debug,
+                    prompt_cache_key=session_prompt_cache_key,
                 )
 
             log_message("Starting translation step", verbose=debug)
@@ -1665,6 +1676,7 @@ The target language is {output_language}. Use the appropriate translation approa
                 translation_prompt,
                 debug,
                 system_prompt=translation_system,
+                prompt_cache_key=session_prompt_cache_key,
             )
             if use_rosetta:
                 final_translations = _parse_rosetta_response(
@@ -1760,6 +1772,7 @@ For each image, you must perform two steps:
                 one_step_prompt,
                 debug,
                 system_prompt=one_step_system,
+                prompt_cache_key=session_prompt_cache_key,
             )
 
             # Parse one-step format ("Original || Translated")

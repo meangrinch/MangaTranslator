@@ -319,6 +319,7 @@ def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
         return False
     return (
         lm.startswith("grok-4.3")
+        or lm.startswith("grok-4.5")
         or "grok-4.20" in lm
         or "reasoning" in lm
         or "multi-agent" in lm
@@ -331,7 +332,7 @@ def supports_xai_reasoning_parameter(model_name: Optional[str]) -> bool:
         return False
     lm = model_name.lower()
     return (
-        lm.startswith("grok-4.3") or "multi-agent" in lm
+        lm.startswith("grok-4.3") or lm.startswith("grok-4.5") or "multi-agent" in lm
     ) and "non-reasoning" not in lm
 
 
