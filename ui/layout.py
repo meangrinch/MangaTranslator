@@ -490,7 +490,6 @@ def create_layout(
                             label="Translated Images",
                             show_label=True,
                             columns=4,
-                            rows=2,
                             height="auto",
                             object_fit="contain",
                         )
