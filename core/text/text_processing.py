@@ -17,6 +17,19 @@ KOREAN_NO_LINE_START_SYLLABLES = {
     "면",  # myeon
 }
 
+# Thai script block (Unicode U+0E00–U+0E7F)
+THAI_CODEPOINT_MIN = 0x0E00
+THAI_CODEPOINT_MAX = 0x0E7F
+# PyThaiNLP engines used for wrapping / orphan detection
+THAI_WORD_TOKENIZE_ENGINE = "newmm"
+THAI_TCC_ENGINE = "tcc_p"
+# Thai tokens at or below this many TCC clusters are short line-start orphans.
+# 3 covers ปกติ (3 clusters); 2 would not.
+THAI_SHORT_LINE_START_MAX_CLUSTERS = 3
+# Default DP cost for a short Thai line-start (scaled by cluster count).
+# Tuned to outweigh equal-line packs that orphan compounds like เรื่อง|ปกติ.
+DEFAULT_THAI_SHORT_LINE_START_PENALTY = 5000.0
+
 
 def is_rtl_script(text: str) -> bool:
     """Check if text contains dominant RTL script characters (Arabic, Hebrew, etc.)."""
@@ -109,6 +122,24 @@ def _is_hangul_character(char: str) -> bool:
     )
 
 
+def _is_thai_character(char: str) -> bool:
+    """Check if a character is in the Thai Unicode block (U+0E00–U+0E7F)."""
+    if len(char) != 1:
+        return False
+    return THAI_CODEPOINT_MIN <= ord(char) <= THAI_CODEPOINT_MAX
+
+
+def _contains_thai(text: str) -> bool:
+    return any(_is_thai_character(ch) for ch in text)
+
+
+def _thai_word_tokenize(text: str) -> List[str]:
+    """Segment Thai text into words via PyThaiNLP (lazy import)."""
+    from pythainlp.tokenize import word_tokenize
+
+    return [w for w in word_tokenize(text, engine=THAI_WORD_TOKENIZE_ENGINE) if w]
+
+
 def strip_no_space_before_marker(token: str) -> str:
     if token.startswith(NO_SPACE_BEFORE_MARKER):
         return token[len(NO_SPACE_BEFORE_MARKER) :]
@@ -151,6 +182,35 @@ def split_hangul_word_for_wrapping(token: str) -> Optional[List[str]]:
     if current_non_hangul:
         units.append(current_non_hangul)
 
+    if len(units) < 2:
+        return None
+
+    units[0] = leading_punc + units[0]
+    units[-1] = units[-1] + trailing_punc
+    return [units[0]] + [f"{NO_SPACE_BEFORE_MARKER}{unit}" for unit in units[1:]]
+
+
+def split_thai_word_for_wrapping(token: str) -> Optional[List[str]]:
+    """
+    Split a Thai-containing word into TCC units without adding hyphens.
+
+    Used as an emergency break when a single Thai word is wider than the
+    bubble. Later units are marked so the wrapper can break before them
+    without inserting spaces.
+    """
+    normalized = unicodedata.normalize("NFC", token)
+    match = re.match(r"^(\W*)(.+?)(\W*)$", normalized, flags=re.UNICODE)
+    if match:
+        leading_punc, core_word, trailing_punc = match.groups()
+    else:
+        leading_punc, core_word, trailing_punc = "", normalized, ""
+
+    if not _contains_thai(core_word):
+        return None
+
+    from pythainlp.tokenize import subword_tokenize
+
+    units = [u for u in subword_tokenize(core_word, engine=THAI_TCC_ENGINE) if u]
     if len(units) < 2:
         return None
 
@@ -243,6 +303,16 @@ def _is_detached_ellipsis(token: str) -> bool:
     return is_detached_trailing_punctuation(token) and token.startswith("..")
 
 
+def _append_breakable_token(token: str, tokens: List[str]) -> None:
+    """Append a word-level token, segmenting Thai runs with PyThaiNLP."""
+    if not token:
+        return
+    if _contains_thai(token):
+        tokens.extend(_thai_word_tokenize(token))
+    else:
+        tokens.append(token)
+
+
 def _split_with_cjk_awareness(
     text: str, detach_trailing_punctuation: bool = True
 ) -> List[str]:
@@ -251,6 +321,9 @@ def _split_with_cjk_awareness(
     Hangul (Korean) is excluded from per-character splitting because Korean
     uses spaces between words — syllables accumulate into word-level tokens
     like Latin characters, preserving inter-word spacing.
+
+    Thai runs are dictionary-segmented via PyThaiNLP so line breaks fall on
+    word boundaries without inserting spaces between Thai words.
     """
     tokens: List[str] = []
     current_token = ""
@@ -258,7 +331,7 @@ def _split_with_cjk_awareness(
     for char in text:
         if char.isspace():
             if current_token:
-                tokens.append(current_token)
+                _append_breakable_token(current_token, tokens)
                 current_token = ""
         elif is_cjk_character(char) and not _is_hangul_character(char):
             if char in KINSOKU_NOT_AT_START:
@@ -270,7 +343,7 @@ def _split_with_cjk_awareness(
                     current_token = char
             elif char in KINSOKU_NOT_AT_END:
                 if current_token:
-                    tokens.append(current_token)
+                    _append_breakable_token(current_token, tokens)
                 current_token = char
             else:
                 if current_token:
@@ -279,7 +352,7 @@ def _split_with_cjk_awareness(
                         tokens.append(current_token)
                         current_token = ""
                     else:
-                        tokens.append(current_token)
+                        _append_breakable_token(current_token, tokens)
                         current_token = ""
                         tokens.append(char)
                 else:
@@ -288,7 +361,7 @@ def _split_with_cjk_awareness(
             current_token += char
 
     if current_token:
-        tokens.append(current_token)
+        _append_breakable_token(current_token, tokens)
 
     if detach_trailing_punctuation:
         final_tokens = []
@@ -437,10 +510,74 @@ def _is_cjk_token(token: str) -> bool:
     )
 
 
+def _is_thai_token(token: str) -> bool:
+    """Check if token is Thai-script content (may include punctuation)."""
+    token = strip_no_space_before_marker(token)
+    match = STYLE_PATTERN.match(token)
+    content = match.group(2) if match else token
+    if not content:
+        return False
+    return _contains_thai(content) and not any(
+        ch.isascii() and ch.isalpha() for ch in content
+    )
+
+
+def _token_plain_content(token: str) -> str:
+    token = strip_no_space_before_marker(token)
+    match = STYLE_PATTERN.match(token)
+    return match.group(2) if match else token
+
+
+def _thai_tcc_cluster_count(text: str) -> int:
+    """Count Thai Character Clusters via PyThaiNLP tcc_p."""
+    if not text:
+        return 0
+    from pythainlp.tokenize import subword_tokenize
+
+    units = subword_tokenize(text, engine=THAI_TCC_ENGINE)
+    return len([u for u in units if u])
+
+
+def _thai_short_line_start_cost(
+    token: str,
+    penalty: float,
+    max_clusters: int = THAI_SHORT_LINE_START_MAX_CLUSTERS,
+    cluster_count_cache: Optional[dict] = None,
+) -> float:
+    """Extra DP cost when a continuation line would start with a short Thai token.
+
+    Length is TCC cluster count (tcc_p), not Unicode code points.
+
+    Cost scales with cluster count inside the short band (penalty * n). That
+    charges 1-cluster particles and, importantly, charges medium short openers
+    such as ปกติ (3) more than shorter heads such as เรื่อง (2). Pure
+    "shorter is worse" would prefer starting a line with ปกติ over เรื่อง and
+    re-introduce awkward compound splits after dictionary segmentation.
+    """
+    if penalty <= 0 or max_clusters <= 0:
+        return 0.0
+    if not _is_thai_token(token):
+        return 0.0
+    content = _token_plain_content(token)
+    if not content:
+        return 0.0
+
+    if cluster_count_cache is not None and content in cluster_count_cache:
+        n = cluster_count_cache[content]
+    else:
+        n = _thai_tcc_cluster_count(content)
+        if cluster_count_cache is not None:
+            cluster_count_cache[content] = n
+
+    if n == 0 or n > max_clusters:
+        return 0.0
+    return penalty * float(n)
+
+
 def _needs_space_between(
     left_token: str, right_token: str, detach_trailing_punctuation: bool = True
 ) -> bool:
-    """No space needed between adjacent CJK tokens or before separated punctuation."""
+    """No space needed between adjacent CJK/Thai tokens or before separated punctuation."""
     if right_token.startswith(NO_SPACE_BEFORE_MARKER):
         return False
 
@@ -448,6 +585,9 @@ def _needs_space_between(
     right_token = strip_no_space_before_marker(right_token)
 
     if _is_cjk_token(left_token) and _is_cjk_token(right_token):
+        return False
+
+    if _is_thai_token(left_token) and _is_thai_token(right_token):
         return False
 
     if detach_trailing_punctuation:
@@ -494,6 +634,8 @@ def find_optimal_breaks_dp(
     badness_exponent: float = 3.0,
     hyphen_penalty: float = 1000.0,
     detach_trailing_punctuation: bool = True,
+    thai_short_line_start_penalty: float = DEFAULT_THAI_SHORT_LINE_START_PENALTY,
+    thai_short_line_start_max_clusters: int = THAI_SHORT_LINE_START_MAX_CLUSTERS,
 ) -> Optional[List[str]]:
     """
     Pragmatic Knuth-Plass style DP to find globally optimal line breaks.
@@ -508,6 +650,10 @@ def find_optimal_breaks_dp(
         space_width: Width of a space character
         badness_exponent: Exponent for badness calculation (higher = prefer tighter lines)
         hyphen_penalty: Penalty for lines ending with hyphens
+        thai_short_line_start_penalty: Extra cost when a continuation line would
+            start with a short Thai token (orphan avoidance). 0 disables.
+        thai_short_line_start_max_clusters: Thai tokens at or below this many
+            TCC clusters (tcc_p) count as short line-start orphans.
 
     Returns:
         List of lines (strings) if successful, None if impossible to fit
@@ -518,6 +664,7 @@ def find_optimal_breaks_dp(
 
         # Calculate widths for all tokens
         token_w: List[float] = [word_width_func(t) for t in tokens]
+        thai_cluster_cache: dict = {}
 
         N = len(tokens)
         min_cost: List[float] = [float("inf")] * (N + 1)
@@ -553,6 +700,15 @@ def find_optimal_breaks_dp(
                         ends_with_hyphen = styled_match.group(2).endswith("-")
                 if ends_with_hyphen:
                     badness += hyphen_penalty
+
+                # Avoid orphaning short Thai tokens at the start of a new line.
+                if j > 0:
+                    badness += _thai_short_line_start_cost(
+                        tokens[j],
+                        thai_short_line_start_penalty,
+                        thai_short_line_start_max_clusters,
+                        thai_cluster_cache,
+                    )
 
                 total_cost = min_cost[j] + badness
                 if total_cost < min_cost[i]:

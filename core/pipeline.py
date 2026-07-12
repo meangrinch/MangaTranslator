@@ -1448,16 +1448,16 @@ def translate_and_render(
                             vertical_stack = False
                             rotation_deg = 0.0
 
-                        # Latin languages use hyphenation; Korean uses no-hyphen
-                        # Hangul emergency breaks under the same user setting.
+                        # Latin languages use hyphenation; Korean/Thai use
+                        # no-hyphen emergency breaks under the same user setting.
                         should_hyphenate = config.rendering.hyphenate_before_scaling
-                        is_korean_output = (
-                            config.translation.output_language.strip().lower()
-                            == "korean"
-                        )
+                        output_lang = config.translation.output_language.strip().lower()
+                        is_korean_output = output_lang == "korean"
+                        is_thai_output = output_lang == "thai"
                         if not (
                             is_latin_style_language(config.translation.output_language)
                             or is_korean_output
+                            or is_thai_output
                         ):
                             should_hyphenate = False
 

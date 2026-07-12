@@ -87,6 +87,7 @@ _ALPHABETICAL_LANGUAGES = [
     "Swedish",
     "Tamil",
     "Telugu",
+    "Thai",
     "Filipino (Tagalog)",
     "Turkish",
     "Ukrainian",

@@ -13,6 +13,7 @@ from core.text.text_processing import (
     is_detached_trailing_punctuation,
     parse_styled_segments,
     split_hangul_word_for_wrapping,
+    split_thai_word_for_wrapping,
     strip_no_space_before_marker,
     tokenize_styled_text,
     try_hyphenate_word,
@@ -477,6 +478,8 @@ def check_fit(
                             return w <= max_render_width
 
                         split_parts = split_hangul_word_for_wrapping(core_text)
+                        if split_parts is None:
+                            split_parts = split_thai_word_for_wrapping(core_text)
                         if split_parts is None:
                             split_parts = try_hyphenate_word(
                                 core_text,
