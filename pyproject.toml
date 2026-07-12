@@ -22,7 +22,7 @@ manga-translator = "main:main"
 manga-translator-web = "app:main"
 
 [project.optional-dependencies]
-dev = ["ruff"]
+dev = ["ruff", "pytest"]
 
 [tool.ruff]
 target-version = "py310"
