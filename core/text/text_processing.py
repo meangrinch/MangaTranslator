@@ -110,6 +110,46 @@ def is_latin_style_language(language_name: str) -> bool:
     return language_name.lower() in latin_style_languages
 
 
+def supports_long_word_breaking(language_name: str) -> bool:
+    """
+    Whether long-word emergency breaking is applied for this target language.
+
+    Latin-style languages may insert hyphens; Korean and Thai use no-hyphen
+    emergency splits under the same user setting.
+    """
+    lang = (language_name or "").strip().lower()
+    return is_latin_style_language(language_name or "") or lang in ("korean", "thai")
+
+
+def uses_true_hyphenation(language_name: str) -> bool:
+    """Whether wrapping may insert actual hyphen characters for this language."""
+    return is_latin_style_language(language_name or "")
+
+
+def text_layout_control_interactivity(
+    output_language: str,
+    batch_output_language: str,
+    hyphenate_before_scaling: bool,
+) -> dict[str, bool]:
+    """
+    Interactive flags for Text Layout hyphenation controls.
+
+    A control is enabled if it is relevant for either the single-tab or batch
+    target language (shared Config panel). Hyphen penalty only applies when
+    true Latin-style hyphenation can produce '-' breaks.
+    """
+    languages = [output_language or "", batch_output_language or ""]
+    word_break = any(supports_long_word_breaking(lang) for lang in languages)
+    true_hyphen = any(uses_true_hyphenation(lang) for lang in languages)
+    hyphen_on = bool(hyphenate_before_scaling)
+
+    return {
+        "hyphenate_before_scaling": word_break,
+        "hyphen_penalty": word_break and true_hyphen and hyphen_on,
+        "hyphenation_min_word_length": word_break and hyphen_on,
+    }
+
+
 def _is_hangul_character(char: str) -> bool:
     """Check if a character is Korean Hangul (syllables or jamo)."""
     if len(char) != 1:

@@ -8,6 +8,7 @@ import torch
 from PIL import Image
 
 from core.config import MangaTranslatorConfig
+from core.text.text_processing import text_layout_control_interactivity
 from core.validation import (
     validate_mutually_exclusive_modes,
     validate_zip_file,
@@ -1318,6 +1319,22 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     text_encoder_quants = flux_sdcpp_text_encoder_quants(
         default_ui_state.outside_text.inpainting_method
     )
+    text_layout_flags = text_layout_control_interactivity(
+        default_ui_state.output_language,
+        default_ui_state.batch_output_language,
+        default_ui_state.rendering.hyphenate_before_scaling,
+    )
+    reset_hyphenate_relevant = text_layout_flags["hyphenate_before_scaling"]
+    reset_hyphenate_value = (
+        default_ui_state.rendering.hyphenate_before_scaling
+        if reset_hyphenate_relevant
+        else False
+    )
+    text_layout_flags = text_layout_control_interactivity(
+        default_ui_state.output_language,
+        default_ui_state.batch_output_language,
+        reset_hyphenate_value,
+    )
 
     return [
         default_ui_state.detection.confidence,
@@ -1448,9 +1465,20 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.llm_settings.bubble_min_side_pixels,
         default_ui_state.llm_settings.context_image_max_side_pixels,
         default_ui_state.llm_settings.osb_min_side_pixels,
-        gr.update(value=default_ui_state.rendering.hyphenate_before_scaling),
+        gr.update(
+            value=reset_hyphenate_value,
+            interactive=reset_hyphenate_relevant,
+        ),
         gr.update(value=default_ui_state.rendering.detach_trailing_punctuation),
         gr.update(value=default_ui_state.rendering.auto_vertical_text),
+        gr.update(
+            value=default_ui_state.rendering.hyphen_penalty,
+            interactive=text_layout_flags["hyphen_penalty"],
+        ),
+        gr.update(
+            value=default_ui_state.rendering.hyphenation_min_word_length,
+            interactive=text_layout_flags["hyphenation_min_word_length"],
+        ),
         default_ui_state.llm_settings.special_instructions or "",
         default_ui_state.batch_special_instructions or "",
         default_ui_state.outside_text.enabled,
@@ -1658,10 +1686,43 @@ def handle_thresholding_change(use_otsu_threshold: bool):
     return gr.update(interactive=not use_otsu_threshold)
 
 
-def handle_hyphenation_change(hyphenate_before_scaling: bool):
-    """Handles changes in the hyphenation checkbox to enable/disable hyphenation-related sliders."""
-    return gr.update(interactive=hyphenate_before_scaling), gr.update(
-        interactive=hyphenate_before_scaling
+def handle_text_layout_language_change(
+    output_language: str,
+    batch_output_language: str,
+):
+    """Enable/disable Text Layout hyphenation controls for the target language(s).
+
+    Gradio checkboxes do not grey out clearly when only interactive=False, so when
+    long-word breaking is irrelevant the checkbox is forced off. When it becomes
+    relevant again, restore from saved config (same pattern as OCR-gated checkboxes
+    in handle_ocr_method_change).
+    """
+    saved_settings = settings_manager.get_saved_settings()
+    restored_hyphenate = saved_settings.get("hyphenate_before_scaling", True)
+    flags = text_layout_control_interactivity(
+        output_language, batch_output_language, restored_hyphenate
+    )
+    hyphenate_relevant = flags["hyphenate_before_scaling"]
+    hyphenate_value = restored_hyphenate if hyphenate_relevant else False
+    return (
+        gr.update(interactive=hyphenate_relevant, value=hyphenate_value),
+        gr.update(interactive=flags["hyphen_penalty"]),
+        gr.update(interactive=flags["hyphenation_min_word_length"]),
+    )
+
+
+def handle_hyphenation_change(
+    hyphenate_before_scaling: bool,
+    output_language: str,
+    batch_output_language: str,
+):
+    """Enable/disable hyphenation-related sliders from checkbox + target language(s)."""
+    flags = text_layout_control_interactivity(
+        output_language, batch_output_language, hyphenate_before_scaling
+    )
+    return (
+        gr.update(interactive=flags["hyphen_penalty"]),
+        gr.update(interactive=flags["hyphenation_min_word_length"]),
     )
 
 

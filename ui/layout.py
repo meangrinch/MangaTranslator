@@ -4,6 +4,7 @@ from typing import Any
 
 import gradio as gr
 
+from core.text.text_processing import text_layout_control_interactivity
 from utils.model_metadata import (
     FLUX_SDCPP_DIFFUSION_QUANTS,
     flux_sdcpp_text_encoder_default,
@@ -1343,12 +1344,32 @@ def create_layout(
                                     "when it improves readability."
                                 ),
                             )
+                            _saved_hyphenate = saved_settings.get(
+                                "hyphenate_before_scaling", True
+                            )
+                            _text_layout_flags = text_layout_control_interactivity(
+                                saved_settings.get("output_language", "English"),
+                                saved_settings.get("batch_output_language", "English"),
+                                _saved_hyphenate,
+                            )
+                            # Force off when language-irrelevant: checkboxes do not
+                            # visually grey out from interactive=False alone.
+                            _hyphenate_relevant = _text_layout_flags[
+                                "hyphenate_before_scaling"
+                            ]
+                            _effective_hyphenate = (
+                                _saved_hyphenate if _hyphenate_relevant else False
+                            )
+                            _text_layout_flags = text_layout_control_interactivity(
+                                saved_settings.get("output_language", "English"),
+                                saved_settings.get("batch_output_language", "English"),
+                                _effective_hyphenate,
+                            )
                             hyphenate_before_scaling = gr.Checkbox(
-                                value=saved_settings.get(
-                                    "hyphenate_before_scaling", True
-                                ),
+                                value=_effective_hyphenate,
                                 label="Hyphenate Long Words",
                                 info="Try inserting hyphens when wrapping before reducing font size.",
+                                interactive=_hyphenate_relevant,
                             )
                             hyphen_penalty = gr.Slider(
                                 100,
@@ -1358,9 +1379,7 @@ def create_layout(
                                 label="Hyphen Penalty",
                                 info="Penalty for hyphenated line breaks in text layout. "
                                 "Increase to discourage hyphenation.",
-                                interactive=saved_settings.get(
-                                    "hyphenate_before_scaling", True
-                                ),
+                                interactive=_text_layout_flags["hyphen_penalty"],
                             )
                             hyphenation_min_word_length = gr.Slider(
                                 4,
@@ -1371,9 +1390,9 @@ def create_layout(
                                 step=1,
                                 label="Min Word Length for Hyphenation",
                                 info="Minimum word length required for hyphenation.",
-                                interactive=saved_settings.get(
-                                    "hyphenate_before_scaling", True
-                                ),
+                                interactive=_text_layout_flags[
+                                    "hyphenation_min_word_length"
+                                ],
                             )
                             badness_exponent = gr.Slider(
                                 2.0,
@@ -2301,6 +2320,8 @@ def create_layout(
             hyphenate_before_scaling,
             detach_trailing_punctuation,
             auto_vertical_text,
+            hyphen_penalty,
+            hyphenation_min_word_length,
             special_instructions,
             batch_special_instructions,
             outside_text_enabled,
@@ -2787,11 +2808,35 @@ def create_layout(
             queue=False,
         )
 
-        # Hyphenation checkbox change handler
+        # Hyphenation / target-language interactivity for Text Layout controls
         hyphenate_before_scaling.change(
             fn=callbacks.handle_hyphenation_change,
-            inputs=hyphenate_before_scaling,
+            inputs=[
+                hyphenate_before_scaling,
+                output_language,
+                batch_output_language,
+            ],
             outputs=[hyphen_penalty, hyphenation_min_word_length],
+            queue=False,
+        )
+        output_language.change(
+            fn=callbacks.handle_text_layout_language_change,
+            inputs=[output_language, batch_output_language],
+            outputs=[
+                hyphenate_before_scaling,
+                hyphen_penalty,
+                hyphenation_min_word_length,
+            ],
+            queue=False,
+        )
+        batch_output_language.change(
+            fn=callbacks.handle_text_layout_language_change,
+            inputs=[output_language, batch_output_language],
+            outputs=[
+                hyphenate_before_scaling,
+                hyphen_penalty,
+                hyphenation_min_word_length,
+            ],
             queue=False,
         )
 

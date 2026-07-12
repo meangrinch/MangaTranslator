@@ -48,7 +48,7 @@ from .services.translation import (
     prepare_bubble_images_for_translation,
 )
 from .text.placeholders import generate_test_placeholders
-from .text.text_processing import is_latin_style_language
+from .text.text_processing import supports_long_word_breaking
 from .text.text_renderer import render_text_skia
 
 if TYPE_CHECKING:
@@ -1451,13 +1451,8 @@ def translate_and_render(
                         # Latin languages use hyphenation; Korean/Thai use
                         # no-hyphen emergency breaks under the same user setting.
                         should_hyphenate = config.rendering.hyphenate_before_scaling
-                        output_lang = config.translation.output_language.strip().lower()
-                        is_korean_output = output_lang == "korean"
-                        is_thai_output = output_lang == "thai"
-                        if not (
-                            is_latin_style_language(config.translation.output_language)
-                            or is_korean_output
-                            or is_thai_output
+                        if not supports_long_word_breaking(
+                            config.translation.output_language
                         ):
                             should_hyphenate = False
 
