@@ -745,7 +745,7 @@ def create_layout(
                                 show_copy_button=False,
                                 visible=(config_initial_provider == "Google"),
                                 elem_id="google_api_key",
-                                info="Stored locally. Or set via GOOGLE_API_KEY env var.",
+                                info="Stored locally. Or set via GOOGLE_API_KEY / GEMINI_API_KEY env var.",
                             )
                             openai_api_key = gr.Textbox(
                                 label="OpenAI API Key",
@@ -768,14 +768,14 @@ def create_layout(
                                 info="Stored locally. Or set via ANTHROPIC_API_KEY env var.",
                             )
                             xai_api_key = gr.Textbox(
-                                label="xAI API Key",
-                                placeholder="Enter xAI API key (starts with xai-...)",
+                                label="SpaceXAI API Key",
+                                placeholder="Enter SpaceXAI API key (starts with xai-...)",
                                 type="password",
                                 value=saved_settings.get("xai_api_key", ""),
                                 show_copy_button=False,
-                                visible=(config_initial_provider == "xAI"),
+                                visible=(config_initial_provider == "SpaceXAI"),
                                 elem_id="xai_api_key",
-                                info="Stored locally. Or set via XAI_API_KEY env var.",
+                                info="Stored locally. Or set via SPACEXAI_API_KEY / XAI_API_KEY env var.",
                             )
                             deepseek_api_key = gr.Textbox(
                                 label="DeepSeek API Key",
@@ -1048,7 +1048,7 @@ def create_layout(
                                 elem_id="image_detail_dropdown",
                             )
 
-                            # Compute initial visibility for media_resolution (Google/xAI providers only)
+                            # Compute initial visibility for media_resolution (Google/SpaceXAI providers only)
                             _mr_bubbles_visible_init, _, _ = (
                                 utils.get_media_resolution_config(
                                     config_initial_provider,
@@ -1072,7 +1072,7 @@ def create_layout(
                                 elem_id="media_resolution_dropdown",
                             )
 
-                            # Compute initial visibility for Gemini 3 and xAI specific media resolution options
+                            # Compute initial visibility for Gemini 3 and SpaceXAI specific media resolution options
                             _mr_bubbles_visible, _mr_choices, _mr_info_base = (
                                 utils.get_media_resolution_config(
                                     config_initial_provider, config_initial_model_name

@@ -162,10 +162,10 @@ fonts/
 
 ### LLMのセットアップ（LLM setup）
 
-- プロバイダー：Google, OpenAI, Anthropic, xAI, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, OpenRouter, OpenAI-Compatible（OpenAI互換）
+- プロバイダー：Google, OpenAI, Anthropic, SpaceXAI, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, OpenRouter, OpenAI-Compatible（OpenAI互換）
 - Web UI：Config（設定）タブからプロバイダー、モデル、APIキーを設定します（ローカルに保存されます）。
 - CLI：コマンドライン引数または環境変数経由でキーやURLを渡します。
-- 環境変数：`GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
+- 環境変数：`GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
 - OpenAI互換のデフォルトURL：`http://localhost:8080/v1`
 
 > [!NOTE]

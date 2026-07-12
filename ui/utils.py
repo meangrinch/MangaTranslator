@@ -96,10 +96,10 @@ def is_valid_google_api_key(api_key: str) -> bool:
 def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     """Validate API key format based on provider."""
     env_var_map = {
-        "Google": "GOOGLE_API_KEY",
+        "Google": "GOOGLE_API_KEY or GEMINI_API_KEY",
         "OpenAI": "OPENAI_API_KEY",
         "Anthropic": "ANTHROPIC_API_KEY",
-        "xAI": "XAI_API_KEY",
+        "SpaceXAI": "SPACEXAI_API_KEY or XAI_API_KEY",
         "OpenRouter": "OPENROUTER_API_KEY",
         "DeepSeek": "DEEPSEEK_API_KEY",
         "Moonshot AI": "MOONSHOT_API_KEY",
@@ -114,6 +114,10 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         if provider == "Google":
             api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get(
                 "GEMINI_API_KEY", ""
+            )
+        elif provider == "SpaceXAI":
+            api_key = os.environ.get("SPACEXAI_API_KEY") or os.environ.get(
+                "XAI_API_KEY", ""
             )
         elif env_var_name:
             api_key = os.environ.get(env_var_name, "")
@@ -134,8 +138,8 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         api_key.startswith("sk-ant-") and len(api_key) >= 100
     ):
         return False, "Invalid Anthropic API key format (should start with 'sk-ant-')"
-    if provider == "xAI" and not api_key.startswith("xai-"):
-        return False, "Invalid xAI API key format (should start with 'xai-')"
+    if provider == "SpaceXAI" and not api_key.startswith("xai-"):
+        return False, "Invalid SpaceXAI API key format (should start with 'xai-')"
     if provider == "OpenRouter" and not (
         api_key.startswith("sk-or-") and len(api_key) >= 48
     ):
@@ -315,7 +319,7 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return _is_openai_reasoning_model(model_name)
     elif provider == "Anthropic":
         return _is_anthropic_reasoning_model(model_name)
-    elif provider == "xAI":
+    elif provider == "SpaceXAI":
         return is_xai_reasoning_model(model_name)
     elif provider == "DeepSeek":
         return is_deepseek_reasoning_model(model_name)
@@ -368,8 +372,8 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
             "Use Anthropic's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
-        "xAI": (
-            "Use xAI's web search tool for up-to-date information. "
+        "SpaceXAI": (
+            "Use SpaceXAI's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "Z.ai": (
@@ -406,7 +410,7 @@ def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) 
         - "Thinking Level" for Gemini 3 models
         - "Thinking Budget" for Google reasoning models (non-Gemini 3)
         - "Extended Thinking" for Anthropic reasoning models
-        - "Multi-Agent Depth" for xAI multi-agent models
+        - "Multi-Agent Depth" for SpaceXAI multi-agent models
         - "Reasoning Effort" otherwise
     """
     if not model_name:
@@ -415,7 +419,7 @@ def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) 
     gemini3 = is_gemini_3_model(model_name)
     gemma = is_gemma_model(model_name)
 
-    if provider == "xAI" and "multi-agent" in model_name.lower():
+    if provider == "SpaceXAI" and "multi-agent" in model_name.lower():
         return "Multi-Agent Depth"
     elif (provider == "Google" or provider == "OpenRouter") and (gemini3 or gemma):
         return "Thinking Level"
@@ -461,10 +465,10 @@ def get_reasoning_effort_info_text(
         base_text = "Controls reasoning token allocation relative to 'max_tokens'"
     elif provider == "OpenAI":
         return "Controls model's internal reasoning effort."
-    elif provider == "xAI":
+    elif provider == "SpaceXAI":
         if model_name and "multi-agent" in model_name.lower():
             return (
-                "Controls xAI multi-agent agent count "
+                "Controls SpaceXAI multi-agent agent count "
                 "(low/medium=4 agents, high/xhigh=16 agents)."
             )
         if supports_xai_reasoning_parameter(model_name):
@@ -618,7 +622,7 @@ def get_reasoning_effort_config(
     elif provider == "Anthropic":
         return anthropic_reasoning_effort_config(model_name)
 
-    elif provider == "xAI":
+    elif provider == "SpaceXAI":
         if not supports_xai_reasoning_parameter(model_name):
             return False, [], None
         if "multi-agent" in lm:
@@ -773,7 +777,7 @@ def get_sampling_slider_interactivity(
         top_p_interactive = False
     elif provider in (
         "OpenAI",
-        "xAI",
+        "SpaceXAI",
         "DeepSeek",
         "Z.ai",
         "Moonshot AI",
@@ -828,7 +832,7 @@ def get_media_resolution_config(
             ["auto", "high", "medium", "low"],
             "Resolution for Gemini 3 to process images.",
         )
-    elif provider == "xAI":
+    elif provider == "SpaceXAI":
         return (True, ["auto", "high", "low"], "Resolution for Grok to process images.")
 
     return False, ["auto"], ""
@@ -899,7 +903,7 @@ def update_translation_ui(
     google_visible_update = gr.update(visible=(provider == "Google"))
     openai_visible_update = gr.update(visible=(provider == "OpenAI"))
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
-    xai_visible_update = gr.update(visible=(provider == "xAI"))
+    xai_visible_update = gr.update(visible=(provider == "SpaceXAI"))
     deepseek_visible_update = gr.update(visible=(provider == "DeepSeek"))
     zai_visible_update = gr.update(visible=(provider == "Z.ai"))
     moonshot_visible_update = gr.update(visible=(provider == "Moonshot AI"))
@@ -973,7 +977,7 @@ def update_translation_ui(
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
-    # Gemini 3 and xAI specific dropdowns
+    # Gemini 3 and SpaceXAI specific dropdowns
     mr_visible, mr_choices, mr_info_base = get_media_resolution_config(
         provider, remembered_model
     )
@@ -1141,7 +1145,7 @@ def update_params_for_model(
         info=info_text,
     )
 
-    # Web search checkbox is visible for Google, OpenRouter, OpenAI, Anthropic, and xAI providers
+    # Web search checkbox is visible for Google, OpenRouter, OpenAI, Anthropic, and SpaceXAI providers
     enable_web_search_visible = provider not in ("OpenAI-Compatible", "DeepSeek")
 
     enable_web_search_label, enable_web_search_info = (
@@ -1171,7 +1175,7 @@ def update_params_for_model(
     media_resolution_visible = provider == "Google" and not is_gemini_3
     media_resolution_update = gr.update(visible=media_resolution_visible)
 
-    # Gemini 3 and xAI specific dropdowns
+    # Gemini 3 and SpaceXAI specific dropdowns
     mr_visible, mr_choices, mr_info_base = get_media_resolution_config(
         provider, model_name
     )

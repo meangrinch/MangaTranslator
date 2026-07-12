@@ -162,10 +162,10 @@ fonts/
 
 ### LLM 설정 (LLM setup)
 
-- 지원 제공자: Google, OpenAI, Anthropic, xAI, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, OpenRouter, OpenAI-Compatible (OpenAI 호환)
+- 지원 제공자: Google, OpenAI, Anthropic, SpaceXAI, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, OpenRouter, OpenAI-Compatible (OpenAI 호환)
 - 웹 UI: Config (설정) 탭에서 제공자/모델/API 키를 설정합니다 (로컬에 저장됨).
 - CLI: 명령줄 플래그 또는 환경 변수를 통해 키/URL을 전달합니다.
-- 환경 변수: `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
+- 환경 변수: `GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
 - OpenAI 호환 제공자의 기본 URL: `http://localhost:8080/v1`
 
 > [!NOTE]

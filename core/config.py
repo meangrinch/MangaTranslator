@@ -82,8 +82,8 @@ class TranslationConfig:
     media_resolution: str = (
         "auto"  # Only available via Google provider (auto/high/medium/low)
     )
-    media_resolution_bubbles: str = "auto"  # Gemini 3 and xAI models
-    media_resolution_context: str = "auto"  # Gemini 3 and xAI models
+    media_resolution_bubbles: str = "auto"  # Gemini 3 and SpaceXAI models
+    media_resolution_context: str = "auto"  # Gemini 3 and SpaceXAI models
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1024
     previous_context_image_count: int = 0
@@ -210,7 +210,9 @@ class MangaTranslatorConfig:
         if not self.translation.anthropic_api_key:
             self.translation.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not self.translation.xai_api_key:
-            self.translation.xai_api_key = os.environ.get("XAI_API_KEY", "")
+            self.translation.xai_api_key = os.environ.get(
+                "SPACEXAI_API_KEY"
+            ) or os.environ.get("XAI_API_KEY", "")
         if not self.translation.deepseek_api_key:
             self.translation.deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY", "")
         if not self.translation.zai_api_key:

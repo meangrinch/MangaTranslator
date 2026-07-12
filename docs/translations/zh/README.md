@@ -162,10 +162,10 @@ fonts/
 
 ### 大语言模型设置 (LLM Setup)
 
-- 服务商支持：Google, OpenAI, Anthropic, xAI, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, OpenRouter, OpenAI-Compatible (OpenAI兼容)
+- 服务商支持：Google, OpenAI, Anthropic, SpaceXAI, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, OpenRouter, OpenAI-Compatible (OpenAI兼容)
 - Web UI：在 Config (配置) 选项卡中配置服务商、模型和 API 密钥（将保存在本地）
 - CLI：通过命令行参数或环境变量传递密钥/URL
-- 环境变量：`GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
+- 环境变量：`GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
 - OpenAI 兼容的默认 URL：`http://localhost:8080/v1`
 
 > [!NOTE]

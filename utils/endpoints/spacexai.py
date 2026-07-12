@@ -21,11 +21,11 @@ def call_xai_endpoint(
     enable_web_search: bool = False,
 ) -> Optional[str]:
     """
-    Calls the xAI Responses API endpoint with the provided data and handles retries.
+    Calls the SpaceXAI Responses API endpoint with the provided data and handles retries.
 
     Args:
-        api_key (str): xAI API key.
-        model_name (str): xAI model to use.
+        api_key (str): SpaceXAI API key.
+        model_name (str): SpaceXAI model to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens).
         system_prompt (Optional[str]): System prompt for the model.
@@ -44,12 +44,14 @@ def call_xai_endpoint(
                       connection errors, or response processing fails.
     """
     if not api_key:
-        raise ValidationError("API key is required for xAI endpoint")
+        raise ValidationError("API key is required for SpaceXAI endpoint")
 
     text_part = next((p for p in parts if "text" in p), None)
     image_parts = [p for p in parts if "inline_data" in p]
     if not text_part:
-        raise ValidationError("Invalid 'parts' format for xAI: No text prompt found.")
+        raise ValidationError(
+            "Invalid 'parts' format for SpaceXAI: No text prompt found."
+        )
 
     url = "https://api.x.ai/v1/responses"
     headers = {
@@ -140,7 +142,7 @@ def call_xai_endpoint(
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
             log_message(
-                f"xAI API request (attempt {attempt + 1}/{max_retries + 1})",
+                f"SpaceXAI API request (attempt {attempt + 1}/{max_retries + 1})",
                 verbose=debug,
             )
 
@@ -149,7 +151,7 @@ def call_xai_endpoint(
             )
             response.raise_for_status()
 
-            log_message("Processing xAI response", verbose=debug)
+            log_message("Processing SpaceXAI response", verbose=debug)
             try:
                 result = response.json()
 
@@ -173,10 +175,10 @@ def call_xai_endpoint(
 
                 if "error" in result:
                     error_msg = result.get("error", {}).get("message", "Unknown error")
-                    raise TranslationError(f"xAI API returned error: {error_msg}")
+                    raise TranslationError(f"SpaceXAI API returned error: {error_msg}")
 
                 log_message(
-                    f"No text content in xAI response. Finish reason: {finish_reason}",
+                    f"No text content in SpaceXAI response. Finish reason: {finish_reason}",
                     always_print=True,
                 )
                 log_message(
@@ -186,7 +188,7 @@ def call_xai_endpoint(
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
-                    f"Error processing xAI API response: {str(e)}"
+                    f"Error processing SpaceXAI API response: {str(e)}"
                 ) from e
 
         except requests.exceptions.HTTPError as e:
@@ -212,8 +214,12 @@ def call_xai_endpoint(
                 elif status_code == 403:
                     error_reason += " (Permission denied, check API key/plan)"
 
-                log_message(f"xAI API HTTP Error: {error_reason}", always_print=True)
-                raise TranslationError(f"xAI API HTTP Error: {error_reason}") from e
+                log_message(
+                    f"SpaceXAI API HTTP Error: {error_reason}", always_print=True
+                )
+                raise TranslationError(
+                    f"SpaceXAI API HTTP Error: {error_reason}"
+                ) from e
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
@@ -225,13 +231,13 @@ def call_xai_endpoint(
                 continue
             else:
                 log_message(
-                    f"xAI connection failed after {max_retries + 1} attempts: {str(e)}",
+                    f"SpaceXAI connection failed after {max_retries + 1} attempts: {str(e)}",
                     always_print=True,
                 )
                 raise TranslationError(
-                    f"xAI API Connection Error after retries: {str(e)}"
+                    f"SpaceXAI API Connection Error after retries: {str(e)}"
                 ) from e
 
     raise TranslationError(
-        f"Failed to get response from xAI API after {max_retries + 1} attempts."
+        f"Failed to get response from SpaceXAI API after {max_retries + 1} attempts."
     )

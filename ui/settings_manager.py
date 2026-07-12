@@ -65,7 +65,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "claude-sonnet-4-5-20250929",
         "claude-haiku-4-5-20251001",
     ],
-    "xAI": [
+    "SpaceXAI": [
         "grok-4.5",
         "grok-4.3",
         "grok-4.20-0309-reasoning",
@@ -125,7 +125,9 @@ DEFAULT_SETTINGS = {
         "Anthropic": (
             PROVIDER_MODELS["Anthropic"][0] if PROVIDER_MODELS["Anthropic"] else None
         ),
-        "xAI": PROVIDER_MODELS["xAI"][0] if PROVIDER_MODELS["xAI"] else None,
+        "SpaceXAI": (
+            PROVIDER_MODELS["SpaceXAI"][0] if PROVIDER_MODELS["SpaceXAI"] else None
+        ),
         "DeepSeek": (
             PROVIDER_MODELS["DeepSeek"][0] if PROVIDER_MODELS["DeepSeek"] else None
         ),
@@ -516,9 +518,11 @@ def get_saved_settings() -> Dict[str, Any]:
 
             # Back-compat: migrate older configs
             try:
-                # 1) provider string: Gemini -> Google
+                # 1) provider string: Gemini -> Google, xAI -> SpaceXAI
                 if saved_config.get("provider") == "Gemini":
                     settings["provider"] = "Google"
+                if saved_config.get("provider") == "xAI":
+                    settings["provider"] = "SpaceXAI"
 
                 # 2) API key: 'gemini_api_key' -> 'google_api_key'
                 if (
@@ -529,12 +533,19 @@ def get_saved_settings() -> Dict[str, Any]:
                 ):
                     settings["google_api_key"] = saved_config.get("gemini_api_key", "")
 
-                # 3) provider_models: move key 'Gemini' -> 'Google' if present
+                # 3) provider_models: move key 'Gemini' -> 'Google', 'xAI' -> 'SpaceXAI'
                 pm = settings.get("provider_models") or {}
                 if isinstance(pm, dict) and "Gemini" in pm:
                     pm.setdefault("Google", pm.get("Gemini"))
                     try:
                         del pm["Gemini"]
+                    except Exception:
+                        pass
+                    settings["provider_models"] = pm
+                if isinstance(pm, dict) and "xAI" in pm:
+                    pm.setdefault("SpaceXAI", pm.get("xAI"))
+                    try:
+                        del pm["xAI"]
                     except Exception:
                         pass
                     settings["provider_models"] = pm

@@ -106,7 +106,7 @@
   - 「ページ全体を LLM に送信（Send Full Page to LLM）」を無効にしてください。
   - 「前文の画像（Previous Context Images）」および「前文の OCR テキスト（Previous Context OCR Text）」を 0 に設定してください。
   - 「吹き出し最小短辺ピクセル（Bubble Min Side Pixels）」/「文脈画像最大長辺ピクセル（Context Image Max Side Pixels）」/「OSB 最小短辺ピクセル（OSB Min Side Pixels）」のターゲットサイズを下げてください。
-  - 「メディア解像度（Media Resolution）」を下げてください（Gemini または xAI 모델を使用している場合）。
+  - 「メディア解像度（Media Resolution）」を下げてください（Gemini または SpaceXAI 모델を使用している場合）。
   - 「画像ディテール（Image Detail）」を下げてください（OpenAI モデルを使用している場合）。
   - "manga-ocr/paddleocr-vl" OCR 方法を使用してください（より高性能な VLM を直接使用するよりも性能が劣る場合があります）。
 

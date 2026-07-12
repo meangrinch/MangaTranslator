@@ -395,7 +395,7 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
             api_key_to_validate = ui_state.provider_settings.openai_api_key
         elif provider_selector == "Anthropic":
             api_key_to_validate = ui_state.provider_settings.anthropic_api_key
-        elif provider_selector == "xAI":
+        elif provider_selector == "SpaceXAI":
             api_key_to_validate = ui_state.provider_settings.xai_api_key
         elif provider_selector == "DeepSeek":
             api_key_to_validate = ui_state.provider_settings.deepseek_api_key
@@ -1260,7 +1260,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     gemini_visible = default_provider == "Google"
     openai_visible = default_provider == "OpenAI"
     anthropic_visible = default_provider == "Anthropic"
-    xai_visible = default_provider == "xAI"
+    xai_visible = default_provider == "SpaceXAI"
     deepseek_visible = default_provider == "DeepSeek"
     zai_visible = default_provider == "Z.ai"
     moonshot_visible = default_provider == "Moonshot AI"

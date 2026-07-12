@@ -107,7 +107,7 @@
   - Disable "Send Full Page to LLM"
   - Set "Previous Context Images" and "Previous Context OCR Text" to 0
   - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes
-  - Lower "Media Resolution" (if using Gemini or xAI models)
+  - Lower "Media Resolution" (if using Gemini or SpaceXAI models)
   - Lower "Image Detail" (if using OpenAI models)
   - Use "manga-ocr/paddleocr-vl" OCR method (may perform worse than more-capable VLMs)
 

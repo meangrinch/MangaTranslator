@@ -107,7 +107,7 @@
   - 禁用“发送整页给 LLM (Send Full Page to LLM)”
   - 将“前文图像 (Previous Context Images)”和“前文 OCR 文本 (Previous Context OCR Text)”设置为 0
   - 降低“气泡最小边长 (Bubble Min Side Pixels)”/“上下文图像最大边长 (Context Image Max Side Pixels)”/“OSB 最小边长 (OSB Min Side Pixels)”的目标大小
-  - 降低“媒体分辨率 (Media Resolution)”（如果使用 Gemini 或 xAI 模型）
+  - 降低“媒体分辨率 (Media Resolution)”（如果使用 Gemini 或 SpaceXAI 模型）
   - 降低“图像细节 (Image Detail)”（如果使用 OpenAI 模型）
   - 使用 "manga-ocr/paddleocr-vl" OCR 方法（其效果可能不及更强的多模态模型）
 

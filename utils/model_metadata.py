@@ -352,7 +352,7 @@ def supports_zai_reasoning_effort(model_name: Optional[str]) -> bool:
 
 
 def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
-    """Check if an xAI model is reasoning-capable."""
+    """Check if a SpaceXAI model is reasoning-capable."""
     if not model_name:
         return False
     lm = model_name.lower()
@@ -368,7 +368,7 @@ def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
 
 
 def supports_xai_reasoning_parameter(model_name: Optional[str]) -> bool:
-    """Whether xAI accepts the Responses API `reasoning` parameter."""
+    """Whether SpaceXAI accepts the Responses API `reasoning` parameter."""
     if not model_name:
         return False
     lm = model_name.lower()

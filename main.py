@@ -79,7 +79,7 @@ def main():
             "Google",
             "OpenAI",
             "Anthropic",
-            "xAI",
+            "SpaceXAI",
             "DeepSeek",
             "Z.ai",
             "Moonshot AI",
@@ -94,7 +94,10 @@ def main():
         dest="google_api_key",
         type=str,
         default=None,
-        help="Google API key (overrides GOOGLE_API_KEY env var if --provider is Google)",
+        help=(
+            "Google API key (overrides GOOGLE_API_KEY or GEMINI_API_KEY env var "
+            "if --provider is Google)"
+        ),
     )
     parser.add_argument(
         "--openai-api-key",
@@ -109,10 +112,13 @@ def main():
         help="Anthropic API key (overrides ANTHROPIC_API_KEY env var if --provider is Anthropic)",
     )
     parser.add_argument(
-        "--xai-api-key",
+        "--spacexai-api-key",
         type=str,
         default=None,
-        help="xAI API key (overrides XAI_API_KEY env var if --provider is xAI)",
+        help=(
+            "SpaceXAI API key (overrides SPACEXAI_API_KEY or XAI_API_KEY env var "
+            "if --provider is SpaceXAI)"
+        ),
     )
     parser.add_argument(
         "--deepseek-api-key",
@@ -529,14 +535,14 @@ def main():
         type=str,
         choices=["auto", "high", "medium", "low"],
         default="auto",
-        help="Media resolution for bubble images (Gemini 3 and xAI models)",
+        help="Media resolution for bubble images (Gemini 3 and Grok only)",
     )
     parser.add_argument(
         "--media-resolution-context",
         type=str,
         choices=["auto", "high", "medium", "low"],
         default="auto",
-        help="Media resolution for context (full page) images (Gemini 3 and xAI only)",
+        help="Media resolution for context (full page) images (Gemini 3 and Grok only)",
     )
     parser.add_argument(
         "--image-detail",
@@ -905,9 +911,13 @@ def main():
     compatible_url = None
 
     if provider == "Google":
-        api_key = args.google_api_key or os.environ.get("GOOGLE_API_KEY")
+        api_key = (
+            args.google_api_key
+            or os.environ.get("GOOGLE_API_KEY")
+            or os.environ.get("GEMINI_API_KEY")
+        )
         api_key_arg_name = "--google-api-key"
-        api_key_env_var = "GOOGLE_API_KEY"
+        api_key_env_var = "GOOGLE_API_KEY or GEMINI_API_KEY"
         default_model = "gemini-3.1-flash-lite"
     elif provider == "OpenAI":
         api_key = args.openai_api_key or os.environ.get("OPENAI_API_KEY")
@@ -919,10 +929,14 @@ def main():
         api_key_arg_name = "--anthropic-api-key"
         api_key_env_var = "ANTHROPIC_API_KEY"
         default_model = "claude-sonnet-5"
-    elif provider == "xAI":
-        api_key = args.xai_api_key or os.environ.get("XAI_API_KEY")
-        api_key_arg_name = "--xai-api-key"
-        api_key_env_var = "XAI_API_KEY"
+    elif provider == "SpaceXAI":
+        api_key = (
+            args.spacexai_api_key
+            or os.environ.get("SPACEXAI_API_KEY")
+            or os.environ.get("XAI_API_KEY")
+        )
+        api_key_arg_name = "--spacexai-api-key"
+        api_key_env_var = "SPACEXAI_API_KEY or XAI_API_KEY"
         default_model = "grok-4.5"
     elif provider == "DeepSeek":
         api_key = args.deepseek_api_key or os.environ.get("DEEPSEEK_API_KEY")
@@ -1027,7 +1041,10 @@ def main():
             google_api_key=(
                 api_key
                 if provider == "Google"
-                else os.environ.get("GOOGLE_API_KEY", "")
+                else (
+                    os.environ.get("GOOGLE_API_KEY")
+                    or os.environ.get("GEMINI_API_KEY", "")
+                )
             ),
             openai_api_key=(
                 api_key
@@ -1040,7 +1057,12 @@ def main():
                 else os.environ.get("ANTHROPIC_API_KEY", "")
             ),
             xai_api_key=(
-                api_key if provider == "xAI" else os.environ.get("XAI_API_KEY", "")
+                api_key
+                if provider == "SpaceXAI"
+                else (
+                    os.environ.get("SPACEXAI_API_KEY")
+                    or os.environ.get("XAI_API_KEY", "")
+                )
             ),
             deepseek_api_key=(
                 api_key

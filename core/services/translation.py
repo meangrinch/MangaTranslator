@@ -313,7 +313,7 @@ def _build_generation_config(
     - Special features (thinking, reasoning_effort, etc.)
 
     Args:
-        provider: Provider name (Google, OpenAI, Anthropic, xAI, OpenRouter, OpenAI-Compatible)
+        provider: Provider name (Google, OpenAI, Anthropic, SpaceXAI, OpenRouter, OpenAI-Compatible)
         model_name: Model identifier
         config: TranslationConfig with all settings
         debug: Whether to log debug messages
@@ -346,7 +346,7 @@ def _build_generation_config(
             is_reasoning = _is_reasoning_model_openai(model_name)
         elif provider == "Anthropic":
             is_reasoning = _is_reasoning_model_anthropic(model_name)
-        elif provider == "xAI":
+        elif provider == "SpaceXAI":
             is_reasoning = is_xai_reasoning_model(model_name)
         elif provider == "OpenRouter":
             is_reasoning = openrouter_is_reasoning_model(model_name, debug)
@@ -502,7 +502,7 @@ def _build_generation_config(
             generation_config["effort"] = config.effort
         return generation_config
 
-    elif provider == "xAI":
+    elif provider == "SpaceXAI":
         generation_config = {
             "max_tokens": max_tokens_value,
             "media_resolution": config.media_resolution,
@@ -770,10 +770,10 @@ def _call_llm_endpoint(
                 debug=debug,
                 enable_web_search=config.enable_web_search,
             )
-        elif provider == "xAI":
+        elif provider == "SpaceXAI":
             api_key = config.xai_api_key
             if not api_key:
-                raise TranslationError("xAI API key is missing.")
+                raise TranslationError("SpaceXAI API key is missing.")
             generation_config = _build_generation_config(
                 provider, model_name, config, debug, prompt_cache_key=prompt_cache_key
             )
@@ -1348,7 +1348,7 @@ def _perform_llm_ocr(
         bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
         supports_per_part_res = (
             provider == "Google" and is_gemini_3_model(config.model_name)
-        ) or provider == "xAI"
+        ) or provider == "SpaceXAI"
         if supports_per_part_res:
             bubble_part = _add_media_resolution_to_part(
                 bubble_part, config.media_resolution_bubbles
@@ -1496,7 +1496,7 @@ def call_translation_api_batch(
 
     model_name = config.model_name
     is_gemini_3 = provider == "Google" and is_gemini_3_model(model_name)
-    supports_per_part_res = is_gemini_3 or provider == "xAI"
+    supports_per_part_res = is_gemini_3 or provider == "SpaceXAI"
 
     base_parts = []
     for i, img_b64 in enumerate(images_b64):

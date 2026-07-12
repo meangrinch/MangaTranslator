@@ -106,7 +106,7 @@
   - "전체 페이지를 LLM으로 전송 (Send Full Page to LLM)" 옵션을 비활성화하세요.
   - "이전 컨텍스트 이미지 (Previous Context Images)" 및 "이전 컨텍스트 OCR 텍스트 (Previous Context OCR Text)"를 0으로 설정하세요.
   - "말풍선 최소 가로세로 픽셀 (Bubble Min Side Pixels)", "컨텍스트 이미지 최대 가로세로 픽셀 (Context Image Max Side Pixels)", "OSB 최소 가로세로 픽셀 (OSB Min Side Pixels)"의 대상 크기를 낮추세요.
-  - "미디어 해상도 (Media Resolution)"를 낮추세요 (Gemini 또는 xAI 모델을 사용하는 경우).
+  - "미디어 해상도 (Media Resolution)"를 낮추세요 (Gemini 또는 SpaceXAI 모델을 사용하는 경우).
   - "이미지 디테일 (Image Detail)"을 낮추세요 (OpenAI 모델을 사용하는 경우).
   - "manga-ocr" 또는 "paddleocr-vl" OCR 방식을 사용하세요 (다만, 고성능 VLM을 직접 사용하는 것보다 인식률이 떨어질 수 있습니다).
 
