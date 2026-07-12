@@ -42,7 +42,11 @@ from .image.image_utils import (
 )
 from .image.sorting import sort_bubbles_by_reading_order, sort_panels_by_reading_order
 from .ml.model_manager import get_model_manager
-from .outside_text_processor import process_outside_text
+from .outside_text_processor import (
+    finish_outside_text_work,
+    prepare_outside_text_work,
+    process_outside_text,
+)
 from .services.translation import (
     call_translation_api_batch,
     prepare_bubble_images_for_translation,
@@ -58,6 +62,72 @@ if TYPE_CHECKING:
 ENABLE_COMPONENT_ORDER_DEBUG = False
 PREVIOUS_CONTEXT_CACHE_MAX_SIZE = 32
 NATURAL_SORT_TOKEN_RE = re.compile(r"(\d+)")
+
+
+def _should_overlap_llm_with_inpaint(config: MangaTranslatorConfig) -> bool:
+    return (
+        bool(getattr(config, "batch_parallel_within_pages", False))
+        and bool(getattr(config, "batch_overlap_llm_with_inpaint", False))
+        and not config.cleaning_only
+        and not getattr(config, "test_mode", False)
+    )
+
+
+def _clean_speech_bubbles_for_page(
+    pil_image_processed: Image.Image,
+    bubble_data: List[Dict[str, Any]],
+    config: MangaTranslatorConfig,
+    device,
+    processing_scale: float,
+    verbose: bool,
+    fallback_cv_image: np.ndarray,
+) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
+    """Clean bubbles (including optional colored-bubble Flux). Returns (cv_image, info)."""
+    try:
+        use_otsu = config.cleaning.use_otsu_threshold
+        if config.cleaning.inpaint_colored_bubbles:
+            log_message(
+                "Flux inpainting enabled for colored bubbles",
+                verbose=verbose,
+            )
+
+        cleaned_image_cv, processed_bubbles_info = clean_speech_bubbles(
+            pil_image_processed,
+            config.yolo_model_path,
+            config.detection.confidence,
+            pre_computed_detections=bubble_data,
+            device=device,
+            thresholding_value=config.cleaning.thresholding_value,
+            use_otsu_threshold=use_otsu,
+            roi_shrink_px=config.cleaning.roi_shrink_px,
+            verbose=verbose,
+            processing_scale=processing_scale,
+            conjoined_confidence=config.detection.conjoined_confidence,
+            inpaint_colored_bubbles=config.cleaning.inpaint_colored_bubbles,
+            flux_hf_token=config.outside_text.huggingface_token,
+            flux_num_inference_steps=config.outside_text.flux_num_inference_steps,
+            flux_residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
+            flux_seed=config.outside_text.seed,
+            osb_text_verification=config.detection.use_osb_text_verification,
+            osb_text_hf_token=config.outside_text.huggingface_token,
+            inpaint_method=config.outside_text.inpainting_method,
+            flux_backend=config.outside_text.flux_backend,
+            flux_low_vram=config.outside_text.flux_low_vram,
+            flux_sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
+            flux_sdcpp_diffusion_quant=config.outside_text.flux_sdcpp_diffusion_quant,
+            flux_sdcpp_text_encoder_quant=config.outside_text.flux_sdcpp_text_encoder_quant,
+            flux_luminance_correction=config.outside_text.flux_luminance_correction,
+            flux_upscale_small_crops=config.outside_text.flux_upscale_small_crops,
+            bubble_detector_model=config.detection.bubble_detector_model,
+            request_coordinator=getattr(config, "request_coordinator", None),
+        )
+        return cleaned_image_cv, processed_bubbles_info
+    except CleaningError as e:
+        log_message(f"Cleaning failed: {e}", always_print=True)
+        return fallback_cv_image.copy(), []
+    except Exception as e:
+        log_message(f"Error during cleaning: {e}", always_print=True)
+        return fallback_cv_image.copy(), []
 
 
 def _natural_text_sort_key(text: str) -> Tuple[Tuple[int, Union[int, str], str], ...]:
@@ -763,18 +833,37 @@ def translate_and_render(
         if config.detection.use_panel_sorting:
             panels = debug_panels
 
-    # Process outside text detection and inpainting (bubble-aware)
-    pil_image_processed, outside_text_data = process_outside_text(
-        pil_image_processed,
-        config,
-        image_path,
-        image_format,
-        verbose,
-        bubble_data=bubble_data,
-        text_free_boxes=text_free_boxes,
-        panels=panels,
-    )
-    original_cv_image = pil_to_cv2(pil_image_processed)
+    # Process outside text (detect always; optionally defer inpainting for LLM overlap)
+    use_llm_inpaint_overlap = _should_overlap_llm_with_inpaint(config)
+    outside_work = None
+    if use_llm_inpaint_overlap:
+        outside_work = prepare_outside_text_work(
+            pil_image_processed,
+            config,
+            image_path,
+            image_format,
+            verbose,
+            bubble_data=bubble_data,
+            text_free_boxes=text_free_boxes,
+            panels=panels,
+        )
+        outside_text_data = (
+            outside_work.outside_text_data if outside_work is not None else []
+        )
+        # Bubble/OSB LLM crops use the pre-inpaint page image
+        original_cv_image = pil_to_cv2(pil_image_processed)
+    else:
+        pil_image_processed, outside_text_data = process_outside_text(
+            pil_image_processed,
+            config,
+            image_path,
+            image_format,
+            verbose,
+            bubble_data=bubble_data,
+            text_free_boxes=text_free_boxes,
+            panels=panels,
+        )
+        original_cv_image = pil_to_cv2(pil_image_processed)
 
     full_image_b64 = None
     full_image_mime_type = None
@@ -866,67 +955,39 @@ def translate_and_render(
         if cancellation_manager and cancellation_manager.is_cancelled():
             raise CancellationError("Process cancelled by user.")
 
-        if bubble_data:
-            log_message("Cleaning speech bubbles...", verbose=verbose)
-            try:
-                use_otsu = config.cleaning.use_otsu_threshold
-                if config.cleaning.inpaint_colored_bubbles:
-                    log_message(
-                        "Flux inpainting enabled for colored bubbles",
-                        verbose=verbose,
+        processed_bubbles_info: List[Dict[str, Any]] = []
+        pil_cleaned_image = pil_image_processed
+        if not use_llm_inpaint_overlap:
+            if bubble_data:
+                log_message("Cleaning speech bubbles...", verbose=verbose)
+                cleaned_image_cv, processed_bubbles_info = (
+                    _clean_speech_bubbles_for_page(
+                        pil_image_processed,
+                        bubble_data,
+                        config,
+                        device,
+                        processing_scale,
+                        verbose,
+                        original_cv_image,
                     )
-
-                cleaned_image_cv, processed_bubbles_info = clean_speech_bubbles(
-                    pil_image_processed,
-                    config.yolo_model_path,
-                    config.detection.confidence,
-                    pre_computed_detections=bubble_data,
-                    device=device,
-                    thresholding_value=config.cleaning.thresholding_value,
-                    use_otsu_threshold=use_otsu,
-                    roi_shrink_px=config.cleaning.roi_shrink_px,
-                    verbose=verbose,
-                    processing_scale=processing_scale,
-                    conjoined_confidence=config.detection.conjoined_confidence,
-                    inpaint_colored_bubbles=config.cleaning.inpaint_colored_bubbles,
-                    flux_hf_token=config.outside_text.huggingface_token,
-                    flux_num_inference_steps=config.outside_text.flux_num_inference_steps,
-                    flux_residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
-                    flux_seed=config.outside_text.seed,
-                    osb_text_verification=config.detection.use_osb_text_verification,
-                    osb_text_hf_token=config.outside_text.huggingface_token,
-                    inpaint_method=config.outside_text.inpainting_method,
-                    flux_backend=config.outside_text.flux_backend,
-                    flux_low_vram=config.outside_text.flux_low_vram,
-                    flux_sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
-                    flux_sdcpp_diffusion_quant=config.outside_text.flux_sdcpp_diffusion_quant,
-                    flux_sdcpp_text_encoder_quant=config.outside_text.flux_sdcpp_text_encoder_quant,
-                    flux_luminance_correction=config.outside_text.flux_luminance_correction,
-                    flux_upscale_small_crops=config.outside_text.flux_upscale_small_crops,
-                    bubble_detector_model=config.detection.bubble_detector_model,
-                    request_coordinator=getattr(config, "request_coordinator", None),
                 )
-            except CleaningError as e:
-                log_message(f"Cleaning failed: {e}", always_print=True)
-                cleaned_image_cv = original_cv_image.copy()
+                pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
+                if pil_cleaned_image.mode != target_mode:
+                    log_message(
+                        f"Converting cleaned image to {target_mode}", verbose=verbose
+                    )
+                    pil_cleaned_image = pil_cleaned_image.convert(target_mode)
+                final_image_to_save = pil_cleaned_image
+            else:
                 processed_bubbles_info = []
-            except Exception as e:
-                log_message(f"Error during cleaning: {e}", always_print=True)
-                cleaned_image_cv = original_cv_image.copy()
-                processed_bubbles_info = []
-
-            pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
-            if pil_cleaned_image.mode != target_mode:
-                log_message(
-                    f"Converting cleaned image to {target_mode}", verbose=verbose
-                )
-                pil_cleaned_image = pil_cleaned_image.convert(target_mode)
-            final_image_to_save = pil_cleaned_image
+                pil_cleaned_image = pil_image_processed
+                if pil_cleaned_image.mode != target_mode:
+                    log_message(f"Converting image to {target_mode}", verbose=verbose)
+                    pil_cleaned_image = pil_cleaned_image.convert(target_mode)
+                final_image_to_save = pil_cleaned_image
         else:
-            processed_bubbles_info = []
-            pil_cleaned_image = pil_image_processed
+            # Cleaning deferred until it can run concurrently with the LLM
             if pil_cleaned_image.mode != target_mode:
-                log_message(f"Converting image to {target_mode}", verbose=verbose)
                 pil_cleaned_image = pil_cleaned_image.convert(target_mode)
             final_image_to_save = pil_cleaned_image
 
@@ -1029,6 +1090,36 @@ def translate_and_render(
                     "No valid bubble images or outside text for translation",
                     always_print=True,
                 )
+                if use_llm_inpaint_overlap and (
+                    outside_work is not None or bubble_data
+                ):
+                    page_image = pil_image_processed
+                    osb_data = outside_text_data
+                    if outside_work is not None:
+                        page_image, osb_data = finish_outside_text_work(outside_work)
+                    fallback_cv = pil_to_cv2(page_image)
+                    if bubble_data:
+                        log_message("Cleaning speech bubbles...", verbose=verbose)
+                        cleaned_image_cv, processed_bubbles_info = (
+                            _clean_speech_bubbles_for_page(
+                                page_image,
+                                bubble_data,
+                                config,
+                                device,
+                                processing_scale,
+                                verbose,
+                                fallback_cv,
+                            )
+                        )
+                    else:
+                        cleaned_image_cv = fallback_cv
+                        processed_bubbles_info = []
+                    pil_image_processed = page_image
+                    outside_text_data = osb_data
+                    pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
+                    if pil_cleaned_image.mode != target_mode:
+                        pil_cleaned_image = pil_cleaned_image.convert(target_mode)
+                    final_image_to_save = pil_cleaned_image
             else:  # Proceed if we have valid bubble data or outside text
                 if cancellation_manager and cancellation_manager.is_cancelled():
                     raise CancellationError("Process cancelled by user.")
@@ -1182,8 +1273,94 @@ def translate_and_render(
                 translated_texts = []
                 current_ocr_texts: List[str] = []
                 _provider_tag = f"[{config.translation.provider}:"
+
+                def _run_deferred_inpaint_and_clean():
+                    page_image = pil_image_processed
+                    osb_data = outside_text_data
+                    if outside_work is not None:
+                        page_image, osb_data = finish_outside_text_work(outside_work)
+                    fallback_cv = pil_to_cv2(page_image)
+                    clean_info: List[Dict[str, Any]] = []
+                    if bubble_data:
+                        log_message("Cleaning speech bubbles...", verbose=verbose)
+                        cleaned_cv, clean_info = _clean_speech_bubbles_for_page(
+                            page_image,
+                            bubble_data,
+                            config,
+                            device,
+                            processing_scale,
+                            verbose,
+                            fallback_cv,
+                        )
+                    else:
+                        cleaned_cv = fallback_cv
+                    return page_image, osb_data, cleaned_cv, clean_info
+
+                def _run_llm_translation() -> Tuple[List[str], List[str]]:
+                    ocr_texts: List[str] = []
+                    if previous_context_texts_provider is not None:
+                        resolved_previous_texts = (
+                            previous_context_texts_provider() or []
+                        )
+                    else:
+                        resolved_previous_texts = previous_context_texts
+                    context_parts = []
+                    if previous_context_images:
+                        image_page_count = len(previous_context_images)
+                        context_parts.append(
+                            f"Previous Context Images: {image_page_count} page(s)"
+                        )
+                    if resolved_previous_texts:
+                        usable_context_text_pages = sum(
+                            1
+                            for page_texts in resolved_previous_texts
+                            if any(
+                                (text or "").strip()
+                                and (text or "").strip() != "[OCR FAILED]"
+                                for text in (page_texts or [])
+                            )
+                        )
+                        if usable_context_text_pages:
+                            context_parts.append(
+                                "Previous Context OCR Text: "
+                                f"{usable_context_text_pages} page(s)"
+                            )
+                    context_suffix = (
+                        f" ({', '.join(context_parts)})" if context_parts else ""
+                    )
+                    log_message(
+                        f"Translating {len(bubble_images_b64)} bubbles: "
+                        f"{config.translation.input_language} → {config.translation.output_language}"
+                        f"{context_suffix}",
+                        always_print=True,
+                    )
+                    texts = call_translation_api_batch(
+                        config=config.translation,
+                        images_b64=bubble_images_b64,
+                        full_image_b64=full_image_b64 or "",
+                        mime_types=bubble_mime_types,
+                        full_image_mime_type=full_image_mime_type or "image/jpeg",
+                        bubble_metadata=sorted_bubble_data,
+                        previous_context_images=previous_context_images,
+                        previous_context_texts=resolved_previous_texts,
+                        ocr_texts_output=ocr_texts,
+                        debug=verbose,
+                    )
+                    return texts, ocr_texts
+
                 if not bubble_images_b64:
                     log_message("No valid bubbles after sorting", always_print=True)
+                    if use_llm_inpaint_overlap:
+                        (
+                            pil_image_processed,
+                            outside_text_data,
+                            cleaned_image_cv,
+                            processed_bubbles_info,
+                        ) = _run_deferred_inpaint_and_clean()
+                        pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
+                        if pil_cleaned_image.mode != target_mode:
+                            pil_cleaned_image = pil_cleaned_image.convert(target_mode)
+                        final_image_to_save = pil_cleaned_image
                 else:
                     if getattr(config, "test_mode", False):
                         translated_texts = generate_test_placeholders(
@@ -1198,57 +1375,93 @@ def translate_and_render(
                             osb_outline_width=osb_outline_width,
                             verbose=verbose,
                         )
+                    elif use_llm_inpaint_overlap:
+                        log_message(
+                            "Running LLM translation concurrently with inpainting",
+                            always_print=True,
+                        )
+                        with ThreadPoolExecutor(max_workers=2) as overlap_executor:
+                            inpaint_future = overlap_executor.submit(
+                                _run_deferred_inpaint_and_clean
+                            )
+                            translate_future = overlap_executor.submit(
+                                _run_llm_translation
+                            )
+                            try:
+                                (
+                                    pil_image_processed,
+                                    outside_text_data,
+                                    cleaned_image_cv,
+                                    processed_bubbles_info,
+                                ) = inpaint_future.result()
+                            except Exception:
+                                translate_future.cancel()
+                                raise
+
+                            pil_cleaned_image = cv2_to_pil(cleaned_image_cv)
+                            if pil_cleaned_image.mode != target_mode:
+                                pil_cleaned_image = pil_cleaned_image.convert(
+                                    target_mode
+                                )
+                            final_image_to_save = pil_cleaned_image
+
+                            try:
+                                translated_texts, current_ocr_texts = (
+                                    translate_future.result()
+                                )
+                                if current_ocr_texts and ocr_texts_out is not None:
+                                    ocr_texts_out.extend(current_ocr_texts)
+                            except TranslationError as e:
+                                error_str = str(e).lower()
+                                critical_tokens = (
+                                    "429",
+                                    "rate limit",
+                                    "rate-limit",
+                                    "auth",
+                                    "unauthorized",
+                                    "forbidden",
+                                    "payment",
+                                    "quota",
+                                    "empty response",
+                                    "api failed",
+                                )
+                                if any(token in error_str for token in critical_tokens):
+                                    raise
+
+                                log_message(
+                                    f"Translation failed: {e}", always_print=True
+                                )
+                                translated_texts = [f"[Translation Error: {e}]"] * len(
+                                    bubble_images_b64
+                                )
+                            except Exception as e:
+                                log_message(
+                                    f"Translation API error: {e}", always_print=True
+                                )
+                                translated_texts = [
+                                    "[Translation Error: API call raised exception]"
+                                    for _ in sorted_bubble_data
+                                ]
+
+                        valid_translations = [
+                            t
+                            for t in translated_texts
+                            if t
+                            and not t.startswith("[Translation Error")
+                            and not t.startswith("API Error")
+                            and not t.startswith(_provider_tag)
+                            and t.strip()
+                            not in {
+                                "[OCR FAILED]",
+                                "[Empty response / no content]",
+                            }
+                        ]
+
+                        if bubble_images_b64 and not valid_translations:
+                            raise TranslationError("All bubbles failed.")
                     else:
                         try:
-                            if previous_context_texts_provider is not None:
-                                previous_context_texts = (
-                                    previous_context_texts_provider() or []
-                                )
-                            context_parts = []
-                            if previous_context_images:
-                                image_page_count = len(previous_context_images)
-                                context_parts.append(
-                                    f"Previous Context Images: {image_page_count} page(s)"
-                                )
-                            if previous_context_texts:
-                                usable_context_text_pages = sum(
-                                    1
-                                    for page_texts in previous_context_texts
-                                    if any(
-                                        (text or "").strip()
-                                        and (text or "").strip() != "[OCR FAILED]"
-                                        for text in (page_texts or [])
-                                    )
-                                )
-                                if usable_context_text_pages:
-                                    context_parts.append(
-                                        "Previous Context OCR Text: "
-                                        f"{usable_context_text_pages} page(s)"
-                                    )
-                            context_suffix = (
-                                f" ({', '.join(context_parts)})"
-                                if context_parts
-                                else ""
-                            )
-                            log_message(
-                                f"Translating {len(bubble_images_b64)} bubbles: "
-                                f"{config.translation.input_language} → {config.translation.output_language}"
-                                f"{context_suffix}",
-                                always_print=True,
-                            )
-                            translated_texts = call_translation_api_batch(
-                                config=config.translation,
-                                images_b64=bubble_images_b64,
-                                full_image_b64=full_image_b64 or "",
-                                mime_types=bubble_mime_types,
-                                full_image_mime_type=full_image_mime_type
-                                or "image/jpeg",
-                                bubble_metadata=sorted_bubble_data,
-                                previous_context_images=previous_context_images,
-                                previous_context_texts=previous_context_texts,
-                                ocr_texts_output=current_ocr_texts,
-                                debug=verbose,
-                            )
+                            translated_texts, current_ocr_texts = _run_llm_translation()
                             if current_ocr_texts and ocr_texts_out is not None:
                                 ocr_texts_out.extend(current_ocr_texts)
                         except TranslationError as e:
@@ -1871,9 +2084,15 @@ async def _batch_translate_parallel(
             "Intra-page parallel requests enabled",
             always_print=True,
         )
+        if getattr(config, "batch_overlap_llm_with_inpaint", False):
+            log_message(
+                "LLM/inpaint overlap enabled",
+                always_print=True,
+            )
     else:
         config.request_coordinator = None
         config.translation.request_coordinator = None
+        config.batch_overlap_llm_with_inpaint = False
 
     # -- Phase 1: process the first image sequentially to warm up models --
     first_img = image_files[0]

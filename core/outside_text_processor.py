@@ -4,6 +4,7 @@ import os
 import random
 import re
 import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -28,7 +29,185 @@ from utils.logging import log_message
 OSB_EXPANSION_PIXEL_BUFFER = 5  # for bubbles, nearby OSB regions, panels
 
 
-def process_outside_text(
+@dataclass
+class OutsideTextWork:
+    """Prepared outside-text state: translation data ready, inpaint still pending."""
+
+    pil_image: Image.Image
+    config: MangaTranslatorConfig
+    image_path: Union[str, Path]
+    image_format: Optional[str]
+    verbose: bool
+    outside_text_results: list
+    raw_outside_text_results: list
+    original_text_colors: dict
+    total_bubble_mask: Any
+    outside_detector: Any
+    mask_groups: list
+    img_w: int
+    img_h: int
+    mime_type: str
+    cv2_ext: str
+    outside_text_data: List[Dict[str, Any]] = field(default_factory=list)
+
+
+def _build_outside_text_data(
+    pil_image: Image.Image,
+    outside_text_results,
+    raw_outside_text_results,
+    original_text_colors,
+    extracted_text_colors,
+    none_skipped_clip_bboxes,
+    mime_type: str,
+    cv2_ext: str,
+    config: MangaTranslatorConfig,
+    verbose: bool,
+) -> List[Dict[str, Any]]:
+    outside_text_data = []
+    original_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+
+    for expanded_res, raw_res in zip(outside_text_results, raw_outside_text_results):
+        bbox_coords, conf = expanded_res
+        raw_coords, _ = raw_res
+
+        x1, y1, x2, y2 = [int(c) for c in bbox_coords]
+        bbox_tuple = (x1, y1, x2, y2)
+        raw_bbox_tuple = tuple(int(c) for c in raw_coords)
+
+        outside_text_image_cv = original_cv_image[y1:y2, x1:x2].copy()
+        outside_text_image_pil = cv2_to_pil(outside_text_image_cv)
+        original_crop_pil = outside_text_image_pil.copy()
+
+        osb_upscale_method = (
+            "none" if config.test_mode else config.translation.upscale_method
+        )
+
+        if osb_upscale_method == "model":
+            model_manager = get_model_manager()
+            upscale_model = model_manager.load_upscale(verbose=verbose)
+            final_text_pil = process_bubble_image_cached(
+                outside_text_image_pil,
+                upscale_model,
+                config.device,
+                config.translation.osb_min_side_pixels,
+                "min",
+                "model",
+                verbose,
+            )
+            model_manager.clear_cache()
+        elif osb_upscale_method == "model_lite":
+            model_manager = get_model_manager()
+            upscale_model = model_manager.load_upscale_lite(verbose=verbose)
+            final_text_pil = process_bubble_image_cached(
+                outside_text_image_pil,
+                upscale_model,
+                config.device,
+                config.translation.osb_min_side_pixels,
+                "min",
+                "model_lite",
+                verbose,
+            )
+            model_manager.clear_cache()
+        elif osb_upscale_method == "lanczos":
+            w, h = outside_text_image_pil.size
+            min_side = min(w, h)
+            if min_side < config.translation.osb_min_side_pixels:
+                scale_factor = config.translation.osb_min_side_pixels / min_side
+                new_w = int(w * scale_factor)
+                new_h = int(h * scale_factor)
+                resized_text = outside_text_image_pil.resize(
+                    (new_w, new_h), Image.LANCZOS
+                )
+            else:
+                resized_text = outside_text_image_pil
+            final_text_pil = resized_text
+        else:
+            final_text_pil = outside_text_image_pil
+
+        outside_text_image_cv = pil_to_cv2(final_text_pil)
+
+        w = max(1, x2 - x1)
+        h = max(1, y2 - y1)
+        aspect_ratio = float(h) / float(w)
+
+        needs_text_bg = False
+        if none_skipped_clip_bboxes:
+            bcx = (x1 + x2) / 2
+            bcy = (y1 + y2) / 2
+            for clip_bbox in none_skipped_clip_bboxes:
+                cx1, cy1, cx2, cy2 = clip_bbox
+                if cx1 <= bcx <= cx2 and cy1 <= bcy <= cy2:
+                    needs_text_bg = True
+                    break
+
+        try:
+            is_success, buffer = cv2.imencode(cv2_ext, outside_text_image_cv)
+            if is_success:
+                image_b64 = base64.b64encode(buffer).decode("utf-8")
+                outside_text_data.append(
+                    {
+                        "bbox": bbox_tuple,
+                        "original_bbox": raw_bbox_tuple,
+                        "confidence": conf,
+                        "is_outside_text": True,
+                        "image_b64": image_b64,
+                        "mime_type": mime_type,
+                        "is_dark_text": original_text_colors.get(raw_bbox_tuple, True),
+                        "text_color_rgb": extracted_text_colors.get(raw_bbox_tuple),
+                        "aspect_ratio": aspect_ratio,
+                        "needs_text_background": needs_text_bg,
+                        "original_crop_pil": original_crop_pil,
+                    }
+                )
+        except Exception as e:
+            log_message(
+                f"Error encoding outside text bbox {(x1, y1, x2, y2)}: {e}",
+                verbose=verbose,
+            )
+
+    return outside_text_data
+
+
+def _apply_inpaint_render_metadata(
+    outside_text_data: List[Dict[str, Any]],
+    extracted_text_colors: dict,
+    none_skipped_clip_bboxes: set,
+) -> None:
+    """Update existing OSB entries in-place with render-only fields from inpainting."""
+    for item in outside_text_data:
+        raw_bbox_tuple = item.get("original_bbox")
+        bbox = item.get("bbox")
+        if raw_bbox_tuple is not None and raw_bbox_tuple in extracted_text_colors:
+            item["text_color_rgb"] = extracted_text_colors[raw_bbox_tuple]
+        elif item.get("text_color_rgb") is None and extracted_text_colors and bbox:
+            x1, y1, x2, y2 = bbox
+            bcx, bcy = (x1 + x2) / 2, (y1 + y2) / 2
+            for key, color in extracted_text_colors.items():
+                if key == raw_bbox_tuple or key == bbox:
+                    item["text_color_rgb"] = color
+                    break
+                if (
+                    isinstance(key, tuple)
+                    and len(key) == 4
+                    and key[0] <= bcx <= key[2]
+                    and key[1] <= bcy <= key[3]
+                ):
+                    item["text_color_rgb"] = color
+                    break
+
+        needs_text_bg = False
+        if none_skipped_clip_bboxes and bbox is not None:
+            x1, y1, x2, y2 = bbox
+            bcx, bcy = (x1 + x2) / 2, (y1 + y2) / 2
+            for clip_bbox in none_skipped_clip_bboxes:
+                cx1, cy1, cx2, cy2 = clip_bbox
+                if cx1 <= bcx <= cx2 and cy1 <= bcy <= cy2:
+                    needs_text_bg = True
+                    break
+        item["needs_text_background"] = needs_text_bg
+
+
+def prepare_outside_text_work(
     pil_image: Image.Image,
     config: MangaTranslatorConfig,
     image_path: Union[str, Path],
@@ -37,30 +216,10 @@ def process_outside_text(
     bubble_data: Optional[List[Dict[str, Any]]] = None,
     text_free_boxes: Optional[List[List[float]]] = None,
     panels: Optional[List[Tuple[int, int, int, int]]] = None,
-) -> Tuple[Image.Image, List[Dict[str, Any]]]:
-    """
-    Process outside text detection, inpainting, and prepare data for translation.
-
-    This function handles the complete outside text processing pipeline:
-    1. Detects text outside speech bubbles using OCR
-    2. Inpaints the detected text regions using FluxKontext
-    3. Prepares the outside text data for translation API calls
-
-    Args:
-        pil_image: The PIL image to process
-        config: MangaTranslatorConfig containing all settings
-        image_path: Path to the original image file
-        image_format: Original image format (PNG, JPEG, etc.)
-        processing_scale: The scale factor for image processing
-        verbose: Whether to print detailed logging
-
-    Returns:
-        Tuple containing:
-        - processed_pil_image: The image after outside text inpainting
-        - outside_text_data: List of dicts with outside text information for translation
-    """
+) -> Optional[OutsideTextWork]:
+    """Detect outside text and build translation crops without inpainting."""
     if not config.outside_text.enabled:
-        return pil_image, []
+        return None
 
     log_message("Detecting text outside speech bubbles...", verbose=verbose)
 
@@ -83,7 +242,7 @@ def process_outside_text(
 
         if not outside_text_results:
             log_message("No outside text regions found", verbose=verbose)
-            return pil_image, []
+            return None
 
         img_w, img_h = pil_image.size
 
@@ -115,7 +274,7 @@ def process_outside_text(
                     "No outside text regions remaining after min area filter",
                     verbose=verbose,
                 )
-                return pil_image, []
+                return None
 
         # Filter out probable page numbers
         # Only run OCR on "suspicious" detections (small & in margin)
@@ -418,6 +577,76 @@ def process_outside_text(
                 verbose=verbose,
             )
 
+        mask_groups, _ = outside_detector.get_text_masks(
+            str(image_path),
+            bbox_expansion_percent=config.outside_text.bbox_expansion_percent,
+            text_box_proximity_ratio=config.outside_text.text_box_proximity_ratio,
+            verbose=verbose,
+            image_override=pil_image,
+            existing_results=raw_outside_text_results,
+        )
+
+        outside_text_data = _build_outside_text_data(
+            pil_image=pil_image,
+            outside_text_results=outside_text_results,
+            raw_outside_text_results=raw_outside_text_results,
+            original_text_colors=original_text_colors,
+            extracted_text_colors={},
+            none_skipped_clip_bboxes=set(),
+            mime_type=mime_type,
+            cv2_ext=cv2_ext,
+            config=config,
+            verbose=verbose,
+        )
+
+        return OutsideTextWork(
+            pil_image=pil_image,
+            config=config,
+            image_path=image_path,
+            image_format=image_format,
+            verbose=verbose,
+            outside_text_results=outside_text_results,
+            raw_outside_text_results=raw_outside_text_results,
+            original_text_colors=original_text_colors,
+            total_bubble_mask=total_bubble_mask,
+            outside_detector=outside_detector,
+            mask_groups=mask_groups,
+            img_w=img_w,
+            img_h=img_h,
+            mime_type=mime_type,
+            cv2_ext=cv2_ext,
+            outside_text_data=outside_text_data,
+        )
+
+    except Exception as e:
+        log_message(
+            f"Error during outside text detection: {e}",
+            always_print=True,
+        )
+        return None
+
+
+def finish_outside_text_work(
+    work: OutsideTextWork,
+) -> Tuple[Image.Image, List[Dict[str, Any]]]:
+    """Run OSB inpainting for prepared work and attach render metadata."""
+    pil_image = work.pil_image
+    config = work.config
+    verbose = work.verbose
+    outside_text_results = work.outside_text_results
+    raw_outside_text_results = work.raw_outside_text_results
+    original_text_colors = work.original_text_colors
+    total_bubble_mask = work.total_bubble_mask
+    mask_groups = work.mask_groups
+    img_w = work.img_w
+    img_h = work.img_h
+    outside_text_data = work.outside_text_data
+
+    extracted_text_colors = {}
+    none_skipped_clip_bboxes = set()
+    current_image = pil_image
+
+    try:
         log_message("Inpainting outside text regions...", verbose=verbose)
 
         # Create inpainter based on selected method
@@ -520,16 +749,6 @@ def process_outside_text(
         elif inpainting_method == "opencv" or inpainter is None:
             inpainter = None
             log_message("Using OpenCV simple fill for inpainting", verbose=verbose)
-
-        mask_groups, _ = outside_detector.get_text_masks(
-            str(image_path),
-            bbox_expansion_percent=config.outside_text.bbox_expansion_percent,
-            text_box_proximity_ratio=config.outside_text.text_box_proximity_ratio,
-            verbose=verbose,
-            image_override=pil_image,
-            existing_results=raw_outside_text_results,
-        )
-
         current_image = pil_image
         temp_files = []
         none_skipped_clip_bboxes = set()
@@ -1403,121 +1622,62 @@ def process_outside_text(
                     except Exception:
                         pass
 
-        outside_text_data = []
-        original_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-
-        for expanded_res, raw_res in zip(
-            outside_text_results, raw_outside_text_results
-        ):
-            bbox_coords, conf = expanded_res
-            raw_coords, _ = raw_res
-
-            x1, y1, x2, y2 = [int(c) for c in bbox_coords]
-            bbox_tuple = (x1, y1, x2, y2)
-            raw_bbox_tuple = tuple(int(c) for c in raw_coords)
-
-            outside_text_image_cv = original_cv_image[y1:y2, x1:x2].copy()
-
-            outside_text_image_pil = cv2_to_pil(outside_text_image_cv)
-
-            original_crop_pil = outside_text_image_pil.copy()
-
-            # Disable upscaling in test_mode
-            osb_upscale_method = (
-                "none" if config.test_mode else config.translation.upscale_method
-            )
-
-            if osb_upscale_method == "model":
-                model_manager = get_model_manager()
-                upscale_model = model_manager.load_upscale(verbose=verbose)
-                final_text_pil = process_bubble_image_cached(
-                    outside_text_image_pil,
-                    upscale_model,
-                    config.device,
-                    config.translation.osb_min_side_pixels,
-                    "min",
-                    "model",
-                    verbose,
-                )
-                model_manager.clear_cache()
-            elif osb_upscale_method == "model_lite":
-                model_manager = get_model_manager()
-                upscale_model = model_manager.load_upscale_lite(verbose=verbose)
-                final_text_pil = process_bubble_image_cached(
-                    outside_text_image_pil,
-                    upscale_model,
-                    config.device,
-                    config.translation.osb_min_side_pixels,
-                    "min",
-                    "model_lite",
-                    verbose,
-                )
-                model_manager.clear_cache()
-            elif osb_upscale_method == "lanczos":
-                w, h = outside_text_image_pil.size
-                min_side = min(w, h)
-                if min_side < config.translation.osb_min_side_pixels:
-                    scale_factor = config.translation.osb_min_side_pixels / min_side
-                    new_w = int(w * scale_factor)
-                    new_h = int(h * scale_factor)
-                    resized_text = outside_text_image_pil.resize(
-                        (new_w, new_h), Image.LANCZOS
-                    )
-                else:
-                    resized_text = outside_text_image_pil
-                final_text_pil = resized_text
-            else:
-                final_text_pil = outside_text_image_pil
-
-            outside_text_image_cv = pil_to_cv2(final_text_pil)
-
-            w = max(1, x2 - x1)
-            h = max(1, y2 - y1)
-            aspect_ratio = float(h) / float(w)
-
-            needs_text_bg = False
-            if none_skipped_clip_bboxes:
-                bcx = (x1 + x2) / 2
-                bcy = (y1 + y2) / 2
-                for clip_bbox in none_skipped_clip_bboxes:
-                    cx1, cy1, cx2, cy2 = clip_bbox
-                    if cx1 <= bcx <= cx2 and cy1 <= bcy <= cy2:
-                        needs_text_bg = True
-                        break
-
-            try:
-                is_success, buffer = cv2.imencode(cv2_ext, outside_text_image_cv)
-                if is_success:
-                    image_b64 = base64.b64encode(buffer).decode("utf-8")
-
-                    outside_text_data.append(
-                        {
-                            "bbox": bbox_tuple,
-                            "original_bbox": raw_bbox_tuple,
-                            "confidence": conf,
-                            "is_outside_text": True,
-                            "image_b64": image_b64,
-                            "mime_type": mime_type,
-                            "is_dark_text": original_text_colors.get(
-                                raw_bbox_tuple, True
-                            ),
-                            "text_color_rgb": extracted_text_colors.get(raw_bbox_tuple),
-                            "aspect_ratio": aspect_ratio,
-                            "needs_text_background": needs_text_bg,
-                            "original_crop_pil": original_crop_pil,
-                        }
-                    )
-            except Exception as e:
-                log_message(
-                    f"Error encoding outside text bbox {(x1, y1, x2, y2)}: {e}",
-                    verbose=verbose,
-                )
-
+        _apply_inpaint_render_metadata(
+            outside_text_data,
+            extracted_text_colors,
+            none_skipped_clip_bboxes,
+        )
         return current_image, outside_text_data
 
     except Exception as e:
         log_message(
-            f"Error during outside text detection/inpainting: {e}",
+            f"Error during outside text inpainting: {e}",
             always_print=True,
         )
+        return pil_image, outside_text_data
+
+
+def process_outside_text(
+    pil_image: Image.Image,
+    config: MangaTranslatorConfig,
+    image_path: Union[str, Path],
+    image_format: Optional[str],
+    verbose: bool = False,
+    bubble_data: Optional[List[Dict[str, Any]]] = None,
+    text_free_boxes: Optional[List[List[float]]] = None,
+    panels: Optional[List[Tuple[int, int, int, int]]] = None,
+) -> Tuple[Image.Image, List[Dict[str, Any]]]:
+    """
+    Process outside text detection, inpainting, and prepare data for translation.
+
+    This function handles the complete outside text processing pipeline:
+    1. Detects text outside speech bubbles using OCR
+    2. Inpaints the detected text regions using FluxKontext
+    3. Prepares the outside text data for translation API calls
+
+    Args:
+        pil_image: The PIL image to process
+        config: MangaTranslatorConfig containing all settings
+        image_path: Path to the original image file
+        image_format: Original image format (PNG, JPEG, etc.)
+        processing_scale: The scale factor for image processing
+        verbose: Whether to print detailed logging
+
+    Returns:
+        Tuple containing:
+        - processed_pil_image: The image after outside text inpainting
+        - outside_text_data: List of dicts with outside text information for translation
+    """
+    work = prepare_outside_text_work(
+        pil_image,
+        config,
+        image_path,
+        image_format,
+        verbose=verbose,
+        bubble_data=bubble_data,
+        text_free_boxes=text_free_boxes,
+        panels=panels,
+    )
+    if work is None:
         return pil_image, []
+    return finish_outside_text_work(work)

@@ -222,6 +222,7 @@ class UIConfigState:
     batch_special_instructions: Optional[str] = None
     batch_parallel_requests: int = 1
     batch_parallel_within_pages: bool = False
+    batch_overlap_llm_with_inpaint: bool = False
     batch_previous_context_image_count: int = 0
     batch_previous_context_text_count: int = 3
 
@@ -352,6 +353,7 @@ class UIConfigState:
             "batch_special_instructions": self.batch_special_instructions or "",
             "batch_parallel_requests": self.batch_parallel_requests,
             "batch_parallel_within_pages": self.batch_parallel_within_pages,
+            "batch_overlap_llm_with_inpaint": self.batch_overlap_llm_with_inpaint,
             "batch_previous_context_image_count": (
                 self.batch_previous_context_image_count
                 if (
@@ -679,6 +681,9 @@ class UIConfigState:
             batch_parallel_within_pages=bool(
                 data.get("batch_parallel_within_pages", False)
             ),
+            batch_overlap_llm_with_inpaint=bool(
+                data.get("batch_overlap_llm_with_inpaint", False)
+            ),
             batch_previous_context_image_count=int(
                 data.get("batch_previous_context_image_count", 0)
             ),
@@ -875,6 +880,11 @@ def map_ui_to_backend_config(
         parallel_requests=ui_state.batch_parallel_requests if is_batch else 1,
         batch_parallel_within_pages=(
             bool(ui_state.batch_parallel_within_pages) if is_batch else False
+        ),
+        batch_overlap_llm_with_inpaint=(
+            bool(ui_state.batch_overlap_llm_with_inpaint)
+            if is_batch and ui_state.batch_parallel_within_pages
+            else False
         ),
     )
 

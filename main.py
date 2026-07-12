@@ -56,6 +56,14 @@ def main():
         ),
     )
     parser.add_argument(
+        "--batch-overlap-llm-with-inpaint",
+        action="store_true",
+        help=(
+            "Batch only: when used with --batch-parallel-within-pages, "
+            "run LLM translation concurrently with OSB/bubble Flux inpainting"
+        ),
+    )
+    parser.add_argument(
         "--batch-previous-context-images",
         type=int,
         default=0,
@@ -1021,6 +1029,11 @@ def main():
         parallel_requests=args.parallel_requests,
         batch_parallel_within_pages=bool(
             args.batch and args.batch_parallel_within_pages
+        ),
+        batch_overlap_llm_with_inpaint=bool(
+            args.batch
+            and args.batch_parallel_within_pages
+            and args.batch_overlap_llm_with_inpaint
         ),
         detection=DetectionConfig(
             confidence=args.confidence,

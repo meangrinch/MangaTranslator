@@ -427,6 +427,22 @@ def create_layout(
                                 "page."
                             ),
                         )
+                        batch_overlap_llm_with_inpaint = gr.Checkbox(
+                            label="Overlap LLM With Inpainting",
+                            value=bool(
+                                saved_settings.get(
+                                    "batch_overlap_llm_with_inpaint", False
+                                )
+                            ),
+                            interactive=bool(
+                                saved_settings.get("batch_parallel_within_pages", False)
+                            ),
+                            info=(
+                                "When within-page parallel requests are enabled, "
+                                "run LLM translation at the same time as OSB and "
+                                "bubble Flux inpainting."
+                            ),
+                        )
                         batch_previous_context_image_count = gr.Slider(
                             minimum=0,
                             maximum=10,
@@ -2244,6 +2260,7 @@ def create_layout(
             auto_scale,
             batch_parallel_requests,
             batch_parallel_within_pages,
+            batch_overlap_llm_with_inpaint,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -2366,6 +2383,7 @@ def create_layout(
             auto_scale,
             batch_parallel_requests,
             batch_parallel_within_pages,
+            batch_overlap_llm_with_inpaint,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -2488,6 +2506,7 @@ def create_layout(
             batch_special_instructions,
             batch_parallel_requests,
             batch_parallel_within_pages,
+            batch_overlap_llm_with_inpaint,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -2611,6 +2630,7 @@ def create_layout(
             batch_special_instructions,
             batch_parallel_requests,
             batch_parallel_within_pages,
+            batch_overlap_llm_with_inpaint,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -3237,6 +3257,17 @@ def create_layout(
                 context_image_max_side_pixels,
                 osb_min_side_pixels,
             ],
+            queue=False,
+        )
+
+        batch_parallel_within_pages.change(
+            fn=lambda enabled: (
+                gr.update(interactive=True)
+                if enabled
+                else gr.update(interactive=False, value=False)
+            ),
+            inputs=batch_parallel_within_pages,
+            outputs=batch_overlap_llm_with_inpaint,
             queue=False,
         )
 
