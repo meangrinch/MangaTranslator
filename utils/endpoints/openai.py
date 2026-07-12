@@ -6,7 +6,13 @@ import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
-from utils.model_metadata import get_gpt5_generation, is_gpt5_series
+from utils.model_metadata import (
+    get_gpt5_generation,
+    is_gpt5_series,
+    resolve_openai_api_model_name,
+    supports_gpt5_max_effort,
+    supports_gpt5_xhigh_effort,
+)
 
 
 def call_openai_endpoint(
@@ -78,8 +84,9 @@ def call_openai_endpoint(
             log_message(f"Invalid image part format: {part}", always_print=True)
     input_content.append({"type": "input_text", "text": text_part["text"]})
 
+    api_model_name = resolve_openai_api_model_name(model_name) or model_name
     payload = {
-        "model": model_name,
+        "model": api_model_name,
         "input": [{"role": "user", "content": input_content}],
         "temperature": generation_config.get("temperature"),
         "top_p": generation_config.get("top_p"),
@@ -97,24 +104,41 @@ def call_openai_endpoint(
         is_gpt5 = is_gpt5_series(model_name)
         gen = get_gpt5_generation(model_name)
         is_reasoning_capable = is_gpt5 or lower_model.startswith("o3")
+        reasoning_mode = generation_config.get("reasoning_mode")
 
         if is_reasoning_capable and not is_chat_variant:
             effort = generation_config.get("reasoning_effort")
+            reasoning_payload: Dict[str, Any] = {}
             if effort:
-                xhigh_capable = gen in ("5.2", "5.3", "5.4", "5.5")
                 none_capable = gen is not None and gen != "5"
 
                 if none_capable and effort == "none":
-                    payload["reasoning"] = {"effort": "none"}
+                    reasoning_payload["effort"] = "none"
                 elif effort != "none":
                     effort_to_send = effort
-                    if effort_to_send == "xhigh" and not xhigh_capable:
+                    if effort_to_send == "max" and not supports_gpt5_max_effort(
+                        model_name
+                    ):
+                        effort_to_send = (
+                            "xhigh"
+                            if supports_gpt5_xhigh_effort(model_name)
+                            else "high"
+                        )
+                    if effort_to_send == "xhigh" and not supports_gpt5_xhigh_effort(
+                        model_name
+                    ):
                         effort_to_send = "high"
                     if none_capable and effort_to_send == "minimal":
                         effort_to_send = "none"
                     elif effort_to_send == "minimal" and not is_gpt5:
                         effort_to_send = "low"
-                    payload["reasoning"] = {"effort": effort_to_send}
+                    reasoning_payload["effort"] = effort_to_send
+
+            if reasoning_mode == "pro":
+                reasoning_payload["mode"] = "pro"
+
+            if reasoning_payload:
+                payload["reasoning"] = reasoning_payload
 
         if is_gpt5 and not is_chat_variant:
             verbosity = generation_config.get("verbosity", "low")

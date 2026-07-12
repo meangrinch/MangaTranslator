@@ -46,6 +46,7 @@ from utils.model_metadata import (
     is_gpt5_chat_variant,
     is_gpt5_pro,
     is_gpt5_series,
+    is_gpt56_virtual_pro,
     is_mimo_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
@@ -53,6 +54,8 @@ from utils.model_metadata import (
     is_rosetta_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
+    supports_gpt5_max_effort,
+    supports_gpt5_xhigh_effort,
     supports_openai_original_image_detail,
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
@@ -450,13 +453,16 @@ def _build_generation_config(
             reasoning_effort = config.reasoning_effort or (
                 "high" if is_gpt5_pro(model_name) and gen == "5" else "medium"
             )
-            xhigh_capable = gen in ("5.2", "5.3", "5.4", "5.5")
             effort = reasoning_effort
-            if effort == "xhigh" and not xhigh_capable:
+            if effort == "max" and not supports_gpt5_max_effort(model_name):
+                effort = "xhigh" if supports_gpt5_xhigh_effort(model_name) else "high"
+            if effort == "xhigh" and not supports_gpt5_xhigh_effort(model_name):
                 effort = "high"
             none_capable = gen is not None and gen != "5"
             if none_capable or effort != "none":
                 generation_config["reasoning_effort"] = effort
+            if is_gpt56_virtual_pro(model_name):
+                generation_config["reasoning_mode"] = "pro"
         if is_gpt5_series(model_name) and not is_gpt5_chat_variant(model_name):
             generation_config["verbosity"] = config.verbosity or "low"
         return generation_config

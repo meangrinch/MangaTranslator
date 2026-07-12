@@ -186,7 +186,7 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
 
 
 def is_gpt5_series(model_name: Optional[str]) -> bool:
-    """Check if a model is any GPT-5 variant (5, 5.1, 5.2, 5.3, 5.4, 5.5, etc.)."""
+    """Check if a model is any GPT-5 variant (5, 5.1, 5.2, etc.)."""
     if not model_name:
         return False
     lm = model_name.lower()
@@ -199,7 +199,7 @@ def is_gpt5_chat_variant(model_name: Optional[str]) -> bool:
 
 
 def is_gpt5_pro(model_name: Optional[str]) -> bool:
-    """Check if a GPT-5 model is a pro variant."""
+    """Check if a GPT-5 model is a pro variant (real slug or virtual GPT-5.6 pro)."""
     return is_gpt5_series(model_name) and "-pro" in (model_name or "").lower()
 
 
@@ -236,6 +236,63 @@ def is_anthropic_model_family(model_name: Optional[str]) -> bool:
 _GPT5_GEN_RE = re.compile(r"gpt-(5(?:\.\d+)?)", re.IGNORECASE)
 
 
+def get_gpt5_generation(model_name: Optional[str]) -> Optional[str]:
+    """Extract the GPT-5 generation string.
+
+    Returns '5', '5.1', '5.2', '5.3', '5.4', '5.5', '5.6', etc. or None if not a GPT-5 model.
+    """
+    if not model_name:
+        return None
+    m = _GPT5_GEN_RE.search(model_name)
+    return m.group(1) if m else None
+
+
+def _parse_gpt5_gen_parts(gen: Optional[str]) -> Optional[Tuple[int, int]]:
+    if not gen:
+        return None
+    try:
+        if "." in gen:
+            major, minor = (int(part) for part in gen.split(".", 1))
+            return major, minor
+        return int(gen), 0
+    except ValueError:
+        return None
+
+
+def supports_gpt5_xhigh_effort(model_name: Optional[str]) -> bool:
+    """Whether a GPT-5 model accepts reasoning.effort='xhigh'."""
+    parts = _parse_gpt5_gen_parts(get_gpt5_generation(model_name))
+    if parts is None:
+        return False
+    return parts >= (5, 2)
+
+
+def supports_gpt5_max_effort(model_name: Optional[str]) -> bool:
+    """Whether a GPT-5 model accepts reasoning.effort='max' (GPT-5.6+)."""
+    parts = _parse_gpt5_gen_parts(get_gpt5_generation(model_name))
+    if parts is None:
+        return False
+    return parts >= (5, 6)
+
+
+def is_gpt56_virtual_pro(model_name: Optional[str]) -> bool:
+    """GPT-5.6 pro is not a separate API slug; UI uses *-pro entries mapped to reasoning.mode."""
+    return get_gpt5_generation(model_name) == "5.6" and is_gpt5_pro(model_name)
+
+
+def resolve_openai_api_model_name(model_name: Optional[str]) -> Optional[str]:
+    """Map UI model names to the slug sent to the OpenAI API.
+
+    Virtual GPT-5.6 pro entries (e.g. gpt-5.6-sol-pro) strip the trailing -pro suffix.
+    Historical pro slugs (gpt-5.5-pro-..., o3-pro-...) are left unchanged.
+    """
+    if not model_name or not is_gpt56_virtual_pro(model_name):
+        return model_name
+    if model_name.lower().endswith("-pro"):
+        return model_name[: -len("-pro")]
+    return model_name
+
+
 def supports_openai_original_image_detail(model_name: Optional[str]) -> bool:
     """Whether an OpenAI model supports image detail='original'."""
     if not is_gpt5_series(model_name):
@@ -245,27 +302,11 @@ def supports_openai_original_image_detail(model_name: Optional[str]) -> bool:
     if any(token in lm for token in ("mini", "nano", "chat")):
         return False
 
-    gen = get_gpt5_generation(model_name)
-    if not gen or gen == "5":
+    parts = _parse_gpt5_gen_parts(get_gpt5_generation(model_name))
+    if parts is None or parts == (5, 0):
         return False
 
-    try:
-        major, minor = (int(part) for part in gen.split(".", 1))
-    except ValueError:
-        return False
-
-    return (major, minor) >= (5, 4)
-
-
-def get_gpt5_generation(model_name: Optional[str]) -> Optional[str]:
-    """Extract the GPT-5 generation string.
-
-    Returns '5', '5.1', '5.2', '5.3', '5.4', '5.5', etc. or None if not a GPT-5 model.
-    """
-    if not model_name:
-        return None
-    m = _GPT5_GEN_RE.search(model_name)
-    return m.group(1) if m else None
+    return parts >= (5, 4)
 
 
 def is_openai_reasoning_model(model_name: Optional[str]) -> bool:

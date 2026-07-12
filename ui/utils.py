@@ -32,6 +32,7 @@ from utils.model_metadata import (
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
+    is_gpt56_virtual_pro,
     is_mimo_reasoning_model,
     is_moonshot_reasoning_model,
     is_openai_compatible_reasoning_model,
@@ -39,6 +40,8 @@ from utils.model_metadata import (
     is_openai_reasoning_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
+    supports_gpt5_max_effort,
+    supports_gpt5_xhigh_effort,
     supports_openai_original_image_detail,
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
@@ -587,13 +590,22 @@ def get_reasoning_effort_config(
         gen = get_gpt5_generation(model_name)
 
         if "-pro" in lm:
+            # GPT-5.6 pro is reasoning.mode=pro; effort is independent (full 5.6 set).
+            if is_gpt56_virtual_pro(model_name) or supports_gpt5_max_effort(model_name):
+                return (
+                    True,
+                    ["max", "xhigh", "high", "medium", "low", "none"],
+                    "medium",
+                )
             if gen in ("5.4", "5.2"):
                 return True, ["xhigh", "high", "medium"], "medium"
             if gen == "5":
                 return True, ["high"], "high"
             return True, ["high", "medium", "low"], "medium"
 
-        if gen in ("5.2", "5.3", "5.4", "5.5"):
+        if supports_gpt5_max_effort(model_name):
+            return True, ["max", "xhigh", "high", "medium", "low", "none"], "medium"
+        if supports_gpt5_xhigh_effort(model_name):
             return True, ["xhigh", "high", "medium", "low", "none"], "medium"
         if gen == "5.1":
             return True, ["high", "medium", "low", "none"], "medium"
@@ -837,10 +849,11 @@ def get_image_detail_config(
 
     if supports_openai_original_image_detail(model_name):
         choices = ["auto", "original", "high", "low"]
-        info += " 'original' is available on GPT-5.4+ base/pro models."
+        info += " 'original' is available on GPT-5.4+ models."
 
-    if model_name and "gpt-5.5" in model_name.lower():
-        info += " On gpt-5.5, 'auto' follows 'original' sizing."
+    lm = (model_name or "").lower()
+    if "gpt-5.5" in lm or "gpt-5.6" in lm:
+        info += " On GPT-5.5/5.6, 'auto' is the same as 'original'."
 
     return True, choices, "auto", info
 
