@@ -882,9 +882,7 @@ def map_ui_to_backend_config(
             bool(ui_state.batch_parallel_within_pages) if is_batch else False
         ),
         batch_overlap_llm_with_inpaint=(
-            bool(ui_state.batch_overlap_llm_with_inpaint)
-            if is_batch and ui_state.batch_parallel_within_pages
-            else False
+            bool(ui_state.batch_overlap_llm_with_inpaint) if is_batch else False
         ),
     )
 

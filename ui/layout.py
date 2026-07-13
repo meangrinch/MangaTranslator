@@ -423,8 +423,7 @@ def create_layout(
                             ),
                             info=(
                                 "Allows parallel workers to be shared with "
-                                "independent LLM and Flux work within each "
-                                "page."
+                                "independent Flux work within each page."
                             ),
                         )
                         batch_overlap_llm_with_inpaint = gr.Checkbox(
@@ -434,12 +433,9 @@ def create_layout(
                                     "batch_overlap_llm_with_inpaint", False
                                 )
                             ),
-                            interactive=bool(
-                                saved_settings.get("batch_parallel_within_pages", False)
-                            ),
                             info=(
-                                "When within-page parallel requests are enabled, "
-                                "run LLM translation at the same time as Flux inpainting."
+                                "Run LLM translation at the same time as inpainting. "
+                                "Independent of within-page parallel requests."
                             ),
                         )
                         batch_previous_context_image_count = gr.Slider(
@@ -3255,17 +3251,6 @@ def create_layout(
                 context_image_max_side_pixels,
                 osb_min_side_pixels,
             ],
-            queue=False,
-        )
-
-        batch_parallel_within_pages.change(
-            fn=lambda enabled: (
-                gr.update(interactive=True)
-                if enabled
-                else gr.update(interactive=False, value=False)
-            ),
-            inputs=batch_parallel_within_pages,
-            outputs=batch_overlap_llm_with_inpaint,
             queue=False,
         )
 

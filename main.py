@@ -59,16 +59,13 @@ def main():
         action="store_true",
         help=(
             "Batch only: allows parallel workers to be shared with "
-            "independent LLM/Flux work within each page"
+            "independent Flux work within each page"
         ),
     )
     parser.add_argument(
         "--batch-overlap-llm-with-inpaint",
         action="store_true",
-        help=(
-            "Batch only: when used with --batch-parallel-within-pages, "
-            "run LLM translation concurrently with OSB/bubble Flux inpainting"
-        ),
+        help=("Batch only: run LLM translation concurrently with inpainting"),
     )
     parser.add_argument(
         "--batch-previous-context-images",
@@ -1038,9 +1035,7 @@ def main():
             args.batch and args.batch_parallel_within_pages
         ),
         batch_overlap_llm_with_inpaint=bool(
-            args.batch
-            and args.batch_parallel_within_pages
-            and args.batch_overlap_llm_with_inpaint
+            args.batch and args.batch_overlap_llm_with_inpaint
         ),
         detection=DetectionConfig(
             confidence=args.confidence,

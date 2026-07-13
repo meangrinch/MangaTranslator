@@ -1591,10 +1591,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.general.auto_scale,
         default_ui_state.batch_parallel_requests,
         default_ui_state.batch_parallel_within_pages,
-        gr.update(
-            value=default_ui_state.batch_overlap_llm_with_inpaint,
-            interactive=default_ui_state.batch_parallel_within_pages,
-        ),
+        default_ui_state.batch_overlap_llm_with_inpaint,
         default_ui_state.batch_previous_context_image_count,
         default_ui_state.batch_previous_context_text_count,
     ]
