@@ -31,6 +31,11 @@ KOREAN_NO_LINE_START_SYLLABLES = {
     "럼",
     "면",
     "요",
+    "뿐",
+    "씩",
+    "님",
+    "죠",
+    "며",
 }
 
 # Thai script block (Unicode U+0E00–U+0E7F)
