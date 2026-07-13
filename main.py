@@ -4,6 +4,7 @@ import os
 # Suppress OpenBLAS NUM_THREADS warnings on machines with >24 logical cores.
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "24")
 
+import shutil
 import tempfile
 import time
 import zipfile
@@ -26,7 +27,10 @@ def main():
         "--input",
         type=str,
         required=True,
-        help="Path to input image, directory, or ZIP archive (if using --batch)",
+        help=(
+            "Path to input image; with --batch: directory, ZIP archive, "
+            "or failed_paths.txt"
+        ),
     )
     parser.add_argument(
         "--output",
@@ -37,7 +41,10 @@ def main():
     parser.add_argument(
         "--batch",
         action="store_true",
-        help="Process all images in the input directory or ZIP archive (preserves folder structure for ZIP files)",
+        help=(
+            "Process all images in the input directory, ZIP archive "
+            "(preserves folder structure), or failed_paths.txt"
+        ),
     )
     parser.add_argument(
         "--parallel-requests",
@@ -1222,7 +1229,9 @@ def main():
     if args.batch:
         input_path = Path(args.input)
         zip_temp_dir_obj = None
+        path_list_temp_dir_obj = None
         preserve_structure = False
+        source_path_map = None
 
         if input_path.is_file() and input_path.suffix.lower() == ".zip":
             log_message(f"Detected ZIP archive: {input_path.name}", always_print=True)
@@ -1253,9 +1262,55 @@ def main():
                     always_print=True,
                 )
                 exit(1)
+        elif input_path.is_file() and input_path.suffix.lower() == ".txt":
+            from utils.path_list import read_image_paths_from_txt
+
+            log_message(
+                f"Detected failed-paths list: {input_path.name}",
+                always_print=True,
+            )
+            image_paths = read_image_paths_from_txt(input_path)
+            if not image_paths:
+                log_message(
+                    f"Error: no existing image paths found in '{args.input}'.",
+                    always_print=True,
+                )
+                exit(1)
+
+            path_list_temp_dir_obj = tempfile.TemporaryDirectory()
+            temp_dir_path = Path(path_list_temp_dir_obj.name)
+            source_path_map = {}
+
+            for index, img_file in enumerate(image_paths):
+                dest = temp_dir_path / img_file.name
+                if dest.exists():
+                    dest = temp_dir_path / f"{img_file.stem}_{index}{img_file.suffix}"
+                try:
+                    shutil.copy2(img_file, dest)
+                    source_path_map[str(dest.resolve())] = str(img_file.resolve())
+                except Exception as copy_err:
+                    log_message(
+                        f"Warning: failed to copy {img_file}: {copy_err}",
+                        always_print=True,
+                    )
+
+            if not source_path_map:
+                log_message(
+                    f"Error: could not stage any images from '{args.input}'.",
+                    always_print=True,
+                )
+                exit(1)
+
+            log_message(
+                f"Prepared {len(source_path_map)} image(s) from path list",
+                always_print=True,
+            )
+            input_path = temp_dir_path
+            preserve_structure = False
         elif not input_path.is_dir():
             log_message(
-                f"Error: --batch requires --input '{args.input}' to be a directory or ZIP archive.",
+                f"Error: --batch requires --input '{args.input}' to be a directory, "
+                "ZIP archive, or failed-paths .txt file.",
                 always_print=True,
             )
             exit(1)
@@ -1278,16 +1333,31 @@ def main():
 
         try:
             results = batch_translate_images(
-                input_path, config, output_dir, preserve_structure=preserve_structure
+                input_path,
+                config,
+                output_dir,
+                preserve_structure=preserve_structure,
+                source_path_map=source_path_map,
             )
+            failed_paths_file = results.get("failed_paths_file")
+            if failed_paths_file:
+                log_message(
+                    f"Failed image paths saved to: {failed_paths_file}",
+                    always_print=True,
+                )
             if results.get("error_count", 0) > 0:
                 raise SystemExit(1)
         finally:
-            if zip_temp_dir_obj:
+            for temp_obj, label in (
+                (zip_temp_dir_obj, "ZIP extraction"),
+                (path_list_temp_dir_obj, "path list staging"),
+            ):
+                if not temp_obj:
+                    continue
                 try:
-                    zip_temp_dir_obj.cleanup()
+                    temp_obj.cleanup()
                     log_message(
-                        "Cleaned up ZIP extraction temporary directory",
+                        f"Cleaned up {label} temporary directory",
                         always_print=True,
                     )
                 except Exception as e_clean:

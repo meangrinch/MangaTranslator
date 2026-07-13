@@ -362,9 +362,9 @@ def create_layout(
                             type="filepath",
                         )
                         input_zip = gr.File(
-                            label="Upload ZIP Archive (preserves directory structure)",
+                            label="Upload ZIP Archive (preserves directory structure) or failed_paths.txt",
                             file_count="single",
-                            file_types=[".zip"],
+                            file_types=[".zip", ".txt"],
                             type="filepath",
                         )
                         batch_font_dropdown = gr.Dropdown(
@@ -439,8 +439,7 @@ def create_layout(
                             ),
                             info=(
                                 "When within-page parallel requests are enabled, "
-                                "run LLM translation at the same time as OSB and "
-                                "bubble Flux inpainting."
+                                "run LLM translation at the same time as Flux inpainting."
                             ),
                         )
                         batch_previous_context_image_count = gr.Slider(
@@ -3327,6 +3326,13 @@ def create_layout(
             ],
             queue=False,
         ).then(fn=None, js=js_reset_status_height, queue=False)
+
+        input_zip.change(
+            fn=callbacks.handle_zip_or_failed_paths_upload,
+            inputs=[input_zip],
+            outputs=[input_files, input_zip],
+            queue=False,
+        )
         translate_event = translate_button.click(
             fn=functools.partial(
                 callbacks.update_process_buttons,

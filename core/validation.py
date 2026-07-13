@@ -342,25 +342,29 @@ def validate_zip_file(zip_path: Union[str, Path]) -> Path:
 
 def validate_batch_input_path(input_path: Union[str, Path]) -> Path:
     """
-    Validates that a batch input path exists and is either a directory or ZIP file.
+    Validates that a batch input path exists and is a directory, ZIP, or path-list .txt.
 
     Args:
-        input_path: Path to validate (directory or ZIP file).
+        input_path: Path to validate (directory, ZIP file, or failed-paths .txt).
 
     Returns:
         Path: Validated Path object.
 
     Raises:
         FileNotFoundError: If the path does not exist.
-        ValidationError: If the path is neither a directory nor a ZIP file.
+        ValidationError: If the path is not a supported batch input.
     """
     path = Path(input_path)
     if not path.exists():
         raise FileNotFoundError(f"Input path '{input_path}' does not exist.")
 
-    if not (path.is_dir() or (path.is_file() and path.suffix.lower() == ".zip")):
-        raise ValidationError(
-            f"Input path '{input_path}' is neither a directory nor a ZIP file."
-        )
+    if path.is_dir():
+        return path
 
-    return path
+    if path.is_file() and path.suffix.lower() in {".zip", ".txt"}:
+        return path
+
+    raise ValidationError(
+        f"Input path '{input_path}' must be a directory, ZIP archive, "
+        "or failed-paths .txt file."
+    )

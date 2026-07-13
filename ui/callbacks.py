@@ -21,6 +21,7 @@ from utils.model_metadata import (
     is_anthropic_model_family,
     is_openai_model_family,
 )
+from utils.path_list import read_image_paths_from_txt
 
 from . import logic, settings_manager, utils
 from .cancellation import CancellationManager
@@ -642,6 +643,7 @@ def _format_batch_success_message(
                 f"• {filename}: {error_msg}\n"
                 for filename, error_msg in failed_pages.items()
             )
+        failure_parts.append("\n")
         failure_details = "".join(failure_parts)
 
     if backend_config.cleaning_only:
@@ -747,6 +749,9 @@ def _format_batch_success_message(
             f"• Saved To: {output_path}",
         ]
     )
+    failed_paths_file = results.get("failed_paths_file")
+    if failed_paths_file:
+        msg_parts.append(f"\n• Failed paths list: {failed_paths_file}")
     return "".join(msg_parts)
 
 
@@ -824,6 +829,27 @@ def handle_translate_click(
         return None, _status_update(cleaned)
 
 
+def handle_zip_or_failed_paths_upload(
+    file_path: Optional[str],
+) -> Tuple[Any, Any]:
+    """Expand a failed-paths .txt into the images uploader; leave ZIPs unchanged."""
+    if not file_path:
+        return gr.update(), gr.update()
+
+    path = Path(file_path)
+    if path.suffix.lower() != ".txt":
+        # ZIP or other: leave both components as Gradio already set them.
+        return gr.update(), gr.update()
+
+    images = [str(p) for p in read_image_paths_from_txt(path)]
+    if not images:
+        gr.Warning("No existing image paths found in the path list file.")
+        return gr.update(), gr.update(value=None)
+
+    # Populate image preview; clear the zip/txt slot so batch uses the file list.
+    return gr.update(value=images), gr.update(value=None)
+
+
 def handle_batch_click(
     *args: Any,
     models_dir: Path,
@@ -840,10 +866,24 @@ def handle_batch_click(
     try:
         zip_file_path = None
         if input_zip:
-            try:
-                zip_file_path = validate_zip_file(input_zip)
-            except (ValidationError, FileNotFoundError) as e:
-                raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
+            zip_path = Path(input_zip)
+            if zip_path.suffix.lower() == ".txt":
+                # Defensive: expand path list if change-handler did not already
+                expanded = [str(p) for p in read_image_paths_from_txt(zip_path)]
+                if not expanded:
+                    raise gr.Error(
+                        f"{ERROR_PREFIX}No existing image paths found in the path list file."
+                    )
+                if input_files and not isinstance(input_files, list):
+                    raise gr.Error(
+                        f"{ERROR_PREFIX}Invalid input format. Expected a list of files."
+                    )
+                input_files = list(input_files or []) + expanded
+            else:
+                try:
+                    zip_file_path = validate_zip_file(input_zip)
+                except (ValidationError, FileNotFoundError) as e:
+                    raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
 
         if input_files:
             if not isinstance(input_files, list):
@@ -853,7 +893,8 @@ def handle_batch_click(
 
         if not zip_file_path and not input_files:
             raise gr.Error(
-                f"{ERROR_PREFIX}Please upload images, a folder, or a ZIP archive."
+                f"{ERROR_PREFIX}Please upload images, a folder, a ZIP archive, "
+                "or a failed-paths .txt file."
             )
 
         if zip_file_path and input_files:

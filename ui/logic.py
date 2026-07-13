@@ -22,6 +22,7 @@ from utils.exceptions import (
     ValidationError,
 )
 from utils.logging import log_message
+from utils.path_list import IMAGE_EXTENSIONS, read_image_paths_from_txt
 
 if TYPE_CHECKING:
     from ui.cancellation import CancellationManager
@@ -29,6 +30,44 @@ if TYPE_CHECKING:
 
 class LogicError(Exception):
     pass
+
+
+def _collect_valid_images(
+    file_paths: List[Union[str, Path]],
+) -> tuple[List[Path], List[str]]:
+    """Return valid image paths and skip notes from a path list."""
+    image_files: List[Path] = []
+    skipped: List[str] = []
+    for f_path_str in file_paths:
+        p = Path(f_path_str)
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
+            try:
+                with Image.open(p) as img:
+                    img.verify()
+                image_files.append(p)
+            except Exception as img_err:
+                skipped.append(f"{p.name} (Invalid: {img_err})")
+        else:
+            skipped.append(f"{p.name} (Not a supported image file)")
+    return image_files, skipped
+
+
+def _copy_images_with_source_map(
+    image_files: List[Path],
+    dest_dir: Path,
+    source_path_map: Dict[str, str],
+) -> None:
+    """Copy images into dest_dir and record temp→original path mapping."""
+    for img_file in image_files:
+        try:
+            dest = dest_dir / img_file.name
+            shutil.copy2(img_file, dest)
+            source_path_map[str(dest.resolve())] = str(img_file.resolve())
+        except Exception as copy_err:
+            log_message(
+                f"Failed to copy {img_file.name}: {copy_err}",
+                always_print=True,
+            )
 
 
 def extract_zip_to_temp(
@@ -235,6 +274,7 @@ def process_batch_logic(
         input_dir_or_files: Can be one of:
             - Path to input directory (str)
             - Path to ZIP archive (str ending in .zip)
+            - Path to failed-paths .txt (str ending in .txt)
             - List of file paths (List[str])
             - Dictionary with both "zip" and "files" keys to process both simultaneously (Dict[str, Any])
         config: The main configuration object.
@@ -250,6 +290,8 @@ def process_batch_logic(
             "success_count": int,
             "error_count": int,
             "errors": Dict[str, str],
+            "failed_image_paths": List[str],
+            "failed_paths_file": optional str path to failed_paths.txt,
             "output_path": Path,
             "processing_time": float
         }
@@ -300,6 +342,7 @@ def process_batch_logic(
     try:
         process_dir = None
         preserve_structure = False
+        source_path_map: Dict[str, str] = {}
 
         if (
             isinstance(input_dir_or_files, dict)
@@ -329,30 +372,11 @@ def process_batch_logic(
                 files_subdir = combined_temp_dir / "uploaded_files"
                 files_subdir.mkdir(exist_ok=True)
 
-                image_extensions = [".jpg", ".jpeg", ".png", ".webp"]
-                image_files_to_copy = []
-                skipped_files = []
-                for f_path_str in files_list:
-                    p = Path(f_path_str)
-                    if p.is_file() and p.suffix.lower() in image_extensions:
-                        try:
-                            with Image.open(p) as img:
-                                img.verify()
-                            image_files_to_copy.append(p)
-                        except Exception as img_err:
-                            skipped_files.append(f"{p.name} (Invalid: {img_err})")
-                    else:
-                        skipped_files.append(f"{p.name} (Not a supported image file)")
-
+                image_files_to_copy, skipped_files = _collect_valid_images(files_list)
                 if image_files_to_copy:
-                    for img_file in image_files_to_copy:
-                        try:
-                            shutil.copy2(img_file, files_subdir / img_file.name)
-                        except Exception as copy_err:
-                            log_message(
-                                f"Failed to copy {img_file.name}: {copy_err}",
-                                always_print=True,
-                            )
+                    _copy_images_with_source_map(
+                        image_files_to_copy, files_subdir, source_path_map
+                    )
 
                 if skipped_files:
                     log_message(
@@ -370,20 +394,9 @@ def process_batch_logic(
             temp_dir_path_obj = tempfile.TemporaryDirectory()
             temp_dir_path = Path(temp_dir_path_obj.name)
 
-            image_extensions = [".jpg", ".jpeg", ".png", ".webp"]
-            image_files_to_copy = []
-            skipped_files = []
-            for f_path_str in input_dir_or_files:
-                p = Path(f_path_str)
-                if p.is_file() and p.suffix.lower() in image_extensions:
-                    try:
-                        with Image.open(p) as img:
-                            img.verify()
-                        image_files_to_copy.append(p)
-                    except Exception as img_err:
-                        skipped_files.append(f"{p.name} (Invalid: {img_err})")
-                else:
-                    skipped_files.append(f"{p.name} (Not a supported image file)")
+            image_files_to_copy, skipped_files = _collect_valid_images(
+                input_dir_or_files
+            )
 
             if not image_files_to_copy:
                 raise ValidationError(
@@ -402,14 +415,9 @@ def process_batch_logic(
                     verbose=config.verbose,
                 )
 
-            for img_file in image_files_to_copy:
-                try:
-                    # Preserve metadata when copying
-                    shutil.copy2(img_file, temp_dir_path / img_file.name)
-                except Exception as copy_err:
-                    log_message(
-                        f"Failed to copy {img_file.name}: {copy_err}", always_print=True
-                    )
+            _copy_images_with_source_map(
+                image_files_to_copy, temp_dir_path, source_path_map
+            )
             process_dir = temp_dir_path
 
         elif isinstance(input_dir_or_files, str):
@@ -419,6 +427,24 @@ def process_batch_logic(
                 extracted_path, zip_temp_dir_obj = extract_zip_to_temp(input_path)
                 process_dir = extracted_path
                 preserve_structure = True
+            elif input_path.is_file() and input_path.suffix.lower() == ".txt":
+                image_paths = read_image_paths_from_txt(input_path)
+                if not image_paths:
+                    raise ValidationError(
+                        "No existing image paths found in the path list file."
+                    )
+                temp_dir_path_obj = tempfile.TemporaryDirectory()
+                temp_dir_path = Path(temp_dir_path_obj.name)
+                image_files_to_copy, skipped_files = _collect_valid_images(image_paths)
+                if not image_files_to_copy:
+                    raise ValidationError(
+                        "No valid image files found in the path list file. "
+                        f"Skipped: {', '.join(skipped_files) if skipped_files else 'None'}"
+                    )
+                _copy_images_with_source_map(
+                    image_files_to_copy, temp_dir_path, source_path_map
+                )
+                process_dir = temp_dir_path
             elif input_path.is_dir():
                 process_dir = input_path
                 preserve_structure = False
@@ -433,6 +459,7 @@ def process_batch_logic(
             progress_callback=_batch_progress_callback,
             preserve_structure=preserve_structure,
             cancellation_manager=cancellation_manager,
+            source_path_map=source_path_map or None,
         )
 
         processing_time = time.time() - start_time

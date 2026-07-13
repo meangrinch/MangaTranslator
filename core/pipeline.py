@@ -28,6 +28,7 @@ from utils.exceptions import (
     TranslationError,
 )
 from utils.logging import log_message
+from utils.path_list import resolve_source_path, write_failed_paths
 
 from .image.cleaning import clean_speech_bubbles, retry_cleaning_with_otsu
 from .image.detection import detect_panels, detect_speech_bubbles
@@ -2049,6 +2050,7 @@ async def _batch_translate_parallel(
     preserve_structure: bool,
     progress_callback: Optional[Callable[[float, str], None]],
     cancellation_manager: Optional["CancellationManager"],
+    source_path_map: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Process images in parallel using a semaphore to maintain target concurrency.
 
@@ -2058,7 +2060,12 @@ async def _batch_translate_parallel(
     """
     total_images = len(image_files)
     n_workers = config.parallel_requests
-    results = {"success_count": 0, "error_count": 0, "errors": {}}
+    results = {
+        "success_count": 0,
+        "error_count": 0,
+        "errors": {},
+        "failed_image_paths": [],
+    }
     previous_context_cache = OrderedDict()
     previous_context_cache_lock = threading.Lock()
     ocr_text_history: Dict[Path, List[str]] = {}
@@ -2140,6 +2147,9 @@ async def _batch_translate_parallel(
         log_message(f"Error processing {first_display}: {str(e)}", always_print=True)
         results["error_count"] += 1
         results["errors"][first_key] = str(e)
+        results["failed_image_paths"].append(
+            resolve_source_path(first_img, source_path_map)
+        )
     finally:
         ocr_text_ready_events[0].set()
 
@@ -2257,6 +2267,9 @@ async def _batch_translate_parallel(
                     with results_lock:
                         results["error_count"] += 1
                         results["errors"][error_key] = str(e)
+                        results["failed_image_paths"].append(
+                            resolve_source_path(img_path, source_path_map)
+                        )
                         completed_count += 1
                         count = completed_count
 
@@ -2295,6 +2308,7 @@ def batch_translate_images(
     progress_callback: Optional[Callable[[float, str], None]] = None,
     preserve_structure: bool = False,
     cancellation_manager: Optional["CancellationManager"] = None,
+    source_path_map: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """
     Process all images in a directory using a configuration object.
@@ -2307,17 +2321,28 @@ def batch_translate_images(
         progress_callback (callable, optional): Function to call with progress updates (0.0-1.0, message).
         preserve_structure (bool): If True, recursively process subdirectories and preserve folder structure
                                    in the output. If False, only processes files in the root directory.
+        source_path_map: Optional mapping from processing paths to original source paths
+            (used when UI/CLI copies inputs into a temp directory).
 
     Returns:
         dict: Processing results with keys:
             - "success_count": Number of successfully processed images
             - "error_count": Number of images that failed to process
             - "errors": Dictionary mapping filenames to error messages
+            - "failed_image_paths": Absolute source paths of failed images
+            - "failed_paths_file": Path to failed_paths.txt when written
     """
+    empty_results = {
+        "success_count": 0,
+        "error_count": 0,
+        "errors": {},
+        "failed_image_paths": [],
+    }
+
     input_dir = Path(input_dir)
     if not input_dir.is_dir():
         log_message(f"Input path '{input_dir}' is not a directory", always_print=True)
-        return {"success_count": 0, "error_count": 0, "errors": {}}
+        return empty_results
 
     if output_dir:
         output_dir = Path(output_dir)
@@ -2356,7 +2381,7 @@ def batch_translate_images(
 
     if not image_files:
         log_message(f"No image files found in '{input_dir}'", always_print=True)
-        return {"success_count": 0, "error_count": 0, "errors": {}}
+        return empty_results
 
     total_images = len(image_files)
     start_batch_time = time.time()
@@ -2374,10 +2399,16 @@ def batch_translate_images(
                 preserve_structure=preserve_structure,
                 progress_callback=progress_callback,
                 cancellation_manager=cancellation_manager,
+                source_path_map=source_path_map,
             )
         )
     else:
-        results = {"success_count": 0, "error_count": 0, "errors": {}}
+        results = {
+            "success_count": 0,
+            "error_count": 0,
+            "errors": {},
+            "failed_image_paths": [],
+        }
         previous_context_cache = OrderedDict()
         previous_context_cache_lock = threading.Lock()
         ocr_text_history: Dict[Path, List[str]] = {}
@@ -2456,6 +2487,9 @@ def batch_translate_images(
                 )
                 results["error_count"] += 1
                 results["errors"][error_key] = str(e)
+                results["failed_image_paths"].append(
+                    resolve_source_path(img_path, source_path_map)
+                )
 
                 if progress_callback:
                     completed_progress = (i + 1) / total_images
@@ -2480,5 +2514,15 @@ def batch_translate_images(
         log_message(f"Failed: {results['error_count']} images", always_print=True)
         for filename, error_msg in results["errors"].items():
             log_message(f"  - {filename}: {error_msg}", always_print=True)
+
+    failed_paths = results.get("failed_image_paths") or []
+    if failed_paths:
+        failed_file = write_failed_paths(output_dir, failed_paths)
+        if failed_file:
+            results["failed_paths_file"] = str(failed_file)
+            log_message(
+                f"Failed image paths saved to: {failed_file}",
+                always_print=True,
+            )
 
     return results
