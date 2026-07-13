@@ -67,7 +67,7 @@ NATURAL_SORT_TOKEN_RE = re.compile(r"(\d+)")
 
 def _should_overlap_llm_with_inpaint(config: MangaTranslatorConfig) -> bool:
     return (
-        bool(getattr(config, "batch_overlap_llm_with_inpaint", False))
+        bool(getattr(config, "overlap_llm_with_inpaint", False))
         and not config.cleaning_only
         and not getattr(config, "test_mode", False)
     )
@@ -2094,7 +2094,7 @@ async def _batch_translate_parallel(
         config.request_coordinator = None
         config.translation.request_coordinator = None
 
-    if getattr(config, "batch_overlap_llm_with_inpaint", False):
+    if getattr(config, "overlap_llm_with_inpaint", False):
         log_message(
             "LLM/inpaint overlap enabled",
             always_print=True,

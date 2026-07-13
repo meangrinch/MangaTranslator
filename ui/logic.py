@@ -216,6 +216,11 @@ def translate_manga_logic(
             output_base_dir / f"{original_name}_translated_{timestamp}{output_ext}"
         )
 
+        if getattr(config, "overlap_llm_with_inpaint", False):
+            log_message(
+                "LLM/inpaint overlap enabled",
+                always_print=True,
+            )
         translated_image = translate_and_render(
             image_path=image_path_for_processing,
             config=config,

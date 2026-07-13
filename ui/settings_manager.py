@@ -205,6 +205,7 @@ DEFAULT_SETTINGS = {
     "send_full_page_context": True,
     "whiteout_conjoined_bubbles": True,
     "special_instructions": "",
+    "overlap_llm_with_inpaint": False,
     "upscale_method": "model_lite",  # "model", "model_lite", "lanczos", or "none"
     "bubble_min_side_pixels": 128,
     "context_image_max_side_pixels": 1024,
@@ -301,6 +302,8 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "image_detail",
     "special_instructions",
     "batch_special_instructions",
+    "overlap_llm_with_inpaint",
+    "batch_overlap_llm_with_inpaint",
     # Rendering
     "font_pack",
     "max_font_size",
@@ -382,7 +385,6 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "batch_font_pack",
     "batch_parallel_requests",
     "batch_parallel_within_pages",
-    "batch_overlap_llm_with_inpaint",
     "batch_previous_context_image_count",
     "batch_previous_context_text_count",
 ]

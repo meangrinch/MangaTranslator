@@ -208,6 +208,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_special_instructions_val,
         batch_parallel_requests_val,
         batch_parallel_within_pages_val,
+        overlap_llm_with_inpaint_val,
         batch_overlap_llm_with_inpaint_val,
         batch_previous_context_image_count_val,
         batch_previous_context_text_count_val,
@@ -218,6 +219,9 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
     final_font_pack = batch_font_dropdown if is_batch else font_dropdown
     final_special_instructions = (
         batch_special_instructions_val if is_batch else special_instructions_val
+    )
+    final_overlap_llm_with_inpaint = (
+        batch_overlap_llm_with_inpaint_val if is_batch else overlap_llm_with_inpaint_val
     )
 
     return UIConfigState(
@@ -359,6 +363,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             effort=effort_val,
             verbosity=verbosity_val,
             auto_scale=auto_scale_val,
+            overlap_llm_with_inpaint=bool(final_overlap_llm_with_inpaint),
         ),
         input_language=final_input_language,
         output_language=final_output_language,
@@ -368,7 +373,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_font_pack=batch_font_dropdown,
         batch_parallel_requests=int(batch_parallel_requests_val),
         batch_parallel_within_pages=bool(batch_parallel_within_pages_val),
-        batch_overlap_llm_with_inpaint=bool(batch_overlap_llm_with_inpaint_val),
         batch_previous_context_image_count=int(batch_previous_context_image_count_val),
         batch_previous_context_text_count=int(batch_previous_context_text_count_val),
     )
@@ -1105,6 +1109,7 @@ def handle_save_config_click(*args: Any) -> str:
         auto_scale_val,
         batch_parallel_requests_val,
         batch_parallel_within_pages_val,
+        overlap_llm_with_inpaint_val,
         batch_overlap_llm_with_inpaint_val,
         batch_previous_context_image_count_val,
         batch_previous_context_text_count_val,
@@ -1248,6 +1253,7 @@ def handle_save_config_click(*args: Any) -> str:
             effort=effort_val,
             verbosity=verbosity_val,
             auto_scale=auto_scale_val,
+            overlap_llm_with_inpaint=bool(overlap_llm_with_inpaint_val),
         ),
         input_language=s_in_lang,
         output_language=s_out_lang,
@@ -1591,6 +1597,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.general.auto_scale,
         default_ui_state.batch_parallel_requests,
         default_ui_state.batch_parallel_within_pages,
+        default_ui_state.general.overlap_llm_with_inpaint,
         default_ui_state.batch_overlap_llm_with_inpaint,
         default_ui_state.batch_previous_context_image_count,
         default_ui_state.batch_previous_context_text_count,

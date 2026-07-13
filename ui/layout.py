@@ -333,6 +333,13 @@ def create_layout(
                             max_lines=10,
                             elem_id="translator_special_instructions",
                         )
+                        overlap_llm_with_inpaint = gr.Checkbox(
+                            label="Overlap LLM With Inpainting",
+                            value=bool(
+                                saved_settings.get("overlap_llm_with_inpaint", False)
+                            ),
+                            info="Run LLM translation concurrently with inpainting.",
+                        )
                     with gr.Column(scale=1):
                         output_image = gr.Image(
                             type="pil",
@@ -433,10 +440,7 @@ def create_layout(
                                     "batch_overlap_llm_with_inpaint", False
                                 )
                             ),
-                            info=(
-                                "Run LLM translation at the same time as inpainting. "
-                                "Independent of within-page parallel requests."
-                            ),
+                            info="Run LLM translation concurrently with inpainting.",
                         )
                         batch_previous_context_image_count = gr.Slider(
                             minimum=0,
@@ -2254,6 +2258,7 @@ def create_layout(
             auto_scale,
             batch_parallel_requests,
             batch_parallel_within_pages,
+            overlap_llm_with_inpaint,
             batch_overlap_llm_with_inpaint,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
@@ -2377,6 +2382,7 @@ def create_layout(
             auto_scale,
             batch_parallel_requests,
             batch_parallel_within_pages,
+            overlap_llm_with_inpaint,
             batch_overlap_llm_with_inpaint,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
@@ -2500,6 +2506,7 @@ def create_layout(
             batch_special_instructions,
             batch_parallel_requests,
             batch_parallel_within_pages,
+            overlap_llm_with_inpaint,
             batch_overlap_llm_with_inpaint,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
@@ -2624,6 +2631,7 @@ def create_layout(
             batch_special_instructions,
             batch_parallel_requests,
             batch_parallel_within_pages,
+            overlap_llm_with_inpaint,
             batch_overlap_llm_with_inpaint,
             batch_previous_context_image_count,
             batch_previous_context_text_count,

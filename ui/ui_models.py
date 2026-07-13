@@ -193,6 +193,7 @@ class UIGeneralSettings:
         None  # GPT-5 series only: controls response verbosity (high/medium/low)
     )
     auto_scale: bool = True
+    overlap_llm_with_inpaint: bool = False
 
 
 @dataclass
@@ -268,6 +269,7 @@ class UIConfigState:
             "context_image_max_side_pixels": self.llm_settings.context_image_max_side_pixels,
             "osb_min_side_pixels": self.llm_settings.osb_min_side_pixels,
             "special_instructions": self.llm_settings.special_instructions or "",
+            "overlap_llm_with_inpaint": self.general.overlap_llm_with_inpaint,
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
             "min_font_size": self.rendering.min_font_size,
@@ -665,6 +667,12 @@ class UIConfigState:
                 effort=data.get("effort", defaults.get("effort", "medium")),
                 verbosity=data.get("verbosity", defaults.get("verbosity", "low")),
                 auto_scale=data.get("auto_scale", defaults.get("auto_scale", True)),
+                overlap_llm_with_inpaint=bool(
+                    data.get(
+                        "overlap_llm_with_inpaint",
+                        defaults.get("overlap_llm_with_inpaint", False),
+                    )
+                ),
             ),
             input_language=data.get("input_language", defaults["input_language"]),
             output_language=data.get("output_language", defaults["output_language"]),
@@ -881,9 +889,7 @@ def map_ui_to_backend_config(
         batch_parallel_within_pages=(
             bool(ui_state.batch_parallel_within_pages) if is_batch else False
         ),
-        batch_overlap_llm_with_inpaint=(
-            bool(ui_state.batch_overlap_llm_with_inpaint) if is_batch else False
-        ),
+        overlap_llm_with_inpaint=bool(ui_state.general.overlap_llm_with_inpaint),
     )
 
     return backend_config

@@ -63,9 +63,9 @@ def main():
         ),
     )
     parser.add_argument(
-        "--batch-overlap-llm-with-inpaint",
+        "--overlap-llm-with-inpaint",
         action="store_true",
-        help=("Batch only: run LLM translation concurrently with inpainting"),
+        help="Run LLM translation concurrently with inpainting",
     )
     parser.add_argument(
         "--batch-previous-context-images",
@@ -1034,9 +1034,7 @@ def main():
         batch_parallel_within_pages=bool(
             args.batch and args.batch_parallel_within_pages
         ),
-        batch_overlap_llm_with_inpaint=bool(
-            args.batch and args.batch_overlap_llm_with_inpaint
-        ),
+        overlap_llm_with_inpaint=bool(args.overlap_llm_with_inpaint),
         detection=DetectionConfig(
             confidence=args.confidence,
             conjoined_confidence=args.conjoined_confidence,
@@ -1408,6 +1406,11 @@ def main():
 
         try:
             log_message(f"Processing {input_path}...", always_print=True)
+            if getattr(config, "overlap_llm_with_inpaint", False):
+                log_message(
+                    "LLM/inpaint overlap enabled",
+                    always_print=True,
+                )
             translate_and_render(input_path, config, output_path)
             log_message(
                 f"Translation complete. Result saved to {output_path}",
