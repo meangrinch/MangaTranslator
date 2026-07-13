@@ -7,14 +7,30 @@ import numpy as np
 # Markdown-like style pattern: ***bold italic***, **bold**, *italic*
 STYLE_PATTERN = re.compile(r"(\*{1,3})(.*?)(\1)")
 NO_SPACE_BEFORE_MARKER = "\uf000"
+# Hangul syllables that must not start a later emergency-wrap unit.
+# Expanded particle/connective set: when a prior unit exists, these glue onto it.
 KOREAN_NO_LINE_START_SYLLABLES = {
-    "랑",  # rang
-    "께",  # ke/kke
-    "란",  # ran
-    "게",  # ge
-    "서",  # se/seo
-    "럼",  # rum/reom
-    "면",  # myeon
+    "은",
+    "는",
+    "이",
+    "가",
+    "을",
+    "를",
+    "에",
+    "의",
+    "도",
+    "만",
+    "로",
+    "와",
+    "과",
+    "랑",
+    "께",
+    "란",
+    "게",
+    "서",
+    "럼",
+    "면",
+    "요",
 }
 
 # Thai script block (Unicode U+0E00–U+0E7F)
