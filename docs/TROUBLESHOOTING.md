@@ -111,6 +111,10 @@
   - Lower "Image Detail" (if using OpenAI models)
   - Use "manga-ocr/paddleocr-vl" OCR method (may perform worse than more-capable VLMs)
 
+- **Batch translation failed for some files:**
+  - Failed images have their paths saved to `failed_paths.txt` in the output directory. You can upload this file to the ZIP archive upload area in the web UI, or pass it via `--input` in the CLI to retry only the failed files.
+  - *Note:* If you uploaded individual images directly via the web UI, the recorded paths will point to Gradio's temporary cache directories, which may be cleaned up after your session ends.
+
 ### Inpainting
 
 - **OSB text not inpainted/cleaned:**
