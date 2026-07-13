@@ -63,6 +63,11 @@ def main():
         ),
     )
     parser.add_argument(
+        "--retry-failed-once",
+        action="store_true",
+        help="Batch only: automatically retry each failed image once at the very end",
+    )
+    parser.add_argument(
         "--overlap-llm-with-inpaint",
         action="store_true",
         help="Run LLM translation concurrently with inpainting",
@@ -1034,6 +1039,7 @@ def main():
         batch_parallel_within_pages=bool(
             args.batch and args.batch_parallel_within_pages
         ),
+        retry_failed_once=bool(args.batch and args.retry_failed_once),
         overlap_llm_with_inpaint=bool(args.overlap_llm_with_inpaint),
         detection=DetectionConfig(
             confidence=args.confidence,

@@ -196,6 +196,7 @@ class MangaTranslatorConfig:
     parallel_requests: int = 1
     batch_parallel_within_pages: bool = False
     overlap_llm_with_inpaint: bool = False
+    retry_failed_once: bool = False
     request_coordinator: Optional[Any] = None
 
     def __post_init__(self):

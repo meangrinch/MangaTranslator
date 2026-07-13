@@ -2041,6 +2041,154 @@ def _resolve_output_path(
     return output_subdir / f"{output_filename}{output_ext}", display_path, error_key
 
 
+def _should_run_failed_retry(
+    config: MangaTranslatorConfig,
+    failed_jobs: List[Dict[str, Any]],
+    cancellation_manager: Optional["CancellationManager"] = None,
+) -> bool:
+    if not getattr(config, "retry_failed_once", False):
+        return False
+    if not failed_jobs:
+        return False
+    if cancellation_manager is not None and cancellation_manager.is_cancelled():
+        return False
+    return True
+
+
+def _retry_failed_batch_images(
+    failed_jobs: List[Dict[str, Any]],
+    results: Dict[str, Any],
+    config: MangaTranslatorConfig,
+    input_dir: Path,
+    output_dir: Path,
+    preserve_structure: bool = False,
+    progress_callback: Optional[Callable[[float, str], None]] = None,
+    cancellation_manager: Optional["CancellationManager"] = None,
+    source_path_map: Optional[Dict[str, str]] = None,
+) -> None:
+    """Retry failed batch images once. Mutates *results* in place.
+
+    Each entry in *failed_jobs* must include:
+      - error_key: key used in results["errors"]
+      - img_path: processing Path passed to translate_and_render
+      - source_path: path stored in results["failed_image_paths"]
+    """
+    if not failed_jobs:
+        results.setdefault("retry_attempted_count", 0)
+        results.setdefault("retry_success_count", 0)
+        results.setdefault("retry_failed_count", 0)
+        return
+
+    if cancellation_manager is not None and cancellation_manager.is_cancelled():
+        results.setdefault("retry_attempted_count", 0)
+        results.setdefault("retry_success_count", 0)
+        results.setdefault("retry_failed_count", 0)
+        return
+
+    total = len(failed_jobs)
+    attempted = 0
+    retry_success = 0
+    retry_failed = 0
+
+    log_message(
+        f"Retrying {total} failed image(s) once...",
+        always_print=True,
+    )
+
+    for i, job in enumerate(failed_jobs):
+        if cancellation_manager is not None and cancellation_manager.is_cancelled():
+            log_message(
+                "Batch retry cancelled by user; remaining retries skipped.",
+                always_print=True,
+            )
+            break
+
+        error_key = job["error_key"]
+        img_path = Path(job["img_path"])
+        source_path = job.get("source_path")
+        if source_path is None:
+            source_path = resolve_source_path(img_path, source_path_map)
+
+        output_path, display_path, _ = _resolve_output_path(
+            img_path, input_dir, output_dir, config, preserve_structure
+        )
+
+        attempted += 1
+        try:
+            if progress_callback:
+                # Keep retries in the high progress band so UI still looks near-complete.
+                frac = 0.95 + 0.05 * (i / max(total, 1))
+                progress_callback(
+                    frac,
+                    f"Retrying failed image {i + 1}/{total}: {display_path}",
+                )
+
+            log_message(
+                f"Retrying {i + 1}/{total}: {display_path}",
+                always_print=True,
+            )
+
+            if cancellation_manager is not None and cancellation_manager.is_cancelled():
+                attempted -= 1
+                break
+            translate_and_render(
+                img_path,
+                config,
+                output_path,
+                cancellation_manager=cancellation_manager,
+            )
+            results["success_count"] = int(results.get("success_count", 0)) + 1
+            results["error_count"] = max(0, int(results.get("error_count", 0)) - 1)
+            errors = results.setdefault("errors", {})
+            errors.pop(error_key, None)
+            failed_paths = list(results.get("failed_image_paths") or [])
+            before_len = len(failed_paths)
+            failed_paths = [p for p in failed_paths if p != source_path]
+            if len(failed_paths) == before_len:
+                log_message(
+                    f"Retry success path cleanup: source_path not in "
+                    f"failed_image_paths ({source_path!r})",
+                    always_print=True,
+                )
+            results["failed_image_paths"] = failed_paths
+            retry_success += 1
+            log_message(
+                f"Retry succeeded: {display_path}",
+                always_print=True,
+            )
+        except CancellationError:
+            attempted -= 1
+            log_message(
+                f"Batch retry cancelled during {display_path}; "
+                "remaining retries skipped.",
+                always_print=True,
+            )
+            break
+        except Exception as e:
+            results.setdefault("errors", {})[error_key] = str(e)
+            retry_failed += 1
+            log_message(
+                f"Retry failed for {display_path}: {e}",
+                always_print=True,
+            )
+
+    results["retry_attempted_count"] = attempted
+    results["retry_success_count"] = retry_success
+    results["retry_failed_count"] = retry_failed
+
+    if progress_callback and attempted > 0:
+        try:
+            progress_callback(
+                0.99,
+                f"Retry complete: {retry_success} recovered, {retry_failed} still failed",
+            )
+        except CancellationError:
+            log_message(
+                "Batch retry progress callback cancelled after stats flush.",
+                always_print=True,
+            )
+
+
 async def _batch_translate_parallel(
     image_files: List[Path],
     input_dir: Path,
@@ -2064,6 +2212,7 @@ async def _batch_translate_parallel(
         "error_count": 0,
         "errors": {},
         "failed_image_paths": [],
+        "_failed_jobs": [],
     }
     previous_context_cache = OrderedDict()
     previous_context_cache_lock = threading.Lock()
@@ -2144,10 +2293,16 @@ async def _batch_translate_parallel(
         raise
     except Exception as e:
         log_message(f"Error processing {first_display}: {str(e)}", always_print=True)
+        source_path = resolve_source_path(first_img, source_path_map)
         results["error_count"] += 1
         results["errors"][first_key] = str(e)
-        results["failed_image_paths"].append(
-            resolve_source_path(first_img, source_path_map)
+        results["failed_image_paths"].append(source_path)
+        results["_failed_jobs"].append(
+            {
+                "error_key": first_key,
+                "img_path": first_img,
+                "source_path": source_path,
+            }
         )
     finally:
         ocr_text_ready_events[0].set()
@@ -2263,11 +2418,17 @@ async def _batch_translate_parallel(
                         f"Error processing {display_path}: {str(e)}",
                         always_print=True,
                     )
+                    source_path = resolve_source_path(img_path, source_path_map)
                     with results_lock:
                         results["error_count"] += 1
                         results["errors"][error_key] = str(e)
-                        results["failed_image_paths"].append(
-                            resolve_source_path(img_path, source_path_map)
+                        results["failed_image_paths"].append(source_path)
+                        results["_failed_jobs"].append(
+                            {
+                                "error_key": error_key,
+                                "img_path": img_path,
+                                "source_path": source_path,
+                            }
                         )
                         completed_count += 1
                         count = completed_count
@@ -2401,6 +2562,7 @@ def batch_translate_images(
                 source_path_map=source_path_map,
             )
         )
+        failed_jobs = results.pop("_failed_jobs", [])
     else:
         results = {
             "success_count": 0,
@@ -2408,6 +2570,7 @@ def batch_translate_images(
             "errors": {},
             "failed_image_paths": [],
         }
+        failed_jobs: List[Dict[str, Any]] = []
         previous_context_cache = OrderedDict()
         previous_context_cache_lock = threading.Lock()
         ocr_text_history: Dict[Path, List[str]] = {}
@@ -2484,10 +2647,16 @@ def batch_translate_images(
                 log_message(
                     f"Error processing {display_path}: {str(e)}", always_print=True
                 )
+                source_path = resolve_source_path(img_path, source_path_map)
                 results["error_count"] += 1
                 results["errors"][error_key] = str(e)
-                results["failed_image_paths"].append(
-                    resolve_source_path(img_path, source_path_map)
+                results["failed_image_paths"].append(source_path)
+                failed_jobs.append(
+                    {
+                        "error_key": error_key,
+                        "img_path": img_path,
+                        "source_path": source_path,
+                    }
                 )
 
                 if progress_callback:
@@ -2496,6 +2665,19 @@ def batch_translate_images(
                         completed_progress,
                         f"Completed {i + 1}/{total_images} images (with errors)",
                     )
+
+    if _should_run_failed_retry(config, failed_jobs, cancellation_manager):
+        _retry_failed_batch_images(
+            failed_jobs=failed_jobs,
+            results=results,
+            config=config,
+            input_dir=input_dir,
+            output_dir=output_dir,
+            preserve_structure=preserve_structure,
+            progress_callback=progress_callback,
+            cancellation_manager=cancellation_manager,
+            source_path_map=source_path_map,
+        )
 
     if progress_callback:
         progress_callback(1.0, "Processing complete")
@@ -2509,6 +2691,13 @@ def batch_translate_images(
         f"{total_batch_time:.2f}s ({seconds_per_image:.2f}s/image)",
         always_print=True,
     )
+    if results.get("retry_attempted_count"):
+        log_message(
+            f"Retry pass: {results.get('retry_success_count', 0)} recovered, "
+            f"{results.get('retry_failed_count', 0)} still failed "
+            f"(of {results['retry_attempted_count']} attempted)",
+            always_print=True,
+        )
     if results["error_count"] > 0:
         log_message(f"Failed: {results['error_count']} images", always_print=True)
         for filename, error_msg in results["errors"].items():

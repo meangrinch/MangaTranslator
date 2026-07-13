@@ -480,8 +480,18 @@ def create_layout(
                             label="Previous Context OCR Text",
                             info=(
                                 "Sends up to this many previous pages' OCR text "
-                                "transcripts as narrative "
-                                "reference. Might improve translation quality."
+                                "transcripts as narrative reference. "
+                                "Might improve translation quality."
+                            ),
+                        )
+                        batch_retry_failed_once = gr.Checkbox(
+                            label="Retry Failed Images Once",
+                            value=bool(
+                                saved_settings.get("batch_retry_failed_once", False)
+                            ),
+                            info=(
+                                "Automatically retry each failed image once "
+                                "at the very end."
                             ),
                         )
                     with gr.Column(scale=1):
@@ -2260,6 +2270,7 @@ def create_layout(
             batch_parallel_within_pages,
             overlap_llm_with_inpaint,
             batch_overlap_llm_with_inpaint,
+            batch_retry_failed_once,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -2384,6 +2395,7 @@ def create_layout(
             batch_parallel_within_pages,
             overlap_llm_with_inpaint,
             batch_overlap_llm_with_inpaint,
+            batch_retry_failed_once,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -2508,6 +2520,7 @@ def create_layout(
             batch_parallel_within_pages,
             overlap_llm_with_inpaint,
             batch_overlap_llm_with_inpaint,
+            batch_retry_failed_once,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]
@@ -2633,6 +2646,7 @@ def create_layout(
             batch_parallel_within_pages,
             overlap_llm_with_inpaint,
             batch_overlap_llm_with_inpaint,
+            batch_retry_failed_once,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
         ]

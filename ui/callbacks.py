@@ -210,6 +210,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_parallel_within_pages_val,
         overlap_llm_with_inpaint_val,
         batch_overlap_llm_with_inpaint_val,
+        batch_retry_failed_once_val,
         batch_previous_context_image_count_val,
         batch_previous_context_text_count_val,
     ) = args
@@ -373,6 +374,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_font_pack=batch_font_dropdown,
         batch_parallel_requests=int(batch_parallel_requests_val),
         batch_parallel_within_pages=bool(batch_parallel_within_pages_val),
+        batch_retry_failed_once=bool(batch_retry_failed_once_val),
         batch_previous_context_image_count=int(batch_previous_context_image_count_val),
         batch_previous_context_text_count=int(batch_previous_context_text_count_val),
     )
@@ -756,6 +758,14 @@ def _format_batch_success_message(
     failed_paths_file = results.get("failed_paths_file")
     if failed_paths_file:
         msg_parts.append(f"\n• Failed paths list: {failed_paths_file}")
+    retry_attempted = results.get("retry_attempted_count")
+    if retry_attempted:
+        retry_ok = results.get("retry_success_count", 0)
+        retry_fail = results.get("retry_failed_count", 0)
+        msg_parts.append(
+            f"\n• Retry pass: {retry_ok} recovered, {retry_fail} still failed "
+            f"(of {retry_attempted} attempted)"
+        )
     return "".join(msg_parts)
 
 
@@ -1111,6 +1121,7 @@ def handle_save_config_click(*args: Any) -> str:
         batch_parallel_within_pages_val,
         overlap_llm_with_inpaint_val,
         batch_overlap_llm_with_inpaint_val,
+        batch_retry_failed_once_val,
         batch_previous_context_image_count_val,
         batch_previous_context_text_count_val,
     ) = args
@@ -1265,6 +1276,7 @@ def handle_save_config_click(*args: Any) -> str:
         batch_parallel_requests=int(batch_parallel_requests_val),
         batch_parallel_within_pages=bool(batch_parallel_within_pages_val),
         batch_overlap_llm_with_inpaint=bool(batch_overlap_llm_with_inpaint_val),
+        batch_retry_failed_once=bool(batch_retry_failed_once_val),
         batch_previous_context_image_count=int(batch_previous_context_image_count_val),
         batch_previous_context_text_count=int(batch_previous_context_text_count_val),
     )
@@ -1599,6 +1611,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.batch_parallel_within_pages,
         default_ui_state.general.overlap_llm_with_inpaint,
         default_ui_state.batch_overlap_llm_with_inpaint,
+        default_ui_state.batch_retry_failed_once,
         default_ui_state.batch_previous_context_image_count,
         default_ui_state.batch_previous_context_text_count,
     ]
