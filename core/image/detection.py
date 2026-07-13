@@ -355,7 +355,7 @@ def _categorize_detections(primary_boxes, secondary_boxes, ioa_threshold=IOA_THR
 
     Args:
         primary_boxes: Tensor of primary YOLO detection boxes (N, 4)
-        secondary_boxes: Tensor of secondary YOLO detection boxes (M, 4)
+        secondary_boxes: Tensor of secondary RT-DETR detection boxes (M, 4)
         ioa_threshold: Threshold for determining if a secondary box is contained in a primary box
 
     Returns:
@@ -1299,10 +1299,10 @@ def detect_speech_bubbles(
     osb_text_hf_token: str = "",
     bubble_detector_model: str = "yolo_1",
 ):
-    """Detect speech bubbles using dual YOLO models and optional SAM2/SAM3 refinement.
+    """Detect speech bubbles using primary YOLO and optional RT-DETR + SAM refinement.
 
-    For conjoined bubbles detected by the secondary model, uses the inner bounding boxes
-    directly and processes each as a separate simple bubble through SAM.
+    For conjoined bubbles detected by the secondary RT-DETR model, uses the inner
+    bounding boxes directly and processes each as a separate simple bubble through SAM.
 
     Args:
         image_path (Path): Path to the input image
@@ -1311,8 +1311,8 @@ def detect_speech_bubbles(
         verbose (bool): Whether to show detailed processing information
         device (torch.device, optional): The device to run the model on. Autodetects if None.
         seg_model (str): Segmentation model ("yolo", "sam2", "sam3")
-        conjoined_detection (bool): Whether to enable conjoined bubble detection using secondary YOLO model
-        conjoined_confidence (float): Confidence threshold for secondary YOLO model (conjoined bubble detection)
+        conjoined_detection (bool): Whether to enable conjoined bubble detection using secondary RT-DETR model
+        conjoined_confidence (float): Confidence threshold for secondary RT-DETR model (conjoined bubble detection)
         osb_text_verification (bool): When True, expand bubble boxes to fully cover OSB text detections
         osb_text_hf_token (str): Optional token for gated model downloads (SAM3, OSB text)
 
@@ -1415,18 +1415,19 @@ def detect_speech_bubbles(
     use_sam = seg_model in ("sam2", "sam3")
     if conjoined_detection:
         try:
-            secondary_model = model_manager.load_yolo_conjoined_bubble()
+            secondary_model = model_manager.load_rtdetr_conjoined_bubble()
             log_message(
-                "Loaded secondary YOLO model for conjoined/fallback detection",
+                "Loaded secondary RT-DETR model for conjoined/fallback detection",
                 verbose=verbose,
             )
 
+            # RT-DETR-v2 (ogkalu) was trained at 640; ignore in-bubble text_bubble class.
             secondary_results = secondary_model(
                 image_cv,
                 conf=conjoined_confidence,
                 device=_device,
                 verbose=False,
-                imgsz=1024,
+                imgsz=640,
             )[0]
             secondary_boxes = (
                 secondary_results.boxes.xyxy
@@ -1449,14 +1450,13 @@ def detect_speech_bubbles(
                         verbose=verbose,
                     )
 
-            # Filter secondary detections to text_bubble for conjoined processing,
-            # while still collecting text_free boxes for OSB routing.
+            # Keep bubble for conjoined processing; collect text_free for OSB; ignore text_bubble.
             if len(secondary_boxes) > 0 and hasattr(secondary_model, "names"):
-                text_bubble_id = None
+                bubble_id = None
                 text_free_id = None
                 for cid, cname in secondary_model.names.items():
-                    if cname == "text_bubble":
-                        text_bubble_id = cid
+                    if cname == "bubble":
+                        bubble_id = cid
                     elif cname == "text_free":
                         text_free_id = cid
 
@@ -1470,7 +1470,7 @@ def detect_speech_bubbles(
                     if text_free_id is not None and cls_id == text_free_id:
                         text_free_boxes.append(s_box.tolist())
                         continue
-                    if text_bubble_id is None or cls_id == text_bubble_id:
+                    if bubble_id is None or cls_id == bubble_id:
                         filtered_boxes.append(s_box)
                         filtered_sources.append(secondary_sources[i])
 
@@ -1564,7 +1564,7 @@ def detect_speech_bubbles(
 
         except Exception as e:
             log_message(
-                f"Warning: Could not load/run secondary YOLO model: {e}. "
+                f"Warning: Could not load/run secondary RT-DETR model: {e}. "
                 "Proceeding without conjoined/fallback detection.",
                 verbose=verbose,
             )
@@ -1607,7 +1607,7 @@ def detect_speech_bubbles(
         )
         if len(conjoined_indices) > 0:
             log_message(
-                f"Detected {len(conjoined_indices)} conjoined speech bubbles with second YOLO",
+                f"Detected {len(conjoined_indices)} conjoined speech bubbles with RT-DETR",
                 always_print=True,
             )
     else:

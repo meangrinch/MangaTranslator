@@ -271,7 +271,7 @@ pip install -r requirements.txt  # Or activate venv first if present
 
 - YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Manga109 Speech Bubble Detector: [huyvux3005](https://huggingface.co/huyvux3005/manga109-segmentation-bubble)
-- Comic Speech Bubble Detector YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
+- Comic Text and Bubble Detector RT-DETR-v2: [ogkalu](https://huggingface.co/ogkalu/comic-text-and-bubble-detector)
 - Manga109 YOLO: [deepghs](https://huggingface.co/deepghs/manga109_yolo)
 - AnimeText YOLO: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
 - SAM 2.1: Segment Anything in Images and Videos: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)

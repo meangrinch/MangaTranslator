@@ -11,6 +11,8 @@ import torch
 from huggingface_hub import hf_hub_download, snapshot_download
 from spandrel import ModelLoader
 from transformers import (
+    RTDetrImageProcessor,
+    RTDetrV2ForObjectDetection,
     Sam2Model,
     Sam2Processor,
     Sam3TrackerModel,
@@ -19,6 +21,7 @@ from transformers import (
 from ultralytics import YOLO
 
 from core.device import empty_cache, get_best_device, get_best_dtype, get_device_info
+from core.ml.rtdetr_adapter import RTDetrYOLOAdapter
 from core.ml.sdcpp_server import SDCppServerManager
 from utils.exceptions import ModelError
 from utils.logging import log_message
@@ -32,7 +35,7 @@ class ModelType(Enum):
     UPSCALE_LITE = "upscale_lite"
     YOLO_SPEECH_BUBBLE = "yolo_speech_bubble"
     YOLO_SPEECH_BUBBLE_2 = "yolo_speech_bubble_2"
-    YOLO_CONJOINED_BUBBLE = "yolo_conjoined_bubble"
+    RTDETR_CONJOINED_BUBBLE = "rtdetr_conjoined_bubble"
     YOLO_OSBTEXT = "yolo_osbtext"
     YOLO_PANEL = "yolo_panel"
     SAM2 = "sam2"
@@ -120,8 +123,8 @@ class ModelManager:
             ModelType.YOLO_SPEECH_BUBBLE_2: (
                 model_dir / "yolo" / "manga109-segmentation-bubble.pt"
             ),
-            ModelType.YOLO_CONJOINED_BUBBLE: (
-                model_dir / "yolo" / "comic-speech-bubble-detector-yolov8m.pt"
+            ModelType.RTDETR_CONJOINED_BUBBLE: (
+                model_dir / "rtdetr" / "comic-text-and-bubble-detector"
             ),
             ModelType.YOLO_OSBTEXT: (model_dir / "yolo" / "animetext_yolov12x.pt"),
             ModelType.YOLO_PANEL: (
@@ -185,9 +188,8 @@ class ModelManager:
                 "repo_id": "huyvux3005/manga109-segmentation-bubble",
                 "filename": "best.pt",
             },
-            ModelType.YOLO_CONJOINED_BUBBLE: {
-                "repo_id": "ogkalu/comic-speech-bubble-detector-yolov8m",
-                "filename": "comic-speech-bubble-detector.pt",
+            ModelType.RTDETR_CONJOINED_BUBBLE: {
+                "repo_id": "ogkalu/comic-text-and-bubble-detector",
             },
             ModelType.YOLO_OSBTEXT: {
                 "repo_id": "deepghs/AnimeText_yolo",
@@ -740,27 +742,40 @@ class ModelManager:
             log_message("YOLO model loaded.", verbose=verbose)
             return model
 
-    def load_yolo_conjoined_bubble(self, verbose: bool = False):
-        """Load YOLO model for conjoined speech bubble detection."""
+    def load_rtdetr_conjoined_bubble(self, verbose: bool = False):
+        """Load RT-DETR-v2 model for conjoined/fallback bubble detection.
+
+        Returns a YOLO-compatible adapter exposing ``.names`` and a callable
+        predict API used by the detection pipeline.
+        """
         with self._lock:
-            if self.is_loaded(ModelType.YOLO_CONJOINED_BUBBLE):
-                return self.models[ModelType.YOLO_CONJOINED_BUBBLE]
+            if self.is_loaded(ModelType.RTDETR_CONJOINED_BUBBLE):
+                return self.models[ModelType.RTDETR_CONJOINED_BUBBLE]
 
             log_message(
-                "Loading YOLO conjoined bubble detection model...", verbose=verbose
+                "Loading RT-DETR conjoined bubble detection model...", verbose=verbose
             )
-            path = self.model_paths[ModelType.YOLO_CONJOINED_BUBBLE]
+            path = self.model_paths[ModelType.RTDETR_CONJOINED_BUBBLE]
+            hf_info = self.model_hf_repos[ModelType.RTDETR_CONJOINED_BUBBLE]
+            self._ensure_hf_repo(hf_info["repo_id"], path, verbose=verbose)
 
-            # Try HF download
-            hf_info = self.model_hf_repos[ModelType.YOLO_CONJOINED_BUBBLE]
-            self._ensure_hf_file(
-                hf_info["repo_id"], hf_info["filename"], path, verbose=verbose
-            )
+            try:
+                processor = RTDetrImageProcessor.from_pretrained(str(path))
+                model = RTDetrV2ForObjectDetection.from_pretrained(str(path))
+                model.to(self.device)
+                model.eval()
+                adapter = RTDetrYOLOAdapter(
+                    model=model,
+                    processor=processor,
+                    device=self.device,
+                    names=getattr(model.config, "id2label", None),
+                )
+            except Exception as e:
+                raise ModelError(f"Failed to load RT-DETR conjoined model: {e}") from e
 
-            model = YOLO(str(path))
-            self.models[ModelType.YOLO_CONJOINED_BUBBLE] = model
-            log_message("YOLO conjoined bubble model loaded.", verbose=verbose)
-            return model
+            self.models[ModelType.RTDETR_CONJOINED_BUBBLE] = adapter
+            log_message("RT-DETR conjoined bubble model loaded.", verbose=verbose)
+            return adapter
 
     def load_yolo_osbtext(self, token: Optional[str] = None, verbose: bool = False):
         """Load YOLO model for outside text detection.
@@ -1386,8 +1401,8 @@ class ModelManager:
             models_unloaded.append("yolo_speech_bubble")
         if self.is_loaded(ModelType.YOLO_SPEECH_BUBBLE_2):
             models_unloaded.append("yolo_speech_bubble_2")
-        if self.is_loaded(ModelType.YOLO_CONJOINED_BUBBLE):
-            models_unloaded.append("yolo_conjoined_bubble")
+        if self.is_loaded(ModelType.RTDETR_CONJOINED_BUBBLE):
+            models_unloaded.append("rtdetr_conjoined_bubble")
         if self.is_loaded(ModelType.SAM2):
             models_unloaded.append("sam2")
         if self.is_loaded(ModelType.SAM3):
@@ -1406,7 +1421,7 @@ class ModelManager:
             ModelType.YOLO_SPEECH_BUBBLE_2, force_gc=False, verbose=verbose
         )
         self.unload_model(
-            ModelType.YOLO_CONJOINED_BUBBLE, force_gc=False, verbose=verbose
+            ModelType.RTDETR_CONJOINED_BUBBLE, force_gc=False, verbose=verbose
         )
         self.unload_model(ModelType.SAM2, force_gc=False, verbose=verbose)
         self.unload_model(ModelType.SAM3, force_gc=False, verbose=verbose)

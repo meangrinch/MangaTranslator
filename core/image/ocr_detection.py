@@ -177,7 +177,7 @@ class OutsideTextDetector:
             image_path: Path to the input image.
             yolo_model_path: Optional custom YOLO model path.
             confidence: Confidence threshold for primary YOLO model detections.
-            conjoined_confidence: Confidence threshold for secondary YOLO model (conjoined bubble detection).
+            conjoined_confidence: Confidence threshold for secondary RT-DETR model (conjoined bubble detection).
             verbose: If True, logs intermediate steps.
             text_free_boxes: Optional list of text_free regions to use as fallback OSB detections.
 
@@ -283,16 +283,16 @@ class OutsideTextDetector:
             )
 
             log_message(
-                "Running Secondary YOLO to catch missed bubbles...", verbose=verbose
+                "Running secondary RT-DETR to catch missed bubbles...", verbose=verbose
             )
             try:
-                sec_model = self.manager.load_yolo_conjoined_bubble()
+                sec_model = self.manager.load_rtdetr_conjoined_bubble()
                 sec_results = sec_model(
                     image_cv,
                     conf=conjoined_confidence,
                     device=self.device,
                     verbose=False,
-                    imgsz=1024,
+                    imgsz=640,
                 )[0]
 
                 sec_boxes = (
@@ -306,13 +306,13 @@ class OutsideTextDetector:
                     else torch.tensor([])
                 )
 
-                # Find text_bubble and text_free classes
-                tb_id = None
+                # bubble = speech bubbles; text_free = OSB; ignore text_bubble (in-bubble text)
+                bubble_id = None
                 tf_id = None
                 if hasattr(sec_model, "names"):
                     for cid, cname in sec_model.names.items():
-                        if cname == "text_bubble":
-                            tb_id = cid
+                        if cname == "bubble":
+                            bubble_id = cid
                         elif cname == "text_free":
                             tf_id = cid
 
@@ -321,15 +321,15 @@ class OutsideTextDetector:
                         if int(cls_id) == tf_id:
                             text_free_boxes.append(sec_boxes[i].detach().cpu().numpy())
 
-                if tb_id is not None and len(sec_boxes) > 0:
+                if bubble_id is not None and len(sec_boxes) > 0:
                     boxes_to_add = []
                     for i, cls_id in enumerate(sec_cls):
-                        if int(cls_id) == tb_id:
+                        if int(cls_id) == bubble_id:
                             boxes_to_add.append(sec_boxes[i])
 
                     if boxes_to_add:
                         log_message(
-                            f"Secondary YOLO found {len(boxes_to_add)} potential bubbles",
+                            f"Secondary RT-DETR found {len(boxes_to_add)} potential bubbles",
                             verbose=verbose,
                         )
                         boxes_to_add_tensor = torch.stack(boxes_to_add)
@@ -340,7 +340,7 @@ class OutsideTextDetector:
                         else:
                             yolo_boxes = boxes_to_add_tensor
             except Exception as e:
-                log_message(f"Secondary YOLO failed: {e}", verbose=verbose)
+                log_message(f"Secondary RT-DETR failed: {e}", verbose=verbose)
 
         log_message("Running YOLO OSB Text...", always_print=True)
 

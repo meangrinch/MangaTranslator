@@ -272,7 +272,7 @@ pip install -r requirements.txt  # 가상 환경을 사용 중인 경우 먼저 
 
 - YOLOv8m 말풍선 감지기: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Manga109 말풍선 감지기: [huyvux3005](https://huggingface.co/huyvux3005/manga109-segmentation-bubble)
-- Comic 말풍선 감지기 YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
+- Comic 텍스트·말풍선 감지 RT-DETR-v2: [ogkalu](https://huggingface.co/ogkalu/comic-text-and-bubble-detector)
 - Manga109 YOLO: [deepghs](https://huggingface.co/deepghs/manga109_yolo)
 - AnimeText YOLO: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
 - SAM 2.1: Segment Anything in Images and Videos: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)

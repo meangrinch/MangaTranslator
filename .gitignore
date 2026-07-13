@@ -24,6 +24,7 @@ start-webui.sh
 /models/manga-ocr-base/
 /models/paddleocr-vl/
 /models/sdcpp/
+/models/rtdetr/
 /output/
 .DS_Store
 Thumbs.db

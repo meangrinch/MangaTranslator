@@ -272,7 +272,7 @@ pip install -r requirements.txt  # 仮想環境を使用している場合は先
 
 - YOLOv8m 吹き出し検出モデル: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Manga109 吹き出し検出モデル: [huyvux3005](https://huggingface.co/huyvux3005/manga109-segmentation-bubble)
-- Comic 吹き出し検出モデル YOLOv8m: [ogkalu](https://huggingface.co/ogkalu/comic-speech-bubble-detector-yolov8m)
+- Comic テキスト・吹き出し検出 RT-DETR-v2: [ogkalu](https://huggingface.co/ogkalu/comic-text-and-bubble-detector)
 - Manga109 YOLO: [deepghs](https://huggingface.co/deepghs/manga109_yolo)
 - AnimeText YOLO: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
 - SAM 2.1: Segment Anything in Images and Videos: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)

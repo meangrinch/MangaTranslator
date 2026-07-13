@@ -590,7 +590,7 @@ def create_layout(
                                 value=saved_settings.get("conjoined_detection", True),
                                 label="Conjoined Bubble Detection",
                                 info=(
-                                    "Uses a secondary YOLO model to detect and split "
+                                    "Uses a secondary RT-DETR model to detect and split "
                                     "conjoined speech bubbles into separate bubbles."
                                 ),
                             )

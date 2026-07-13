@@ -240,7 +240,7 @@ def main():
         "--no-conjoined-detection",
         dest="conjoined_detection",
         action="store_false",
-        help="Disable conjoined bubble detection using secondary YOLO model",
+        help="Disable conjoined bubble detection using secondary RT-DETR model",
     )
     parser.set_defaults(conjoined_detection=True)
     parser.add_argument(
