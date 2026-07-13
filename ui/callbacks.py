@@ -584,8 +584,8 @@ def _format_single_success_message(
 
     msg_parts.extend(
         [
-            f"• Processing Time: {processing_time:.2f} seconds\n",
-            f"• Saved To: {save_path}",
+            f"\n• Processing Time: {processing_time:.2f} seconds\n",
+            f"• Saved to: {save_path}",
         ]
     )
     return "".join(msg_parts)
@@ -649,7 +649,6 @@ def _format_batch_success_message(
                 f"• {filename}: {error_msg}\n"
                 for filename, error_msg in failed_pages.items()
             )
-        failure_parts.append("\n")
         failure_details = "".join(failure_parts)
 
     if backend_config.cleaning_only:
@@ -751,8 +750,8 @@ def _format_batch_success_message(
         [
             f"• Successful Translations: {success_count}/{total_images}\n",
             failure_details,
-            f"• Total Processing Time: {processing_time:.2f} seconds ({seconds_per_image:.2f} seconds/image)\n",
-            f"• Saved To: {output_path}",
+            f"\n• Total Processing Time: {processing_time:.2f} seconds ({seconds_per_image:.2f} seconds/image)\n",
+            f"• Saved to: {output_path}",
         ]
     )
     failed_paths_file = results.get("failed_paths_file")
