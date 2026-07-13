@@ -2243,12 +2243,6 @@ async def _batch_translate_parallel(
         config.request_coordinator = None
         config.translation.request_coordinator = None
 
-    if getattr(config, "overlap_llm_with_inpaint", False):
-        log_message(
-            "LLM/inpaint overlap enabled",
-            always_print=True,
-        )
-
     # -- Phase 1: process the first image sequentially to warm up models --
     first_img = image_files[0]
     first_output, first_display, first_key = _resolve_output_path(

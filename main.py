@@ -1412,11 +1412,6 @@ def main():
 
         try:
             log_message(f"Processing {input_path}...", always_print=True)
-            if getattr(config, "overlap_llm_with_inpaint", False):
-                log_message(
-                    "LLM/inpaint overlap enabled",
-                    always_print=True,
-                )
             translate_and_render(input_path, config, output_path)
             log_message(
                 f"Translation complete. Result saved to {output_path}",
