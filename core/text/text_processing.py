@@ -36,6 +36,8 @@ KOREAN_NO_LINE_START_SYLLABLES = {
     "님",
     "죠",
     "며",
+    "겠",
+    "잖",
 }
 
 # Thai script block (Unicode U+0E00–U+0E7F)
