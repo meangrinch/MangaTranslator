@@ -16,6 +16,9 @@ from utils.logging import log_message
 OSB_BUBBLE_MATCH_IOA_THRESHOLD = (
     0.2  # Minimum text-box overlap ratio for OSB assignment
 )
+TEXT_FREE_BUBBLE_IOA_THRESHOLD = (
+    0.5  # Bubble treated as text_free only with substantial overlap
+)
 
 
 class OutsideTextDetector:
@@ -117,6 +120,31 @@ class OutsideTextDetector:
 
         ioa = intersection / area1
         return ioa > threshold
+
+    def box_ioa(self, box_inner, box_outer) -> float:
+        """IoA = intersection_area / area_of_inner_box."""
+        area_inner = self.box_area(box_inner)
+        if area_inner <= 0.0:
+            return 0.0
+        return self.box_intersection_area(box_inner, box_outer) / area_inner
+
+    def bubble_is_text_free_region(self, bubble_box, text_free_boxes) -> bool:
+        """Return True if a bubble box is substantially the same as a text_free box.
+
+        Requires real IoA overlap, not a one-pixel touch. Adjacent dialogue
+        bubbles must still suppress in-bubble OSB text detections.
+        """
+        if not text_free_boxes:
+            return False
+        for tf_box in text_free_boxes:
+            tf = list(map(float, tf_box[:4]))
+            bubble = list(map(float, bubble_box[:4]))
+            if (
+                self.box_ioa(bubble, tf) > TEXT_FREE_BUBBLE_IOA_THRESHOLD
+                or self.box_ioa(tf, bubble) > TEXT_FREE_BUBBLE_IOA_THRESHOLD
+            ):
+                return True
+        return False
 
     def filter_nested_detections(self, results):
         """Remove detections fully contained in larger ones to avoid duplicates.
@@ -438,20 +466,13 @@ class OutsideTextDetector:
 
                 for yolo_box in yolo_boxes_np:
                     if self.boxes_overlap(bbox, yolo_box):
-                        # Check if this bubble is actually a text_free region
-                        is_text_free_bubble = False
-                        if text_free_boxes:
-                            for tf_box in text_free_boxes:
-                                # We check if the YOLO bubble overlaps with a text_free detection
-                                if self.boxes_overlap(yolo_box, tf_box):
-                                    is_text_free_bubble = True
-                                    break
+                        if self.bubble_is_text_free_region(yolo_box, text_free_boxes):
+                            continue
 
-                        if not is_text_free_bubble:
-                            intersection = self.box_intersection_area(bbox, yolo_box)
-                            if intersection > best_intersection:
-                                best_intersection = intersection
-                                best_bubble = yolo_box
+                        intersection = self.box_intersection_area(bbox, yolo_box)
+                        if intersection > best_intersection:
+                            best_intersection = intersection
+                            best_bubble = yolo_box
 
                 if best_bubble is None or not self.text_box_meaningfully_matches_bubble(
                     bbox, best_bubble

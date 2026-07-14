@@ -23,8 +23,10 @@ OSB_TEXT_MATCH_IOA_THRESHOLD = (
 AMBIGUOUS_TEXT_MATCH_RATIO = (
     0.85  # Skip nudge boxes that match sibling bubbles nearly equally
 )
-TEXT_NUDGE_BOX_INSET_RATIO = 0.08  # Use text-core box, not full detector padding
-OVERLAP_NUDGE_INSET_RATIO = 0.08  # Keep nudged diagonal away from overlap-zone edges
+OSB_TEXT_CONTAIN_IOA_THRESHOLD = (
+    0.9  # Drop larger OSB boxes that nearly contain a smaller one
+)
+OVERLAP_NUDGE_INSET_RATIO = 0.08  # Keep cut slightly inside the overlap-zone edges
 MIN_OVERLAP_SPLIT_SHARE = 0.08  # Minimum share of overlap zone kept by each child
 SYNTHETIC_CONJOINED_IOA_THRESHOLD = (
     0.15  # Primary bbox overlap signaling a split conjoined bubble
@@ -104,24 +106,14 @@ def _text_box_meaningfully_matches_box(t_box, b_box) -> bool:
     )
 
 
-def _get_nudge_box_corners(t_box) -> list[tuple[float, float]]:
-    """Return a slightly inset box so detector padding does not overconstrain nudges."""
+def _get_text_box_corners(t_box) -> list[tuple[float, float]]:
+    """Return the four corners of an OSB text box (full box, no inset)."""
     x0, y0, x1, y1 = [float(v) for v in t_box[:4]]
-    width = max(0.0, x1 - x0)
-    height = max(0.0, y1 - y0)
-    inset_x = min(
-        max(1.0, width * TEXT_NUDGE_BOX_INSET_RATIO),
-        max(0.0, width / 2.0 - 0.5),
-    )
-    inset_y = min(
-        max(1.0, height * TEXT_NUDGE_BOX_INSET_RATIO),
-        max(0.0, height / 2.0 - 0.5),
-    )
     return [
-        (x0 + inset_x, y0 + inset_y),
-        (x1 - inset_x, y0 + inset_y),
-        (x0 + inset_x, y1 - inset_y),
-        (x1 - inset_x, y1 - inset_y),
+        (x0, y0),
+        (x1, y0),
+        (x0, y1),
+        (x1, y1),
     ]
 
 
@@ -587,6 +579,46 @@ def _build_rect_mask_from_box(box, img_h: int, img_w: int) -> np.ndarray:
     return mask
 
 
+def _filter_encompassing_osb_text_boxes(
+    osb_text_boxes: np.ndarray,
+    contain_threshold: float = OSB_TEXT_CONTAIN_IOA_THRESHOLD,
+) -> np.ndarray:
+    """Drop larger OSB boxes that nearly contain a smaller, more precise box.
+
+    Spanning detections over both lobes of a conjoined bubble block text-safe
+    split gaps; prefer the nested smaller boxes when present.
+    """
+    if osb_text_boxes is None or len(osb_text_boxes) <= 1:
+        return osb_text_boxes
+
+    boxes = [np.asarray(tb)[:4] for tb in osb_text_boxes]
+    n = len(boxes)
+    keep = [True] * n
+
+    for i in range(n):
+        if not keep[i]:
+            continue
+        area_i = _box_area(boxes[i])
+        if area_i <= 0.0:
+            keep[i] = False
+            continue
+        for j in range(n):
+            if i == j or not keep[j]:
+                continue
+            area_j = _box_area(boxes[j])
+            if area_j <= 0.0 or area_i <= area_j:
+                continue
+            # j is smaller and mostly inside i → drop the encompassing box i
+            if _calculate_ioa(boxes[j], boxes[i]) > contain_threshold:
+                keep[i] = False
+                break
+
+    kept = [osb_text_boxes[i] for i in range(n) if keep[i]]
+    if not kept:
+        return osb_text_boxes
+    return np.asarray(kept)
+
+
 def _get_group_osb_text_boxes(
     osb_text_boxes: Optional[np.ndarray], primary_box
 ) -> Optional[np.ndarray]:
@@ -601,7 +633,9 @@ def _get_group_osb_text_boxes(
     for tb in osb_text_boxes:
         if tb[0] < px1 and tb[2] > px0 and tb[1] < py1 and tb[3] > py0:
             hits.append(tb)
-    return np.array(hits) if hits else None
+    if not hits:
+        return None
+    return _filter_encompassing_osb_text_boxes(np.asarray(hits))
 
 
 def _seed_mask_from_box(parent_mask: np.ndarray, box) -> np.ndarray:
@@ -684,13 +718,13 @@ def _split_overlap_zone_with_line(
             upper_bound = raw_upper_bound
 
         def _tighten_strict(text_boxes, center_dist, lower, upper):
-            """Constrain using ALL inset-box corners (strictest protection)."""
+            """Constrain using ALL text-box corners (keep whole boxes on one side)."""
             if abs(center_dist) < 1e-6:
                 return lower, upper
 
             corner_distances = []
             for t_box in text_boxes:
-                for cx, cy in _get_nudge_box_corners(t_box):
+                for cx, cy in _get_text_box_corners(t_box):
                     corner_distances.append(_signed_distance(cx, cy))
 
             if not corner_distances:
@@ -702,77 +736,19 @@ def _split_overlap_zone_with_line(
                 lower = max(lower, max(corner_distances))
             return lower, upper
 
-        def _tighten_own_side(text_boxes, center_dist, lower, upper):
-            """Constrain using only corners on the text's own side."""
-            if abs(center_dist) < 1e-6:
-                return lower, upper
-
-            corner_distances = []
-            for t_box in text_boxes:
-                for cx, cy in _get_nudge_box_corners(t_box):
-                    corner_distances.append(_signed_distance(cx, cy))
-
-            if not corner_distances:
-                return lower, upper
-
-            if center_dist > 0:
-                own_side = [d for d in corner_distances if d > 0]
-                if own_side:
-                    upper = min(upper, min(own_side))
-            else:
-                own_side = [d for d in corner_distances if d < 0]
-                if own_side:
-                    lower = max(lower, max(own_side))
-            return lower, upper
-
-        def _pick_offset(lower, upper):
-            """Choose the best offset from a feasible range."""
-            if lower <= 0.0 <= upper:
-                mid = (lower + upper) / 2.0
-                return 0.0 if abs(mid) < 1e-6 else mid
-            return upper if upper < 0.0 else lower
-
-        def _split_respects_text(off):
-            """Reject if the split bisects any text box (2+ corners on wrong side)."""
-            for t_box, member_dist in [
-                *[(tb, center_a_dist) for tb in text_boxes_a],
-                *[(tb, center_b_dist) for tb in text_boxes_b],
-            ]:
-                dists = [
-                    _signed_distance(cx, cy) for cx, cy in _get_nudge_box_corners(t_box)
-                ]
-                if member_dist > 0:
-                    wrong = sum(1 for d in dists if d < off)
-                else:
-                    wrong = sum(1 for d in dists if d > off)
-                if wrong >= 2:
-                    return False
-            return True
-
         center_a_dist = _signed_distance(center_a[0], center_a[1])
         center_b_dist = _signed_distance(center_b[0], center_b[1])
 
-        # Tier 1: strict corner-based constraints (best text protection).
+        # Strict: every text-box corner on its section's side. The feasible
+        # [lo, hi] is the gap between the two texts; place the cut in its middle
+        # (not at the geometric section midpoint, which often sits on ink).
         lo, hi = lower_bound, upper_bound
         lo, hi = _tighten_strict(text_boxes_a, center_a_dist, lo, hi)
         lo, hi = _tighten_strict(text_boxes_b, center_b_dist, lo, hi)
 
-        if lo <= hi:
-            offset = _pick_offset(lo, hi)
-        else:
-            # Tier 2: own-side corners + post-validation.
-            tier1_gap_lo = hi  # furthest cross-over corner of text_B
-            tier1_gap_hi = lo  # furthest cross-over corner of text_A
-            lo, hi = lower_bound, upper_bound
-            lo, hi = _tighten_own_side(text_boxes_a, center_a_dist, lo, hi)
-            lo, hi = _tighten_own_side(text_boxes_b, center_b_dist, lo, hi)
-            lo = max(lo, tier1_gap_lo)
-            hi = min(hi, tier1_gap_hi)
-
-            candidate_off = _pick_offset(lo, hi) if lo <= hi else None
-            if lo > hi or not _split_respects_text(candidate_off):
-                return None
-            offset = candidate_off
+        if lo > hi:
+            return None
+        offset = (lo + hi) / 2.0
 
     def _classify_pixels(split_offset: float):
         side_a = _signed_distance(center_a[0], center_a[1]) - split_offset
