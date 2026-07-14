@@ -168,7 +168,7 @@ class OutsideTextDetector:
         image_override: Optional[Image.Image] = None,
         existing_bubbles: Optional[List] = None,
         text_free_boxes: Optional[List] = None,
-        bubble_detector_model: str = "yolo_1",
+        bubble_detector_model: str = "yolo_2",
         min_area_ignore_ratio: float = 0.0,
     ):
         """Detect non-dialogue text by subtracting YOLO speech bubbles from OCR results.

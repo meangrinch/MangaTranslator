@@ -28,7 +28,7 @@ class UIDetectionSettings:
     conjoined_confidence: float = 0.35
     panel_confidence: float = 0.25
     seg_model: str = "yolo"  # "sam3", "sam2", or "yolo"
-    bubble_detector_model: str = "yolo_1"  # "yolo_1" or "yolo_2"
+    bubble_detector_model: str = "yolo_2"  # "yolo_1" or "yolo_2"
     conjoined_detection: bool = True
     use_panel_sorting: bool = True
     use_osb_text_verification: bool = True
@@ -97,7 +97,7 @@ class UIRenderingSettings:
     hyphen_penalty: float = 1000.0
     hyphenation_min_word_length: int = 8
     badness_exponent: float = 3.0
-    padding_pixels: float = 5.0
+    padding_pixels: float = 4.0
     supersampling_factor: int = 4
     detach_trailing_punctuation: bool = True
     auto_vertical_text: bool = False
@@ -393,7 +393,7 @@ class UIConfigState:
                 seg_model=data.get("seg_model", defaults.get("seg_model", "yolo")),
                 bubble_detector_model=data.get(
                     "bubble_detector_model",
-                    defaults.get("bubble_detector_model", "yolo_1"),
+                    defaults.get("bubble_detector_model", "yolo_2"),
                 ),
                 conjoined_detection=data.get(
                     "conjoined_detection",
@@ -597,7 +597,7 @@ class UIConfigState:
                     "badness_exponent", defaults.get("badness_exponent", 3.0)
                 ),
                 padding_pixels=data.get(
-                    "padding_pixels", defaults.get("padding_pixels", 5.0)
+                    "padding_pixels", defaults.get("padding_pixels", 4.0)
                 ),
                 supersampling_factor=data.get(
                     "supersampling_factor", defaults.get("supersampling_factor", 4)

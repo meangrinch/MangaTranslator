@@ -248,7 +248,7 @@ def main():
         dest="bubble_detector_model",
         type=str,
         choices=["yolo_1", "yolo_2"],
-        default="yolo_1",
+        default="yolo_2",
         help="Primary bubble detector model",
     )
     parser.add_argument(
@@ -433,7 +433,7 @@ def main():
     parser.add_argument(
         "--padding-pixels",
         type=float,
-        default=5.0,
+        default=4.0,
         help="Padding between text and the edge of the speech bubble (2-12). "
         "Increase for more space between text and bubble boundaries.",
     )

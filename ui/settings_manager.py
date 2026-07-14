@@ -154,7 +154,7 @@ DEFAULT_SETTINGS = {
     "conjoined_confidence": 0.35,
     "panel_confidence": 0.25,
     "seg_model": "yolo",  # "sam3", "sam2", or "yolo"
-    "bubble_detector_model": "yolo_1",  # "yolo_1" or "yolo_2"
+    "bubble_detector_model": "yolo_2",  # "yolo_1" or "yolo_2"
     "conjoined_detection": True,
     "use_osb_text_verification": True,
     "use_panel_sorting": True,
@@ -176,7 +176,7 @@ DEFAULT_SETTINGS = {
     "hyphen_penalty": 1000.0,
     "hyphenation_min_word_length": 8,
     "badness_exponent": 3.0,
-    "padding_pixels": 5.0,
+    "padding_pixels": 4.0,
     "supersampling_factor": 4,
     "detach_trailing_punctuation": True,
     "auto_vertical_text": False,

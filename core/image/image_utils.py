@@ -171,7 +171,7 @@ def save_image_with_compression(
 
 
 def calculate_centroid_expansion_box(
-    cleaned_mask: np.ndarray, padding_pixels: float = 5.0, verbose: bool = False
+    cleaned_mask: np.ndarray, padding_pixels: float = 4.0, verbose: bool = False
 ) -> Tuple[Tuple[int, int, int, int], Tuple[float, float]]:
     """
     Calculates a guaranteed safe rendering box within a speech bubble to ensure text

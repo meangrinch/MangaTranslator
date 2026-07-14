@@ -539,7 +539,7 @@ def clean_speech_bubbles(
     flux_sdcpp_text_encoder_quant: str = "",
     flux_luminance_correction: bool = True,
     flux_upscale_small_crops: bool = True,
-    bubble_detector_model: str = "yolo_1",
+    bubble_detector_model: str = "yolo_2",
     request_coordinator: Optional[Any] = None,
 ):
     """

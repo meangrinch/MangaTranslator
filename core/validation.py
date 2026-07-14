@@ -172,7 +172,7 @@ def clamp_settings(settings: Any) -> Any:
 
 
 def autodetect_yolo_model_path(
-    models_dir: Path, bubble_detector_model: str = "yolo_1"
+    models_dir: Path, bubble_detector_model: str = "yolo_2"
 ) -> Path:
     """Returns the path for the primary YOLO speech bubble model.
 
@@ -192,7 +192,7 @@ def validate_core_inputs(
     rendering_cfg: RenderingConfig,
     models_dir: Path,
     fonts_base_dir: Path,
-    bubble_detector_model: str = "yolo_1",
+    bubble_detector_model: str = "yolo_2",
 ) -> Tuple[Path, Path]:
     """
     Validates core inputs required for translation, raising standard exceptions.

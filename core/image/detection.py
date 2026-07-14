@@ -1297,7 +1297,7 @@ def detect_speech_bubbles(
     osb_enabled: bool = False,
     osb_text_verification: bool = False,
     osb_text_hf_token: str = "",
-    bubble_detector_model: str = "yolo_1",
+    bubble_detector_model: str = "yolo_2",
 ):
     """Detect speech bubbles using primary YOLO and optional RT-DETR + SAM refinement.
 

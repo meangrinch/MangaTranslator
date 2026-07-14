@@ -573,7 +573,7 @@ def create_layout(
                             bubble_detector_model = gr.Radio(
                                 choices=["yolo_1", "yolo_2"],
                                 value=saved_settings.get(
-                                    "bubble_detector_model", "yolo_1"
+                                    "bubble_detector_model", "yolo_2"
                                 ),
                                 label="Bubble Detector Model",
                                 info=("Primary YOLO model for bubble detection."),
@@ -1430,7 +1430,7 @@ def create_layout(
                             padding_pixels = gr.Slider(
                                 2,
                                 12,
-                                value=saved_settings.get("padding_pixels", 5.0),
+                                value=saved_settings.get("padding_pixels", 4.0),
                                 step=1,
                                 label="Padding Pixels",
                                 info="Padding between text and the edge of the speech bubble. "
