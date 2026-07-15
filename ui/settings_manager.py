@@ -555,6 +555,10 @@ def get_saved_settings() -> Dict[str, Any]:
                     except Exception:
                         pass
                     settings["provider_models"] = pm
+
+                # 4) ocr_method: paddleocr-vl -> paddleocr-vl-1.6
+                if settings.get("ocr_method") == "paddleocr-vl":
+                    settings["ocr_method"] = "paddleocr-vl-1.6"
             except Exception:
                 pass
 

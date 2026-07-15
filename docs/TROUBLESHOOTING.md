@@ -93,7 +93,7 @@
   - Try disabling "Send Full Page to LLM"
   - Try using a local OCR method, particularly for less-capable LLMs:
     - "manga-ocr": Japanese sources only
-    - "paddleocr-vl": non-Japanese sources
+    - "paddleocr-vl-1.6": non-Japanese sources
   - Increase "max_tokens" and/or use a higher "reasoning_effort" (e.g., "high")
   - Switch "Bubble/Context Resizing Method" to a better quality method (e.g., "Model")
   - In batch mode, try raising "Previous Context OCR Text"
@@ -109,7 +109,7 @@
   - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes
   - Lower "Media Resolution" (if using Gemini or SpaceXAI models)
   - Lower "Image Detail" (if using OpenAI models)
-  - Use "manga-ocr/paddleocr-vl" OCR method (may perform worse than more-capable VLMs)
+  - Use "manga-ocr/paddleocr-vl-1.6" OCR method (may perform worse than more-capable VLMs)
 
 - **Batch translation failed for some files:**
   - Failed images have their paths saved to `failed_paths.txt` in the output directory. You can upload this file to the ZIP archive upload area in the web UI, or pass it via `--input` in the CLI to retry only the failed files.

@@ -1974,8 +1974,8 @@ def handle_ocr_method_change(
             updates.append(gr.update(choices=models, value=selected_model))
         else:
             updates.append(gr.update())
-    elif ocr_method == "paddleocr-vl":
-        # Restrict to PaddleOCR-VL-1.5 supported languages; keep current if supported
+    elif ocr_method == "paddleocr-vl-1.6":
+        # Restrict to PaddleOCR-VL-1.6 supported languages; keep current if supported
         paddle_langs = layout.PADDLE_OCR_VL_LANGUAGES
         if input_language in paddle_langs:
             saved_language = original_language_state
@@ -2193,7 +2193,7 @@ def handle_translation_mode_change(translation_mode: str, current_ocr_method: st
     import gradio as gr
 
     if translation_mode == "one-step":
-        if current_ocr_method in ("manga-ocr", "paddleocr-vl"):
+        if current_ocr_method in ("manga-ocr", "paddleocr-vl-1.6"):
             return gr.update(value="LLM", interactive=False)
         else:
             return gr.update(interactive=False)

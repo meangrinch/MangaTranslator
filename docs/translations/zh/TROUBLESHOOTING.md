@@ -93,7 +93,7 @@
   - 尝试禁用“发送整页给 LLM (Send Full Page to LLM)”
   - 尝试使用本地 OCR 方法，特别是对于能力较弱 of LLM：
     - "manga-ocr": 仅限日语源文本
-    - "paddleocr-vl": 非日语源文本
+    - "paddleocr-vl-1.6": 非日语源文本
   - 增加 `max_tokens` 和/或使用更高的“推理努力 (reasoning_effort)”（例如 "high"）
   - 将“气泡/上下文缩放方法 (Bubble/Context Resizing Method)”切换到质量更好的方法（例如 "Model"）
   - 在批量模式下，尝试提高“前文 OCR 文本 (Previous Context OCR Text)”
@@ -109,7 +109,7 @@
   - 降低“气泡最小边长 (Bubble Min Side Pixels)”/“上下文图像最大边长 (Context Image Max Side Pixels)”/“OSB 最小边长 (OSB Min Side Pixels)”的目标大小
   - 降低“媒体分辨率 (Media Resolution)”（如果使用 Gemini 或 SpaceXAI 模型）
   - 降低“图像细节 (Image Detail)”（如果使用 OpenAI 模型）
-  - 使用 "manga-ocr/paddleocr-vl" OCR 方法（其效果可能不及更强的多模态模型）
+  - 使用 "manga-ocr/paddleocr-vl-1.6" OCR 方法（其效果可能不及更强的多模态模型）
 
 - **部分文件批量翻译失败：**
   - 翻译失败的图像路径将保存到输出目录下的 `failed_paths.txt` 中。您可以将此文件上传到 WebUI 的 ZIP 归档上传框中，或在命令行中将其作为 `--input` 参数传入，以仅重试失败的文件。

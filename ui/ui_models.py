@@ -80,7 +80,7 @@ class UITranslationLLMSettings:
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
     special_instructions: Optional[str] = None
-    ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl"
+    ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"
 
 
 @dataclass

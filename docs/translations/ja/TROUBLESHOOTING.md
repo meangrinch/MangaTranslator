@@ -92,7 +92,7 @@
   - 「ページ全体を LLM に送信（Send Full Page to LLM）」を無効にしてみてください。
   - 性能 of 低い LLM を使用する場合は、ローカルの OCR 方法を試してください:
     - "manga-ocr": 日本語の原文のみ
-    - "paddleocr-vl": 日本語以外の原文
+    - "paddleocr-vl-1.6": 日本語以外の原文
   - `max_tokens` を増やすか、より高い「推理力（reasoning_effort）」（例: "high"）を使用してください。
   - 「吹き出し/文脈リサイズ方法（Bubble/Context Resizing Method）」をより高品質な方法（例: "Model"）に切り替えてください。
   - バッチモードでは、「前文の OCR テキスト（Previous Context OCR Text）」を増やしてみてください。
@@ -108,7 +108,7 @@
   - 「吹き出し最小短辺ピクセル（Bubble Min Side Pixels）」/「文脈画像最大長辺ピクセル（Context Image Max Side Pixels）」/「OSB 最小短辺ピクセル（OSB Min Side Pixels）」のターゲットサイズを下げてください。
   - 「メディア解像度（Media Resolution）」を下げてください（Gemini または SpaceXAI 모델を使用している場合）。
   - 「画像ディテール（Image Detail）」を下げてください（OpenAI モデルを使用している場合）。
-  - "manga-ocr/paddleocr-vl" OCR 方法を使用してください（より高性能な VLM を直接使用するよりも性能が劣る場合があります）。
+  - "manga-ocr/paddleocr-vl-1.6" OCR 方法を使用してください（より高性能な VLM を直接使用するよりも性能が劣る場合があります）。
 
 - **一部のファイルのバッチ翻訳に失敗した:**
   - 翻訳に失敗した画像のパスは、出力フォルダの `failed_paths.txt` に保存されます。WebUI の ZIP アップロードエリアにこのファイルをアップロードするか、CLI で `--input` 引数に指定することで、失敗したファイルのみを再試行できます。

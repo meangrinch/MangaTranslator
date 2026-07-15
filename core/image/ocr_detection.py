@@ -848,7 +848,7 @@ def _get_paddle_ocr_vl_size(processor, max_pixels: int) -> dict:
 def extract_text_with_paddle_ocr_vl(
     images: List[Image.Image], verbose: bool = False
 ) -> List[str]:
-    """Extract text from images using PaddleOCR-VL-1.5.
+    """Extract text from images using PaddleOCR-VL-1.6.
 
     Args:
         images: List of PIL Images to process (RGB)
@@ -879,7 +879,7 @@ def extract_text_with_paddle_ocr_vl(
                     continue
 
                 log_message(
-                    f"Processing image {i + 1}/{len(images)} with PaddleOCR-VL-1.5",
+                    f"Processing image {i + 1}/{len(images)} with PaddleOCR-VL-1.6",
                     verbose=verbose,
                 )
 
@@ -898,8 +898,10 @@ def extract_text_with_paddle_ocr_vl(
                     tokenize=True,
                     return_dict=True,
                     return_tensors="pt",
-                    images_kwargs={
-                        "size": image_size,
+                    processor_kwargs={
+                        "images_kwargs": {
+                            "size": image_size,
+                        },
                     },
                 ).to(model.device)
 
@@ -910,7 +912,7 @@ def extract_text_with_paddle_ocr_vl(
 
             except Exception as e:
                 log_message(
-                    f"PaddleOCR-VL-1.5 failed for image {i + 1}: {e}",
+                    f"PaddleOCR-VL-1.6 failed for image {i + 1}: {e}",
                     always_print=True,
                 )
                 extracted_texts.append("[OCR FAILED]")
@@ -918,5 +920,5 @@ def extract_text_with_paddle_ocr_vl(
         return extracted_texts
 
     except Exception as e:
-        log_message(f"Error with PaddleOCR-VL-1.5: {e}", always_print=True)
+        log_message(f"Error with PaddleOCR-VL-1.6: {e}", always_print=True)
         return ["[OCR FAILED]"] * len(images)

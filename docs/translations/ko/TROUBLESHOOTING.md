@@ -92,7 +92,7 @@
   - "전체 페이지를 LLM으로 전송 (Send Full Page to LLM)" 옵션을 비활성화해 보세요.
   - 성능이 낮은 LLM을 사용할 때는 다음과 같은 로컬 OCR 방식을 병행해 보세요:
     - "manga-ocr": 일본어 원본 전용
-    - "paddleocr-vl": 일본어 이외의 원본용
+    - "paddleocr-vl-1.6": 일본어 이외의 원본용
   - `max_tokens` 값을 늘리거나 더 높은 "추론 노력 (reasoning_effort)"(예: "high")을 사용하세요.
   - "말풍선/컨텍스트 크기 조정 방식 (Bubble/Context Resizing Method)"을 더 고품질의 방식(예: "Model")으로 변경하세요.
   - 배치(일괄) 모드에서 "이전 컨텍스트 OCR 텍스트 (Previous Context OCR Text)" 값을 늘려보세요.
@@ -108,7 +108,7 @@
   - "말풍선 최소 가로세로 픽셀 (Bubble Min Side Pixels)", "컨텍스트 이미지 최대 가로세로 픽셀 (Context Image Max Side Pixels)", "OSB 최소 가로세로 픽셀 (OSB Min Side Pixels)"의 대상 크기를 낮추세요.
   - "미디어 해상도 (Media Resolution)"를 낮추세요 (Gemini 또는 SpaceXAI 모델을 사용하는 경우).
   - "이미지 디테일 (Image Detail)"을 낮추세요 (OpenAI 모델을 사용하는 경우).
-  - "manga-ocr" 또는 "paddleocr-vl" OCR 방식을 사용하세요 (다만, 고성능 VLM을 직접 사용하는 것보다 인식률이 떨어질 수 있습니다).
+  - "manga-ocr" 또는 "paddleocr-vl-1.6" OCR 방식을 사용하세요 (다만, 고성능 VLM을 직접 사용하는 것보다 인식률이 떨어질 수 있습니다).
 
 - **일부 파일의 일괄 번역(배치)에 실패함:**
   - 번역에 실패한 이미지의 경로가 출력 디렉터리의 `failed_paths.txt`에 저장됩니다. WebUI의 ZIP 업로드 영역에 이 파일을 업로드하거나, CLI에서 `--input` 매개변수로 지정하여 실패한 파일만 재시도할 수 있습니다.

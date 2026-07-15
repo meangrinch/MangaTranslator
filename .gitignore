@@ -22,7 +22,7 @@ start-webui.sh
 /models/upscale/
 /models/yolo/
 /models/manga-ocr-base/
-/models/paddleocr-vl/
+/models/paddleocr-vl-1.6/
 /models/sdcpp/
 /models/rtdetr/
 /output/
