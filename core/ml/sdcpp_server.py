@@ -162,7 +162,8 @@ def run_image_job(
 
 
 class SDCppServerManager:
-    RELEASE_TAG = "master-669-2d40a8b"
+    RELEASE_TAG = "master-778-c00a9e9"
+    RELEASE_COMMIT = "c00a9e9"
     RELEASE_BASE_URL = (
         "https://github.com/leejet/stable-diffusion.cpp/releases/download"
     )
@@ -171,6 +172,10 @@ class SDCppServerManager:
     BINARY_ENV = "MANGATRANSLATOR_SDCPP_BINARY"
     SERVER_BINARY_ENV = "MANGATRANSLATOR_SDCPP_SERVER_BINARY"
     RELEASE_ASSET_ENV = "MANGATRANSLATOR_SDCPP_RELEASE_ASSET"
+    # Prefer the newer matching ROCm build
+    WIN_ROCM_ASSET = "bin-win-rocm-7.13.0-x64.zip"
+    LINUX_ROCM_ASSET = "bin-Linux-Ubuntu-24.04-x86_64-rocm-7.13.0.zip"
+    DARWIN_ARM64_ASSET = "bin-Darwin-macOS-26.4-arm64.zip"
 
     def __init__(self, install_dir: Path):
         self.install_dir = Path(install_dir)
@@ -271,6 +276,14 @@ class SDCppServerManager:
                 verbose=verbose,
             )
 
+    def _release_asset(self, suffix: str) -> str:
+        return f"sd-master-{self.RELEASE_COMMIT}-{suffix}"
+
+    @staticmethod
+    def _torch_hip_available() -> bool:
+        hip = getattr(torch.version, "hip", None)
+        return bool(hip) and torch.cuda.is_available()
+
     def _select_archive_name(self) -> str:
         override = os.environ.get(self.RELEASE_ASSET_ENV)
         if override:
@@ -280,19 +293,26 @@ class SDCppServerManager:
         machine = platform.machine().lower()
 
         if system == "windows":
+            if self._torch_hip_available():
+                return self._release_asset(self.WIN_ROCM_ASSET)
             if torch.cuda.is_available():
-                return "sd-master-2d40a8b-bin-win-cuda12-x64.zip"
-            return "sd-master-2d40a8b-bin-win-avx2-x64.zip"
+                return self._release_asset("bin-win-cuda12-x64.zip")
+            # Dynamic CPU backends replace the old avx/avx2/avx512 matrix.
+            return self._release_asset("bin-win-cpu-x64.zip")
 
         if system == "darwin" and machine in ("arm64", "aarch64"):
-            return "sd-master-2d40a8b-bin-Darwin-macOS-15.7.7-arm64.zip"
+            return self._release_asset(self.DARWIN_ARM64_ASSET)
 
         if system == "linux" and machine in ("x86_64", "amd64"):
-            return "sd-master-2d40a8b-bin-Linux-Ubuntu-24.04-x86_64.zip"
+            if self._torch_hip_available():
+                return self._release_asset(self.LINUX_ROCM_ASSET)
+            return self._release_asset("bin-Linux-Ubuntu-24.04-x86_64.zip")
 
         raise ModelError(
             "No default sd.cpp binary is configured for this platform. "
-            f"Set {self.SERVER_BINARY_ENV} to an sd-server executable path."
+            f"Set {self.SERVER_BINARY_ENV} to an sd-server executable path, "
+            f"or {self.RELEASE_ASSET_ENV} to a release asset name "
+            f"(e.g. win-vulkan / Linux vulkan builds)."
         )
 
     def _archive_url(self, archive_name: str) -> str:
@@ -671,6 +691,7 @@ class SDCppServerManager:
                 cache_mode, num_inference_steps
             )
 
+            # Scheduler / ref-image mode left to sd.cpp model auto-detect
             cmd = [
                 str(assets["executable"]),
                 "--listen-ip",
@@ -682,6 +703,7 @@ class SDCppServerManager:
                 "--vae",
                 str(assets["vae"]),
                 "--fa",
+                "--eager-load",
                 "--cfg-scale",
                 "1.0",
                 "--img-cfg-scale",
@@ -690,8 +712,6 @@ class SDCppServerManager:
                 "2.5" if model_key == "flux_kontext" else "1.0",
                 "--sampling-method",
                 "euler",
-                "--scheduler",
-                "simple",
                 "--steps",
                 str(steps),
                 "--offload-to-cpu",
