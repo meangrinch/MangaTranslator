@@ -640,3 +640,30 @@ def is_rosetta_model(model_name: Optional[str]) -> bool:
         return False
     lm = model_name.lower().replace("-", "").replace("_", "").replace(" ", "")
     return "rosetta" in lm and "yanoljanext" in lm
+
+
+def is_hy_mt2_model(model_name: Optional[str]) -> bool:
+    """Check if a model is a Tencent Hy-MT2 translation model."""
+    if not model_name:
+        return False
+    return "hy-mt2" in model_name.lower()
+
+
+def get_hy_mt2_sampling_defaults(
+    model_name: Optional[str],
+) -> Dict[str, float | int | None]:
+    """Model-card sampling defaults for Hy-MT2 (1.8B/7B vs 30B-A3B)."""
+    lm = (model_name or "").lower()
+    if "30b" in lm or "a3b" in lm:
+        return {
+            "temperature": 0.7,
+            "top_p": 1.0,
+            "top_k": None,
+            "max_tokens": 4096,
+        }
+    return {
+        "temperature": 0.7,
+        "top_p": 0.6,
+        "top_k": 20,
+        "max_tokens": 4096,
+    }

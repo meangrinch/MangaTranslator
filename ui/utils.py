@@ -18,6 +18,7 @@ from utils.model_metadata import (
     anthropic_reasoning_effort_config,
     anthropic_uses_adaptive_thinking_info,
     get_gpt5_generation,
+    get_hy_mt2_sampling_defaults,
     get_max_tokens_cap,
     is_anthropic_model_family,
     is_anthropic_no_sampling_model,
@@ -33,6 +34,7 @@ from utils.model_metadata import (
     is_gpt5_chat_variant,
     is_gpt5_series,
     is_gpt56_virtual_pro,
+    is_hy_mt2_model,
     is_mimo_reasoning_model,
     is_moonshot_reasoning_model,
     is_openai_compatible_reasoning_model,
@@ -1111,13 +1113,28 @@ def update_params_for_model(
     )
     use_custom_sampling_visible = is_use_custom_sampling_visible(provider, model_name)
 
-    new_temp_value = min(current_temp, temp_max)
-    temp_update = gr.update(
-        maximum=temp_max, value=new_temp_value, interactive=temp_interactive
-    )
-
-    top_k_update = gr.update(interactive=top_k_interactive)
-    top_p_update = gr.update(interactive=top_p_interactive)
+    if is_hy_mt2_model(model_name):
+        hy = get_hy_mt2_sampling_defaults(model_name)
+        temp_update = gr.update(
+            maximum=temp_max,
+            value=min(float(hy["temperature"]), temp_max),
+            interactive=temp_interactive,
+        )
+        top_p_update = gr.update(
+            value=float(hy["top_p"]), interactive=top_p_interactive
+        )
+        top_k_update = gr.update(
+            value=0 if hy["top_k"] is None else int(hy["top_k"]),
+            interactive=top_k_interactive,
+        )
+    else:
+        temp_update = gr.update(
+            maximum=temp_max,
+            value=min(current_temp, temp_max),
+            interactive=temp_interactive,
+        )
+        top_k_update = gr.update(interactive=top_k_interactive)
+        top_p_update = gr.update(interactive=top_p_interactive)
     use_custom_sampling_update = gr.update(visible=use_custom_sampling_visible)
 
     is_gemini_3_google = provider == "Google" and is_gemini_3_model(model_name)

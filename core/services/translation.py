@@ -47,6 +47,7 @@ from utils.model_metadata import (
     is_gpt5_pro,
     is_gpt5_series,
     is_gpt56_virtual_pro,
+    is_hy_mt2_model,
     is_mimo_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
@@ -683,13 +684,10 @@ def _build_generation_config(
     elif provider == "OpenAI-Compatible":
         generation_config = {"max_tokens": max_tokens_value}
         if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": temperature,
-                    "top_p": top_p,
-                    "top_k": top_k,
-                }
-            )
+            generation_config["temperature"] = temperature
+            generation_config["top_p"] = top_p
+            if top_k is not None:
+                generation_config["top_k"] = top_k
         return generation_config
 
     else:
@@ -1133,7 +1131,7 @@ def _parse_rosetta_response(
     provider: str,
     debug: bool = False,
 ) -> List[str]:
-    """Parse JSON response from a Rosetta model.
+    """Parse JSON response from a Rosetta (or Hy-MT2) model.
 
     Falls back to _parse_llm_response_unified if JSON parsing fails.
     """
@@ -1165,17 +1163,63 @@ def _parse_rosetta_response(
                 else:
                     result.append(f"[{provider}: Missing item {i}]")
             log_message(
-                f"Parsed {len(parsed)} items from Rosetta JSON (expected {total_elements})",
+                f"Parsed {len(parsed)} items from JSON (expected {total_elements})",
                 verbose=debug,
             )
             return result
     except (json.JSONDecodeError, TypeError):
         log_message(
-            "Rosetta response is not valid JSON, falling back to numbered-list parser",
+            "JSON response invalid, falling back to numbered-list parser",
             verbose=debug,
         )
 
     return _parse_llm_response_unified(response_text, total_elements, provider, debug)
+
+
+def _build_hy_mt2_prompt(
+    output_language: str,
+    extracted_texts: List[str],
+    special_instructions: Optional[str] = None,
+) -> str:
+    """Build user-only prompt for Hy-MT2 (no system prompt per model card).
+
+    Follows the card's default/terminology templates; source is JSON for multi-bubble.
+    """
+    source_data = json.dumps(
+        {str(i + 1): text for i, text in enumerate(extracted_texts)},
+        ensure_ascii=False,
+    )
+
+    prompt = ""
+    if special_instructions and special_instructions.strip():
+        term_lines = []
+        for line in special_instructions.strip().splitlines():
+            line = line.strip().removeprefix("- ").strip()
+            if not line:
+                continue
+            if "->" in line:
+                src, _, tgt = line.partition("->")
+                term_lines.append(f"{src.strip()} translates to {tgt.strip()}")
+            elif "=>" in line:
+                src, _, tgt = line.partition("=>")
+                term_lines.append(f"{src.strip()} translates to {tgt.strip()}")
+            else:
+                term_lines.append(line)
+        if term_lines:
+            prompt += (
+                "Reference the following translations:\n"
+                + "\n".join(term_lines)
+                + "\n\n"
+            )
+
+    prompt += (
+        f"Translate the following text into {output_language}. "
+        f"Keep the JSON structure and keys. "
+        f"Note that you should **only output the translated result without any "
+        f"additional explanation**:\n\n"
+        f"{source_data}"
+    )
+    return prompt
 
 
 def _perform_manga_ocr(
@@ -1654,6 +1698,7 @@ The target language is {output_language}. Use the appropriate translation approa
                 translation_parts.append(previous_part)
 
             use_rosetta = is_rosetta_model(model_name)
+            use_hy_mt2 = is_hy_mt2_model(model_name)
             if use_rosetta:
                 log_message(
                     "YanoljaNEXT Rosetta model detected — using Rosetta prompt format",
@@ -1665,6 +1710,18 @@ The target language is {output_language}. Use the appropriate translation approa
                 )
                 translation_prompt = _build_rosetta_source_prompt(formatted_texts)
                 translation_parts = []  # text-only model, no image parts
+            elif use_hy_mt2:
+                log_message(
+                    "Hy-MT2 model detected — using Hy-MT2 prompt format",
+                    always_print=True,
+                )
+                translation_system = None
+                translation_prompt = _build_hy_mt2_prompt(
+                    output_language,
+                    formatted_texts,
+                    config.special_instructions,
+                )
+                translation_parts = []
             else:
                 translation_system = _build_system_prompt_translation(
                     output_language,
@@ -1684,7 +1741,7 @@ The target language is {output_language}. Use the appropriate translation approa
                 system_prompt=translation_system,
                 prompt_cache_key=session_prompt_cache_key,
             )
-            if use_rosetta:
+            if use_rosetta or use_hy_mt2:
                 final_translations = _parse_rosetta_response(
                     translation_response_text,
                     total_elements,

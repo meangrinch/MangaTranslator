@@ -170,7 +170,10 @@ fonts/
 - OpenAI 호환 제공자의 기본 URL: `http://localhost:8080/v1`
 
 > [!NOTE]
-> OpenAI 호환 제공자를 통해 YanoljaNEXT-Rosetta 모델(예: `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`)을 사용하면 자동으로 감지되어 최적화된 프롬프트가 적용됩니다. 이 모델은 텍스트 전용이므로 2단계 번역 모드 및 로컬 OCR 모델을 활성화해야 합니다. 특별 지침(Special Instructions) 필드는 Rosetta의 번역 용어집에 매핑됩니다 (줄바꿈으로 구분, 예: `Yanolja NEXT -> 야놀자넥스트`).
+> OpenAI 호환 제공자를 통해 다음 모델들을 사용하면 자동으로 감지되어 최적화된 프롬프트가 적용됩니다. 이 모델들은 텍스트 전용이므로 2단계 번역 모드 및 로컬 OCR 모델을 활성화해야 합니다. `special_instructions` (특별 지침) 필드는 해당 용어집/용어에 매핑됩니다 (줄바꿈으로 구분, 예: `term -> translation`).
+>
+> - **YanoljaNEXT-Rosetta** (예: `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`)
+> - **Hy-MT2** (예: `tencent/Hy-MT2-7B`). 해당 모델의 권장 샘플링 매개변수도 자동으로 입력됩니다.
 
 ### 말풍선 외부 (OSB) 텍스트 설정 (선택 사항)
 

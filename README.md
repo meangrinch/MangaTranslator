@@ -170,7 +170,10 @@ fonts/
 - OpenAI-compatible default URL: `http://localhost:8080/v1`
 
 > [!NOTE]
-> YanoljaNEXT-Rosetta models (e.g., `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`) are automatically detected when used via the OpenAI-Compatible provider and receive optimized prompting. These are text-only models and require two-step + local OCR model. The Special Instructions field is mapped to Rosetta's translation glossary (one entry per line, e.g., `Yanolja NEXT -> 야놀자넥스트`).
+> The following models are automatically detected when used via the OpenAI-Compatible provider and receive optimized prompting. They are text-only and require two-step translation + local OCR. The `special_instructions` field maps to their corresponding glossary/terminology (one entry per line, e.g., `term -> translation`).
+>
+> - **YanoljaNEXT-Rosetta** (e.g., `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`)
+> - **Hy-MT2** (e.g., `tencent/Hy-MT2-7B`). Also pre-fills the model's recommended sampling parameters
 
 ### OSB text setup (optional)
 

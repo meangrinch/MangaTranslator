@@ -170,7 +170,10 @@ fonts/
 - OpenAI互換のデフォルトURL：`http://localhost:8080/v1`
 
 > [!NOTE]
-> OpenAI互換プロバイダーを介してYanoljaNEXT-Rosettaモデル（例：`yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`）を使用する場合、自動的に検出されて最適化されたプロンプトが適用されます。これらはテキスト専用モデルであるため、2ステップ翻訳モードとローカルOCRモデルを有効にする必要があります。「特別指示 (Special Instructions)」フィールドはRosetta의 翻訳用語集にマッピングされます（1行に1エントリ、例：`Yanolja NEXT -> 야놀자넥스트`）。
+> OpenAI互換プロバイダーを介して以下のモデルを使用する場合、自動的に検出されて最適化されたプロンプトが適用されます。これらはテキスト専用モデルであるため、2ステップ翻訳モードとローカルOCRモデルを有効にする必要があります。「特別指示 (Special Instructions)」フィールドは、対応する用語集/用語にマッピングされます（1行に1エントリ、例：`term -> translation`）。
+>
+> - **YanoljaNEXT-Rosetta** (例: `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`)
+> - **Hy-MT2** (例: `tencent/Hy-MT2-7B`)。モデル推奨のサンプリングパラメータも自動的に設定されます。
 
 ### 吹き出し外（OSB）テキストのセットアップ（任意）
 

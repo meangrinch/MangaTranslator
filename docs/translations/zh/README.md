@@ -170,7 +170,10 @@ fonts/
 - OpenAI 兼容的默认 URL：`http://localhost:8080/v1`
 
 > [!NOTE]
-> 当通过 OpenAI 兼容服务商使用 YanoljaNEXT-Rosetta 模型（例如 `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`）时，程序会自动检测并使用优化的提示词。这些是纯文本模型，需要启用两步翻译模式和本地 OCR 模型。特殊说明 (Special Instructions) 字段将被映射为 Rosetta 的翻译词汇表（每行一个条目，例如 `Yanolja NEXT -> 雅놀자넥스트`）。
+> 当通过 OpenAI 兼容服务商使用以下模型时，程序会自动检测并使用优化的提示词。这些是纯文本模型，需要启用两步翻译模式和本地 OCR 模型。`special_instructions` (特殊说明) 字段将被映射为对应的词汇表/术语表（每行一个条目，例如 `term -> translation`）。
+>
+> - **YanoljaNEXT-Rosetta** (例如 `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`)
+> - **Hy-MT2** (例如 `tencent/Hy-MT2-7B`)。同时也会自动填充该模型的推荐采样参数。
 
 ### 对话框外 (OSB) 文本设置（可选）
 
