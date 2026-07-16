@@ -396,14 +396,20 @@ def is_anthropic_reasoning_model(model_name: Optional[str]) -> bool:
     )
 
 
-def is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
-    """Check if a Moonshot model is reasoning-capable.
-
-    All kimi-k2.X models default to thinking enabled.
-    """
+def is_moonshot_k3_model(model_name: Optional[str]) -> bool:
+    """Check if a model is Kimi K3 (kimi-k3 or future kimi-k3-* variants)."""
     if not model_name:
         return False
-    return "kimi-k2." in model_name.lower()
+    lm = model_name.lower()
+    return lm == "kimi-k3" or lm.startswith("kimi-k3-") or lm.startswith("kimi-k3.")
+
+
+def is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if a Moonshot model is reasoning-capable."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "kimi-k2." in lm or is_moonshot_k3_model(model_name)
 
 
 def is_mimo_multimodal_model(model_name: Optional[str]) -> bool:

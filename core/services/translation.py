@@ -49,6 +49,8 @@ from utils.model_metadata import (
     is_gpt56_virtual_pro,
     is_hy_mt2_model,
     is_mimo_reasoning_model,
+    is_moonshot_k3_model,
+    is_moonshot_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
     is_openai_reasoning_model,
@@ -358,8 +360,7 @@ def _build_generation_config(
         elif provider == "Z.ai":
             is_reasoning = is_zai_reasoning_model(model_name)
         elif provider == "Moonshot AI":
-            lm = (model_name or "").lower()
-            is_reasoning = "kimi-k2." in lm
+            is_reasoning = is_moonshot_reasoning_model(model_name)
         elif provider == "Xiaomi MiMo":
             is_reasoning = is_mimo_reasoning_model(model_name)
         max_tokens_value = 16384 if is_reasoning else 4096
@@ -565,8 +566,7 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "Moonshot AI":
-        lm = (model_name or "").lower()
-        is_reasoning = "kimi-k2." in lm
+        is_reasoning = is_moonshot_reasoning_model(model_name)
 
         generation_config = {
             "max_tokens": max_tokens_value,
@@ -580,10 +580,12 @@ def _build_generation_config(
             )
 
         if is_reasoning:
-            # Map reasoning_effort: "auto" -> enabled, "none" -> disabled
-            reasoning_effort = config.reasoning_effort or "auto"
-            thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
-            generation_config["thinking"] = {"type": thinking_type}
+            if is_moonshot_k3_model(model_name):
+                generation_config["reasoning_effort"] = "max"
+            else:
+                reasoning_effort = config.reasoning_effort or "auto"
+                thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
+                generation_config["thinking"] = {"type": thinking_type}
         return generation_config
 
     elif provider == "Xiaomi MiMo":

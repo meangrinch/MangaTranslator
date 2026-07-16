@@ -87,8 +87,8 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "glm-4.6v",
     ],
     "Moonshot AI": [
+        "kimi-k3",
         "kimi-k2.6",
-        "kimi-k2.5",
     ],
     "Xiaomi MiMo": [
         "mimo-v2.5-pro",

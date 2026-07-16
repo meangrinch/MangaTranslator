@@ -6,6 +6,7 @@ import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
+from utils.model_metadata import is_moonshot_k3_model
 
 
 def call_moonshot_endpoint(
@@ -22,13 +23,15 @@ def call_moonshot_endpoint(
 ) -> Optional[str]:
     """
     Calls the Moonshot AI (Kimi) API endpoint with the provided data and handles retries.
-    Moonshot uses OpenAI-compatible API format. Kimi K2.X models support multimodal inputs and hybrid reasoning.
+    Moonshot uses OpenAI-compatible API format. All current Kimi models support multimodal
+    inputs and reasoning (K2.x via thinking, K3 via reasoning_effort).
 
     Args:
         api_key (str): Moonshot API key.
         model_name (str): Moonshot model to use.
         parts (List[Dict[str, Any]]): List of content parts (text and optional images).
-        generation_config (Dict[str, Any]): Configuration for generation.
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens,
+            thinking, reasoning_effort).
         system_prompt (Optional[str]): System prompt for the conversation.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
@@ -48,7 +51,6 @@ def call_moonshot_endpoint(
         "Content-Type": "application/json",
     }
 
-    # Prepare message content (multimodal support)
     text_part = next((p for p in parts if "text" in p), None)
     image_parts = [p for p in parts if "inline_data" in p]
 
@@ -57,13 +59,8 @@ def call_moonshot_endpoint(
             "Invalid 'parts' format for Moonshot: No text prompt found."
         )
 
-    model_lower = model_name.lower()
-    is_multimodal = "kimi-k2." in model_lower
-
-    if is_multimodal:
+    if image_parts:
         content_list = []
-        content_list.append({"type": "text", "text": text_part["text"]})
-
         for part in image_parts:
             if (
                 "inline_data" in part
@@ -78,9 +75,9 @@ def call_moonshot_endpoint(
                         "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
                     }
                 )
+        content_list.append({"type": "text", "text": text_part["text"]})
         user_content = content_list
     else:
-        # For non-multimodal models, use a simple string for content
         user_content = text_part["text"]
 
     messages = []
@@ -88,11 +85,19 @@ def call_moonshot_endpoint(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_content})
 
-    payload = {
-        "model": model_name,
-        "messages": messages,
-        "max_tokens": generation_config.get("max_tokens", 4096),
-    }
+    max_tokens_value = generation_config.get("max_tokens", 4096)
+    if is_moonshot_k3_model(model_name):
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "max_completion_tokens": max_tokens_value,
+        }
+    else:
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "max_tokens": max_tokens_value,
+        }
 
     temp = generation_config.get("temperature")
     if temp is not None:
@@ -102,16 +107,21 @@ def call_moonshot_endpoint(
     if top_p is not None:
         payload["top_p"] = top_p
 
-    # Add 'thinking' parameter if present
     thinking = generation_config.get("thinking")
     if thinking:
         payload["thinking"] = thinking
 
-    # Handle web search via Moonshot's builtin_search tool
+    reasoning_effort = generation_config.get("reasoning_effort")
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
+
+    if is_moonshot_k3_model(model_name):
+        payload.pop("temperature", None)
+        payload.pop("top_p", None)
+
     if enable_web_search:
         payload["tools"] = [{"type": "builtin_search"}]
 
-    # Remove None values
     payload = {k: v for k, v in payload.items() if v is not None}
 
     for attempt in range(max_retries + 1):

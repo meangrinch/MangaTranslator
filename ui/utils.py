@@ -36,6 +36,7 @@ from utils.model_metadata import (
     is_gpt56_virtual_pro,
     is_hy_mt2_model,
     is_mimo_reasoning_model,
+    is_moonshot_k3_model,
     is_moonshot_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
@@ -646,7 +647,9 @@ def get_reasoning_effort_config(
         return True, ["auto", "none"], "auto"
 
     elif provider == "Moonshot AI":
-        if "kimi-k2." in lm:
+        if is_moonshot_k3_model(model_name):
+            return False, [], None
+        if is_moonshot_reasoning_model(model_name):
             return True, ["auto", "none"], "auto"
         return False, [], None
 
@@ -756,6 +759,8 @@ def _model_disallows_all_sampling_params(
         return is_anthropic_no_sampling_model(model_name)
     if provider == "OpenRouter" and is_anthropic_model_family(model_name):
         return is_anthropic_no_sampling_model(model_name)
+    if provider == "Moonshot AI":
+        return is_moonshot_k3_model(model_name)
     return False
 
 
@@ -796,6 +801,7 @@ def get_sampling_slider_interactivity(
 
     if _model_disallows_all_sampling_params(provider, model_name):
         temp_interactive = False
+        top_p_interactive = False
         top_k_interactive = False
 
     return temp_interactive, top_p_interactive, top_k_interactive
@@ -890,8 +896,6 @@ def update_translation_ui(
 
     if provider == "Z.ai" and ocr_method == "LLM":
         models = [m for m in models if "v" in m]
-    elif provider == "Moonshot AI" and ocr_method == "LLM":
-        models = [m for m in models if "kimi-k2." in m.lower()]
     elif provider == "Xiaomi MiMo" and ocr_method == "LLM":
         models = [m for m in models if m.lower() == "mimo-v2.5"]
 
@@ -1004,7 +1008,6 @@ def update_translation_ui(
         info=mr_context_info, **mr_update_kwargs
     )
 
-    # Moonshot AI: reasoning effort is visible for kimi-k2.X models
     reasoning_effort_visible, reasoning_choices, reasoning_default_value = (
         get_reasoning_effort_config(provider, remembered_model)
     )
