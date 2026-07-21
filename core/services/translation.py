@@ -44,7 +44,6 @@ from utils.model_metadata import (
     is_google_model_family,
     is_google_reasoning_model,
     is_gpt5_chat_variant,
-    is_gpt5_pro,
     is_gpt5_series,
     is_gpt56_virtual_pro,
     is_hy_mt2_model,
@@ -395,7 +394,7 @@ def _build_generation_config(
             )
             generation_config["media_resolution"] = backend_media_resolution
         if is_gemini_3 or is_gemma:
-            reasoning_effort = config.reasoning_effort or "medium"
+            reasoning_effort = config.reasoning_effort or "high"
             generation_config["thinkingConfig"] = {"thinkingLevel": reasoning_effort}
             log_message(
                 f"Using reasoning effort '{reasoning_effort}' for {model_name}",
@@ -452,9 +451,7 @@ def _build_generation_config(
         is_chat = is_gpt5_chat_variant(model_name)
         if _is_reasoning_model_openai(model_name) and not is_chat:
             gen = get_gpt5_generation(model_name)
-            reasoning_effort = config.reasoning_effort or (
-                "high" if is_gpt5_pro(model_name) and gen == "5" else "medium"
-            )
+            reasoning_effort = config.reasoning_effort or "high"
             effort = reasoning_effort
             if effort == "max" and not supports_gpt5_max_effort(model_name):
                 effort = "xhigh" if supports_gpt5_xhigh_effort(model_name) else "high"
@@ -519,7 +516,7 @@ def _build_generation_config(
                 }
             )
         if supports_xai_reasoning_parameter(model_name):
-            reasoning_effort = config.reasoning_effort or "medium"
+            reasoning_effort = config.reasoning_effort or "high"
             generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 

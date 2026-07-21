@@ -64,7 +64,7 @@ class TranslationConfig:
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
     reasoning_effort: Optional[str] = (
-        None  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
+        None  # Default: Google uses "auto", Anthropic uses "none", others use "high"
     )
     effort: Optional[str] = (
         None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)

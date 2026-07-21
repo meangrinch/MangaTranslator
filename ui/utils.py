@@ -577,10 +577,10 @@ def get_reasoning_effort_config(
 
         if is_gemini_3_model(model_name):
             if "flash" in lm:
-                return True, ["high", "medium", "low", "minimal"], "medium"
+                return True, ["high", "medium", "low", "minimal"], "high"
             if "gemini-3.1" in lm:
-                return True, ["high", "medium", "low"], "medium"
-            return True, ["high", "medium", "low"], "medium"
+                return True, ["high", "medium", "low"], "high"
+            return True, ["high", "medium", "low"], "high"
 
         if is_gemini_25_flash_model(model_name) or is_gemini_25_pro_model(model_name):
             return True, ["auto", "high", "medium", "low", "minimal", "none"], "auto"
@@ -602,25 +602,25 @@ def get_reasoning_effort_config(
                 return (
                     True,
                     ["max", "xhigh", "high", "medium", "low", "none"],
-                    "medium",
+                    "high",
                 )
             if gen in ("5.4", "5.2"):
-                return True, ["xhigh", "high", "medium"], "medium"
+                return True, ["xhigh", "high", "medium"], "high"
             if gen == "5":
                 return True, ["high"], "high"
-            return True, ["high", "medium", "low"], "medium"
+            return True, ["high", "medium", "low"], "high"
 
         if supports_gpt5_max_effort(model_name):
-            return True, ["max", "xhigh", "high", "medium", "low", "none"], "medium"
+            return True, ["max", "xhigh", "high", "medium", "low", "none"], "high"
         if supports_gpt5_xhigh_effort(model_name):
-            return True, ["xhigh", "high", "medium", "low", "none"], "medium"
+            return True, ["xhigh", "high", "medium", "low", "none"], "high"
         if gen == "5.1":
-            return True, ["high", "medium", "low", "none"], "medium"
+            return True, ["high", "medium", "low", "none"], "high"
         if gen == "5":
-            return True, ["high", "medium", "low", "minimal"], "medium"
+            return True, ["high", "medium", "low", "minimal"], "high"
 
         # o3
-        return True, ["high", "medium", "low"], "medium"
+        return True, ["high", "medium", "low"], "high"
 
     elif provider == "Anthropic":
         return anthropic_reasoning_effort_config(model_name)
@@ -629,8 +629,8 @@ def get_reasoning_effort_config(
         if not supports_xai_reasoning_parameter(model_name):
             return False, [], None
         if "multi-agent" in lm:
-            return True, ["xhigh", "high", "medium", "low"], "medium"
-        return True, ["high", "medium", "low", "none"], "medium"
+            return True, ["xhigh", "high", "medium", "low"], "high"
+        return True, ["high", "medium", "low", "none"], "high"
 
     elif provider == "DeepSeek":
         is_reasoning = is_deepseek_reasoning_model(model_name)
@@ -668,7 +668,7 @@ def get_reasoning_effort_config(
             if is_gemma_model(model_name):
                 return True, ["high", "minimal"], "high"
 
-            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
+            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "high"
 
         if is_anthropic_model_family(model_name):
             return anthropic_reasoning_effort_config(model_name)
@@ -679,7 +679,7 @@ def get_reasoning_effort_config(
             is_reasoning = False
 
         if is_reasoning:
-            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
+            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "high"
 
         return False, [], None
 
@@ -1512,7 +1512,7 @@ def format_thinking_status(
     thinking_status_str = ""
     if provider == "Google" and model_name:
         if is_gemini_3_model(model_name):
-            effort = reasoning_effort or "medium"
+            effort = reasoning_effort or "high"
             thinking_status_str = f" (thinking: {effort})"
         elif is_gemini_25_flash_model(model_name):
             effort = reasoning_effort or "auto"
@@ -1521,7 +1521,7 @@ def format_thinking_status(
             else:
                 thinking_status_str = f" (thinking: {effort})"
     elif provider == "OpenRouter" and is_gemini_3_model(model_name):
-        effort = reasoning_effort or "medium"
+        effort = reasoning_effort or "high"
         thinking_status_str = f" (thinking: {effort})"
     elif (
         provider == "Anthropic"

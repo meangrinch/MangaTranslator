@@ -325,7 +325,7 @@ def main():
     parser.add_argument(
         "--reasoning-effort",
         type=str,
-        default="medium",
+        default="high",
         choices=["max", "xhigh", "high", "medium", "low", "minimal", "none"],
         help=(
             "OpenAI/Gemini 3: Controls internal reasoning effort. "

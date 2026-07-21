@@ -191,7 +191,7 @@ DEFAULT_SETTINGS = {
     "cleaning_only": False,
     "upscaling_only": False,
     "test_mode": False,
-    "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "medium"
+    "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "high"
     "effort": "medium",  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)
     "verbosity": "low",  # GPT-5 series only: controls response verbosity (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
