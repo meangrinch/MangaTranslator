@@ -105,7 +105,7 @@ Your sole purpose is to accurately transcribe the original text from a series of
 - You must return your response as a single numbered list with exactly one line per input image.
 - The numbering must correspond to the input image order (1, 2, 3...).
 - The format must be `i: <transcribed {lang_label}text>` where `i` is the input image number.
-- Do not include section headers, explanations, or formatting outside of this list.
+- Do not include section headers, explanations, internal thoughts, or any extra formatting anywhere in your response.
 """  # noqa
 
 
@@ -221,7 +221,7 @@ Your goal is to produce natural-sounding, high-quality translations in {output_l
 ## STYLING GUIDE
 You must use the following markdown-style markers to convey emphasis:
 - `*italic*`: Used for onomatopoeias, thoughts, flashbacks, distant sounds, or dialogue mediated by a device (e.g., phone, radio).
-- `**bold**`: Used for sound effects (SFX), shouting, timestamps, or individual emphatic words.
+- `**bold**`: Used for sound effects, shouting, timestamps, or individual emphatic words.
 - `***bold-italic***`: Used for extremely loud sounds or dialogue that also meets the criteria for italics (e.g., shouting over a radio).
 
 {core_rules}
@@ -234,7 +234,7 @@ You must use the following markdown-style markers to convey emphasis:
 - The numbering must correspond to the input image order (1, 2, 3...).
 - For each item, provide both transcription and translation in the format:
   `i: <transcribed text> || <translated {output_language} text>` where `i` is the input image number.
-- Do not include section headers, explanations, or formatting outside of this list.
+- Do not include section headers, explanations, internal thoughts, or any extra formatting anywhere in your response.
 """
     elif mode == "two-step":
         output_schema = f"""
@@ -242,7 +242,7 @@ You must use the following markdown-style markers to convey emphasis:
 - You must return your response as a single numbered list with exactly one line per input text.
 - The numbering must correspond to the input order (1, 2, 3...).
 - The format must be `i: <translated {output_language} text>` where `i` is the input text number.
-- Do not include section headers, explanations, or formatting outside of this list.
+- Do not include section headers, explanations, internal thoughts, or any extra formatting anywhere in your response.
 """  # noqa
     else:
         raise ValueError(
