@@ -604,7 +604,7 @@ def is_gemini_3_flash_model(model_name: Optional[str]) -> bool:
     if not model_name:
         return False
     lm = model_name.lower()
-    return "gemini-3" in lm and "flash" in lm and "flash-lite" not in lm
+    return "gemini-3" in lm and "flash" in lm and "lite" not in lm
 
 
 def is_gemini_25_flash_model(model_name: Optional[str]) -> bool:
