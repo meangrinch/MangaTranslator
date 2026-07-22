@@ -45,6 +45,7 @@ from utils.model_metadata import (
     is_zai_reasoning_model,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
+    supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
@@ -478,6 +479,8 @@ def get_reasoning_effort_info_text(
             return "Controls model's internal reasoning effort."
         return "Grok reasons automatically; no configurable reasoning effort is sent."
     elif provider == "Moonshot AI":
+        if supports_moonshot_reasoning_effort(model_name):
+            return "Controls model's internal reasoning effort."
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "Xiaomi MiMo":
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
@@ -518,6 +521,8 @@ def get_reasoning_effort_info_text(
     options = []
     if "auto" in choices:
         options.append("auto=model decides")
+    if "max" in choices:
+        options.append("max=maximum effort")
     if "xhigh" in choices:
         options.append("xhigh=95%")
     if "high" in choices:
@@ -647,8 +652,8 @@ def get_reasoning_effort_config(
         return True, ["auto", "none"], "auto"
 
     elif provider == "Moonshot AI":
-        if is_moonshot_k3_model(model_name):
-            return False, [], None
+        if supports_moonshot_reasoning_effort(model_name):
+            return True, ["max", "high", "low"], "high"
         if is_moonshot_reasoning_model(model_name):
             return True, ["auto", "none"], "auto"
         return False, [], None
@@ -1542,5 +1547,15 @@ def format_thinking_status(
             thinking_status_str = " (no thinking)"
         else:
             thinking_status_str = f" (thinking: {effort})"
+    elif provider == "Moonshot AI":
+        if supports_moonshot_reasoning_effort(model_name):
+            effort = reasoning_effort or "high"
+            thinking_status_str = f" (thinking: {effort})"
+        elif is_moonshot_reasoning_model(model_name):
+            effort = reasoning_effort or "auto"
+            if effort == "none":
+                thinking_status_str = " (no thinking)"
+            else:
+                thinking_status_str = f" (thinking: {effort})"
 
     return thinking_status_str

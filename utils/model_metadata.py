@@ -406,6 +406,11 @@ def is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
     return "kimi-k2." in lm or is_moonshot_k3_model(model_name)
 
 
+def supports_moonshot_reasoning_effort(model_name: Optional[str]) -> bool:
+    """Check if a Moonshot model supports the reasoning_effort API parameter."""
+    return is_moonshot_k3_model(model_name)
+
+
 def is_mimo_multimodal_model(model_name: Optional[str]) -> bool:
     """Check if a MiMo model supports multimodal (image) input."""
     if not model_name:

@@ -48,7 +48,6 @@ from utils.model_metadata import (
     is_gpt56_virtual_pro,
     is_hy_mt2_model,
     is_mimo_reasoning_model,
-    is_moonshot_k3_model,
     is_moonshot_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
@@ -58,6 +57,7 @@ from utils.model_metadata import (
     is_zai_reasoning_model,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
+    supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
@@ -577,8 +577,15 @@ def _build_generation_config(
             )
 
         if is_reasoning:
-            if is_moonshot_k3_model(model_name):
-                generation_config["reasoning_effort"] = "max"
+            if supports_moonshot_reasoning_effort(model_name):
+                reasoning_effort = config.reasoning_effort or "high"
+                if reasoning_effort not in ("low", "high", "max"):
+                    reasoning_effort = "high"
+                generation_config["reasoning_effort"] = reasoning_effort
+                log_message(
+                    f"Using reasoning effort '{reasoning_effort}' for {model_name}",
+                    verbose=debug,
+                )
             else:
                 reasoning_effort = config.reasoning_effort or "auto"
                 thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
