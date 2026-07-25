@@ -385,8 +385,9 @@ def is_anthropic_reasoning_model(model_name: Optional[str]) -> bool:
         or "claude-sonnet-4" in lm
         or "claude-haiku-4-5" in lm
         or "claude-haiku-4.5" in lm
-        or is_fable_5_model(model_name)
         or is_sonnet_5_model(model_name)
+        or is_opus_5_model(model_name)
+        or is_fable_5_model(model_name)
     )
 
 
@@ -466,6 +467,16 @@ def is_opus_48_model(model_name: Optional[str]) -> bool:
     return ("4.8" in lm) or ("4-8" in lm)
 
 
+def is_opus_5_model(model_name: Optional[str]) -> bool:
+    """Check if a model is Claude Opus 5 (adaptive thinking on by default, max effort support, no sampling params)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    if "claude" not in lm or "opus" not in lm:
+        return False
+    return "claude-opus-5" in lm
+
+
 def is_fable_5_model(model_name: Optional[str]) -> bool:
     """Check if a model is Claude Fable 5 (always-on adaptive thinking, no sampling params)."""
     if not model_name:
@@ -489,9 +500,9 @@ def anthropic_model_flags(model_name: Optional[str]) -> Dict[str, bool]:
 
     Tiers (each includes the capabilities of tiers below):
     - Opus 4.5: is_claude_effort
-    - 4.6 (Opus/Sonnet): + is_claude_effort_max
-    - 4.7/4.8/Sonnet 5: + is_claude_effort_xhigh (also strips sampling params)
-    - Sonnet 5: + is_claude_adaptive_default
+    - Sonnet/Opus 4.6: + is_claude_effort_max
+    - Sonnet/Opus 4.7/4.8/5: + is_claude_effort_xhigh (also strips sampling params)
+    - Sonnet/Opus 5: + is_claude_adaptive_default
     - Fable 5: same as 4.7+ plus is_claude_omit_thinking
     """
     if not model_name:
@@ -503,7 +514,7 @@ def anthropic_model_flags(model_name: Optional[str]) -> Dict[str, bool]:
             "is_claude_effort_xhigh": True,
             "is_claude_omit_thinking": True,
         }
-    if is_sonnet_5_model(model_name):
+    if is_sonnet_5_model(model_name) or is_opus_5_model(model_name):
         return {
             "is_claude_effort": True,
             "is_claude_effort_max": True,
@@ -569,10 +580,10 @@ def anthropic_effort_config(
     if not flags.get("is_claude_effort"):
         return False, [], None
     if flags.get("is_claude_effort_xhigh"):
-        return True, ["max", "xhigh", "high", "medium", "low"], "medium"
+        return True, ["max", "xhigh", "high", "medium", "low"], "high"
     if flags.get("is_claude_effort_max"):
-        return True, ["max", "high", "medium", "low"], "medium"
-    return True, ["high", "medium", "low"], "medium"
+        return True, ["max", "high", "medium", "low"], "high"
+    return True, ["high", "medium", "low"], "high"
 
 
 def is_sonnet_46_model(model_name: Optional[str]) -> bool:

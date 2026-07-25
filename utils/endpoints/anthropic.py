@@ -164,6 +164,10 @@ def call_anthropic_endpoint(
     except Exception:
         pass
 
+    if payload.get("thinking") == {"type": "disabled"}:
+        if payload.get("output_config", {}).get("effort") in ("xhigh", "max"):
+            payload["output_config"]["effort"] = "high"
+
     if enable_web_search:
         payload["tools"] = [{"type": "web_search_20250305", "name": "web_search"}]
     payload = {k: v for k, v in payload.items() if v is not None}
