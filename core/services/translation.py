@@ -36,6 +36,7 @@ from utils.model_metadata import (
     get_max_tokens_cap,
     is_anthropic_model_family,
     is_anthropic_reasoning_model,
+    is_azure_url,
     is_deepseek_reasoning_model,
     is_gemini_3_model,
     is_gemini_25_flash_model,
@@ -690,12 +691,63 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "OpenAI-Compatible":
+        is_openai_model = is_openai_model_family(model_name)
+        is_anthropic_model = is_anthropic_model_family(model_name)
+        is_azure = is_azure_url(config.openai_compatible_url)
+
+        is_openai_reasoning = is_openai_model and _is_openai_reasoning_meta(model_name)
+        is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
+        anthropic_flags = anthropic_model_flags(model_name)
+
         generation_config = {"max_tokens": max_tokens_value}
-        if use_sampling:
-            generation_config["temperature"] = temperature
-            generation_config["top_p"] = top_p
-            if top_k is not None:
+        if (
+            use_sampling
+            and not is_gemini_no_sampling_model(model_name)
+            and not is_openai_reasoning
+        ):
+            generation_config.update(
+                {
+                    "temperature": min(temperature, 1.0)
+                    if is_anthropic_model
+                    else temperature,
+                    "top_p": top_p if not is_anthropic_model else None,
+                }
+            )
+            if top_k is not None and not is_openai_model and not is_anthropic_model:
                 generation_config["top_k"] = top_k
+
+        if is_openai_model:
+            generation_config["image_detail"] = normalize_image_detail()
+
+        generation_config["_metadata"] = {
+            "is_openai_model": is_openai_model,
+            "is_anthropic_model": is_anthropic_model,
+            "is_azure": is_azure,
+            "is_openai_reasoning": is_openai_reasoning,
+            "is_anthropic_reasoning": is_anthropic_reasoning,
+            "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
+            "is_gpt5_model": is_openai_model and is_gpt5_series(model_name),
+            **anthropic_flags,
+        }
+
+        if (
+            is_openai_reasoning
+            or is_anthropic_reasoning
+            or is_openai_compatible_reasoning_model(model_name)
+        ):
+            if config.reasoning_effort:
+                generation_config["reasoning_effort"] = config.reasoning_effort
+
+        if anthropic_flags and config.effort:
+            generation_config["effort"] = config.effort
+
+        if (
+            is_openai_model
+            and is_gpt5_series(model_name)
+            and not is_gpt5_chat_variant(model_name)
+        ):
+            generation_config["verbosity"] = config.verbosity or "low"
+
         return generation_config
 
     else:

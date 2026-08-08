@@ -1,5 +1,5 @@
-import json
 import os
+import re
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
@@ -9,7 +9,6 @@ from PIL import Image
 
 from core.llm_defaults import get_provider_sampling_defaults
 from utils.endpoints import openrouter_is_reasoning_model
-from utils.exceptions import ValidationError
 from utils.logging import log_message
 from utils.model_metadata import (
     anthropic_effort_config,
@@ -23,6 +22,7 @@ from utils.model_metadata import (
     is_anthropic_model_family,
     is_anthropic_no_sampling_model,
     is_anthropic_reasoning_model,
+    is_azure_url,
     is_deepseek_reasoning_model,
     is_gemini_3_flash_model,
     is_gemini_3_model,
@@ -690,6 +690,16 @@ def get_reasoning_effort_config(
         return False, [], None
 
     elif provider == "OpenAI-Compatible":
+        if not model_name:
+            return False, [], None
+        if is_anthropic_model_family(model_name):
+            return anthropic_reasoning_effort_config(model_name)
+        if is_openai_model_family(model_name) and _is_openai_reasoning_model(
+            model_name
+        ):
+            return True, ["high", "medium", "low", "none"], "high"
+        if is_openai_compatible_reasoning_model(model_name):
+            return True, ["high", "medium", "low", "none"], "high"
         return False, [], None
 
     return False, [], None
@@ -699,14 +709,17 @@ def get_effort_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], Optional[str]]:
     """
-    Get effort configuration for Claude Opus 4.5+ and Sonnet 4.6 models (Anthropic/OpenRouter).
+    Get effort configuration for Claude Opus 4.5+ and Sonnet 4.6 models (Anthropic/OpenRouter/OpenAI-Compatible).
 
     Returns:
         Tuple of (visible, choices, default_value)
     """
-    if provider not in ("Anthropic", "OpenRouter"):
+    if provider not in ("Anthropic", "OpenRouter", "OpenAI-Compatible"):
         return False, [], None
-    if provider == "OpenRouter" and not is_anthropic_model_family(model_name):
+    if provider in (
+        "OpenRouter",
+        "OpenAI-Compatible",
+    ) and not is_anthropic_model_family(model_name):
         return False, [], None
 
     return anthropic_effort_config(model_name)
@@ -716,12 +729,12 @@ def get_verbosity_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], Optional[str]]:
     """
-    Get verbosity configuration for GPT-5 series models (OpenAI/OpenRouter).
+    Get verbosity configuration for GPT-5 series models (OpenAI/OpenRouter/OpenAI-Compatible).
 
     Returns:
         Tuple of (visible, choices, default_value)
     """
-    if provider not in ("OpenAI", "OpenRouter"):
+    if provider not in ("OpenAI", "OpenRouter", "OpenAI-Compatible"):
         return False, [], None
 
     if is_gpt5_series(model_name) and not is_gpt5_chat_variant(model_name):
@@ -801,7 +814,7 @@ def get_sampling_slider_interactivity(
         "Xiaomi MiMo",
     ):
         top_k_interactive = False
-    elif provider == "OpenRouter":
+    elif provider in ("OpenRouter", "OpenAI-Compatible"):
         is_anthropic_model = is_anthropic_model_family(model_name)
         is_openai_model = is_openai_model_family(model_name)
         if is_anthropic_model:
@@ -860,7 +873,7 @@ def get_image_detail_config(
     provider: str, model_name: Optional[str]
 ) -> Tuple[bool, List[str], str, str]:
     """Get image detail configuration for a provider/model combination."""
-    if provider == "OpenRouter":
+    if provider in ("OpenRouter", "OpenAI-Compatible"):
         if not is_openai_model_family(model_name):
             return False, ["auto"], "auto", ""
     elif provider != "OpenAI":
@@ -1442,37 +1455,60 @@ def fetch_and_update_compatible_models(
         return gr.update(choices=cached_models, value=selected_comp_model)
 
     log_message(f"Fetching models from {url}", verbose=verbose)
+    extracted_dep_name = None
+    if is_azure_url(url) and "/openai/deployments/" in url:
+        match = re.search(r"/openai/deployments/([^/?#]+)", url)
+        if match:
+            extracted_dep_name = match.group(1)
+
     try:
         headers = {}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+            if is_azure_url(url):
+                headers["api-key"] = api_key
 
-        fetch_url = f"{url.rstrip('/')}/models"
+        if (
+            is_azure_url(url)
+            and not url.endswith("/models")
+            and "/openai/deployments/" not in url
+        ):
+            fetch_url = f"{url.rstrip('/')}/openai/deployments?api-version=2024-06-01"
+        else:
+            fetch_url = f"{url.rstrip('/')}/models"
+
         response = requests.get(fetch_url, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
 
-        all_models_data = data.get("data", [])
-        if not isinstance(all_models_data, list):
-            # Some endpoints (like Ollama) return a list of models directly under a 'models' key
+        all_models_data = data.get("data")
+        if not all_models_data or not isinstance(all_models_data, list):
             if isinstance(data.get("models"), list):
                 all_models_data = data["models"]
+            elif isinstance(data.get("value"), list):
+                all_models_data = data["value"]
             else:
-                raise ValidationError(
-                    "Invalid response format: 'data' or 'models' key not found or not a list."
-                )
+                all_models_data = []
 
-        fetched_models = [
-            model.get(
-                "id", model.get("name")
-            )  # Handle different key names ('id' or 'name')
-            for model in all_models_data
-            if isinstance(model, dict) and (model.get("id") or model.get("name"))
-        ]
+        fetched_models = []
+        for model in all_models_data:
+            if isinstance(model, dict):
+                raw_id = (
+                    model.get("id") or model.get("name") or model.get("deployment_name")
+                )
+                if raw_id:
+                    clean_id = str(raw_id).rsplit("/", 1)[-1]
+                    if clean_id:
+                        fetched_models.append(clean_id)
         fetched_models = [m for m in fetched_models if m]
         # Filter out embedding models (case-insensitive)
         fetched_models = [m for m in fetched_models if "embedding" not in m.lower()]
+        if extracted_dep_name and extracted_dep_name not in fetched_models:
+            fetched_models.insert(0, extracted_dep_name)
         fetched_models.sort()
+
+        if not fetched_models and extracted_dep_name:
+            fetched_models = [extracted_dep_name]
 
         COMPATIBLE_MODEL_CACHE["url"] = url
         COMPATIBLE_MODEL_CACHE["models"] = fetched_models
@@ -1498,18 +1534,13 @@ def fetch_and_update_compatible_models(
         )
         return gr.update(choices=fetched_models, value=selected_comp_model)
 
-    except requests.exceptions.RequestException as e:
-        gr.Error(f"Error fetching models from {url}: {e}")
-        return gr.update(choices=[], value=None)
-    except (json.JSONDecodeError, ValueError, KeyError) as e:
-        error_detail = (
-            "Check if the URL points to a valid OpenAI-Compatible '/v1' "
-            "or '/api/tags' (Ollama) endpoint."
-        )
-        gr.Error(f"Error parsing response from {url}: {e}. {error_detail}")
-        return gr.update(choices=[], value=None)
     except Exception as e:
-        gr.Error(f"Unexpected error fetching models from {url}: {e}")
+        if extracted_dep_name:
+            fallback_models = [extracted_dep_name]
+            COMPATIBLE_MODEL_CACHE["url"] = url
+            COMPATIBLE_MODEL_CACHE["models"] = fallback_models
+            return gr.update(choices=fallback_models, value=extracted_dep_name)
+        gr.Warning(f"Error fetching models from {url}: {e}")
         return gr.update(choices=[], value=None)
 
 

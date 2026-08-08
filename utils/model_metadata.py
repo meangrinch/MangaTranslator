@@ -313,12 +313,32 @@ def is_openai_reasoning_model(model_name: Optional[str]) -> bool:
     )
 
 
+def is_azure_url(url: Optional[str]) -> bool:
+    """Check if a URL is an Azure OpenAI or Azure AI Services endpoint."""
+    if not url:
+        return False
+    url_lower = url.lower()
+    azure_domains = (
+        ".azure.com",
+        ".azure-api.net",
+        ".azure.us",
+        ".azure.cn",
+        ".microsoftazure.de",
+    )
+    return any(domain in url_lower for domain in azure_domains)
+
+
 def is_openai_compatible_reasoning_model(model_name: Optional[str]) -> bool:
     """Check if an OpenAI-Compatible model is reasoning-capable."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return "thinking" in lm or "reasoning" in lm
+    return (
+        "thinking" in lm
+        or "reasoning" in lm
+        or is_openai_reasoning_model(model_name)
+        or is_anthropic_reasoning_model(model_name)
+    )
 
 
 def is_deepseek_reasoning_model(model_name: Optional[str]) -> bool:
