@@ -226,7 +226,7 @@ DEFAULT_SETTINGS = {
     "outside_text_flux_upscale_small_crops": True,
     "outside_text_flux_group_regions": False,
     "outside_text_flux_residual_diff_threshold": 0.15,
-    "outside_text_osb_confidence": 0.6,
+    "outside_text_osb_confidence": 0.5,
     "outside_text_enable_page_number_filtering": False,
     "outside_text_page_filter_margin_threshold": 0.1,
     "outside_text_page_filter_min_area_ratio": 0.05,

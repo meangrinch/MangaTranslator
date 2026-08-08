@@ -801,7 +801,7 @@ def main():
     parser.add_argument(
         "--osb-confidence",
         type=float,
-        default=0.6,
+        default=0.5,
         help="Confidence threshold for OSB text detection (0.0-1.0)",
     )
     parser.add_argument(

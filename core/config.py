@@ -142,7 +142,7 @@ class OutsideTextConfig:
     flux_upscale_small_crops: bool = True
     flux_group_regions: bool = False
     flux_residual_diff_threshold: float = 0.15
-    osb_confidence: float = 0.6
+    osb_confidence: float = 0.5
     osb_font_dir: Optional[str] = None  # None = use main font as fallback
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10

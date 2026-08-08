@@ -1484,7 +1484,7 @@ def create_layout(
                                     0.0,
                                     1.0,
                                     value=saved_settings.get(
-                                        "outside_text_osb_confidence", 0.6
+                                        "outside_text_osb_confidence", 0.5
                                     ),
                                     step=0.05,
                                     label="OSB Text Detection Confidence",

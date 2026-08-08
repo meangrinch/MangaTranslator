@@ -141,7 +141,7 @@ class UIOutsideTextSettings:
     flux_upscale_small_crops: bool = True
     flux_group_regions: bool = False
     flux_residual_diff_threshold: float = 0.15
-    osb_confidence: float = 0.6
+    osb_confidence: float = 0.5
     osb_font_dir: str = ""  # Empty = use main font
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
@@ -479,7 +479,7 @@ class UIConfigState:
                 flux_residual_diff_threshold=data.get(
                     "outside_text_flux_residual_diff_threshold", 0.15
                 ),
-                osb_confidence=data.get("outside_text_osb_confidence", 0.6),
+                osb_confidence=data.get("outside_text_osb_confidence", 0.5),
                 osb_font_dir=data.get(
                     "outside_text_osb_font_pack",
                     defaults.get("outside_text_osb_font_pack", ""),
