@@ -341,12 +341,32 @@ def is_openai_compatible_reasoning_model(model_name: Optional[str]) -> bool:
     )
 
 
+def is_deepseek_v4_flash_model(model_name: Optional[str]) -> bool:
+    """Check if a model is DeepSeek V4 Flash."""
+    if not model_name:
+        return False
+    return "deepseek-v4-flash" in model_name.lower()
+
+
+def is_deepseek_v4_pro_model(model_name: Optional[str]) -> bool:
+    """Check if a model is DeepSeek V4 Pro."""
+    if not model_name:
+        return False
+    return "deepseek-v4-pro" in model_name.lower()
+
+
+def supports_deepseek_v4_low_effort(model_name: Optional[str]) -> bool:
+    """Whether a DeepSeek model accepts reasoning_effort='low'."""
+    return is_deepseek_v4_flash_model(model_name)
+
+
 def is_deepseek_reasoning_model(model_name: Optional[str]) -> bool:
     """Check if a DeepSeek model is reasoning-capable."""
     if not model_name:
         return False
-    lm = model_name.lower()
-    return lm in ("deepseek-v4-pro", "deepseek-v4-flash")
+    return is_deepseek_v4_flash_model(model_name) or is_deepseek_v4_pro_model(
+        model_name
+    )
 
 
 def is_zai_reasoning_model(model_name: Optional[str]) -> bool:

@@ -57,6 +57,7 @@ from utils.model_metadata import (
     is_rosetta_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
+    supports_deepseek_v4_low_effort,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
     supports_moonshot_reasoning_effort,
@@ -536,6 +537,10 @@ def _build_generation_config(
             )
         if is_reasoning:
             reasoning_effort = config.reasoning_effort or "high"
+            if reasoning_effort == "low" and not supports_deepseek_v4_low_effort(
+                model_name
+            ):
+                reasoning_effort = "high"
             thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
             generation_config["thinking"] = {"type": thinking_type}
             if thinking_type == "enabled":

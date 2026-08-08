@@ -44,6 +44,7 @@ from utils.model_metadata import (
     is_openai_reasoning_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
+    supports_deepseek_v4_low_effort,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
     supports_moonshot_reasoning_effort,
@@ -642,6 +643,8 @@ def get_reasoning_effort_config(
         is_reasoning = is_deepseek_reasoning_model(model_name)
         if not is_reasoning:
             return False, [], None
+        if supports_deepseek_v4_low_effort(model_name):
+            return True, ["max", "high", "low", "none"], "high"
         return True, ["max", "high", "none"], "high"
 
     elif provider == "Z.ai":
