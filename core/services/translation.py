@@ -40,6 +40,7 @@ from utils.model_metadata import (
     is_gemini_3_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
+    is_gemini_no_sampling_model,
     is_gemma_model,
     is_google_model_family,
     is_google_reasoning_model,
@@ -374,7 +375,7 @@ def _build_generation_config(
         generation_config = {
             "maxOutputTokens": max_tokens_value,
         }
-        if use_sampling:
+        if use_sampling and not is_gemini_no_sampling_model(model_name):
             generation_config.update(
                 {
                     "temperature": temperature,
@@ -621,7 +622,7 @@ def _build_generation_config(
         is_google_model = is_google_model_family(model_name)
 
         generation_config = {"max_tokens": max_tokens_value}
-        if use_sampling:
+        if use_sampling and not is_gemini_no_sampling_model(model_name):
             generation_config.update(
                 {
                     "temperature": temperature,
@@ -647,6 +648,7 @@ def _build_generation_config(
             "is_grok_model": is_grok_model,
             "is_gemini_3": is_gemini_3,
             "is_google_model": is_google_model,
+            "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
             "is_openai_reasoning": is_openai_reasoning,
             "is_anthropic_reasoning": is_anthropic_reasoning,
             "is_grok_reasoning": is_grok_reasoning,

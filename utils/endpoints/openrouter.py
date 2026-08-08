@@ -6,6 +6,7 @@ import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
+from utils.model_metadata import is_gemini_no_sampling_model
 
 # OpenRouter model metadata cache & reasoning detection
 _OPENROUTER_MODELS_META: Dict[str, Dict[str, Any]] = {}
@@ -161,21 +162,29 @@ def call_openrouter_endpoint(
     is_anthropic_model = metadata.get("is_anthropic_model", False)
 
     temp = generation_config.get("temperature")
-    no_sampling = metadata.get("is_claude_effort_xhigh", False) or metadata.get(
-        "is_claude_no_sampling", False
+    no_sampling = (
+        metadata.get("is_claude_effort_xhigh", False)
+        or metadata.get("is_claude_no_sampling", False)
+        or metadata.get("is_gemini_no_sampling", False)
+        or is_gemini_no_sampling_model(model_name)
     )
-    if temp is not None and not (is_anthropic_model and no_sampling):
+    if temp is not None and not is_gemini_no_sampling_model(model_name) and not (is_anthropic_model and no_sampling):
         if is_anthropic_model or is_openai_model:
             payload["temperature"] = min(temp, 1.0)
         else:
             payload["temperature"] = temp
 
     top_p = generation_config.get("top_p")
-    if top_p is not None and not is_anthropic_model:
+    if top_p is not None and not is_anthropic_model and not no_sampling:
         payload["top_p"] = top_p
 
     top_k = generation_config.get("top_k")
-    if top_k is not None and not is_openai_model and not is_anthropic_model:
+    if (
+        top_k is not None
+        and not is_openai_model
+        and not is_anthropic_model
+        and not no_sampling
+    ):
         payload["top_k"] = top_k
 
     # OpenRouter verbosity parameter: used by both Claude (effort) and GPT-5 (verbosity)

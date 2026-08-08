@@ -28,6 +28,7 @@ from utils.model_metadata import (
     is_gemini_3_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
+    is_gemini_no_sampling_model,
     is_gemma_model,
     is_google_model_family,
     is_google_reasoning_model,
@@ -759,13 +760,17 @@ def get_sampling_interactivity_for_effort(
 def _model_disallows_all_sampling_params(
     provider: str, model_name: Optional[str]
 ) -> bool:
-    """Models that reject temperature/top-k at the API (e.g. Claude Opus 4.7+)."""
+    """Models that reject temperature/top-k at the API (e.g. Claude Opus 4.7+, Gemini 3.6 Flash, Gemini 3.5 Flash Lite)."""
     if provider == "Anthropic":
         return is_anthropic_no_sampling_model(model_name)
     if provider == "OpenRouter" and is_anthropic_model_family(model_name):
         return is_anthropic_no_sampling_model(model_name)
     if provider == "Moonshot AI":
         return is_moonshot_k3_model(model_name)
+    if provider == "Google" or (
+        provider == "OpenRouter" and is_google_model_family(model_name)
+    ):
+        return is_gemini_no_sampling_model(model_name)
     return False
 
 
@@ -952,10 +957,21 @@ def update_translation_ui(
     )
 
     temp_update = gr.update(
-        maximum=temp_max, value=new_temp_value, interactive=temp_interactive
+        maximum=temp_max,
+        value=new_temp_value,
+        interactive=temp_interactive,
+        visible=use_custom_sampling_visible,
     )
-    top_k_update = gr.update(interactive=top_k_interactive, value=default_top_k)
-    top_p_update = gr.update(value=default_top_p, interactive=top_p_interactive)
+    top_k_update = gr.update(
+        interactive=top_k_interactive,
+        value=default_top_k,
+        visible=use_custom_sampling_visible,
+    )
+    top_p_update = gr.update(
+        value=default_top_p,
+        interactive=top_p_interactive,
+        visible=use_custom_sampling_visible,
+    )
     use_custom_sampling_update = gr.update(visible=use_custom_sampling_visible)
 
     if remembered_model:
@@ -1127,22 +1143,33 @@ def update_params_for_model(
             maximum=temp_max,
             value=min(float(hy["temperature"]), temp_max),
             interactive=temp_interactive,
+            visible=use_custom_sampling_visible,
         )
         top_p_update = gr.update(
-            value=float(hy["top_p"]), interactive=top_p_interactive
+            value=float(hy["top_p"]),
+            interactive=top_p_interactive,
+            visible=use_custom_sampling_visible,
         )
         top_k_update = gr.update(
             value=0 if hy["top_k"] is None else int(hy["top_k"]),
             interactive=top_k_interactive,
+            visible=use_custom_sampling_visible,
         )
     else:
         temp_update = gr.update(
             maximum=temp_max,
             value=min(current_temp, temp_max),
             interactive=temp_interactive,
+            visible=use_custom_sampling_visible,
         )
-        top_k_update = gr.update(interactive=top_k_interactive)
-        top_p_update = gr.update(interactive=top_p_interactive)
+        top_k_update = gr.update(
+            interactive=top_k_interactive,
+            visible=use_custom_sampling_visible,
+        )
+        top_p_update = gr.update(
+            interactive=top_p_interactive,
+            visible=use_custom_sampling_visible,
+        )
     use_custom_sampling_update = gr.update(visible=use_custom_sampling_visible)
 
     is_gemini_3_google = provider == "Google" and is_gemini_3_model(model_name)

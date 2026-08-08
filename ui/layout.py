@@ -1178,6 +1178,7 @@ def create_layout(
                                 label="Temperature",
                                 info="Controls creativity. Lower = deterministic; higher = random.",
                                 interactive=initial_temp_interactive,
+                                visible=initial_use_custom_sampling_visible,
                                 elem_id="config_temperature",
                             )
                             top_p = gr.Slider(
@@ -1188,6 +1189,7 @@ def create_layout(
                                 label="Top P",
                                 info="Controls diversity. Lower = focused; higher = random.",
                                 interactive=initial_top_p_interactive,
+                                visible=initial_use_custom_sampling_visible,
                                 elem_id="config_top_p",
                             )
                             top_k = gr.Slider(
@@ -1198,6 +1200,7 @@ def create_layout(
                                 label="Top K",
                                 info="Limits sampling pool to top K tokens.",
                                 interactive=initial_top_k_interactive,
+                                visible=initial_use_custom_sampling_visible,
                                 elem_id="config_top_k",
                             )
                             max_tokens = gr.Slider(

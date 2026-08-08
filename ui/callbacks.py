@@ -1460,11 +1460,21 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
             visible=compatible_visible,
         ),
         gr.update(choices=default_models_choices, value=default_model_name),
-        gr.update(value=temp_val, maximum=temp_max),
         gr.update(
-            value=default_ui_state.llm_settings.top_p, interactive=top_p_interactive
+            value=temp_val,
+            maximum=temp_max,
+            visible=use_custom_sampling_visible,
         ),
-        gr.update(value=top_k_val, interactive=top_k_interactive),
+        gr.update(
+            value=default_ui_state.llm_settings.top_p,
+            interactive=top_p_interactive,
+            visible=use_custom_sampling_visible,
+        ),
+        gr.update(
+            value=top_k_val,
+            interactive=top_k_interactive,
+            visible=use_custom_sampling_visible,
+        ),
         gr.update(
             value=default_ui_state.general.use_custom_sampling,
             visible=use_custom_sampling_visible,
@@ -1694,9 +1704,9 @@ def handle_reasoning_effort_change(
         provider, model_name, reasoning_effort
     )
     return (
-        gr.update(interactive=temp_ok),
-        gr.update(interactive=top_p_ok),
-        gr.update(interactive=top_k_ok),
+        gr.update(interactive=temp_ok, visible=visible),
+        gr.update(interactive=top_p_ok, visible=visible),
+        gr.update(interactive=top_k_ok, visible=visible),
         gr.update(visible=visible),
     )
 

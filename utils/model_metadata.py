@@ -623,6 +623,29 @@ def is_gemini_3_flash_model(model_name: Optional[str]) -> bool:
     return "gemini-3" in lm and "flash" in lm and "lite" not in lm
 
 
+def is_gemini_36_flash_model(model_name: Optional[str]) -> bool:
+    """Check if a model is Gemini 3.6 Flash."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "gemini-3.6" in lm and "flash" in lm
+
+
+def is_gemini_35_flash_lite_model(model_name: Optional[str]) -> bool:
+    """Check if a model is Gemini 3.5 Flash Lite."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "gemini-3.5" in lm and "flash" in lm and "lite" in lm
+
+
+def is_gemini_no_sampling_model(model_name: Optional[str]) -> bool:
+    """Check if a Gemini model does not support custom sampling parameters."""
+    return is_gemini_36_flash_model(model_name) or is_gemini_35_flash_lite_model(
+        model_name
+    )
+
+
 def is_gemini_25_flash_model(model_name: Optional[str]) -> bool:
     """Check if a model is Gemini 2.5 Flash."""
     if not model_name:
