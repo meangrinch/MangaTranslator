@@ -25,8 +25,15 @@ from core.image.ocr_detection import OutsideTextDetector, extract_text_with_mang
 from core.ml.model_manager import get_model_manager
 from utils.logging import log_message
 
-# OSB Expansion Parameters
+# OSB Expansion and Classification Constants
 OSB_EXPANSION_PIXEL_BUFFER = 5  # for bubbles, nearby OSB regions, panels
+OSB_SOLID_RATIO_THRESHOLD = (
+    0.95  # Stricter than interior sampling because border ring has no text mask noise
+)
+OSB_COLOR_TOLERANCE = 15
+OSB_EXPANSION_PX = 2
+OSB_WHITE_SNAP_THRESH = 245
+OSB_BLACK_SNAP_THRESH = 10
 
 
 @dataclass
@@ -1058,11 +1065,10 @@ def finish_outside_text_work(
                             else:
                                 rx0, ry0, rx1, ry1 = ox, oy, ox + ow, oy + oh
 
-                            expansion_px = 2
-                            sx1 = max(0, rx0 - expansion_px)
-                            sy1 = max(0, ry0 - expansion_px)
-                            sx2 = min(img_w, rx1 + expansion_px)
-                            sy2 = min(img_h, ry1 + expansion_px)
+                            sx1 = max(0, rx0 - OSB_EXPANSION_PX)
+                            sy1 = max(0, ry0 - OSB_EXPANSION_PX)
+                            sx2 = min(img_w, rx1 + OSB_EXPANSION_PX)
+                            sy2 = min(img_h, ry1 + OSB_EXPANSION_PX)
 
                             if sx2 > sx1 and sy2 > sy1:
                                 mask_h, mask_w = sy2 - sy1, sx2 - sx1
@@ -1156,23 +1162,41 @@ def finish_outside_text_work(
                                             text_color_rgb
                                         )
 
-                                    white_thresh = 250
-                                    black_thresh = 5
-                                    ratio_threshold = 0.95
-
-                                    white_ratio = np.mean(
-                                        np.all(border_pixels >= white_thresh, axis=1)
+                                    bg_rgb_med = np.median(
+                                        border_pixels, axis=0
+                                    ).astype(int)
+                                    diffs = np.max(
+                                        np.abs(border_pixels.astype(int) - bg_rgb_med),
+                                        axis=1,
                                     )
-                                    black_ratio = np.mean(
-                                        np.all(border_pixels <= black_thresh, axis=1)
+                                    solid_ratio = float(
+                                        np.mean(diffs <= OSB_COLOR_TOLERANCE)
+                                    )
+                                    is_border_solid = (
+                                        solid_ratio >= OSB_SOLID_RATIO_THRESHOLD
                                     )
 
-                                    if fallback_fill_color is None:
-                                        fallback_fill_color = (
-                                            (255, 255, 255)
-                                            if white_ratio >= black_ratio
-                                            else (0, 0, 0)
+                                    if (
+                                        bg_rgb_med[0] >= OSB_WHITE_SNAP_THRESH
+                                        and bg_rgb_med[1] >= OSB_WHITE_SNAP_THRESH
+                                        and bg_rgb_med[2] >= OSB_WHITE_SNAP_THRESH
+                                    ):
+                                        detected_color = (255, 255, 255)
+                                    elif (
+                                        bg_rgb_med[0] <= OSB_BLACK_SNAP_THRESH
+                                        and bg_rgb_med[1] <= OSB_BLACK_SNAP_THRESH
+                                        and bg_rgb_med[2] <= OSB_BLACK_SNAP_THRESH
+                                    ):
+                                        detected_color = (0, 0, 0)
+                                    else:
+                                        detected_color = (
+                                            int(bg_rgb_med[0]),
+                                            int(bg_rgb_med[1]),
+                                            int(bg_rgb_med[2]),
                                         )
+
+                                    if is_border_solid or fallback_fill_color is None:
+                                        fallback_fill_color = detected_color
 
                                     force_fill = inpainting_method == "opencv"
 
@@ -1225,15 +1249,13 @@ def finish_outside_text_work(
                                             ),
                                         )
 
-                                    force_fill = inpainting_method == "opencv"
-
                                     # Simply check if the expanded boundary is solid color
-                                    expanded_is_solid = False
+                                    expanded_is_solid = is_border_solid
                                     if not force_fill:
-                                        ex_sx1 = max(0, p_x0 - expansion_px)
-                                        ex_sy1 = max(0, p_y0 - expansion_px)
-                                        ex_sx2 = min(img_w, p_x1 + expansion_px)
-                                        ex_sy2 = min(img_h, p_y1 + expansion_px)
+                                        ex_sx1 = max(0, p_x0 - OSB_EXPANSION_PX)
+                                        ex_sy1 = max(0, p_y0 - OSB_EXPANSION_PX)
+                                        ex_sx2 = min(img_w, p_x1 + OSB_EXPANSION_PX)
+                                        ex_sy2 = min(img_h, p_y1 + OSB_EXPANSION_PX)
 
                                         if ex_sx2 > ex_sx1 and ex_sy2 > ex_sy1:
                                             # Grab boundary pixels using Numpy directly for speed
@@ -1255,42 +1277,72 @@ def finish_outside_text_work(
 
                                             eborder_pixels = ecrop_np[elocal_mask]
                                             if eborder_pixels.size > 0:
-                                                ewhite_ratio = np.mean(
-                                                    np.all(
-                                                        eborder_pixels >= white_thresh,
-                                                        axis=1,
-                                                    )
+                                                ebg_rgb_med = np.median(
+                                                    eborder_pixels, axis=0
+                                                ).astype(int)
+                                                ediffs = np.max(
+                                                    np.abs(
+                                                        eborder_pixels.astype(int)
+                                                        - ebg_rgb_med
+                                                    ),
+                                                    axis=1,
                                                 )
-                                                eblack_ratio = np.mean(
-                                                    np.all(
-                                                        eborder_pixels <= black_thresh,
-                                                        axis=1,
+                                                esolid_ratio = float(
+                                                    np.mean(
+                                                        ediffs <= OSB_COLOR_TOLERANCE
                                                     )
                                                 )
                                                 if (
-                                                    ewhite_ratio >= ratio_threshold
-                                                    or eblack_ratio >= ratio_threshold
+                                                    ebg_rgb_med[0]
+                                                    >= OSB_WHITE_SNAP_THRESH
+                                                    and ebg_rgb_med[1]
+                                                    >= OSB_WHITE_SNAP_THRESH
+                                                    and ebg_rgb_med[2]
+                                                    >= OSB_WHITE_SNAP_THRESH
+                                                ):
+                                                    edetected_color = (255, 255, 255)
+                                                elif (
+                                                    ebg_rgb_med[0]
+                                                    <= OSB_BLACK_SNAP_THRESH
+                                                    and ebg_rgb_med[1]
+                                                    <= OSB_BLACK_SNAP_THRESH
+                                                    and ebg_rgb_med[2]
+                                                    <= OSB_BLACK_SNAP_THRESH
+                                                ):
+                                                    edetected_color = (0, 0, 0)
+                                                else:
+                                                    edetected_color = (
+                                                        int(ebg_rgb_med[0]),
+                                                        int(ebg_rgb_med[1]),
+                                                        int(ebg_rgb_med[2]),
+                                                    )
+
+                                                if (
+                                                    esolid_ratio
+                                                    >= OSB_SOLID_RATIO_THRESHOLD
                                                 ):
                                                     expanded_is_solid = True
+                                                    fallback_fill_color = (
+                                                        edetected_color
+                                                    )
 
                                     should_simple_fill = expanded_is_solid or force_fill
 
                                     if should_simple_fill:
-                                        fill_color = fallback_fill_color
+                                        fill_color = (
+                                            fallback_fill_color
+                                            if fallback_fill_color is not None
+                                            else detected_color
+                                        )
 
-                                        if force_fill and not (
-                                            white_ratio >= ratio_threshold
-                                            or black_ratio >= ratio_threshold
-                                        ):
+                                        if force_fill:
                                             log_message(
-                                                "Forcing CV2 fill: defaulting to "
-                                                f"{'white' if fill_color == (255, 255, 255) else 'black'} background",
+                                                f"Using OpenCV simple fill for OSB region: {fill_color} background",
                                                 verbose=verbose,
                                             )
                                         else:
                                             log_message(
-                                                "Skipping Flux for OSB region: detected pure "
-                                                f"{'white' if fill_color == (255, 255, 255) else 'black'} background",
+                                                f"Skipping Flux for OSB region: detected solid {fill_color} background",
                                                 verbose=verbose,
                                             )
 

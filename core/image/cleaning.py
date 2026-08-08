@@ -29,13 +29,9 @@ DILATION_KERNEL_SIZE = (7, 7)  # Kernel size for morphological dilation
 EROSION_KERNEL_SIZE = (5, 5)  # Kernel size for morphological erosion
 DISTANCE_TRANSFORM_MASK_SIZE = 5  # Mask size for distance transform
 
-# Classification thresholds for colored bubbles
-BRIGHT_RATIO_THRESHOLD = 0.65
-DARK_RATIO_THRESHOLD = 0.65
-BRIGHT_DOM_RATIO_MIN = 0.40
-DARK_DOM_RATIO_MIN = 0.40
-BRIGHT_DARK_RATIO_MAX = 0.10
-DARK_BRIGHT_RATIO_MAX = 0.10
+# Classification threshold for solid background bubbles (interior sampling)
+# Lower threshold (0.65) accounts for residual text mask contours and erosion artifacts
+SOLID_RATIO_THRESHOLD = 0.65
 
 
 # Adaptive shrink defaults for conjoined junction zones (at 1.0x scale)
@@ -399,63 +395,77 @@ def process_single_bubble(
                     )
                     sampling_mask[text_mask_dilated == 255] = 0
 
-                    sample_pixels = img_gray[sampling_mask == 255]
-                    if sample_pixels.size == 0:
-                        sample_pixels = masked_pixels
+                    if image_bgr is not None:
+                        sample_pixels_bgr = image_bgr[sampling_mask == 255]
+                        if sample_pixels_bgr.size == 0:
+                            sample_pixels_bgr = image_bgr[base_mask == 255]
 
-                    sample_values = sample_pixels.astype(np.uint8).flatten()
-                    hist = np.bincount(sample_values, minlength=256)
-                    dominant_val = (
-                        int(hist.argmax()) if hist.size > 0 else int(mean_pixel_value)
-                    )
-                    dominant_count = int(hist.max()) if hist.size > 0 else 0
-                    total_count = max(int(sample_values.size), 1)
-                    dominant_ratio = dominant_count / float(total_count)
-                    bright_ratio = float(
-                        np.count_nonzero(sample_values >= 245)
-                    ) / float(total_count)
-                    dark_ratio = float(np.count_nonzero(sample_values <= 15)) / float(
-                        total_count
-                    )
+                        if sample_pixels_bgr.size > 0:
+                            med_bgr = np.median(sample_pixels_bgr, axis=0).astype(int)
+                            diffs = np.max(
+                                np.abs(sample_pixels_bgr.astype(int) - med_bgr), axis=1
+                            )
+                            solid_ratio = float(np.count_nonzero(diffs <= 15)) / float(
+                                len(sample_pixels_bgr)
+                            )
+
+                            if (
+                                med_bgr[0] >= 245
+                                and med_bgr[1] >= 245
+                                and med_bgr[2] >= 245
+                            ):
+                                fill_color_bgr = (255, 255, 255)
+                            elif (
+                                med_bgr[0] <= 10
+                                and med_bgr[1] <= 10
+                                and med_bgr[2] <= 10
+                            ):
+                                fill_color_bgr = (0, 0, 0)
+                            else:
+                                fill_color_bgr = (
+                                    int(med_bgr[0]),
+                                    int(med_bgr[1]),
+                                    int(med_bgr[2]),
+                                )
+                        else:
+                            fill_color_bgr = (255, 255, 255)
+                            solid_ratio = 0.0
+                    else:
+                        sample_pixels = img_gray[sampling_mask == 255]
+                        if sample_pixels.size == 0:
+                            sample_pixels = masked_pixels
+                        sample_values = sample_pixels.astype(np.uint8).flatten()
+                        med_val = (
+                            int(np.median(sample_values))
+                            if sample_values.size > 0
+                            else int(mean_pixel_value)
+                        )
+                        diffs = np.abs(sample_values.astype(int) - med_val)
+                        solid_ratio = float(np.count_nonzero(diffs <= 15)) / float(
+                            max(len(sample_values), 1)
+                        )
+                        if med_val >= 245:
+                            fill_color_bgr = (255, 255, 255)
+                        elif med_val <= 10:
+                            fill_color_bgr = (0, 0, 0)
+                        else:
+                            fill_color_bgr = (med_val, med_val, med_val)
 
                     log_prefix = "[SAM] " if is_sam else ""
-                    if bright_ratio >= BRIGHT_RATIO_THRESHOLD or (
-                        dominant_val >= 245
-                        and dominant_ratio >= BRIGHT_DOM_RATIO_MIN
-                        and dark_ratio <= BRIGHT_DARK_RATIO_MAX
-                    ):
+                    if solid_ratio >= SOLID_RATIO_THRESHOLD:
                         is_colored_bubble = False
-                        fill_color_bgr = (255, 255, 255)
-                        sample_color_bgr = (255, 255, 255)
+                        sample_color_bgr = fill_color_bgr
                         log_message(
-                            f"{log_prefix}Detection {detection_bbox}: white "
-                            f"(mode={dominant_val}, dom_ratio={dominant_ratio:.2f}, "
-                            f"bright_ratio={bright_ratio:.2f}, dark_ratio={dark_ratio:.2f})",
-                            verbose=verbose,
-                        )
-                    elif dark_ratio >= DARK_RATIO_THRESHOLD or (
-                        dominant_val <= 15
-                        and dominant_ratio >= DARK_DOM_RATIO_MIN
-                        and bright_ratio <= DARK_BRIGHT_RATIO_MAX
-                    ):
-                        is_colored_bubble = False
-                        fill_color_bgr = (0, 0, 0)
-                        sample_color_bgr = (0, 0, 0)
-                        log_message(
-                            f"{log_prefix}Detection {detection_bbox}: black "
-                            f"(mode={dominant_val}, dom_ratio={dominant_ratio:.2f}, "
-                            f"bright_ratio={bright_ratio:.2f}, dark_ratio={dark_ratio:.2f})",
+                            f"{log_prefix}Detection {detection_bbox}: solid color {fill_color_bgr} "
+                            f"(solid_ratio={solid_ratio:.2f})",
                             verbose=verbose,
                         )
                     else:
                         is_colored_bubble = True
-                        sample_color_bgr = (dominant_val, dominant_val, dominant_val)
+                        sample_color_bgr = fill_color_bgr
                         log_message(
-                            f"{log_prefix}Detection {detection_bbox}: "
-                            f"colored/gradient (mode={dominant_val}, "
-                            f"dom_ratio={dominant_ratio:.2f}, "
-                            f"bright_ratio={bright_ratio:.2f}, "
-                            f"dark_ratio={dark_ratio:.2f})",
+                            f"{log_prefix}Detection {detection_bbox}: non-solid/gradient "
+                            f"(solid_ratio={solid_ratio:.2f})",
                             verbose=verbose,
                         )
 
@@ -480,16 +490,15 @@ def process_single_bubble(
                             np.uint8([[sampled_bgr]]), cv2.COLOR_BGR2HSV
                         )[0][0]
                         if hsv[1] < 25:
-                            if not is_colored_bubble:
-                                text_color_bgr = (
-                                    (0, 0, 0)
-                                    if fill_color_bgr == (255, 255, 255)
-                                    else (255, 255, 255)
-                                )
-                            else:
-                                text_color_bgr = (
-                                    (0, 0, 0) if hsv[2] < 128 else (255, 255, 255)
-                                )
+                            b, g, r = (
+                                fill_color_bgr[0],
+                                fill_color_bgr[1],
+                                fill_color_bgr[2],
+                            )
+                            luminance = 0.114 * b + 0.587 * g + 0.299 * r
+                            text_color_bgr = (
+                                (0, 0, 0) if luminance >= 128 else (255, 255, 255)
+                            )
                         else:
                             text_color_bgr = sampled_bgr
 
@@ -555,7 +564,7 @@ def clean_speech_bubbles(
                                  are useful for uncleaned text close to bubble's edges.
         use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value.
         roi_shrink_px (int): Number of pixels to shrink the ROI inwards before identification/fill.
-        inpaint_colored_bubbles (bool): If True, detect non-white/black bubbles and inpaint text with Flux.
+        inpaint_colored_bubbles (bool): If True, detect non-solid background bubbles and inpaint text with Flux.
         flux_hf_token (str): Hugging Face token for Flux downloads (shared with outside-text removal).
         flux_num_inference_steps (int): Flux denoising steps for colored bubble inpainting.
         flux_residual_diff_threshold (float): Flux residual diff threshold for caching.
