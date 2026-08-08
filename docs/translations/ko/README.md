@@ -167,7 +167,7 @@ fonts/
 - 웹 UI: Config (설정) 탭에서 제공자/모델/API 키를 설정합니다 (로컬에 저장됨).
 - CLI: 명령줄 플래그 또는 환경 변수를 통해 키/URL을 전달합니다.
 - 환경 변수: `GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
-- OpenAI 호환 제공자의 기본 URL: `http://localhost:8080/v1`
+- OpenAI-Compatible (OpenAI 호환) 제공자는 로컬 엔드포인트(예: `http://localhost:8080/v1`) 및 Azure OpenAI 엔드포인트(예: `https://<resource>.openai.azure.com`)를 지원합니다
 
 > [!NOTE]
 > OpenAI 호환 제공자를 통해 다음 모델들을 사용하면 자동으로 감지되어 최적화된 프롬프트가 적용됩니다. 이 모델들은 텍스트 전용이므로 2단계 번역 모드 및 로컬 OCR 모델을 활성화해야 합니다. `special_instructions` (특별 지침) 필드는 해당 용어집/용어에 매핑됩니다 (줄바꿈으로 구분, 예: `term -> translation`).

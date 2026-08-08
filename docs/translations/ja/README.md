@@ -167,7 +167,7 @@ fonts/
 - Web UI：Config（設定）タブからプロバイダー、モデル、APIキーを設定します（ローカルに保存されます）。
 - CLI：コマンドライン引数または環境変数経由でキーやURLを渡します。
 - 環境変数：`GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
-- OpenAI互換のデフォルトURL：`http://localhost:8080/v1`
+- OpenAI-Compatible（OpenAI互換）プロバイダーはローカルエンドポイント（例：`http://localhost:8080/v1`）およびAzure OpenAIエンドポイント（例：`https://<resource>.openai.azure.com`）をサポートしています
 
 > [!NOTE]
 > OpenAI互換プロバイダーを介して以下のモデルを使用する場合、自動的に検出されて最適化されたプロンプトが適用されます。これらはテキスト専用モデルであるため、2ステップ翻訳モードとローカルOCRモデルを有効にする必要があります。「特別指示 (Special Instructions)」フィールドは、対応する用語集/用語にマッピングされます（1行に1エントリ、例：`term -> translation`）。

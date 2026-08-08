@@ -858,7 +858,7 @@ def create_layout(
                             )
                             openai_compatible_url_input = gr.Textbox(
                                 label="OpenAI-Compatible URL",
-                                placeholder="Enter Base URL (e.g., http://localhost:8080/v1)",
+                                placeholder="Enter Base URL (e.g., http://localhost:8080/v1 or https://<resource>.openai.azure.com)",
                                 type="text",
                                 value=saved_settings.get(
                                     "openai_compatible_url",
@@ -871,7 +871,7 @@ def create_layout(
                                     config_initial_provider == "OpenAI-Compatible"
                                 ),
                                 elem_id="openai_compatible_url_input",
-                                info="Base URL of your OpenAI-Compatible API endpoint.",
+                                info="Base URL of your OpenAI-Compatible endpoint or Azure OpenAI endpoint.",
                             )
                             openai_compatible_api_key_input = gr.Textbox(
                                 label="OpenAI-Compatible API Key (Optional)",

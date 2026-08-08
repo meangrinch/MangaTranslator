@@ -174,7 +174,7 @@ def main():
         "--openai-compatible-url",
         type=str,
         default="http://localhost:8080/v1",
-        help="Base URL for the OpenAI-Compatible endpoint (default is llama.cpp)",
+        help="Base URL for the OpenAI-Compatible endpoint. Also supports Azure OpenAI endpoint URLs (e.g. https://<resource>.openai.azure.com)",
     )
     parser.add_argument(
         "--openai-compatible-api-key",

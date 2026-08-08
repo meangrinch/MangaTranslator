@@ -167,7 +167,7 @@ fonts/
 - Web UI：在 Config (配置) 选项卡中配置服务商、模型和 API 密钥（将保存在本地）
 - CLI：通过命令行参数或环境变量传递密钥/URL
 - 环境变量：`GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
-- OpenAI 兼容的默认 URL：`http://localhost:8080/v1`
+- OpenAI-Compatible (OpenAI兼容) 服务商支持本地端点（例如 `http://localhost:8080/v1`）和 Azure OpenAI 端点（例如 `https://<resource>.openai.azure.com`）
 
 > [!NOTE]
 > 当通过 OpenAI 兼容服务商使用以下模型时，程序会自动检测并使用优化的提示词。这些是纯文本模型，需要启用两步翻译模式和本地 OCR 模型。`special_instructions` (特殊说明) 字段将被映射为对应的词汇表/术语表（每行一个条目，例如 `term -> translation`）。
