@@ -147,6 +147,7 @@ class OutsideTextConfig:
     flux_group_regions: bool = False
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.5
+    osb_text_free_only: bool = False  # Use the RT-DETR text_free class as OSB source
     osb_font_dir: Optional[str] = None  # None = use main font as fallback
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10

@@ -146,6 +146,7 @@ class UIOutsideTextSettings:
     flux_group_regions: bool = False
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.5
+    osb_text_free_only: bool = False
     osb_font_dir: str = ""  # Empty = use main font
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
@@ -314,6 +315,7 @@ class UIConfigState:
             "outside_text_flux_group_regions": self.outside_text.flux_group_regions,
             "outside_text_flux_residual_diff_threshold": self.outside_text.flux_residual_diff_threshold,
             "outside_text_osb_confidence": self.outside_text.osb_confidence,
+            "outside_text_osb_text_free_only": self.outside_text.osb_text_free_only,
             "outside_text_enable_page_number_filtering": self.outside_text.enable_page_number_filtering,
             "outside_text_page_filter_margin_threshold": self.outside_text.page_filter_margin_threshold,
             "outside_text_page_filter_min_area_ratio": self.outside_text.page_filter_min_area_ratio,
@@ -498,6 +500,7 @@ class UIConfigState:
                     "outside_text_flux_residual_diff_threshold", 0.15
                 ),
                 osb_confidence=data.get("outside_text_osb_confidence", 0.5),
+                osb_text_free_only=data.get("outside_text_osb_text_free_only", False),
                 osb_font_dir=data.get(
                     "outside_text_osb_font_pack",
                     defaults.get("outside_text_osb_font_pack", ""),
@@ -894,6 +897,7 @@ def map_ui_to_backend_config(
         flux_group_regions=ui_state.outside_text.flux_group_regions,
         flux_residual_diff_threshold=ui_state.outside_text.flux_residual_diff_threshold,
         osb_confidence=ui_state.outside_text.osb_confidence,
+        osb_text_free_only=ui_state.outside_text.osb_text_free_only,
         osb_font_dir=str(osb_font_path) if osb_font_path else None,
         osb_max_font_size=ui_state.outside_text.osb_max_font_size,
         osb_min_font_size=ui_state.outside_text.osb_min_font_size,

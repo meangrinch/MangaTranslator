@@ -869,6 +869,14 @@ def main():
         help="Confidence threshold for OSB text detection (0.0-1.0)",
     )
     parser.add_argument(
+        "--osb-text-free-only",
+        action="store_true",
+        help=(
+            "Only target 'text_free' detections from the RT-DETR model "
+            "(narration-style text blocks), ignoring stray SFX and other detections"
+        ),
+    )
+    parser.add_argument(
         "--osb-filter-page-numbers",
         action="store_true",
         help=(
@@ -1295,6 +1303,7 @@ def main():
             flux_group_regions=args.osb_flux_group_regions,
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
             osb_confidence=args.osb_confidence,
+            osb_text_free_only=args.osb_text_free_only,
             seed=args.osb_seed,
             osb_font_dir=args.osb_font_dir,
             osb_max_font_size=args.osb_max_font_size,

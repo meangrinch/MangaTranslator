@@ -1532,6 +1532,31 @@ def create_layout(
                                     label="OSB Text Detection Confidence",
                                     info="Lower values detect more text, but potentially include false positives.",
                                 )
+                                outside_text_osb_text_free_only = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_text_free_only", False
+                                    ),
+                                    label="Only Target Caption Boxes",
+                                    info=(
+                                        "Restricts OSB text detection to 'text_free' "
+                                        "detections from the RT-DETR model (narration-style "
+                                        "text blocks), ignoring stray SFX and other detections."
+                                    ),
+                                )
+                                outside_text_min_area_ignore_ratio_percent = gr.Slider(
+                                    0.0,
+                                    5.0,
+                                    value=saved_settings.get(
+                                        "outside_text_min_area_ignore_ratio", 0.0
+                                    )
+                                    * 100.0,
+                                    step=0.1,
+                                    label="Ignore Regions Below Area (%)",
+                                    info=(
+                                        "Skip OSB regions whose bounding-box area is below this "
+                                        "percentage of the image."
+                                    ),
+                                )
                                 outside_text_bbox_expansion_percent_width = gr.Slider(
                                     0.0,
                                     1.0,
@@ -1570,20 +1595,6 @@ def create_layout(
                                     info=(
                                         "Ratio for grouping nearby text boxes (as fraction of image dimension). "
                                         "Increase to group more distant boxes together."
-                                    ),
-                                )
-                                outside_text_min_area_ignore_ratio_percent = gr.Slider(
-                                    0.0,
-                                    5.0,
-                                    value=saved_settings.get(
-                                        "outside_text_min_area_ignore_ratio", 0.0
-                                    )
-                                    * 100.0,
-                                    step=0.1,
-                                    label="Ignore Regions Below Area (%)",
-                                    info=(
-                                        "Skip OSB regions whose bounding-box area is below this "
-                                        "percentage of the image."
                                     ),
                                 )
                                 outside_text_enable_page_number_filtering = gr.Checkbox(
@@ -2350,6 +2361,7 @@ def create_layout(
             outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_osb_text_free_only,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
@@ -2484,6 +2496,7 @@ def create_layout(
             outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_osb_text_free_only,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
@@ -2613,6 +2626,7 @@ def create_layout(
             outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_osb_text_free_only,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
@@ -2748,6 +2762,7 @@ def create_layout(
             outside_text_flux_group_regions,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
+            outside_text_osb_text_free_only,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,

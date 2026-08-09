@@ -245,6 +245,7 @@ def prepare_outside_text_work(
             text_free_boxes=text_free_boxes,
             bubble_detector_model=config.detection.bubble_detector_model,
             min_area_ignore_ratio=config.outside_text.min_area_ignore_ratio,
+            text_free_only=config.outside_text.osb_text_free_only,
         )
 
         if not outside_text_results:
