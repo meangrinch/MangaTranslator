@@ -116,6 +116,8 @@ class RenderingConfig:
     supersampling_factor: int = 4
     detach_trailing_punctuation: bool = True
     auto_vertical_text: bool = False
+    vertical_line_spacing_mult: float = 1.0
+    vertical_font_size_mult: float = 1.0
 
 
 @dataclass
@@ -151,9 +153,14 @@ class OutsideTextConfig:
     osb_use_ligatures: bool = False
     osb_outline_width: float = 3.0
     osb_line_spacing: float = 1.0
+    osb_padding_pixels: float = 4.0
+    osb_auto_vertical_text: bool = False
+    osb_vertical_line_spacing_mult: float = 1.0
+    osb_vertical_font_size_mult: float = 1.0
     osb_use_subpixel_rendering: bool = False
     osb_font_hinting: str = "none"
-    bbox_expansion_percent: float = 0.1
+    bbox_expansion_percent_width: float = 0.1
+    bbox_expansion_percent_height: float = 0.1
     osb_render_expansion_narrow_multiplier: float = 1.0
     osb_render_expansion_tiny_multiplier: float = 1.0
     osb_render_expansion_aspect_ratio_threshold: float = 0.4

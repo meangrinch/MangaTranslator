@@ -1391,6 +1391,28 @@ def create_layout(
                                     "when it improves readability."
                                 ),
                             )
+                            vertical_line_spacing_mult = gr.Slider(
+                                0.5,
+                                2.0,
+                                value=saved_settings.get(
+                                    "vertical_line_spacing_mult", 1.0
+                                ),
+                                step=0.05,
+                                label="Vertical Line Spacing Multiplier",
+                                info="Adjusts vertical space between lines when text is stacked vertically.",
+                                visible=saved_settings.get("auto_vertical_text", False),
+                            )
+                            vertical_font_size_mult = gr.Slider(
+                                0.1,
+                                3.0,
+                                value=saved_settings.get(
+                                    "vertical_font_size_mult", 1.0
+                                ),
+                                step=0.05,
+                                label="Vertical Font Size Multiplier",
+                                info="Multiplier for font size when text is stacked vertically.",
+                                visible=saved_settings.get("auto_vertical_text", False),
+                            )
                             _saved_hyphenate = saved_settings.get(
                                 "hyphenate_before_scaling", True
                             )
@@ -1510,16 +1532,30 @@ def create_layout(
                                     label="OSB Text Detection Confidence",
                                     info="Lower values detect more text, but potentially include false positives.",
                                 )
-                                outside_text_bbox_expansion_percent = gr.Slider(
+                                outside_text_bbox_expansion_percent_width = gr.Slider(
                                     0.0,
                                     1.0,
                                     value=saved_settings.get(
-                                        "outside_text_bbox_expansion_percent", 0.1
+                                        "outside_text_bbox_expansion_percent_width", 0.1
                                     ),
                                     step=0.05,
-                                    label="Bounding Box Expansion",
+                                    label="Bounding Box Width Expansion",
                                     info=(
-                                        "Percentage to expand bounding boxes for text detection. "
+                                        "Percentage to expand bounding boxes horizontally for text detection. "
+                                        "Higher values capture more context around text."
+                                    ),
+                                )
+                                outside_text_bbox_expansion_percent_height = gr.Slider(
+                                    0.0,
+                                    1.0,
+                                    value=saved_settings.get(
+                                        "outside_text_bbox_expansion_percent_height",
+                                        0.1,
+                                    ),
+                                    step=0.05,
+                                    label="Bounding Box Height Expansion",
+                                    info=(
+                                        "Percentage to expand bounding boxes vertically for text detection. "
                                         "Higher values capture more context around text."
                                     ),
                                 )
@@ -1977,9 +2013,53 @@ def create_layout(
                                     ),
                                     step=0.05,
                                     label="Line Spacing Multiplier",
+                                    info="Adjusts the vertical space between lines of text (1.0 = standard).",
+                                )
+                                outside_text_osb_padding_pixels = gr.Slider(
+                                    2,
+                                    12,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_padding_pixels", 4.0
+                                    ),
+                                    step=1,
+                                    label="Padding Pixels",
                                     info=(
-                                        "Adjusts the vertical space between lines of text (1.0 = standard). "
-                                        "Also affects vertically stacked text. Decrease for tighter text (e.g., 0.9)."
+                                        "Padding between text and the edge of the OSB region. "
+                                        "Increase for more space between text and region boundaries."
+                                    ),
+                                )
+                                outside_text_osb_auto_vertical_text = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_auto_vertical_text", False
+                                    ),
+                                    label="Auto Vertical OSB Text",
+                                    info="Stack short translated OSB text vertically when it improves readability.",
+                                )
+                                outside_text_osb_vertical_line_spacing_mult = gr.Slider(
+                                    0.5,
+                                    2.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_vertical_line_spacing_mult",
+                                        1.0,
+                                    ),
+                                    step=0.05,
+                                    label="OSB Vertical Line Spacing Multiplier",
+                                    info="Adjusts vertical space between lines for vertical OSB text.",
+                                    visible=saved_settings.get(
+                                        "outside_text_osb_auto_vertical_text", False
+                                    ),
+                                )
+                                outside_text_osb_vertical_font_size_mult = gr.Slider(
+                                    0.1,
+                                    3.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_vertical_font_size_mult", 1.0
+                                    ),
+                                    step=0.05,
+                                    label="OSB Vertical Font Size Multiplier",
+                                    info="Multiplier for font size when OSB text is stacked vertically.",
+                                    visible=saved_settings.get(
+                                        "outside_text_osb_auto_vertical_text", False
                                     ),
                                 )
                                 outside_text_osb_use_subpixel_rendering = gr.Checkbox(
@@ -2247,6 +2327,8 @@ def create_layout(
             hyphenate_before_scaling,
             detach_trailing_punctuation,
             auto_vertical_text,
+            vertical_line_spacing_mult,
+            vertical_font_size_mult,
             special_instructions,
             batch_special_instructions,
             hyphen_penalty,
@@ -2279,9 +2361,14 @@ def create_layout(
             outside_text_osb_use_ligatures,
             outside_text_osb_outline_width,
             outside_text_osb_line_spacing,
+            outside_text_osb_padding_pixels,
+            outside_text_osb_auto_vertical_text,
+            outside_text_osb_vertical_line_spacing_mult,
+            outside_text_osb_vertical_font_size_mult,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
-            outside_text_bbox_expansion_percent,
+            outside_text_bbox_expansion_percent_width,
+            outside_text_bbox_expansion_percent_height,
             outside_text_osb_render_expansion_narrow_multiplier,
             outside_text_osb_render_expansion_aspect_ratio_threshold,
             outside_text_osb_render_expansion_tiny_multiplier,
@@ -2374,6 +2461,8 @@ def create_layout(
             hyphenate_before_scaling,
             detach_trailing_punctuation,
             auto_vertical_text,
+            vertical_line_spacing_mult,
+            vertical_font_size_mult,
             hyphen_penalty,
             hyphenation_min_word_length,
             special_instructions,
@@ -2406,9 +2495,14 @@ def create_layout(
             outside_text_osb_use_ligatures,
             outside_text_osb_outline_width,
             outside_text_osb_line_spacing,
+            outside_text_osb_padding_pixels,
+            outside_text_osb_auto_vertical_text,
+            outside_text_osb_vertical_line_spacing_mult,
+            outside_text_osb_vertical_font_size_mult,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
-            outside_text_bbox_expansion_percent,
+            outside_text_bbox_expansion_percent_width,
+            outside_text_bbox_expansion_percent_height,
             outside_text_osb_render_expansion_narrow_multiplier,
             outside_text_osb_render_expansion_aspect_ratio_threshold,
             outside_text_osb_render_expansion_tiny_multiplier,
@@ -2498,6 +2592,8 @@ def create_layout(
             hyphenate_before_scaling,
             detach_trailing_punctuation,
             auto_vertical_text,
+            vertical_line_spacing_mult,
+            vertical_font_size_mult,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
@@ -2528,9 +2624,14 @@ def create_layout(
             outside_text_osb_use_ligatures,
             outside_text_osb_outline_width,
             outside_text_osb_line_spacing,
+            outside_text_osb_padding_pixels,
+            outside_text_osb_auto_vertical_text,
+            outside_text_osb_vertical_line_spacing_mult,
+            outside_text_osb_vertical_font_size_mult,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
-            outside_text_bbox_expansion_percent,
+            outside_text_bbox_expansion_percent_width,
+            outside_text_bbox_expansion_percent_height,
             outside_text_osb_render_expansion_narrow_multiplier,
             outside_text_osb_render_expansion_aspect_ratio_threshold,
             outside_text_osb_render_expansion_tiny_multiplier,
@@ -2626,6 +2727,8 @@ def create_layout(
             hyphenate_before_scaling,
             detach_trailing_punctuation,
             auto_vertical_text,
+            vertical_line_spacing_mult,
+            vertical_font_size_mult,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
@@ -2656,9 +2759,14 @@ def create_layout(
             outside_text_osb_use_ligatures,
             outside_text_osb_outline_width,
             outside_text_osb_line_spacing,
+            outside_text_osb_padding_pixels,
+            outside_text_osb_auto_vertical_text,
+            outside_text_osb_vertical_line_spacing_mult,
+            outside_text_osb_vertical_font_size_mult,
             outside_text_osb_use_subpixel_rendering,
             outside_text_osb_font_hinting,
-            outside_text_bbox_expansion_percent,
+            outside_text_bbox_expansion_percent_width,
+            outside_text_bbox_expansion_percent_height,
             outside_text_osb_render_expansion_narrow_multiplier,
             outside_text_osb_render_expansion_aspect_ratio_threshold,
             outside_text_osb_render_expansion_tiny_multiplier,
@@ -2938,6 +3046,24 @@ def create_layout(
             fn=lambda x: gr.update(visible=x),
             inputs=outside_text_enabled,
             outputs=outside_text_settings_wrapper,
+            queue=False,
+        )
+
+        # Vertical-text multipliers hidden until their auto-vertical toggle is on
+        auto_vertical_text.change(
+            fn=lambda x: (gr.update(visible=x), gr.update(visible=x)),
+            inputs=auto_vertical_text,
+            outputs=[vertical_line_spacing_mult, vertical_font_size_mult],
+            queue=False,
+        )
+
+        outside_text_osb_auto_vertical_text.change(
+            fn=lambda x: (gr.update(visible=x), gr.update(visible=x)),
+            inputs=outside_text_osb_auto_vertical_text,
+            outputs=[
+                outside_text_osb_vertical_line_spacing_mult,
+                outside_text_osb_vertical_font_size_mult,
+            ],
             queue=False,
         )
 

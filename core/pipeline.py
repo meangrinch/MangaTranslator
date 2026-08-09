@@ -1010,6 +1010,12 @@ def translate_and_render(
                 minimum=1.0,
                 maximum=80.0,
             )
+            osb_padding_pixels = scale_scalar(
+                config.outside_text.osb_padding_pixels,
+                processing_scale,
+                minimum=1.0,
+                maximum=80.0,
+            )
             osb_min_font = scale_font_size(
                 config.outside_text.osb_min_font_size,
                 processing_scale,
@@ -1372,6 +1378,7 @@ def translate_and_render(
                             osb_min_font=osb_min_font,
                             osb_max_font=osb_max_font,
                             padding_pixels=padding_pixels,
+                            osb_padding_pixels=osb_padding_pixels,
                             osb_outline_width=osb_outline_width,
                             verbose=verbose,
                         )
@@ -1688,7 +1695,11 @@ def translate_and_render(
                             hyphen_penalty=config.rendering.hyphen_penalty,
                             hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
                             badness_exponent=config.rendering.badness_exponent,
-                            padding_pixels=padding_pixels,
+                            padding_pixels=(
+                                osb_padding_pixels
+                                if is_outside_text
+                                else padding_pixels
+                            ),
                             outline_width=(
                                 osb_outline_width if is_outside_text else 0.0
                             ),
@@ -1697,9 +1708,19 @@ def translate_and_render(
                                 config.rendering.detach_trailing_punctuation
                             ),
                             auto_vertical_text=(
-                                False
+                                config.outside_text.osb_auto_vertical_text
                                 if is_outside_text
                                 else config.rendering.auto_vertical_text
+                            ),
+                            vertical_line_spacing_mult=(
+                                config.outside_text.osb_vertical_line_spacing_mult
+                                if is_outside_text
+                                else config.rendering.vertical_line_spacing_mult
+                            ),
+                            vertical_font_size_mult=(
+                                config.outside_text.osb_vertical_font_size_mult
+                                if is_outside_text
+                                else config.rendering.vertical_font_size_mult
                             ),
                         )
                         success = False
@@ -1720,6 +1741,7 @@ def translate_and_render(
                                     text_color_rgb=text_color_rgb,
                                     raise_on_safe_error=False,
                                     text_background_color=text_bg_rgb,
+                                    fallback_padding_pixels=osb_padding_pixels,
                                 )
                                 success = True
                             except Exception as e:
@@ -1753,6 +1775,7 @@ def translate_and_render(
                                             text_color_rgb=text_color_rgb,
                                             raise_on_safe_error=False,
                                             text_background_color=text_bg_rgb,
+                                            fallback_padding_pixels=osb_padding_pixels,
                                         )
                                         log_message(
                                             "Vertical-stack fallback succeeded",

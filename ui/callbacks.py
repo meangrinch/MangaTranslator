@@ -161,6 +161,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         hyphenate_before_scaling_val,
         detach_trailing_punctuation_val,
         auto_vertical_text_val,
+        vertical_line_spacing_mult_val,
+        vertical_font_size_mult_val,
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
@@ -191,9 +193,14 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_osb_use_ligatures_val,
         outside_text_osb_outline_width_val,
         outside_text_osb_line_spacing_val,
+        outside_text_osb_padding_pixels_val,
+        outside_text_osb_auto_vertical_text_val,
+        outside_text_osb_vertical_line_spacing_mult_val,
+        outside_text_osb_vertical_font_size_mult_val,
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
-        outside_text_bbox_expansion_percent_val,
+        outside_text_bbox_expansion_percent_width_val,
+        outside_text_bbox_expansion_percent_height_val,
         outside_text_osb_render_expansion_narrow_multiplier_val,
         outside_text_osb_render_expansion_aspect_ratio_threshold_val,
         outside_text_osb_render_expansion_tiny_multiplier_val,
@@ -277,9 +284,22 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             osb_use_ligatures=outside_text_osb_use_ligatures_val,
             osb_outline_width=float(outside_text_osb_outline_width_val),
             osb_line_spacing=float(outside_text_osb_line_spacing_val),
+            osb_padding_pixels=float(outside_text_osb_padding_pixels_val),
+            osb_auto_vertical_text=outside_text_osb_auto_vertical_text_val,
+            osb_vertical_line_spacing_mult=float(
+                outside_text_osb_vertical_line_spacing_mult_val
+            ),
+            osb_vertical_font_size_mult=float(
+                outside_text_osb_vertical_font_size_mult_val
+            ),
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
-            bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
+            bbox_expansion_percent_width=float(
+                outside_text_bbox_expansion_percent_width_val
+            ),
+            bbox_expansion_percent_height=float(
+                outside_text_bbox_expansion_percent_height_val
+            ),
             osb_render_expansion_narrow_multiplier=float(
                 outside_text_osb_render_expansion_narrow_multiplier_val
             ),
@@ -338,6 +358,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             hyphenate_before_scaling=hyphenate_before_scaling_val,
             detach_trailing_punctuation=detach_trailing_punctuation_val,
             auto_vertical_text=auto_vertical_text_val,
+            vertical_line_spacing_mult=float(vertical_line_spacing_mult_val),
+            vertical_font_size_mult=float(vertical_font_size_mult_val),
             hyphen_penalty=hyphen_penalty_val,
             hyphenation_min_word_length=hyphenation_min_word_length_val,
             badness_exponent=badness_exponent_val,
@@ -1082,6 +1104,8 @@ def handle_save_config_click(*args: Any) -> str:
         hyphenate_before_scaling_val,
         detach_trailing_punctuation_val,
         auto_vertical_text_val,
+        vertical_line_spacing_mult_val,
+        vertical_font_size_mult_val,
         special_instructions_val,
         batch_special_instructions_val,
         hyphen_penalty_val,
@@ -1114,9 +1138,14 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_osb_use_ligatures_val,
         outside_text_osb_outline_width_val,
         outside_text_osb_line_spacing_val,
+        outside_text_osb_padding_pixels_val,
+        outside_text_osb_auto_vertical_text_val,
+        outside_text_osb_vertical_line_spacing_mult_val,
+        outside_text_osb_vertical_font_size_mult_val,
         outside_text_osb_use_subpixel_rendering_val,
         outside_text_osb_font_hinting_val,
-        outside_text_bbox_expansion_percent_val,
+        outside_text_bbox_expansion_percent_width_val,
+        outside_text_bbox_expansion_percent_height_val,
         outside_text_osb_render_expansion_narrow_multiplier_val,
         outside_text_osb_render_expansion_aspect_ratio_threshold_val,
         outside_text_osb_render_expansion_tiny_multiplier_val,
@@ -1184,9 +1213,22 @@ def handle_save_config_click(*args: Any) -> str:
             osb_use_ligatures=outside_text_osb_use_ligatures_val,
             osb_outline_width=float(outside_text_osb_outline_width_val),
             osb_line_spacing=float(outside_text_osb_line_spacing_val),
+            osb_padding_pixels=float(outside_text_osb_padding_pixels_val),
+            osb_auto_vertical_text=outside_text_osb_auto_vertical_text_val,
+            osb_vertical_line_spacing_mult=float(
+                outside_text_osb_vertical_line_spacing_mult_val
+            ),
+            osb_vertical_font_size_mult=float(
+                outside_text_osb_vertical_font_size_mult_val
+            ),
             osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
             osb_font_hinting=outside_text_osb_font_hinting_val,
-            bbox_expansion_percent=float(outside_text_bbox_expansion_percent_val),
+            bbox_expansion_percent_width=float(
+                outside_text_bbox_expansion_percent_width_val
+            ),
+            bbox_expansion_percent_height=float(
+                outside_text_bbox_expansion_percent_height_val
+            ),
             osb_render_expansion_narrow_multiplier=float(
                 outside_text_osb_render_expansion_narrow_multiplier_val
             ),
@@ -1245,6 +1287,8 @@ def handle_save_config_click(*args: Any) -> str:
             hyphenate_before_scaling=hyphenate_before_scaling_val,
             detach_trailing_punctuation=detach_trailing_punctuation_val,
             auto_vertical_text=auto_vertical_text_val,
+            vertical_line_spacing_mult=float(vertical_line_spacing_mult_val),
+            vertical_font_size_mult=float(vertical_font_size_mult_val),
             hyphen_penalty=hyphen_penalty_val,
             hyphenation_min_word_length=hyphenation_min_word_length_val,
             badness_exponent=badness_exponent_val,
@@ -1565,6 +1609,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         ),
         gr.update(value=default_ui_state.rendering.detach_trailing_punctuation),
         gr.update(value=default_ui_state.rendering.auto_vertical_text),
+        default_ui_state.rendering.vertical_line_spacing_mult,
+        default_ui_state.rendering.vertical_font_size_mult,
         gr.update(
             value=default_ui_state.rendering.hyphen_penalty,
             interactive=text_layout_flags["hyphen_penalty"],
@@ -1620,9 +1666,14 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         default_ui_state.outside_text.osb_use_ligatures,
         default_ui_state.outside_text.osb_outline_width,
         default_ui_state.outside_text.osb_line_spacing,
+        default_ui_state.outside_text.osb_padding_pixels,
+        default_ui_state.outside_text.osb_auto_vertical_text,
+        default_ui_state.outside_text.osb_vertical_line_spacing_mult,
+        default_ui_state.outside_text.osb_vertical_font_size_mult,
         default_ui_state.outside_text.osb_use_subpixel_rendering,
         default_ui_state.outside_text.osb_font_hinting,
-        default_ui_state.outside_text.bbox_expansion_percent,
+        default_ui_state.outside_text.bbox_expansion_percent_width,
+        default_ui_state.outside_text.bbox_expansion_percent_height,
         default_ui_state.outside_text.osb_render_expansion_narrow_multiplier,
         default_ui_state.outside_text.osb_render_expansion_aspect_ratio_threshold,
         default_ui_state.outside_text.osb_render_expansion_tiny_multiplier,

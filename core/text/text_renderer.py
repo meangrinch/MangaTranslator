@@ -95,6 +95,7 @@ def render_text_skia(
     text_color_rgb: Optional[Tuple[int, int, int]] = None,
     text_background_color: Optional[Tuple[int, int, int]] = None,
     layout_only: bool = False,
+    fallback_padding_pixels: Optional[float] = None,
 ) -> Image.Image:
     """
     Fits and renders text within a bounding box using Skia and HarfBuzz.
@@ -122,6 +123,7 @@ def render_text_skia(
         cleaned_mask: Binary mask of the cleaned bubble (0/255). Used for safe area calculation.
         bubble_color_bgr: Background color of the bubble (BGR tuple). Used to determine text color.
         config: RenderingConfig object containing all rendering parameters. If None, uses defaults.
+        fallback_padding_pixels: Pixel inset for the no-mask padded-bbox fallback; None keeps the ratio-based fallback.
         verbose: Whether to print detailed logs.
 
     Returns:
@@ -187,8 +189,12 @@ def render_text_skia(
                 "Safe area calculation failed, falling back to padded bbox method",
                 verbose=verbose,
             )
-        max_render_width = bubble_width * (1 - 2 * FALLBACK_PADDING_RATIO)
-        max_render_height = bubble_height * (1 - 2 * FALLBACK_PADDING_RATIO)
+        if fallback_padding_pixels is not None:
+            max_render_width = bubble_width - 2 * fallback_padding_pixels
+            max_render_height = bubble_height - 2 * fallback_padding_pixels
+        else:
+            max_render_width = bubble_width * (1 - 2 * FALLBACK_PADDING_RATIO)
+            max_render_height = bubble_height * (1 - 2 * FALLBACK_PADDING_RATIO)
 
         if max_render_width <= 0 or max_render_height <= 0:
             max_render_width = max(1.0, float(bubble_width))
@@ -241,6 +247,17 @@ def render_text_skia(
                 preload_hb_faces[style_key] = _hb_face
 
     def _find_layout(use_vertical_stack: bool) -> dict:
+        line_spacing = (
+            config.vertical_line_spacing_mult
+            if use_vertical_stack
+            else config.line_spacing_mult
+        )
+        min_font = config.min_font_size
+        max_font = config.max_font_size
+        if use_vertical_stack and config.vertical_font_size_mult != 1.0:
+            min_font = max(1, int(round(min_font * config.vertical_font_size_mult)))
+            max_font = max(1, int(round(max_font * config.vertical_font_size_mult)))
+
         return find_optimal_layout(
             layout_text,
             max_render_width,
@@ -249,9 +266,9 @@ def render_text_skia(
             regular_typeface,
             preload_hb_faces,
             features_to_enable,
-            config.min_font_size,
-            config.max_font_size,
-            config.line_spacing_mult,
+            min_font,
+            max_font,
+            line_spacing,
             False if use_vertical_stack else config.hyphenate_before_scaling,
             config.hyphen_penalty,
             config.hyphenation_min_word_length,

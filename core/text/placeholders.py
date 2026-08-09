@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from PIL import Image
 
@@ -16,14 +16,18 @@ def generate_test_placeholders(
     main_max_font: int,
     osb_min_font: int,
     osb_max_font: int,
-    padding_pixels: float,
-    osb_outline_width: float,
+    padding_pixels: Optional[float] = None,
+    osb_padding_pixels: Optional[float] = None,
+    osb_outline_width: float = 0.0,
     verbose: bool = False,
 ) -> List[str]:
     """
     Generates test placeholder text by probing the rendering engine.
     Finds the largest text string that fits in the bounding box.
     """
+    padding_pixels_bubble = padding_pixels if padding_pixels is not None else 4.0
+    padding_pixels_osb = osb_padding_pixels if osb_padding_pixels is not None else 4.0
+
     translated_texts = []
     placeholder_long = "Lorem **ipsum** *dolor* sit amet, consectetur adipiscing elit."
     placeholder_short = "Lorem **ipsum** *dolor* sit amet..."
@@ -94,11 +98,25 @@ def generate_test_placeholders(
             hyphen_penalty=config.rendering.hyphen_penalty,
             hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
             badness_exponent=config.rendering.badness_exponent,
-            padding_pixels=padding_pixels,
+            padding_pixels=padding_pixels_osb
+            if is_outside_text
+            else padding_pixels_bubble,
             outline_width=(osb_outline_width if is_outside_text else 0.0),
             supersampling_factor=1,  # No supersampling for probe
             auto_vertical_text=(
-                False if is_outside_text else config.rendering.auto_vertical_text
+                config.outside_text.osb_auto_vertical_text
+                if is_outside_text
+                else config.rendering.auto_vertical_text
+            ),
+            vertical_line_spacing_mult=(
+                config.outside_text.osb_vertical_line_spacing_mult
+                if is_outside_text
+                else config.rendering.vertical_line_spacing_mult
+            ),
+            vertical_font_size_mult=(
+                config.outside_text.osb_vertical_font_size_mult
+                if is_outside_text
+                else config.rendering.vertical_font_size_mult
             ),
         )
         best_fit = (
@@ -136,6 +154,9 @@ def generate_test_placeholders(
                     bubble_id=str(i + 1),
                     raise_on_safe_error=False,
                     layout_only=True,
+                    fallback_padding_pixels=(
+                        padding_pixels_osb if is_outside_text else None
+                    ),
                 )
 
                 font_size = rendered.info.get("font_size", 0)

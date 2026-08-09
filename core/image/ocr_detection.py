@@ -505,7 +505,8 @@ class OutsideTextDetector:
     def get_text_masks(
         self,
         image_path: str,
-        bbox_expansion_percent: float = 0.0,
+        bbox_expansion_percent_width: float = 0.0,
+        bbox_expansion_percent_height: float = 0.0,
         text_box_proximity_ratio: float = 0.02,
         verbose: bool = False,
         image_override: Optional[Image.Image] = None,
@@ -515,7 +516,8 @@ class OutsideTextDetector:
 
         Args:
             image_path: Path to the input image.
-            bbox_expansion_percent: Percentage to expand bounding boxes.
+            bbox_expansion_percent_width: Percentage to expand bounding boxes horizontally.
+            bbox_expansion_percent_height: Percentage to expand bounding boxes vertically.
             text_box_proximity_ratio: Ratio for grouping nearby text boxes (as fraction of image dimension).
             verbose: Whether to print verbose output.
 
@@ -560,8 +562,8 @@ class OutsideTextDetector:
             x0, y0, x1, y1 = box
             width = x1 - x0
             height = y1 - y0
-            expand_x = width * bbox_expansion_percent
-            expand_y = height * bbox_expansion_percent
+            expand_x = width * bbox_expansion_percent_width
+            expand_y = height * bbox_expansion_percent_height
             x0e = int(np.floor(max(0, x0 - expand_x)))
             y0e = int(np.floor(max(0, y0 - expand_y)))
             x1e = int(np.ceil(min(img_w, x1 + expand_x)))

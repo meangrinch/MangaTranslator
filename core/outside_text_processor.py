@@ -586,7 +586,8 @@ def prepare_outside_text_work(
 
         mask_groups, _ = outside_detector.get_text_masks(
             str(image_path),
-            bbox_expansion_percent=config.outside_text.bbox_expansion_percent,
+            bbox_expansion_percent_width=config.outside_text.bbox_expansion_percent_width,
+            bbox_expansion_percent_height=config.outside_text.bbox_expansion_percent_height,
             text_box_proximity_ratio=config.outside_text.text_box_proximity_ratio,
             verbose=verbose,
             image_override=pil_image,

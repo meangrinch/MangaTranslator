@@ -484,6 +484,18 @@ def main():
             "when it improves the layout."
         ),
     )
+    parser.add_argument(
+        "--vertical-line-spacing-mult",
+        type=float,
+        default=1.0,
+        help="Line spacing multiplier for vertical bubble text (0.5-2.0)",
+    )
+    parser.add_argument(
+        "--vertical-font-size-mult",
+        type=float,
+        default=1.0,
+        help="Font size multiplier for vertical bubble text (0.1-3.0)",
+    )
     # Output args
     parser.add_argument(
         "--jpeg-quality",
@@ -785,10 +797,40 @@ def main():
         help="Font hinting mode for OSB text",
     )
     parser.add_argument(
-        "--osb-bbox-expansion",
+        "--osb-padding-pixels",
+        type=float,
+        default=4.0,
+        help="Padding between text and the edge of the OSB region (2-12). "
+        "Increase for more space between text and region boundaries.",
+    )
+    parser.add_argument(
+        "--osb-auto-vertical-text",
+        action="store_true",
+        help="Automatically stack short translated OSB text vertically when it improves layout",
+    )
+    parser.add_argument(
+        "--osb-vertical-line-spacing-mult",
+        type=float,
+        default=1.0,
+        help="Line spacing multiplier for vertical OSB text (0.5-2.0)",
+    )
+    parser.add_argument(
+        "--osb-vertical-font-size-mult",
+        type=float,
+        default=1.0,
+        help="Font size multiplier for vertical OSB text (0.1-3.0)",
+    )
+    parser.add_argument(
+        "--osb-bbox-expansion-width",
         type=float,
         default=0.1,
-        help="Bounding box expansion percent for OSB detection",
+        help="Bounding box width expansion percent for OSB detection",
+    )
+    parser.add_argument(
+        "--osb-bbox-expansion-height",
+        type=float,
+        default=0.1,
+        help="Bounding box height expansion percent for OSB detection",
     )
     parser.add_argument(
         "--osb-render-expansion-narrow",
@@ -1224,6 +1266,8 @@ def main():
             supersampling_factor=args.supersampling_factor,
             detach_trailing_punctuation=args.detach_trailing_punctuation,
             auto_vertical_text=args.auto_vertical_text,
+            vertical_line_spacing_mult=args.vertical_line_spacing_mult,
+            vertical_font_size_mult=args.vertical_font_size_mult,
         ),
         output=OutputConfig(
             output_format=args.output_format,
@@ -1258,9 +1302,14 @@ def main():
             osb_use_ligatures=args.osb_use_ligatures,
             osb_outline_width=args.osb_outline_width,
             osb_line_spacing=args.osb_line_spacing,
+            osb_padding_pixels=args.osb_padding_pixels,
+            osb_auto_vertical_text=args.osb_auto_vertical_text,
+            osb_vertical_line_spacing_mult=args.osb_vertical_line_spacing_mult,
+            osb_vertical_font_size_mult=args.osb_vertical_font_size_mult,
             osb_use_subpixel_rendering=args.osb_use_subpixel,
             osb_font_hinting=args.osb_font_hinting,
-            bbox_expansion_percent=args.osb_bbox_expansion,
+            bbox_expansion_percent_width=args.osb_bbox_expansion_width,
+            bbox_expansion_percent_height=args.osb_bbox_expansion_height,
             osb_render_expansion_narrow_multiplier=args.osb_render_expansion_narrow,
             osb_render_expansion_tiny_multiplier=args.osb_render_expansion_tiny,
             osb_render_expansion_aspect_ratio_threshold=(
