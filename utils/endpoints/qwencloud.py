@@ -111,7 +111,10 @@ def call_qwencloud_endpoint(
             and reasoning_effort not in ("auto", "none")
             and supports_qwencloud_reasoning_effort(model_name)
         ):
-            payload["reasoning_effort"] = reasoning_effort
+            if reasoning_effort in ("xhigh", "medium", "low"):
+                payload["reasoning_effort"] = reasoning_effort
+            elif reasoning_effort in ("high", "max"):
+                payload["reasoning_effort"] = "xhigh"
 
     if enable_web_search:
         payload["enable_search"] = True

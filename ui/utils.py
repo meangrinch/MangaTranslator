@@ -715,7 +715,7 @@ def get_reasoning_effort_config(
 
     elif provider == "QwenCloud":
         if supports_qwencloud_reasoning_effort(model_name):
-            return True, ["max", "high", "low", "none"], "high"
+            return True, ["xhigh", "medium", "low", "none"], "xhigh"
         if is_qwencloud_reasoning_model(model_name):
             return True, ["auto", "none"], "auto"
         return False, [], None

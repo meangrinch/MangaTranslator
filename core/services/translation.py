@@ -645,7 +645,7 @@ def _build_generation_config(
 
         if is_reasoning:
             reasoning_effort = config.reasoning_effort or (
-                "high" if supports_qwencloud_reasoning_effort(model_name) else "auto"
+                "xhigh" if supports_qwencloud_reasoning_effort(model_name) else "auto"
             )
             thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
             generation_config["thinking"] = {"type": thinking_type}
