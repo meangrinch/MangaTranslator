@@ -1,6 +1,7 @@
 from .anthropic import call_anthropic_endpoint
 from .deepseek import call_deepseek_endpoint
 from .google import call_gemini_endpoint
+from .meta_model import call_meta_model_endpoint
 from .mimo import call_mimo_endpoint
 from .moonshot import call_moonshot_endpoint
 from .openai import call_openai_endpoint
@@ -15,6 +16,7 @@ __all__ = [
     "call_openai_endpoint",
     "call_anthropic_endpoint",
     "call_xai_endpoint",
+    "call_meta_model_endpoint",
     "call_deepseek_endpoint",
     "call_mimo_endpoint",
     "call_moonshot_endpoint",

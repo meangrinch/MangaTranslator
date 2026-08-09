@@ -36,6 +36,7 @@ from utils.model_metadata import (
     is_gpt5_series,
     is_gpt56_virtual_pro,
     is_hy_mt2_model,
+    is_meta_reasoning_model,
     is_mimo_reasoning_model,
     is_moonshot_k3_model,
     is_moonshot_reasoning_model,
@@ -48,6 +49,7 @@ from utils.model_metadata import (
     supports_deepseek_v4_low_effort,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
+    supports_meta_reasoning_effort,
     supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
     supports_qwencloud_reasoning_effort,
@@ -108,6 +110,7 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         "OpenAI": "OPENAI_API_KEY",
         "Anthropic": "ANTHROPIC_API_KEY",
         "SpaceXAI": "SPACEXAI_API_KEY or XAI_API_KEY",
+        "Meta Model": "META_MODEL_API_KEY or META_API_KEY",
         "OpenRouter": "OPENROUTER_API_KEY",
         "DeepSeek": "DEEPSEEK_API_KEY",
         "Moonshot AI": "MOONSHOT_API_KEY",
@@ -127,6 +130,10 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         elif provider == "SpaceXAI":
             api_key = os.environ.get("SPACEXAI_API_KEY") or os.environ.get(
                 "XAI_API_KEY", ""
+            )
+        elif provider == "Meta Model":
+            api_key = os.environ.get("META_MODEL_API_KEY") or os.environ.get(
+                "META_API_KEY", ""
             )
         elif provider == "QwenCloud":
             api_key = os.environ.get("QWENCLOUD_API_KEY") or os.environ.get(
@@ -174,6 +181,13 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         return (
             False,
             "Invalid QwenCloud API key format (should start with 'sk-')",
+        )
+    if provider == "Meta Model" and not (
+        api_key.startswith("LLM|") and len(api_key) >= 20
+    ):
+        return (
+            False,
+            "Invalid Meta Model key format (should start with 'LLM|')",
         )
     # No specific format check for Z.ai or OpenAI-Compatible keys
 
@@ -351,6 +365,8 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return is_mimo_reasoning_model(model_name)
     elif provider == "QwenCloud":
         return is_qwencloud_reasoning_model(model_name)
+    elif provider == "Meta Model":
+        return is_meta_reasoning_model(model_name)
     elif provider == "OpenRouter":
         try:
             return openrouter_is_reasoning_model(model_name, debug=False)
@@ -412,6 +428,10 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
         ),
         "QwenCloud": (
             "Use QwenCloud's web search tool for up-to-date information. "
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
+        ),
+        "Meta Model": (
+            "Use Meta Model's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
     }
@@ -510,6 +530,8 @@ def get_reasoning_effort_info_text(
         if supports_qwencloud_reasoning_effort(model_name):
             return "Controls model's internal reasoning effort."
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
+    elif provider == "Meta Model":
+        return "Controls model's internal reasoning effort."
     elif provider == "DeepSeek":
         return "Controls model's internal reasoning effort."
     elif provider == "Z.ai":
@@ -698,6 +720,11 @@ def get_reasoning_effort_config(
             return True, ["auto", "none"], "auto"
         return False, [], None
 
+    elif provider == "Meta Model":
+        if supports_meta_reasoning_effort(model_name):
+            return True, ["xhigh", "high", "medium", "low", "minimal"], "high"
+        return False, [], None
+
     elif provider == "OpenRouter":
         lm = model_name.lower()
         if is_google_model_family(model_name):
@@ -842,6 +869,7 @@ def get_sampling_slider_interactivity(
     elif provider in (
         "OpenAI",
         "SpaceXAI",
+        "Meta Model",
         "DeepSeek",
         "Z.ai",
         "Moonshot AI",
@@ -968,6 +996,7 @@ def update_translation_ui(
     openai_visible_update = gr.update(visible=(provider == "OpenAI"))
     anthropic_visible_update = gr.update(visible=(provider == "Anthropic"))
     xai_visible_update = gr.update(visible=(provider == "SpaceXAI"))
+    meta_visible_update = gr.update(visible=(provider == "Meta Model"))
     deepseek_visible_update = gr.update(visible=(provider == "DeepSeek"))
     zai_visible_update = gr.update(visible=(provider == "Z.ai"))
     moonshot_visible_update = gr.update(visible=(provider == "Moonshot AI"))
@@ -1143,6 +1172,7 @@ def update_translation_ui(
         openai_visible_update,
         anthropic_visible_update,
         xai_visible_update,
+        meta_visible_update,
         deepseek_visible_update,
         zai_visible_update,
         moonshot_visible_update,

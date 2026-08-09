@@ -75,6 +75,11 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "grok-4.20-0309-non-reasoning",
         "grok-4.20-multi-agent-0309",
     ],
+    "Meta Model": [
+        "muse-spark-1.2",
+        "muse-spark-1.2-contributor",
+        "muse-spark-1.1",
+    ],
     "DeepSeek": [
         "deepseek-v4-pro",
         "deepseek-v4-flash",
@@ -114,6 +119,7 @@ DEFAULT_SETTINGS = {
     "openai_api_key": "",
     "anthropic_api_key": "",
     "xai_api_key": "",
+    "meta_api_key": "",
     "deepseek_api_key": "",
     "zai_api_key": "",
     "moonshot_api_key": "",
@@ -135,6 +141,9 @@ DEFAULT_SETTINGS = {
         ),
         "SpaceXAI": (
             PROVIDER_MODELS["SpaceXAI"][0] if PROVIDER_MODELS["SpaceXAI"] else None
+        ),
+        "Meta Model": (
+            PROVIDER_MODELS["Meta Model"][0] if PROVIDER_MODELS["Meta Model"] else None
         ),
         "DeepSeek": (
             PROVIDER_MODELS["DeepSeek"][0] if PROVIDER_MODELS["DeepSeek"] else None

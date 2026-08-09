@@ -482,6 +482,22 @@ def supports_qwencloud_reasoning_effort(model_name: Optional[str]) -> bool:
     return "qwen3.8" in model_name.lower()
 
 
+def is_meta_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if a Meta Model API model is reasoning-capable (muse-spark series)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "muse-spark" in lm
+
+
+def supports_meta_reasoning_effort(model_name: Optional[str]) -> bool:
+    """Check if a Meta Model API model supports reasoning effort configuration."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "muse-spark" in lm
+
+
 def is_opus_45_model(model_name: Optional[str]) -> bool:
     """Check if a model is Claude Opus 4.5 (supports effort parameter)."""
     if not model_name:

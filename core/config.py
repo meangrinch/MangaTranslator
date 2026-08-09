@@ -44,6 +44,7 @@ class TranslationConfig:
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     xai_api_key: str = ""
+    meta_api_key: str = ""
     deepseek_api_key: str = ""
     zai_api_key: str = ""
     moonshot_api_key: str = ""
@@ -216,6 +217,10 @@ class MangaTranslatorConfig:
             self.translation.xai_api_key = os.environ.get(
                 "SPACEXAI_API_KEY"
             ) or os.environ.get("XAI_API_KEY", "")
+        if not self.translation.meta_api_key:
+            self.translation.meta_api_key = os.environ.get(
+                "META_MODEL_API_KEY"
+            ) or os.environ.get("META_API_KEY", "")
         if not self.translation.deepseek_api_key:
             self.translation.deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY", "")
         if not self.translation.zai_api_key:

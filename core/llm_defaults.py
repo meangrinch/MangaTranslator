@@ -12,6 +12,7 @@ _PROVIDER_SAMPLING_DEFAULTS: Dict[str, Dict[str, float | int]] = {
     "OpenAI": {"temperature": 0.1, "top_p": 1.0, "top_k": 0},
     "Anthropic": {"temperature": 0.1, "top_p": 1.0, "top_k": 0},
     "SpaceXAI": {"temperature": 0.1, "top_p": 1.0, "top_k": 0},
+    "Meta Model": {"temperature": 0.1, "top_p": 1.0, "top_k": 0},
     "DeepSeek": {"temperature": 0.1, "top_p": 0.95, "top_k": 0},
     "Z.ai": {"temperature": 0.1, "top_p": 0.95, "top_k": 0},
     "Moonshot AI": {"temperature": 0.1, "top_p": 1.0, "top_k": 0},

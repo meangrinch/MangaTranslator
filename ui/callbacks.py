@@ -109,6 +109,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         openai_api_key,
         anthropic_api_key,
         xai_api_key,
+        meta_api_key,
         deepseek_api_key,
         zai_api_key,
         moonshot_api_key,
@@ -300,6 +301,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             openai_api_key=openai_api_key,
             anthropic_api_key=anthropic_api_key,
             xai_api_key=xai_api_key,
+            meta_api_key=meta_api_key,
             deepseek_api_key=deepseek_api_key,
             zai_api_key=zai_api_key,
             moonshot_api_key=moonshot_api_key,
@@ -409,6 +411,8 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
             api_key_to_validate = ui_state.provider_settings.anthropic_api_key
         elif provider_selector == "SpaceXAI":
             api_key_to_validate = ui_state.provider_settings.xai_api_key
+        elif provider_selector == "Meta Model":
+            api_key_to_validate = ui_state.provider_settings.meta_api_key
         elif provider_selector == "DeepSeek":
             api_key_to_validate = ui_state.provider_settings.deepseek_api_key
         elif provider_selector == "Z.ai":
@@ -1024,6 +1028,7 @@ def handle_save_config_click(*args: Any) -> str:
         oai_key,
         ant_key,
         xai_key,
+        meta_key,
         deepseek_key,
         zai_key,
         moonshot_key,
@@ -1203,6 +1208,7 @@ def handle_save_config_click(*args: Any) -> str:
             openai_api_key=oai_key,
             anthropic_api_key=ant_key,
             xai_api_key=xai_key,
+            meta_api_key=meta_key,
             deepseek_api_key=deepseek_key,
             zai_api_key=zai_key,
             moonshot_api_key=moonshot_key,
@@ -1330,6 +1336,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     openai_visible = default_provider == "OpenAI"
     anthropic_visible = default_provider == "Anthropic"
     xai_visible = default_provider == "SpaceXAI"
+    meta_visible = default_provider == "Meta Model"
     deepseek_visible = default_provider == "DeepSeek"
     zai_visible = default_provider == "Z.ai"
     moonshot_visible = default_provider == "Moonshot AI"
@@ -1437,6 +1444,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         ),
         gr.update(
             value=default_ui_state.provider_settings.xai_api_key, visible=xai_visible
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.meta_api_key,
+            visible=meta_visible,
         ),
         gr.update(
             value=default_ui_state.provider_settings.deepseek_api_key,
@@ -1992,6 +2003,19 @@ def handle_ocr_method_change(
                 else (models[0] if models else None)
             )
             updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "Meta Model":
+            models = settings_manager.PROVIDER_MODELS.get("Meta Model", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("Meta Model")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
         elif current_provider == "QwenCloud":
             models = settings_manager.PROVIDER_MODELS.get("QwenCloud", [])
             saved_settings = settings_manager.get_saved_settings()
@@ -2091,6 +2115,19 @@ def handle_ocr_method_change(
                 "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
             )
             remembered_model = provider_models_dict.get("Xiaomi MiMo")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "Meta Model":
+            models = settings_manager.PROVIDER_MODELS.get("Meta Model", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("Meta Model")
             selected_model = (
                 remembered_model
                 if remembered_model in models
@@ -2218,6 +2255,19 @@ def handle_ocr_method_change(
                 "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
             )
             remembered_model = provider_models_dict.get("Xiaomi MiMo")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "Meta Model":
+            models = settings_manager.PROVIDER_MODELS.get("Meta Model", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("Meta Model")
             selected_model = (
                 remembered_model
                 if remembered_model in models

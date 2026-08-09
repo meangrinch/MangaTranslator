@@ -19,6 +19,7 @@ from utils.endpoints import (
     call_anthropic_endpoint,
     call_deepseek_endpoint,
     call_gemini_endpoint,
+    call_meta_model_endpoint,
     call_mimo_endpoint,
     call_moonshot_endpoint,
     call_openai_compatible_endpoint,
@@ -50,6 +51,7 @@ from utils.model_metadata import (
     is_gpt5_series,
     is_gpt56_virtual_pro,
     is_hy_mt2_model,
+    is_meta_reasoning_model,
     is_mimo_reasoning_model,
     is_moonshot_reasoning_model,
     is_openai_compatible_reasoning_model,
@@ -62,6 +64,7 @@ from utils.model_metadata import (
     supports_deepseek_v4_low_effort,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
+    supports_meta_reasoning_effort,
     supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
     supports_qwencloud_reasoning_effort,
@@ -356,6 +359,8 @@ def _build_generation_config(
             is_reasoning = _is_reasoning_model_anthropic(model_name)
         elif provider == "SpaceXAI":
             is_reasoning = is_xai_reasoning_model(model_name)
+        elif provider == "Meta Model":
+            is_reasoning = is_meta_reasoning_model(model_name)
         elif provider == "OpenRouter":
             is_reasoning = openrouter_is_reasoning_model(model_name, debug)
         elif provider == "OpenAI-Compatible":
@@ -649,6 +654,29 @@ def _build_generation_config(
                 and reasoning_effort not in ("auto", "none")
                 and supports_qwencloud_reasoning_effort(model_name)
             ):
+                generation_config["reasoning_effort"] = reasoning_effort
+        return generation_config
+
+    elif provider == "Meta Model":
+        is_reasoning = is_meta_reasoning_model(model_name)
+
+        generation_config = {
+            "max_tokens": max_tokens_value,
+        }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": min(temperature, 1.0),
+                    "top_p": top_p,
+                }
+            )
+
+        if is_reasoning:
+            reasoning_effort = config.reasoning_effort or "auto"
+            if reasoning_effort not in (
+                "auto",
+                "none",
+            ) and supports_meta_reasoning_effort(model_name):
                 generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
@@ -953,6 +981,22 @@ def _call_llm_endpoint(
                 provider, model_name, config, debug
             )
             return call_qwencloud_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                system_prompt=system_prompt,
+                debug=debug,
+                enable_web_search=config.enable_web_search,
+            )
+        elif provider == "Meta Model":
+            api_key = config.meta_api_key
+            if not api_key:
+                raise TranslationError("Meta Model API key is missing.")
+            generation_config = _build_generation_config(
+                provider, model_name, config, debug
+            )
+            return call_meta_model_endpoint(
                 api_key=api_key,
                 model_name=model_name,
                 parts=api_parts,

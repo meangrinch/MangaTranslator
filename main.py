@@ -97,6 +97,7 @@ def main():
             "OpenAI",
             "Anthropic",
             "SpaceXAI",
+            "Meta Model",
             "DeepSeek",
             "Z.ai",
             "Moonshot AI",
@@ -136,6 +137,16 @@ def main():
         help=(
             "SpaceXAI API key (overrides SPACEXAI_API_KEY or XAI_API_KEY env var "
             "if --provider is SpaceXAI)"
+        ),
+    )
+    parser.add_argument(
+        "--meta-api-key",
+        dest="meta_api_key",
+        type=str,
+        default=None,
+        help=(
+            "Meta Model API key; overrides META_MODEL_API_KEY or META_API_KEY env var "
+            "if --provider is Meta Model"
         ),
     )
     parser.add_argument(
@@ -966,6 +977,15 @@ def main():
         api_key_arg_name = "--spacexai-api-key"
         api_key_env_var = "SPACEXAI_API_KEY or XAI_API_KEY"
         default_model = "grok-4.5"
+    elif provider == "Meta Model":
+        api_key = (
+            getattr(args, "meta_api_key", None)
+            or os.environ.get("META_MODEL_API_KEY")
+            or os.environ.get("META_API_KEY")
+        )
+        api_key_arg_name = "--meta-api-key"
+        api_key_env_var = "META_MODEL_API_KEY or META_API_KEY"
+        default_model = "muse-spark-1.2"
     elif provider == "DeepSeek":
         api_key = args.deepseek_api_key or os.environ.get("DEEPSEEK_API_KEY")
         api_key_arg_name = "--deepseek-api-key"
@@ -1101,6 +1121,14 @@ def main():
                 else (
                     os.environ.get("SPACEXAI_API_KEY")
                     or os.environ.get("XAI_API_KEY", "")
+                )
+            ),
+            meta_api_key=(
+                api_key
+                if provider == "Meta Model"
+                else (
+                    os.environ.get("META_MODEL_API_KEY")
+                    or os.environ.get("META_API_KEY", "")
                 )
             ),
             deepseek_api_key=(

@@ -53,6 +53,7 @@ class UITranslationProviderSettings:
     openai_api_key: Optional[str] = ""
     anthropic_api_key: Optional[str] = ""
     xai_api_key: Optional[str] = ""
+    meta_api_key: Optional[str] = ""
     deepseek_api_key: Optional[str] = ""
     zai_api_key: Optional[str] = ""
     moonshot_api_key: Optional[str] = ""
@@ -250,6 +251,7 @@ class UIConfigState:
             "openai_api_key": self.provider_settings.openai_api_key,
             "anthropic_api_key": self.provider_settings.anthropic_api_key,
             "xai_api_key": self.provider_settings.xai_api_key,
+            "meta_api_key": self.provider_settings.meta_api_key,
             "deepseek_api_key": self.provider_settings.deepseek_api_key,
             "zai_api_key": self.provider_settings.zai_api_key,
             "moonshot_api_key": self.provider_settings.moonshot_api_key,
@@ -530,6 +532,7 @@ class UIConfigState:
                     "anthropic_api_key", defaults["anthropic_api_key"]
                 ),
                 xai_api_key=data.get("xai_api_key", defaults["xai_api_key"]),
+                meta_api_key=data.get("meta_api_key", defaults.get("meta_api_key", "")),
                 deepseek_api_key=data.get(
                     "deepseek_api_key", defaults.get("deepseek_api_key", "")
                 ),
@@ -751,6 +754,7 @@ def map_ui_to_backend_config(
         openai_api_key=ui_state.provider_settings.openai_api_key or "",
         anthropic_api_key=ui_state.provider_settings.anthropic_api_key or "",
         xai_api_key=ui_state.provider_settings.xai_api_key or "",
+        meta_api_key=ui_state.provider_settings.meta_api_key or "",
         deepseek_api_key=ui_state.provider_settings.deepseek_api_key or "",
         zai_api_key=ui_state.provider_settings.zai_api_key or "",
         moonshot_api_key=ui_state.provider_settings.moonshot_api_key or "",

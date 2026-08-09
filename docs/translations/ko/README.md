@@ -163,10 +163,10 @@ fonts/
 
 ### LLM 설정 (LLM setup)
 
-- 지원 제공자: Google, OpenAI, Anthropic, SpaceXAI, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, QwenCloud, OpenRouter, OpenAI-Compatible (OpenAI 호환)
+- 지원 제공자: Google, OpenAI, Anthropic, SpaceXAI, Meta Model, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, QwenCloud, OpenRouter, OpenAI-Compatible (OpenAI 호환)
 - 웹 UI: Config (설정) 탭에서 제공자/모델/API 키를 설정합니다 (로컬에 저장됨).
 - CLI: 명령줄 플래그 또는 환경 변수를 통해 키/URL을 전달합니다.
-- 환경 변수: `GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `QWENCLOUD_API_KEY` / `QWEN_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
+- 환경 변수: `GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `META_MODEL_API_KEY` / `META_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `QWENCLOUD_API_KEY` / `QWEN_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
 - OpenAI-Compatible (OpenAI 호환) 제공자는 로컬 엔드포인트(예: `http://localhost:8080/v1`) 및 Azure OpenAI 엔드포인트(예: `https://<resource>.openai.azure.com`)를 지원합니다
 
 > [!NOTE]
