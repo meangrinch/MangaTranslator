@@ -95,6 +95,12 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "mimo-v2.5-pro",
         "mimo-v2.5",
     ],
+    "QwenCloud": [
+        "qwen3.8-max",
+        "qwen3.7-max",
+        "qwen3.7-plus",
+        "qwen3.7-flash",
+    ],
     "OpenRouter": [],
     "OpenAI-Compatible": [],
 }
@@ -112,6 +118,7 @@ DEFAULT_SETTINGS = {
     "zai_api_key": "",
     "moonshot_api_key": "",
     "mimo_api_key": "",
+    "qwencloud_api_key": "",
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:8080/v1",
     "openai_compatible_api_key": "",
@@ -142,6 +149,9 @@ DEFAULT_SETTINGS = {
             PROVIDER_MODELS["Xiaomi MiMo"][0]
             if PROVIDER_MODELS["Xiaomi MiMo"]
             else None
+        ),
+        "QwenCloud": (
+            PROVIDER_MODELS["QwenCloud"][0] if PROVIDER_MODELS["QwenCloud"] else None
         ),
         "OpenRouter": None,
         "OpenAI-Compatible": None,

@@ -846,6 +846,16 @@ def create_layout(
                                     "Pay-as-you-go keys start with sk-; Token Plan keys start with tp-."
                                 ),
                             )
+                            qwencloud_api_key = gr.Textbox(
+                                label="QwenCloud API Key",
+                                placeholder="Enter QwenCloud API key (starts with sk-...)",
+                                type="password",
+                                value=saved_settings.get("qwencloud_api_key", ""),
+                                show_copy_button=False,
+                                visible=(config_initial_provider == "QwenCloud"),
+                                elem_id="qwencloud_api_key",
+                                info="Stored locally. Or set via QWENCLOUD_API_KEY / QWEN_API_KEY env var.",
+                            )
                             openrouter_api_key = gr.Textbox(
                                 label="OpenRouter API Key",
                                 placeholder="Enter OpenRouter API key (starts with sk-or-...)",
@@ -2177,6 +2187,7 @@ def create_layout(
             zai_api_key,
             moonshot_api_key,
             mimo_api_key,
+            qwencloud_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2301,6 +2312,7 @@ def create_layout(
             zai_api_key,
             moonshot_api_key,
             mimo_api_key,
+            qwencloud_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2426,6 +2438,7 @@ def create_layout(
             zai_api_key,
             moonshot_api_key,
             mimo_api_key,
+            qwencloud_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2552,6 +2565,7 @@ def create_layout(
             zai_api_key,
             moonshot_api_key,
             mimo_api_key,
+            qwencloud_api_key,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2739,6 +2753,7 @@ def create_layout(
                 zai_api_key,
                 moonshot_api_key,
                 mimo_api_key,
+                qwencloud_api_key,
                 openrouter_api_key,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,

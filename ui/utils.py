@@ -42,6 +42,7 @@ from utils.model_metadata import (
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
     is_openai_reasoning_model,
+    is_qwencloud_reasoning_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
     supports_deepseek_v4_low_effort,
@@ -49,6 +50,7 @@ from utils.model_metadata import (
     supports_gpt5_xhigh_effort,
     supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
+    supports_qwencloud_reasoning_effort,
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
 )
@@ -111,6 +113,7 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         "Moonshot AI": "MOONSHOT_API_KEY",
         "Xiaomi MiMo": "MIMO_API_KEY",
         "Z.ai": "ZAI_API_KEY",
+        "QwenCloud": "QWENCLOUD_API_KEY or QWEN_API_KEY",
         "OpenAI-Compatible": "OPENAI_COMPATIBLE_API_KEY",
     }
     env_var_name = env_var_map.get(provider)
@@ -124,6 +127,10 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         elif provider == "SpaceXAI":
             api_key = os.environ.get("SPACEXAI_API_KEY") or os.environ.get(
                 "XAI_API_KEY", ""
+            )
+        elif provider == "QwenCloud":
+            api_key = os.environ.get("QWENCLOUD_API_KEY") or os.environ.get(
+                "QWEN_API_KEY", ""
             )
         elif env_var_name:
             api_key = os.environ.get(env_var_name, "")
@@ -160,6 +167,13 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         return (
             False,
             "Invalid Xiaomi MiMo API key format (should start with 'sk-' or 'tp-')",
+        )
+    if provider == "QwenCloud" and not (
+        api_key.startswith("sk-") and len(api_key) >= 32
+    ):
+        return (
+            False,
+            "Invalid QwenCloud API key format (should start with 'sk-')",
         )
     # No specific format check for Z.ai or OpenAI-Compatible keys
 
@@ -335,6 +349,8 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return _is_moonshot_reasoning_model(model_name)
     elif provider == "Xiaomi MiMo":
         return is_mimo_reasoning_model(model_name)
+    elif provider == "QwenCloud":
+        return is_qwencloud_reasoning_model(model_name)
     elif provider == "OpenRouter":
         try:
             return openrouter_is_reasoning_model(model_name, debug=False)
@@ -392,6 +408,10 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
         ),
         "Xiaomi MiMo": (
             "Use Xiaomi MiMo's web search tool for up-to-date information. "
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
+        ),
+        "QwenCloud": (
+            "Use QwenCloud's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
     }
@@ -485,6 +505,10 @@ def get_reasoning_effort_info_text(
             return "Controls model's internal reasoning effort."
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "Xiaomi MiMo":
+        return "Enables or disables model thinking (auto=enabled, none=disabled)."
+    elif provider == "QwenCloud":
+        if supports_qwencloud_reasoning_effort(model_name):
+            return "Controls model's internal reasoning effort."
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "DeepSeek":
         return "Controls model's internal reasoning effort."
@@ -667,6 +691,13 @@ def get_reasoning_effort_config(
             return True, ["auto", "none"], "auto"
         return False, [], None
 
+    elif provider == "QwenCloud":
+        if supports_qwencloud_reasoning_effort(model_name):
+            return True, ["max", "high", "low", "none"], "high"
+        if is_qwencloud_reasoning_model(model_name):
+            return True, ["auto", "none"], "auto"
+        return False, [], None
+
     elif provider == "OpenRouter":
         lm = model_name.lower()
         if is_google_model_family(model_name):
@@ -815,6 +846,7 @@ def get_sampling_slider_interactivity(
         "Z.ai",
         "Moonshot AI",
         "Xiaomi MiMo",
+        "QwenCloud",
     ):
         top_k_interactive = False
     elif provider in ("OpenRouter", "OpenAI-Compatible"):
@@ -940,6 +972,7 @@ def update_translation_ui(
     zai_visible_update = gr.update(visible=(provider == "Z.ai"))
     moonshot_visible_update = gr.update(visible=(provider == "Moonshot AI"))
     mimo_visible_update = gr.update(visible=(provider == "Xiaomi MiMo"))
+    qwencloud_visible_update = gr.update(visible=(provider == "QwenCloud"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
     openai_compatible_url_visible_update = gr.update(
         visible=(provider == "OpenAI-Compatible")
@@ -1114,6 +1147,7 @@ def update_translation_ui(
         zai_visible_update,
         moonshot_visible_update,
         mimo_visible_update,
+        qwencloud_visible_update,
         openrouter_visible_update,
         openai_compatible_url_visible_update,
         openai_compatible_key_visible_update,

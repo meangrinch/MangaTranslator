@@ -101,6 +101,7 @@ def main():
             "Z.ai",
             "Moonshot AI",
             "Xiaomi MiMo",
+            "QwenCloud",
             "OpenRouter",
             "OpenAI-Compatible",
         ],
@@ -162,6 +163,16 @@ def main():
         help=(
             "Xiaomi MiMo API key, sk-... (pay-as-you-go) or tp-... (Token Plan); "
             "overrides MIMO_API_KEY env var if --provider is Xiaomi MiMo"
+        ),
+    )
+    parser.add_argument(
+        "--qwencloud-api-key",
+        dest="qwencloud_api_key",
+        type=str,
+        default=None,
+        help=(
+            "QwenCloud API key (starts with sk-...); "
+            "overrides QWENCLOUD_API_KEY or QWEN_API_KEY env var if --provider is QwenCloud"
         ),
     )
     parser.add_argument(
@@ -975,6 +986,15 @@ def main():
         api_key_arg_name = "--mimo-api-key"
         api_key_env_var = "MIMO_API_KEY"
         default_model = "mimo-v2.5"
+    elif provider == "QwenCloud":
+        api_key = (
+            args.qwencloud_api_key
+            or os.environ.get("QWENCLOUD_API_KEY")
+            or os.environ.get("QWEN_API_KEY")
+        )
+        api_key_arg_name = "--qwencloud-api-key"
+        api_key_env_var = "QWENCLOUD_API_KEY or QWEN_API_KEY"
+        default_model = "qwen3.8-max"
     elif provider == "OpenRouter":
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
@@ -1100,6 +1120,14 @@ def main():
                 api_key
                 if provider == "Xiaomi MiMo"
                 else os.environ.get("MIMO_API_KEY", "")
+            ),
+            qwencloud_api_key=(
+                api_key
+                if provider == "QwenCloud"
+                else (
+                    os.environ.get("QWENCLOUD_API_KEY")
+                    or os.environ.get("QWEN_API_KEY", "")
+                )
             ),
             openrouter_api_key=(
                 api_key

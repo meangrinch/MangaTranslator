@@ -467,6 +467,21 @@ def is_mimo_reasoning_model(model_name: Optional[str]) -> bool:
     return lm in ("mimo-v2.5-pro", "mimo-v2.5")
 
 
+def is_qwencloud_reasoning_model(model_name: Optional[str]) -> bool:
+    """Check if a QwenCloud model is reasoning-capable (toggleable thinking mode)."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "qwen" in lm
+
+
+def supports_qwencloud_reasoning_effort(model_name: Optional[str]) -> bool:
+    """Check if a QwenCloud model supports the reasoning_effort API parameter (Qwen 3.8+)."""
+    if not model_name:
+        return False
+    return "qwen3.8" in model_name.lower()
+
+
 def is_opus_45_model(model_name: Optional[str]) -> bool:
     """Check if a model is Claude Opus 4.5 (supports effort parameter)."""
     if not model_name:

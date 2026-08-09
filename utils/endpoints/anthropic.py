@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from core.config import calculate_reasoning_budget
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 
@@ -138,6 +137,8 @@ def call_anthropic_endpoint(
             elif thinking_type == "enabled":
                 # Older models: Budget-based thinking
                 if reasoning_effort and reasoning_effort != "none":
+                    from core.config import calculate_reasoning_budget
+
                     max_tokens_value = generation_config.get("max_tokens", 4096)
                     budget_tokens = calculate_reasoning_budget(
                         max_tokens_value, reasoning_effort

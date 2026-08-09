@@ -113,6 +113,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         zai_api_key,
         moonshot_api_key,
         mimo_api_key,
+        qwencloud_api_key,
         openrouter_api_key,
         openai_compatible_url_input,
         openai_compatible_api_key_input,
@@ -303,6 +304,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             zai_api_key=zai_api_key,
             moonshot_api_key=moonshot_api_key,
             mimo_api_key=mimo_api_key,
+            qwencloud_api_key=qwencloud_api_key,
             openrouter_api_key=openrouter_api_key,
             openai_compatible_url=openai_compatible_url_input,
             openai_compatible_api_key=openai_compatible_api_key_input,
@@ -415,6 +417,8 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
             api_key_to_validate = ui_state.provider_settings.moonshot_api_key
         elif provider_selector == "Xiaomi MiMo":
             api_key_to_validate = ui_state.provider_settings.mimo_api_key
+        elif provider_selector == "QwenCloud":
+            api_key_to_validate = ui_state.provider_settings.qwencloud_api_key
         elif provider_selector == "OpenRouter":
             api_key_to_validate = ui_state.provider_settings.openrouter_api_key
         elif provider_selector == "OpenAI-Compatible":
@@ -1024,6 +1028,7 @@ def handle_save_config_click(*args: Any) -> str:
         zai_key,
         moonshot_key,
         mimo_key,
+        qwencloud_key,
         or_key,
         comp_url,
         comp_key,
@@ -1202,6 +1207,7 @@ def handle_save_config_click(*args: Any) -> str:
             zai_api_key=zai_key,
             moonshot_api_key=moonshot_key,
             mimo_api_key=mimo_key,
+            qwencloud_api_key=qwencloud_key,
             openrouter_api_key=or_key,
             openai_compatible_url=comp_url,
             openai_compatible_api_key=comp_key,
@@ -1328,6 +1334,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     zai_visible = default_provider == "Z.ai"
     moonshot_visible = default_provider == "Moonshot AI"
     mimo_visible = default_provider == "Xiaomi MiMo"
+    qwencloud_visible = default_provider == "QwenCloud"
     openrouter_visible = default_provider == "OpenRouter"
     compatible_visible = default_provider == "OpenAI-Compatible"
     (
@@ -1446,6 +1453,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(
             value=default_ui_state.provider_settings.mimo_api_key,
             visible=mimo_visible,
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.qwencloud_api_key,
+            visible=qwencloud_visible,
         ),
         gr.update(
             value=default_ui_state.provider_settings.openrouter_api_key,
@@ -1981,6 +1992,19 @@ def handle_ocr_method_change(
                 else (models[0] if models else None)
             )
             updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "QwenCloud":
+            models = settings_manager.PROVIDER_MODELS.get("QwenCloud", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("QwenCloud")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
         else:
             updates.append(gr.update())
     elif ocr_method == "paddleocr-vl-1.6":
@@ -2067,6 +2091,19 @@ def handle_ocr_method_change(
                 "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
             )
             remembered_model = provider_models_dict.get("Xiaomi MiMo")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "QwenCloud":
+            models = settings_manager.PROVIDER_MODELS.get("QwenCloud", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("QwenCloud")
             selected_model = (
                 remembered_model
                 if remembered_model in models
@@ -2181,6 +2218,19 @@ def handle_ocr_method_change(
                 "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
             )
             remembered_model = provider_models_dict.get("Xiaomi MiMo")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "QwenCloud":
+            models = settings_manager.PROVIDER_MODELS.get("QwenCloud", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("QwenCloud")
             selected_model = (
                 remembered_model
                 if remembered_model in models

@@ -6,6 +6,7 @@ from .moonshot import call_moonshot_endpoint
 from .openai import call_openai_endpoint
 from .openai_compatible import call_openai_compatible_endpoint
 from .openrouter import call_openrouter_endpoint, openrouter_is_reasoning_model
+from .qwencloud import call_qwencloud_endpoint
 from .spacexai import call_xai_endpoint
 from .zai import call_zai_endpoint
 
@@ -19,6 +20,7 @@ __all__ = [
     "call_moonshot_endpoint",
     "call_openrouter_endpoint",
     "call_openai_compatible_endpoint",
+    "call_qwencloud_endpoint",
     "call_zai_endpoint",
     "openrouter_is_reasoning_model",
 ]

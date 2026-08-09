@@ -24,6 +24,7 @@ from utils.endpoints import (
     call_openai_compatible_endpoint,
     call_openai_endpoint,
     call_openrouter_endpoint,
+    call_qwencloud_endpoint,
     call_xai_endpoint,
     call_zai_endpoint,
     openrouter_is_reasoning_model,
@@ -54,6 +55,7 @@ from utils.model_metadata import (
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
     is_openai_reasoning_model,
+    is_qwencloud_reasoning_model,
     is_rosetta_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
@@ -62,6 +64,7 @@ from utils.model_metadata import (
     supports_gpt5_xhigh_effort,
     supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
+    supports_qwencloud_reasoning_effort,
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
 )
@@ -365,6 +368,8 @@ def _build_generation_config(
             is_reasoning = is_moonshot_reasoning_model(model_name)
         elif provider == "Xiaomi MiMo":
             is_reasoning = is_mimo_reasoning_model(model_name)
+        elif provider == "QwenCloud":
+            is_reasoning = is_qwencloud_reasoning_model(model_name)
         max_tokens_value = 16384 if is_reasoning else 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, model_name)
@@ -617,6 +622,34 @@ def _build_generation_config(
             reasoning_effort = config.reasoning_effort or "auto"
             thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
             generation_config["thinking"] = {"type": thinking_type}
+        return generation_config
+
+    elif provider == "QwenCloud":
+        is_reasoning = is_qwencloud_reasoning_model(model_name)
+
+        generation_config = {
+            "max_tokens": max_tokens_value,
+        }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": min(temperature, 1.0),
+                    "top_p": top_p,
+                }
+            )
+
+        if is_reasoning:
+            reasoning_effort = config.reasoning_effort or (
+                "high" if supports_qwencloud_reasoning_effort(model_name) else "auto"
+            )
+            thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
+            generation_config["thinking"] = {"type": thinking_type}
+            if (
+                thinking_type == "enabled"
+                and reasoning_effort not in ("auto", "none")
+                and supports_qwencloud_reasoning_effort(model_name)
+            ):
+                generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     elif provider == "OpenRouter":
@@ -904,6 +937,22 @@ def _call_llm_endpoint(
                 provider, model_name, config, debug
             )
             return call_mimo_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                system_prompt=system_prompt,
+                debug=debug,
+                enable_web_search=config.enable_web_search,
+            )
+        elif provider == "QwenCloud":
+            api_key = config.qwencloud_api_key
+            if not api_key:
+                raise TranslationError("QwenCloud API key is missing.")
+            generation_config = _build_generation_config(
+                provider, model_name, config, debug
+            )
+            return call_qwencloud_endpoint(
                 api_key=api_key,
                 model_name=model_name,
                 parts=api_parts,

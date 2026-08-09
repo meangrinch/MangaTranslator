@@ -163,10 +163,10 @@ fonts/
 
 ### LLM setup
 
-- Providers: Google, OpenAI, Anthropic, SpaceXAI, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, OpenRouter, OpenAI-Compatible
+- Providers: Google, OpenAI, Anthropic, SpaceXAI, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, QwenCloud, OpenRouter, OpenAI-Compatible
 - Web UI: configure provider/model/key in the Config tab (stored locally)
 - CLI: pass keys/URLs as flags or via env vars
-- Env vars: `GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
+- Env vars: `GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `QWENCLOUD_API_KEY` / `QWEN_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
 - OpenAI-Compatible provider supports local endpoints (e.g., `http://localhost:8080/v1`), and Azure OpenAI endpoints (e.g., `https://<resource>.openai.azure.com`)
 
 > [!NOTE]
