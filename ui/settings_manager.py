@@ -69,6 +69,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "claude-haiku-4-5-20251001",
     ],
     "SpaceXAI": [
+        "grok-4.6",
         "grok-4.5",
         "grok-4.3",
         "grok-4.20-0309-reasoning",

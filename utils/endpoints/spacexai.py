@@ -130,7 +130,11 @@ def call_xai_endpoint(
     if "multi-agent" in model_lower:
         if reasoning_effort in ("low", "medium", "high", "xhigh"):
             payload["reasoning"] = {"effort": reasoning_effort}
-    elif model_lower.startswith("grok-4.3") or model_lower.startswith("grok-4.5"):
+    elif (
+        model_lower.startswith("grok-4.3")
+        or model_lower.startswith("grok-4.5")
+        or model_lower.startswith("grok-4.6")
+    ):
         if reasoning_effort in ("none", "low", "medium", "high"):
             payload["reasoning"] = {"effort": reasoning_effort}
 

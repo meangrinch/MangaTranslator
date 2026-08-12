@@ -1026,7 +1026,7 @@ def main():
         )
         api_key_arg_name = "--spacexai-api-key"
         api_key_env_var = "SPACEXAI_API_KEY or XAI_API_KEY"
-        default_model = "grok-4.5"
+        default_model = "grok-4.6"
     elif provider == "Meta Model":
         api_key = (
             getattr(args, "meta_api_key", None)
