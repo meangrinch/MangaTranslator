@@ -22,31 +22,31 @@ def call_qwencloud_endpoint(
     enable_web_search: bool = False,
 ) -> Optional[str]:
     """
-    Calls the QwenCloud (Alibaba Cloud DashScope Compatible Mode) API endpoint with the provided data and handles retries.
+    Calls the QwenCloud (Alibaba Cloud Model Studio Responses API) endpoint with the provided data and handles retries.
 
     Args:
         api_key (str): QwenCloud API key.
         model_name (str): QwenCloud model to use.
         parts (List[Dict[str, Any]]): List of content parts (text and optional images).
-        generation_config (Dict[str, Any]): Configuration for generation.
+        generation_config (Dict[str, Any]): Configuration for generation (temperature, top_p, max_output_tokens/max_tokens, thinking, reasoning_effort).
         system_prompt (Optional[str]): System prompt for the conversation.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
         base_delay (float): Initial delay for retries in seconds.
-        enable_web_search (bool): Enable QwenCloud's web search tool.
+        enable_web_search (bool): Enable QwenCloud's built-in web search tool.
 
     Returns:
-        Optional[str]: The raw text content from the API response if successful.
+        Optional[str]: The raw text content from the API response if successful,
+                       None if an error occurs or no content is found after retries.
+
+    Raises:
+        ValidationError: If API key is missing or parts format is invalid.
+        TranslationError: If API call fails after retries for non-rate-limited HTTP errors,
+                          connection errors, or response processing fails.
     """
     if not api_key:
         raise ValidationError("API key is required for QwenCloud endpoint")
-
-    url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
 
     text_part = next((p for p in parts if "text" in p), None)
     image_parts = [p for p in parts if "inline_data" in p]
@@ -55,6 +55,12 @@ def call_qwencloud_endpoint(
         raise ValidationError(
             "Invalid 'parts' format for QwenCloud: No text prompt found."
         )
+
+    url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/responses"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
 
     if image_parts:
         content_list = []
@@ -68,25 +74,30 @@ def call_qwencloud_endpoint(
                 base64_image = part["inline_data"]["data"]
                 content_list.append(
                     {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
+                        "type": "input_image",
+                        "image_url": f"data:{mime_type};base64,{base64_image}",
                     }
                 )
-        content_list.append({"type": "text", "text": text_part["text"]})
-        user_content = content_list
+            else:
+                log_message(f"Invalid image part format: {part}", always_print=True)
+        content_list.append({"type": "input_text", "text": text_part["text"]})
+        input_messages = [{"role": "user", "content": content_list}]
     else:
-        user_content = text_part["text"]
+        input_messages = [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": text_part["text"]}],
+            }
+        ]
 
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": user_content})
-
-    payload = {
+    payload: Dict[str, Any] = {
         "model": model_name,
-        "messages": messages,
-        "max_tokens": generation_config.get("max_tokens", 4096),
+        "input": input_messages,
+        "max_output_tokens": generation_config.get("max_tokens", 4096),
     }
+
+    if system_prompt:
+        payload["instructions"] = system_prompt
 
     temp = generation_config.get("temperature")
     if temp is not None:
@@ -104,20 +115,32 @@ def call_qwencloud_endpoint(
             if isinstance(thinking, dict)
             else bool(thinking)
         )
-        payload["enable_thinking"] = thinking_enabled
-        if (
-            thinking_enabled
-            and reasoning_effort
-            and reasoning_effort not in ("auto", "none")
-            and supports_qwencloud_reasoning_effort(model_name)
-        ):
-            if reasoning_effort in ("xhigh", "medium", "low"):
-                payload["reasoning_effort"] = reasoning_effort
-            elif reasoning_effort in ("high", "max"):
-                payload["reasoning_effort"] = "xhigh"
+        if not thinking_enabled:
+            payload["reasoning"] = {"effort": "none"}
+        else:
+            if reasoning_effort and reasoning_effort != "auto":
+                if reasoning_effort in ("xhigh", "max", "high"):
+                    payload["reasoning"] = {"effort": "high"}
+                elif reasoning_effort in ("medium", "low", "minimal", "none"):
+                    payload["reasoning"] = {"effort": reasoning_effort}
+            else:
+                payload["reasoning"] = {
+                    "effort": (
+                        "high"
+                        if supports_qwencloud_reasoning_effort(model_name)
+                        else "medium"
+                    )
+                }
+    elif reasoning_effort:
+        if reasoning_effort == "none":
+            payload["reasoning"] = {"effort": "none"}
+        elif reasoning_effort in ("xhigh", "max", "high"):
+            payload["reasoning"] = {"effort": "high"}
+        elif reasoning_effort in ("medium", "low", "minimal"):
+            payload["reasoning"] = {"effort": reasoning_effort}
 
     if enable_web_search:
-        payload["enable_search"] = True
+        payload["tools"] = [{"type": "web_search"}]
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
@@ -138,24 +161,6 @@ def call_qwencloud_endpoint(
             try:
                 result = response.json()
 
-                if "choices" in result and len(result["choices"]) > 0:
-                    choice = result["choices"][0]
-                    finish_reason = choice.get("finish_reason")
-
-                    message = choice.get("message")
-                    if message and "content" in message:
-                        content = message["content"]
-                        return content.strip() if content else ""
-                    log_message(
-                        f"No message content in QwenCloud response. Finish reason: {finish_reason}",
-                        always_print=True,
-                    )
-                    log_message(
-                        f"Full response: {json.dumps(result, indent=2)}",
-                        verbose=debug,
-                    )
-                    return ""
-                log_message("No choices in QwenCloud response", always_print=True)
                 if "error" in result:
                     error_obj = result.get("error", {})
                     error_msg = (
@@ -164,6 +169,20 @@ def call_qwencloud_endpoint(
                         else str(error_obj)
                     )
                     raise TranslationError(f"QwenCloud API returned error: {error_msg}")
+
+                output_text = result.get("output_text")
+                if isinstance(output_text, str) and output_text.strip():
+                    return output_text.strip()
+
+                finish_reason = result.get("finish_reason") or "unknown"
+                log_message(
+                    f"No text content in QwenCloud response. Finish reason: {finish_reason}",
+                    always_print=True,
+                )
+                log_message(
+                    f"Full response: {json.dumps(result, indent=2)}",
+                    verbose=debug,
+                )
                 return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
