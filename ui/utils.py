@@ -28,6 +28,7 @@ from utils.model_metadata import (
     is_gemini_3_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
+    is_gemini_37_flash_model,
     is_gemini_no_sampling_model,
     is_gemma_model,
     is_google_model_family,
@@ -628,6 +629,8 @@ def get_reasoning_effort_config(
             return True, ["high", "minimal"], "high"
 
         if is_gemini_3_model(model_name):
+            if is_gemini_37_flash_model(model_name):
+                return True, ["high", "medium", "low"], "high"
             if "flash" in lm:
                 return True, ["high", "medium", "low", "minimal"], "high"
             if "gemini-3.1" in lm:
@@ -731,6 +734,9 @@ def get_reasoning_effort_config(
             if is_gemma_model(model_name):
                 return True, ["high", "minimal"], "high"
 
+            if is_gemini_37_flash_model(model_name):
+                return True, ["xhigh", "high", "medium", "low", "none"], "high"
+
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "high"
 
         if is_anthropic_model_family(model_name):
@@ -830,7 +836,7 @@ def get_sampling_interactivity_for_effort(
 def _model_disallows_all_sampling_params(
     provider: str, model_name: Optional[str]
 ) -> bool:
-    """Models that reject temperature/top-k at the API (e.g. Claude Opus 4.7+, Gemini 3.6 Flash, Gemini 3.5 Flash Lite)."""
+    """Models that reject temperature/top-k at the API (e.g. Claude Opus 4.7+, Gemini 3.6+ Flash, Gemini 3.5 Flash Lite)."""
     if provider == "Anthropic":
         return is_anthropic_no_sampling_model(model_name)
     if provider == "OpenRouter" and is_anthropic_model_family(model_name):
