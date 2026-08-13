@@ -925,6 +925,7 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 system_prompt=system_prompt,
                 debug=debug,
+                enable_web_search=config.enable_web_search,
             )
         elif provider == "Z.ai":
             api_key = config.zai_api_key

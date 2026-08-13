@@ -18,31 +18,33 @@ def call_deepseek_endpoint(
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
+    enable_web_search: bool = False,
 ) -> Optional[str]:
     """
-    Calls the DeepSeek Chat Completions API endpoint with the provided data and handles retries.
-    DeepSeek uses OpenAI-compatible API format and is text-only (no image support).
+    Calls the DeepSeek Responses API endpoint with the provided data and handles retries.
+    DeepSeek Responses API format is text-only (no image support).
 
     Args:
         api_key (str): DeepSeek API key.
-        model_name (str): DeepSeek model to use.
+        model_name (str): DeepSeek model to use (e.g., deepseek-v4-flash, deepseek-v4-pro).
         parts (List[Dict[str, Any]]): List of content parts (text only, images are ignored).
-        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens,
+        generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens/max_output_tokens,
             thinking, reasoning_effort).
         system_prompt (Optional[str]): System prompt for the conversation.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
         base_delay (float): Initial delay for retries in seconds.
+        enable_web_search (bool): Enable DeepSeek's web search tool.
 
     Returns:
         Optional[str]: The raw text content from the API response if successful,
                        None if an error occurs or no content is found after retries.
 
     Raises:
-        ValueError: If API key is missing or parts format is invalid.
-        RuntimeError: If API call fails after retries for non-rate-limited HTTP errors,
-                      connection errors, or response processing fails.
+        ValidationError: If API key is missing or parts format is invalid.
+        TranslationError: If API call fails after retries for non-rate-limited HTTP errors,
+                          connection errors, or response processing fails.
     """
     if not api_key:
         raise ValidationError("API key is required for DeepSeek endpoint")
@@ -54,24 +56,27 @@ def call_deepseek_endpoint(
             "Invalid 'parts' format for DeepSeek: No text prompt found."
         )
 
-    url = "https://api.deepseek.com/chat/completions"
-    api_model_name = model_name
-
+    url = "https://api.deepseek.com/responses"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
 
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": text_part["text"]})
+    input_content = [{"type": "input_text", "text": text_part["text"]}]
+    input_messages = [{"role": "user", "content": input_content}]
 
-    payload = {
-        "model": api_model_name,
-        "messages": messages,
-        "max_tokens": generation_config.get("max_tokens", 4096),
+    max_output_tokens = generation_config.get(
+        "max_output_tokens"
+    ) or generation_config.get("max_tokens", 4096)
+
+    payload: Dict[str, Any] = {
+        "model": model_name,
+        "input": input_messages,
+        "max_output_tokens": max_output_tokens,
     }
+
+    if system_prompt:
+        payload["instructions"] = system_prompt
 
     # Add thinking parameter if present
     thinking_config = generation_config.get("thinking")
@@ -93,6 +98,9 @@ def call_deepseek_endpoint(
         if top_p is not None:
             payload["top_p"] = top_p
 
+    if enable_web_search:
+        payload["tools"] = [{"type": "web_search"}]
+
     payload = {k: v for k, v in payload.items() if v is not None}
 
     for attempt in range(max_retries + 1):
@@ -112,34 +120,24 @@ def call_deepseek_endpoint(
             try:
                 result = response.json()
 
-                if "choices" in result and len(result["choices"]) > 0:
-                    choice = result["choices"][0]
-                    finish_reason = choice.get("finish_reason")
+                if "error" in result:
+                    error_msg = result.get("error", {}).get("message", "Unknown error")
+                    raise TranslationError(f"DeepSeek API returned error: {error_msg}")
 
-                    message = choice.get("message")
-                    if message and "content" in message:
-                        content = message["content"]
-                        return content.strip() if content else ""
-                    else:
-                        log_message(
-                            f"No message content in DeepSeek response. Finish reason: {finish_reason}",
-                            always_print=True,
-                        )
-                        log_message(
-                            f"Full response: {json.dumps(result, indent=2)}",
-                            verbose=debug,
-                        )
-                        return ""
-                else:
-                    log_message("No choices in DeepSeek response", always_print=True)
-                    if "error" in result:
-                        error_msg = result.get("error", {}).get(
-                            "message", "Unknown error"
-                        )
-                        raise TranslationError(
-                            f"DeepSeek API returned error: {error_msg}"
-                        )
-                    return None
+                output_text = result.get("output_text")
+                if isinstance(output_text, str) and output_text.strip():
+                    return output_text.strip()
+
+                finish_reason = result.get("finish_reason") or "unknown"
+                log_message(
+                    f"No text content in DeepSeek response. Finish reason: {finish_reason}",
+                    always_print=True,
+                )
+                log_message(
+                    f"Full response: {json.dumps(result, indent=2)}",
+                    verbose=debug,
+                )
+                return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
@@ -170,6 +168,8 @@ def call_deepseek_endpoint(
                     error_reason += " (Insufficient balance, top up your account)"
                 elif status_code == 403:
                     error_reason += " (Permission denied, check API key/plan)"
+                elif status_code == 404:
+                    error_reason += " (Endpoint or model not found)"
                 elif status_code == 422:
                     error_reason += " (Invalid parameters)"
 

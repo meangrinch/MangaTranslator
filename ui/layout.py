@@ -1023,8 +1023,7 @@ def create_layout(
                             )
 
                             _initial_enable_web_search_visible = (
-                                config_initial_provider
-                                not in ("OpenAI-Compatible", "DeepSeek")
+                                config_initial_provider not in ("OpenAI-Compatible",)
                             )
                             (
                                 _initial_enable_web_search_label,

@@ -398,10 +398,6 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
             "Use Gemini's web search for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
-        "OpenRouter": (
-            "Use OpenRouter's web search (Exa) for up-to-date information. "
-            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
-        ),
         "OpenAI": (
             "Use OpenAI's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
@@ -412,6 +408,14 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
         ),
         "SpaceXAI": (
             "Use SpaceXAI's web search tool for up-to-date information. "
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
+        ),
+        "Meta Model": (
+            "Use Meta Model's web search tool for up-to-date information. "
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
+        ),
+        "DeepSeek": (
+            "Use DeepSeek's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "Z.ai": (
@@ -430,8 +434,8 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
             "Use QwenCloud's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
-        "Meta Model": (
-            "Use Meta Model's web search tool for up-to-date information. "
+        "OpenRouter": (
+            "Use OpenRouter's web search (Exa) for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
     }
@@ -1069,7 +1073,7 @@ def update_translation_ui(
         remembered_model
     )
 
-    enable_web_search_visible = provider not in ("OpenAI-Compatible", "DeepSeek")
+    enable_web_search_visible = provider not in ("OpenAI-Compatible",)
     enable_web_search_label, enable_web_search_info = (
         get_enable_web_search_label_and_info(provider)
     )
@@ -1279,8 +1283,8 @@ def update_params_for_model(
         info=info_text,
     )
 
-    # Web search checkbox is visible for Google, OpenRouter, OpenAI, Anthropic, and SpaceXAI providers
-    enable_web_search_visible = provider not in ("OpenAI-Compatible", "DeepSeek")
+    # Web search checkbox is visible for all providers except OpenAI-Compatible
+    enable_web_search_visible = provider not in ("OpenAI-Compatible",)
 
     enable_web_search_label, enable_web_search_info = (
         get_enable_web_search_label_and_info(provider)
