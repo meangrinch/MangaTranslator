@@ -20,6 +20,7 @@ from utils.model_metadata import (
     flux_sdcpp_valid_text_encoder_quant,
     is_anthropic_model_family,
     is_openai_model_family,
+    is_opencode_multimodal_model,
 )
 from utils.path_list import read_image_paths_from_txt
 
@@ -115,6 +116,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         moonshot_api_key,
         mimo_api_key,
         qwencloud_api_key,
+        opencode_api_key,
+        opencode_tier,
         openrouter_api_key,
         openai_compatible_url_input,
         openai_compatible_api_key_input,
@@ -329,6 +332,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             moonshot_api_key=moonshot_api_key,
             mimo_api_key=mimo_api_key,
             qwencloud_api_key=qwencloud_api_key,
+            opencode_api_key=opencode_api_key,
+            opencode_tier=("go" if "go" in str(opencode_tier).lower() else "zen"),
             openrouter_api_key=openrouter_api_key,
             openai_compatible_url=openai_compatible_url_input,
             openai_compatible_api_key=openai_compatible_api_key_input,
@@ -447,6 +452,8 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
             api_key_to_validate = ui_state.provider_settings.mimo_api_key
         elif provider_selector == "QwenCloud":
             api_key_to_validate = ui_state.provider_settings.qwencloud_api_key
+        elif provider_selector == "OpenCode":
+            api_key_to_validate = ui_state.provider_settings.opencode_api_key
         elif provider_selector == "OpenRouter":
             api_key_to_validate = ui_state.provider_settings.openrouter_api_key
         elif provider_selector == "OpenAI-Compatible":
@@ -1058,6 +1065,8 @@ def handle_save_config_click(*args: Any) -> str:
         moonshot_key,
         mimo_key,
         qwencloud_key,
+        opencode_key,
+        opencode_tier_val,
         or_key,
         comp_url,
         comp_key,
@@ -1260,6 +1269,8 @@ def handle_save_config_click(*args: Any) -> str:
             moonshot_api_key=moonshot_key,
             mimo_api_key=mimo_key,
             qwencloud_api_key=qwencloud_key,
+            opencode_api_key=opencode_key,
+            opencode_tier=("go" if "go" in str(opencode_tier_val).lower() else "zen"),
             openrouter_api_key=or_key,
             openai_compatible_url=comp_url,
             openai_compatible_api_key=comp_key,
@@ -1373,7 +1384,11 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         )
         default_ui_state.llm_settings.model_name = default_model_name
 
-    if default_provider == "OpenRouter" or default_provider == "OpenAI-Compatible":
+    if (
+        default_provider == "OpenRouter"
+        or default_provider == "OpenAI-Compatible"
+        or default_provider == "OpenCode"
+    ):
         default_models_choices = [default_model_name] if default_model_name else []
     else:
         default_models_choices = settings_manager.PROVIDER_MODELS.get(
@@ -1390,6 +1405,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
     moonshot_visible = default_provider == "Moonshot AI"
     mimo_visible = default_provider == "Xiaomi MiMo"
     qwencloud_visible = default_provider == "QwenCloud"
+    opencode_visible = default_provider == "OpenCode"
+    opencode_tier_visible = default_provider == "OpenCode"
     openrouter_visible = default_provider == "OpenRouter"
     compatible_visible = default_provider == "OpenAI-Compatible"
     (
@@ -1516,6 +1533,19 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
         gr.update(
             value=default_ui_state.provider_settings.qwencloud_api_key,
             visible=qwencloud_visible,
+        ),
+        gr.update(
+            value=default_ui_state.provider_settings.opencode_api_key,
+            visible=opencode_visible,
+        ),
+        gr.update(
+            value=(
+                "OpenCode Go"
+                if (default_ui_state.provider_settings.opencode_tier or "").lower()
+                == "go"
+                else "OpenCode Zen"
+            ),
+            visible=opencode_tier_visible,
         ),
         gr.update(
             value=default_ui_state.provider_settings.openrouter_api_key,
@@ -1708,6 +1738,7 @@ def handle_provider_change(
     provider: str,
     ocr_method: str = "LLM",
     use_custom_sampling: bool = True,
+    opencode_tier: Optional[str] = None,
 ):
     """Handles changes in the provider selector."""
     from core.caching import get_cache
@@ -1715,7 +1746,63 @@ def handle_provider_change(
     cache = get_cache()
     cache.clear_translation_cache()
     cache.clear_manga_ocr_cache()
-    return utils.update_translation_ui(provider, ocr_method, use_custom_sampling)
+    return utils.update_translation_ui(
+        provider, ocr_method, use_custom_sampling, opencode_tier
+    )
+
+
+def handle_opencode_tier_change(
+    opencode_tier: str,
+    current_model: Optional[str],
+    current_temp: float,
+    use_custom_sampling: bool = True,
+    ocr_method: str = "LLM",
+):
+    """Handles switching between OpenCode Zen and OpenCode Go endpoint tiers."""
+    from core.caching import get_cache
+
+    cache = get_cache()
+    cache.clear_translation_cache()
+    cache.clear_manga_ocr_cache()
+
+    is_go = "go" in (opencode_tier or "").lower()
+    tier_key = "go" if is_go else "zen"
+
+    saved_settings = settings_manager.get_saved_settings()
+    provider_models_dict = saved_settings.get(
+        "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+    )
+
+    cached_models = utils.OPENCODE_MODEL_CACHE.get(tier_key) or []
+    if ocr_method == "LLM":
+        available_choices = [
+            m for m in cached_models if is_opencode_multimodal_model(m)
+        ]
+    else:
+        available_choices = list(cached_models)
+
+    remembered_model = provider_models_dict.get("OpenCode")
+    selected_model = (
+        remembered_model
+        if remembered_model in available_choices
+        else (
+            available_choices[0]
+            if available_choices
+            else (remembered_model or current_model)
+        )
+    )
+
+    model_update = gr.update(
+        choices=available_choices
+        if available_choices
+        else ([selected_model] if selected_model else []),
+        value=selected_model,
+    )
+    param_updates = utils.update_params_for_model(
+        "OpenCode", selected_model, current_temp, use_custom_sampling
+    )
+
+    return (model_update, *param_updates)
 
 
 def handle_output_format_change(output_format_value: str):
@@ -1802,9 +1889,23 @@ def handle_use_custom_sampling_change(
     return updates[0], updates[1], updates[2]
 
 
-def handle_app_load(provider: str, url: str, key: Optional[str]):
+def handle_app_load(
+    provider: str,
+    url: str,
+    key: Optional[str],
+    opencode_tier: Optional[str] = None,
+    opencode_key: Optional[str] = None,
+    ocr_method: str = "LLM",
+):
     """Callback for the app.load event to fetch dynamic models."""
-    return utils.initial_dynamic_fetch(provider, url, key)
+    return utils.initial_dynamic_fetch(
+        provider,
+        url,
+        key,
+        opencode_tier=opencode_tier,
+        opencode_key=opencode_key,
+        ocr_method=ocr_method,
+    )
 
 
 def update_process_buttons(
@@ -1948,6 +2049,8 @@ def handle_ocr_method_change(
     current_model: Optional[str],
     openai_compatible_url: str,
     openai_compatible_api_key: Optional[str],
+    opencode_tier: Optional[str] = None,
+    opencode_api_key: Optional[str] = None,
 ):
     """Handles changes in OCR method selection."""
     import gradio as gr
@@ -2085,6 +2188,17 @@ def handle_ocr_method_change(
                 else (models[0] if models else None)
             )
             updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "OpenCode":
+            saved_settings = settings_manager.get_saved_settings()
+            tier = opencode_tier or saved_settings.get("opencode_tier") or "zen"
+            key = opencode_api_key or saved_settings.get("opencode_api_key") or ""
+            model_update = utils.fetch_and_update_opencode_models(
+                tier=tier,
+                api_key=key,
+                current_model=current_model,
+                ocr_method=ocr_method,
+            )
+            updates.append(model_update)
         else:
             updates.append(gr.update())
     elif ocr_method == "paddleocr-vl-1.6":
@@ -2203,6 +2317,17 @@ def handle_ocr_method_change(
                 else (models[0] if models else None)
             )
             updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "OpenCode":
+            saved_settings = settings_manager.get_saved_settings()
+            tier = opencode_tier or saved_settings.get("opencode_tier") or "zen"
+            key = opencode_api_key or saved_settings.get("opencode_api_key") or ""
+            model_update = utils.fetch_and_update_opencode_models(
+                tier=tier,
+                api_key=key,
+                current_model=current_model,
+                ocr_method=ocr_method,
+            )
+            updates.append(model_update)
         else:
             updates.append(gr.update())
     else:
@@ -2343,6 +2468,17 @@ def handle_ocr_method_change(
                 else (models[0] if models else None)
             )
             updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "OpenCode":
+            saved_settings = settings_manager.get_saved_settings()
+            tier = opencode_tier or saved_settings.get("opencode_tier") or "zen"
+            key = opencode_api_key or saved_settings.get("opencode_api_key") or ""
+            model_update = utils.fetch_and_update_opencode_models(
+                tier=tier,
+                api_key=key,
+                current_model=current_model,
+                ocr_method=ocr_method,
+            )
+            updates.append(model_update)
         else:
             updates.append(gr.update())
 

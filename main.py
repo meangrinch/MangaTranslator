@@ -103,6 +103,7 @@ def main():
             "Moonshot AI",
             "Xiaomi MiMo",
             "QwenCloud",
+            "OpenCode",
             "OpenRouter",
             "OpenAI-Compatible",
         ],
@@ -185,6 +186,19 @@ def main():
             "QwenCloud API key (starts with sk-...); "
             "overrides QWENCLOUD_API_KEY or QWEN_API_KEY env var if --provider is QwenCloud"
         ),
+    )
+    parser.add_argument(
+        "--opencode-api-key",
+        type=str,
+        default=None,
+        help="OpenCode API key (overrides OPENCODE_API_KEY env var if --provider is OpenCode)",
+    )
+    parser.add_argument(
+        "--opencode-tier",
+        type=str,
+        default="zen",
+        choices=["zen", "go", "OpenCode Zen", "OpenCode Go"],
+        help="OpenCode endpoint tier ('zen' or 'go', default: 'zen')",
     )
     parser.add_argument(
         "--openrouter-api-key",
@@ -1065,6 +1079,16 @@ def main():
         api_key_arg_name = "--qwencloud-api-key"
         api_key_env_var = "QWENCLOUD_API_KEY or QWEN_API_KEY"
         default_model = "qwen3.8-max"
+    elif provider == "OpenCode":
+        api_key = (
+            args.opencode_api_key
+            or os.environ.get("OPENCODE_API_KEY")
+            or os.environ.get("OPENCODE_ZEN_API_KEY")
+            or os.environ.get("OPENCODE_GO_API_KEY")
+        )
+        api_key_arg_name = "--opencode-api-key"
+        api_key_env_var = "OPENCODE_API_KEY"
+        default_model = "gpt-5.6-luna"
     elif provider == "OpenRouter":
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
@@ -1207,6 +1231,16 @@ def main():
                     or os.environ.get("QWEN_API_KEY", "")
                 )
             ),
+            opencode_api_key=(
+                api_key
+                if provider == "OpenCode"
+                else (
+                    os.environ.get("OPENCODE_API_KEY")
+                    or os.environ.get("OPENCODE_ZEN_API_KEY")
+                    or os.environ.get("OPENCODE_GO_API_KEY", "")
+                )
+            ),
+            opencode_tier=getattr(args, "opencode_tier", "zen"),
             openrouter_api_key=(
                 api_key
                 if provider == "OpenRouter"

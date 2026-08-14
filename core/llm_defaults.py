@@ -18,6 +18,7 @@ _PROVIDER_SAMPLING_DEFAULTS: Dict[str, Dict[str, float | int]] = {
     "Moonshot AI": {"temperature": 0.1, "top_p": 1.0, "top_k": 0},
     "Xiaomi MiMo": {"temperature": 0.1, "top_p": 1.0, "top_k": 0},
     "QwenCloud": {"temperature": 0.1, "top_p": 0.95, "top_k": 0},
+    "OpenCode": {"temperature": 0.1, "top_p": 0.95, "top_k": 0},
     "OpenRouter": {"temperature": 0.1, "top_p": 0.95, "top_k": 64},
     "OpenAI-Compatible": {"temperature": 0.1, "top_p": 0.95, "top_k": 40},
 }

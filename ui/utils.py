@@ -1,7 +1,7 @@
 import os
 import re
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import gradio as gr
 import requests
@@ -44,6 +44,7 @@ from utils.model_metadata import (
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
     is_openai_reasoning_model,
+    is_opencode_multimodal_model,
     is_qwencloud_reasoning_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
@@ -77,6 +78,7 @@ SUCCESS_PREFIX = "✅ "
 # Global caches for API models (Session-based)
 OPENROUTER_MODEL_CACHE = {}
 COMPATIBLE_MODEL_CACHE = {"url": None, "models": None}
+OPENCODE_MODEL_CACHE: Dict[str, Any] = {"zen": None, "go": None}
 
 
 def get_available_font_packs(fonts_base_dir: Path) -> Tuple[List[str], Optional[str]]:
@@ -117,6 +119,7 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         "Xiaomi MiMo": "MIMO_API_KEY",
         "Z.ai": "ZAI_API_KEY",
         "QwenCloud": "QWENCLOUD_API_KEY or QWEN_API_KEY",
+        "OpenCode": "OPENCODE_API_KEY, OPENCODE_ZEN_API_KEY, or OPENCODE_GO_API_KEY",
         "OpenAI-Compatible": "OPENAI_COMPATIBLE_API_KEY",
     }
     env_var_name = env_var_map.get(provider)
@@ -138,6 +141,12 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         elif provider == "QwenCloud":
             api_key = os.environ.get("QWENCLOUD_API_KEY") or os.environ.get(
                 "QWEN_API_KEY", ""
+            )
+        elif provider == "OpenCode":
+            api_key = (
+                os.environ.get("OPENCODE_API_KEY")
+                or os.environ.get("OPENCODE_ZEN_API_KEY")
+                or os.environ.get("OPENCODE_GO_API_KEY", "")
             )
         elif env_var_name:
             api_key = os.environ.get(env_var_name, "")
@@ -188,6 +197,19 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         return (
             False,
             "Invalid Meta Model key format (should start with 'LLM|')",
+        )
+    if provider == "OpenCode" and not (
+        (
+            api_key.startswith("sk-")
+            or api_key.startswith("opencode-")
+            or api_key.startswith("zen-")
+            or api_key.startswith("go-")
+        )
+        and len(api_key) >= 10
+    ):
+        return (
+            False,
+            "Invalid OpenCode API key format (should start with 'sk-', 'opencode-', 'zen-', or 'go-')",
         )
     # No specific format check for Z.ai or OpenAI-Compatible keys
 
@@ -292,7 +314,10 @@ def update_font_dropdown(fonts_base_dir: Path):
 
 
 def refresh_models_and_fonts(fonts_base_dir: Path):
-    """Update font dropdown lists; YOLO is auto-detected so no model dropdown update."""
+    """Update font dropdown lists; also clears dynamic model caches."""
+    OPENROUTER_MODEL_CACHE.clear()
+    COMPATIBLE_MODEL_CACHE.update({"url": None, "models": None})
+    OPENCODE_MODEL_CACHE.update({"zen": None, "go": None})
     try:
         font_packs, _ = get_available_font_packs(fonts_base_dir)
         saved_settings = get_saved_settings()
@@ -365,6 +390,18 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return is_mimo_reasoning_model(model_name)
     elif provider == "QwenCloud":
         return is_qwencloud_reasoning_model(model_name)
+    elif provider == "OpenCode":
+        return (
+            is_deepseek_reasoning_model(model_name)
+            or is_qwencloud_reasoning_model(model_name)
+            or is_zai_reasoning_model(model_name)
+            or is_openai_reasoning_model(model_name)
+            or is_moonshot_reasoning_model(model_name)
+            or is_mimo_reasoning_model(model_name)
+            or is_xai_reasoning_model(model_name)
+            or is_meta_reasoning_model(model_name)
+            or is_anthropic_reasoning_model(model_name)
+        )
     elif provider == "Meta Model":
         return is_meta_reasoning_model(model_name)
     elif provider == "OpenRouter":
@@ -432,6 +469,10 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
         ),
         "QwenCloud": (
             "Use QwenCloud's web search tool for up-to-date information. "
+            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
+        ),
+        "OpenCode": (
+            "Use model's built-in web search tool for up-to-date information if supported. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "OpenRouter": (
@@ -535,6 +576,8 @@ def get_reasoning_effort_info_text(
             return "Controls model's internal reasoning effort."
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
     elif provider == "Meta Model":
+        return "Controls model's internal reasoning effort."
+    elif provider == "OpenCode":
         return "Controls model's internal reasoning effort."
     elif provider == "DeepSeek":
         return "Controls model's internal reasoning effort."
@@ -728,6 +771,35 @@ def get_reasoning_effort_config(
             return True, ["xhigh", "high", "medium", "low", "minimal"], "high"
         return False, [], None
 
+    elif provider == "OpenCode":
+        if not model_name:
+            return False, [], None
+        if is_deepseek_reasoning_model(model_name):
+            return True, ["max", "high", "low", "none"], "high"
+        if supports_qwencloud_reasoning_effort(model_name):
+            return True, ["xhigh", "medium", "low", "none"], "xhigh"
+        if is_qwencloud_reasoning_model(model_name):
+            return True, ["auto", "none"], "auto"
+        if supports_zai_reasoning_effort(model_name):
+            return True, ["max", "high", "none"], "high"
+        if is_zai_reasoning_model(model_name):
+            return True, ["auto", "none"], "auto"
+        if supports_moonshot_reasoning_effort(model_name):
+            return True, ["max", "high", "low"], "high"
+        if is_moonshot_reasoning_model(model_name):
+            return True, ["auto", "none"], "auto"
+        if is_mimo_reasoning_model(model_name):
+            return True, ["auto", "none"], "auto"
+        if is_openai_reasoning_model(model_name):
+            return True, ["high", "medium", "low", "none"], "high"
+        if is_xai_reasoning_model(model_name):
+            return True, ["high", "medium", "low", "none"], "high"
+        if supports_meta_reasoning_effort(model_name):
+            return True, ["xhigh", "high", "medium", "low", "minimal"], "high"
+        if is_anthropic_reasoning_model(model_name):
+            return anthropic_reasoning_effort_config(model_name)
+        return False, [], None
+
     elif provider == "OpenRouter":
         lm = model_name.lower()
         if is_google_model_family(model_name):
@@ -881,6 +953,7 @@ def get_sampling_slider_interactivity(
         "Moonshot AI",
         "Xiaomi MiMo",
         "QwenCloud",
+        "OpenCode",
     ):
         top_k_interactive = False
     elif provider in ("OpenRouter", "OpenAI-Compatible"):
@@ -971,19 +1044,21 @@ def update_translation_ui(
     provider: str,
     ocr_method: str = "LLM",
     use_custom_sampling: bool = True,
+    opencode_tier: Optional[str] = None,
 ):
     """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity.
 
     Args:
         provider: The selected translation provider
         ocr_method: OCR method ("LLM", "manga-ocr", or "paddleocr-vl-1.6"). Used to filter vision-only models.
+        use_custom_sampling: Whether custom sampling controls are enabled.
+        opencode_tier: OpenCode tier selection ("zen" or "go").
     """
     saved_settings = get_saved_settings()
     provider_models_dict = saved_settings.get(
         "provider_models", DEFAULT_SETTINGS["provider_models"]
     )
     remembered_model = provider_models_dict.get(provider)
-
     models = PROVIDER_MODELS.get(provider, [])
 
     if provider == "Z.ai" and ocr_method == "LLM":
@@ -996,7 +1071,6 @@ def update_translation_ui(
         if remembered_model in models
         else (models[0] if models else None)
     )
-    model_update = gr.update(choices=models, value=selected_model)
 
     google_visible_update = gr.update(visible=(provider == "Google"))
     openai_visible_update = gr.update(visible=(provider == "OpenAI"))
@@ -1008,6 +1082,8 @@ def update_translation_ui(
     moonshot_visible_update = gr.update(visible=(provider == "Moonshot AI"))
     mimo_visible_update = gr.update(visible=(provider == "Xiaomi MiMo"))
     qwencloud_visible_update = gr.update(visible=(provider == "QwenCloud"))
+    opencode_visible_update = gr.update(visible=(provider == "OpenCode"))
+    opencode_tier_visible_update = gr.update(visible=(provider == "OpenCode"))
     openrouter_visible_update = gr.update(visible=(provider == "OpenRouter"))
     openai_compatible_url_visible_update = gr.update(
         visible=(provider == "OpenAI-Compatible")
@@ -1015,11 +1091,32 @@ def update_translation_ui(
     openai_compatible_key_visible_update = gr.update(
         visible=(provider == "OpenAI-Compatible")
     )
-    if provider == "OpenRouter" or provider == "OpenAI-Compatible":
-        model_update = gr.update(
-            value=remembered_model,
-            choices=[remembered_model] if remembered_model else [],
+    if provider in ("OpenRouter", "OpenAI-Compatible", "OpenCode"):
+        cached_models = (
+            OPENCODE_MODEL_CACHE.get(
+                "go" if "go" in (opencode_tier or "").lower() else "zen"
+            )
+            if provider == "OpenCode"
+            else None
         )
+        if cached_models:
+            if ocr_method == "LLM":
+                available_choices = [
+                    m for m in cached_models if is_opencode_multimodal_model(m)
+                ]
+            else:
+                available_choices = list(cached_models)
+            selected_model = (
+                remembered_model
+                if remembered_model in available_choices
+                else (available_choices[0] if available_choices else None)
+            )
+            model_update = gr.update(choices=available_choices, value=selected_model)
+        else:
+            model_update = gr.update(
+                value=remembered_model,
+                choices=[remembered_model] if remembered_model else [],
+            )
     else:
         model_update = gr.update(choices=models, value=selected_model)
 
@@ -1184,6 +1281,8 @@ def update_translation_ui(
         moonshot_visible_update,
         mimo_visible_update,
         qwencloud_visible_update,
+        opencode_visible_update,
+        opencode_tier_visible_update,
         openrouter_visible_update,
         openai_compatible_url_visible_update,
         openai_compatible_key_visible_update,
@@ -1617,12 +1716,113 @@ def fetch_and_update_compatible_models(
         return gr.update(choices=[], value=None)
 
 
-def initial_dynamic_fetch(provider: str, url: str, key: Optional[str]):
+def fetch_and_update_opencode_models(
+    tier: str = "zen",
+    api_key: Optional[str] = None,
+    current_model: Optional[str] = None,
+    force_refresh: bool = False,
+    ocr_method: str = "LLM",
+):
+    """Fetches models dynamically from the OpenCode Zen or Go endpoint.
+
+    Args:
+        tier: "OpenCode Zen" / "zen" or "OpenCode Go" / "go".
+        api_key: Optional OpenCode API key.
+        current_model: Currently selected model to preserve if present.
+        force_refresh: If True, bypass cache and re-query endpoint.
+        ocr_method: OCR method ("LLM" for vision-capable models, "manga-ocr"/"paddleocr-vl-1.6" for all models).
+    """
+    verbose = get_saved_settings().get("verbose", False)
+    is_go = "go" in (tier or "").lower()
+    tier_key = "go" if is_go else "zen"
+    url = (
+        "https://opencode.ai/zen/go/v1/models"
+        if is_go
+        else "https://opencode.ai/zen/v1/models"
+    )
+
+    cached = OPENCODE_MODEL_CACHE.get(tier_key)
+    if not force_refresh and cached is not None:
+        log_message(f"Using cached OpenCode ({tier_key}) models", verbose=verbose)
+        models = cached
+    else:
+        resolved_api_key = (
+            api_key
+            or os.environ.get("OPENCODE_API_KEY")
+            or os.environ.get("OPENCODE_ZEN_API_KEY")
+            or os.environ.get("OPENCODE_GO_API_KEY", "")
+        )
+        if not resolved_api_key:
+            return gr.update(choices=[], value=None)
+
+        log_message(
+            f"Fetching OpenCode ({tier_key}) models from {url}...", verbose=verbose
+        )
+        try:
+            headers = {"Authorization": f"Bearer {resolved_api_key}"}
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            raw_list = data.get("data", []) if isinstance(data, dict) else data
+            fetched_ids = []
+            if isinstance(raw_list, list):
+                for item in raw_list:
+                    if isinstance(item, dict) and "id" in item:
+                        fetched_ids.append(item["id"])
+                    elif isinstance(item, str):
+                        fetched_ids.append(item)
+
+            fetched_ids.sort()
+            OPENCODE_MODEL_CACHE[tier_key] = fetched_ids
+            models = fetched_ids
+            log_message(
+                f"Fetched {len(models)} OpenCode ({tier_key}) models",
+                verbose=verbose,
+            )
+        except Exception as e:
+            gr.Warning(f"Error fetching OpenCode models from {url}: {e}")
+            return gr.update(choices=[], value=None)
+
+    if ocr_method == "LLM":
+        filtered_models = [m for m in models if is_opencode_multimodal_model(m)]
+    else:
+        filtered_models = list(models)
+
+    saved_settings = get_saved_settings()
+    provider_models_dict = saved_settings.get(
+        "provider_models", DEFAULT_SETTINGS["provider_models"]
+    )
+    remembered_model = provider_models_dict.get("OpenCode")
+
+    preferred_model = current_model if current_model in filtered_models else None
+    if preferred_model is None and remembered_model in filtered_models:
+        preferred_model = remembered_model
+
+    selected_model = preferred_model or (
+        filtered_models[0] if filtered_models else None
+    )
+    return gr.update(choices=filtered_models, value=selected_model)
+
+
+def initial_dynamic_fetch(
+    provider: str,
+    url: str,
+    key: Optional[str],
+    opencode_tier: Optional[str] = None,
+    opencode_key: Optional[str] = None,
+    ocr_method: str = "LLM",
+):
     """Handle initial model fetching for dynamic providers on app load."""
     if provider == "OpenRouter":
-        return fetch_and_update_openrouter_models()
+        return fetch_and_update_openrouter_models(ocr_method=ocr_method)
     elif provider == "OpenAI-Compatible":
         return fetch_and_update_compatible_models(url, key)
+    elif provider == "OpenCode":
+        return fetch_and_update_opencode_models(
+            tier=opencode_tier or "zen",
+            api_key=opencode_key,
+            ocr_method=ocr_method,
+        )
     return gr.update()
 
 

@@ -50,6 +50,8 @@ class TranslationConfig:
     moonshot_api_key: str = ""
     mimo_api_key: str = ""
     qwencloud_api_key: str = ""
+    opencode_api_key: str = ""
+    opencode_tier: str = "zen"
     openrouter_api_key: str = ""
     openai_compatible_url: str = "http://localhost:8080/v1"
     openai_compatible_api_key: Optional[str] = ""
@@ -241,6 +243,12 @@ class MangaTranslatorConfig:
             self.translation.qwencloud_api_key = os.environ.get(
                 "QWENCLOUD_API_KEY"
             ) or os.environ.get("QWEN_API_KEY", "")
+        if not self.translation.opencode_api_key:
+            self.translation.opencode_api_key = (
+                os.environ.get("OPENCODE_API_KEY")
+                or os.environ.get("OPENCODE_ZEN_API_KEY")
+                or os.environ.get("OPENCODE_GO_API_KEY", "")
+            )
         if not self.translation.openrouter_api_key:
             self.translation.openrouter_api_key = os.environ.get(
                 "OPENROUTER_API_KEY", ""

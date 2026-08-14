@@ -442,6 +442,40 @@ def is_mimo_multimodal_model(model_name: Optional[str]) -> bool:
     return model_name.lower() == "mimo-v2.5"
 
 
+def is_opencode_multimodal_model(model_name: Optional[str]) -> bool:
+    """Check if an OpenCode model is multimodal/vision-capable for LLM OCR mode."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    base_name = lm.split("/")[-1]
+
+    if (
+        "-code" in base_name
+        or "code-" in base_name
+        or "coder" in base_name
+        or "starcoder" in base_name
+        or "codegeex" in base_name
+        or "embed" in base_name
+        or is_deepseek_reasoning_model(model_name)
+    ):
+        return False
+
+    return (
+        is_openai_model_family(model_name)
+        or is_google_model_family(model_name)
+        or is_anthropic_model_family(model_name)
+        or is_mimo_multimodal_model(model_name)
+        or is_moonshot_k3_model(model_name)
+        or is_meta_reasoning_model(model_name)
+        or "grok" in lm
+        or "vl" in lm
+        or "-v" in lm
+        or "vision" in lm
+        or "multimodal" in lm
+        or "omni" in lm
+    )
+
+
 def is_mimo_reasoning_model(model_name: Optional[str]) -> bool:
     """Check if a MiMo model is reasoning-capable (hybrid thinking)."""
     if not model_name:

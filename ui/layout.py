@@ -266,7 +266,11 @@ def create_layout(
         )
         initial_model_name = saved_settings.get("model_name")
 
-        if initial_provider == "OpenRouter" or initial_provider == "OpenAI-Compatible":
+        if (
+            initial_provider == "OpenRouter"
+            or initial_provider == "OpenAI-Compatible"
+            or initial_provider == "OpenCode"
+        ):
             initial_models_choices = [initial_model_name] if initial_model_name else []
         else:
             initial_models_choices = settings_manager.PROVIDER_MODELS.get(
@@ -865,6 +869,31 @@ def create_layout(
                                 visible=(config_initial_provider == "QwenCloud"),
                                 elem_id="qwencloud_api_key",
                                 info="Stored locally. Or set via QWENCLOUD_API_KEY / QWEN_API_KEY env var.",
+                            )
+                            opencode_api_key = gr.Textbox(
+                                label="OpenCode API Key",
+                                placeholder="Enter OpenCode API key (e.g. sk-..., opencode-...)",
+                                type="password",
+                                value=saved_settings.get("opencode_api_key", ""),
+                                show_copy_button=False,
+                                visible=(config_initial_provider == "OpenCode"),
+                                elem_id="opencode_api_key",
+                                info="Stored locally. Or set via OPENCODE_API_KEY env var.",
+                            )
+                            opencode_tier = gr.Radio(
+                                label="Endpoint Tier",
+                                choices=["OpenCode Zen", "OpenCode Go"],
+                                value=(
+                                    "OpenCode Go"
+                                    if (
+                                        saved_settings.get("opencode_tier") or ""
+                                    ).lower()
+                                    == "go"
+                                    else "OpenCode Zen"
+                                ),
+                                visible=(config_initial_provider == "OpenCode"),
+                                elem_id="opencode_tier",
+                                info="OpenCode Zen (pay-per-use / free models) or OpenCode Go (subscription models).",
                             )
                             openrouter_api_key = gr.Textbox(
                                 label="OpenRouter API Key",
@@ -2289,6 +2318,8 @@ def create_layout(
             moonshot_api_key,
             mimo_api_key,
             qwencloud_api_key,
+            opencode_api_key,
+            opencode_tier,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2423,6 +2454,8 @@ def create_layout(
             moonshot_api_key,
             mimo_api_key,
             qwencloud_api_key,
+            opencode_api_key,
+            opencode_tier,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2558,6 +2591,8 @@ def create_layout(
             moonshot_api_key,
             mimo_api_key,
             qwencloud_api_key,
+            opencode_api_key,
+            opencode_tier,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2694,6 +2729,8 @@ def create_layout(
             moonshot_api_key,
             mimo_api_key,
             qwencloud_api_key,
+            opencode_api_key,
+            opencode_tier,
             openrouter_api_key,
             openai_compatible_url_input,
             openai_compatible_api_key_input,
@@ -2879,6 +2916,7 @@ def create_layout(
                 provider_selector,
                 ocr_method_radio,
                 use_custom_sampling_checkbox,
+                opencode_tier,
             ],
             outputs=[
                 google_api_key,
@@ -2891,6 +2929,8 @@ def create_layout(
                 moonshot_api_key,
                 mimo_api_key,
                 qwencloud_api_key,
+                opencode_api_key,
+                opencode_tier,
                 openrouter_api_key,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,
@@ -2912,23 +2952,75 @@ def create_layout(
             ],
             queue=False,
         ).then(  # Trigger model fetch *after* provider change updates visibility etc.
-            fn=lambda prov, url, key, ocr_method: (
-                utils.fetch_and_update_compatible_models(url, key, force_refresh=True)
+            fn=lambda prov, url, comp_key, opencode_tier_val, opencode_key, ocr_method: (
+                utils.fetch_and_update_compatible_models(
+                    url, comp_key, force_refresh=True
+                )
                 if prov == "OpenAI-Compatible"
                 else (
                     utils.fetch_and_update_openrouter_models(ocr_method=ocr_method)
                     if prov == "OpenRouter"
-                    else gr.update()
+                    else (
+                        utils.fetch_and_update_opencode_models(
+                            tier=opencode_tier_val,
+                            api_key=opencode_key,
+                            force_refresh=True,
+                            ocr_method=ocr_method,
+                        )
+                        if prov == "OpenCode"
+                        else gr.update()
+                    )
                 )
             ),
             inputs=[
                 provider_selector,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,
+                opencode_tier,
+                opencode_api_key,
                 ocr_method_radio,
             ],
             outputs=[config_model_name],
             queue=True,  # Allow fetching to happen in the background
+        )
+
+        opencode_tier.change(
+            fn=callbacks.handle_opencode_tier_change,
+            inputs=[
+                opencode_tier,
+                config_model_name,
+                temperature,
+                use_custom_sampling_checkbox,
+                ocr_method_radio,
+            ],
+            outputs=[
+                config_model_name,
+                temperature,
+                top_p,
+                top_k,
+                max_tokens,
+                use_custom_sampling_checkbox,
+                enable_web_search_checkbox,
+                enable_code_execution_checkbox,
+                image_detail_dropdown,
+                media_resolution_dropdown,
+                media_resolution_bubbles_dropdown,
+                media_resolution_context_dropdown,
+                reasoning_effort_dropdown,
+                effort_dropdown,
+                verbosity_dropdown,
+            ],
+            queue=False,
+        ).then(
+            fn=lambda tier_val, key, ocr_method: utils.fetch_and_update_opencode_models(
+                tier=tier_val,
+                api_key=key,
+                force_refresh=True,
+                ocr_method=ocr_method,
+            ),
+            inputs=[opencode_tier, opencode_api_key, ocr_method_radio],
+            outputs=[config_model_name],
+            queue=True,
         )
 
         # Keep provider_state in sync with provider_selector for manual changes
@@ -3401,6 +3493,8 @@ def create_layout(
                 config_model_name,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,
+                opencode_tier,
+                opencode_api_key,
             ],
             outputs=[
                 provider_selector,
@@ -3620,6 +3714,9 @@ def create_layout(
                 provider_selector,
                 openai_compatible_url_input,
                 openai_compatible_api_key_input,
+                opencode_tier,
+                opencode_api_key,
+                ocr_method_radio,
             ],
             outputs=[config_model_name],
             queue=False,

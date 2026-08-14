@@ -108,6 +108,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "qwen3.7-plus",
         "qwen3.7-flash",
     ],
+    "OpenCode": [],
     "OpenRouter": [],
     "OpenAI-Compatible": [],
 }
@@ -127,6 +128,8 @@ DEFAULT_SETTINGS = {
     "moonshot_api_key": "",
     "mimo_api_key": "",
     "qwencloud_api_key": "",
+    "opencode_api_key": "",
+    "opencode_tier": "zen",
     "openrouter_api_key": "",
     "openai_compatible_url": "http://localhost:8080/v1",
     "openai_compatible_api_key": "",
@@ -164,6 +167,7 @@ DEFAULT_SETTINGS = {
         "QwenCloud": (
             PROVIDER_MODELS["QwenCloud"][0] if PROVIDER_MODELS["QwenCloud"] else None
         ),
+        "OpenCode": None,
         "OpenRouter": None,
         "OpenAI-Compatible": None,
     },
@@ -311,6 +315,9 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
     "zai_api_key",
     "moonshot_api_key",
     "mimo_api_key",
+    "qwencloud_api_key",
+    "opencode_api_key",
+    "opencode_tier",
     "openrouter_api_key",
     "openai_compatible_url",
     "openai_compatible_api_key",
@@ -609,6 +616,7 @@ def get_saved_settings() -> Dict[str, Any]:
             if (
                 loaded_provider == "OpenRouter"
                 or loaded_provider == "OpenAI-Compatible"
+                or loaded_provider == "OpenCode"
             ):
                 settings["model_name"] = saved_model_for_provider
             else:
@@ -688,10 +696,14 @@ def reset_to_defaults() -> Dict[str, Any]:
             "openai_api_key",
             "anthropic_api_key",
             "xai_api_key",
+            "meta_api_key",
             "deepseek_api_key",
             "zai_api_key",
             "moonshot_api_key",
             "mimo_api_key",
+            "qwencloud_api_key",
+            "opencode_api_key",
+            "opencode_tier",
             "openrouter_api_key",
             "openai_compatible_api_key",
             "outside_text_huggingface_token",

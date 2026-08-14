@@ -59,6 +59,8 @@ class UITranslationProviderSettings:
     moonshot_api_key: Optional[str] = ""
     mimo_api_key: Optional[str] = ""
     qwencloud_api_key: Optional[str] = ""
+    opencode_api_key: Optional[str] = ""
+    opencode_tier: str = "zen"
     openrouter_api_key: Optional[str] = ""
     openai_compatible_url: str = "http://localhost:8080/v1"
     openai_compatible_api_key: Optional[str] = ""
@@ -265,6 +267,8 @@ class UIConfigState:
             "moonshot_api_key": self.provider_settings.moonshot_api_key,
             "mimo_api_key": self.provider_settings.mimo_api_key,
             "qwencloud_api_key": self.provider_settings.qwencloud_api_key,
+            "opencode_api_key": self.provider_settings.opencode_api_key,
+            "opencode_tier": self.provider_settings.opencode_tier,
             "openrouter_api_key": self.provider_settings.openrouter_api_key,
             "openai_compatible_url": self.provider_settings.openai_compatible_url,
             "openai_compatible_api_key": self.provider_settings.openai_compatible_api_key,
@@ -575,6 +579,12 @@ class UIConfigState:
                 qwencloud_api_key=data.get(
                     "qwencloud_api_key", defaults.get("qwencloud_api_key", "")
                 ),
+                opencode_api_key=data.get(
+                    "opencode_api_key", defaults.get("opencode_api_key", "")
+                ),
+                opencode_tier=data.get(
+                    "opencode_tier", defaults.get("opencode_tier", "zen")
+                ),
                 openrouter_api_key=data.get(
                     "openrouter_api_key", defaults["openrouter_api_key"]
                 ),
@@ -793,6 +803,8 @@ def map_ui_to_backend_config(
         moonshot_api_key=ui_state.provider_settings.moonshot_api_key or "",
         mimo_api_key=ui_state.provider_settings.mimo_api_key or "",
         qwencloud_api_key=ui_state.provider_settings.qwencloud_api_key or "",
+        opencode_api_key=ui_state.provider_settings.opencode_api_key or "",
+        opencode_tier=ui_state.provider_settings.opencode_tier,
         openrouter_api_key=ui_state.provider_settings.openrouter_api_key or "",
         openai_compatible_url=ui_state.provider_settings.openai_compatible_url,
         openai_compatible_api_key=ui_state.provider_settings.openai_compatible_api_key,

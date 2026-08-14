@@ -24,6 +24,7 @@ from utils.endpoints import (
     call_moonshot_endpoint,
     call_openai_compatible_endpoint,
     call_openai_endpoint,
+    call_opencode_endpoint,
     call_openrouter_endpoint,
     call_qwencloud_endpoint,
     call_xai_endpoint,
@@ -375,6 +376,18 @@ def _build_generation_config(
             is_reasoning = is_mimo_reasoning_model(model_name)
         elif provider == "QwenCloud":
             is_reasoning = is_qwencloud_reasoning_model(model_name)
+        elif provider == "OpenCode":
+            is_reasoning = (
+                is_deepseek_reasoning_model(model_name)
+                or is_qwencloud_reasoning_model(model_name)
+                or is_zai_reasoning_model(model_name)
+                or is_openai_reasoning_model(model_name)
+                or is_moonshot_reasoning_model(model_name)
+                or is_mimo_reasoning_model(model_name)
+                or is_xai_reasoning_model(model_name)
+                or is_meta_reasoning_model(model_name)
+                or is_anthropic_reasoning_model(model_name)
+            )
         max_tokens_value = 16384 if is_reasoning else 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, model_name)
@@ -676,6 +689,38 @@ def _build_generation_config(
                 "none",
             ) and supports_meta_reasoning_effort(model_name):
                 generation_config["reasoning_effort"] = reasoning_effort
+        return generation_config
+
+    elif provider == "OpenCode":
+        is_reasoning = (
+            is_deepseek_reasoning_model(model_name)
+            or is_qwencloud_reasoning_model(model_name)
+            or is_zai_reasoning_model(model_name)
+            or is_openai_reasoning_model(model_name)
+            or is_moonshot_reasoning_model(model_name)
+            or is_mimo_reasoning_model(model_name)
+            or is_xai_reasoning_model(model_name)
+            or is_meta_reasoning_model(model_name)
+            or is_anthropic_reasoning_model(model_name)
+        )
+
+        generation_config = {
+            "max_tokens": max_tokens_value,
+        }
+        if use_sampling:
+            generation_config.update(
+                {
+                    "temperature": temperature,
+                    "top_p": top_p,
+                }
+            )
+
+        if (
+            is_reasoning
+            and config.reasoning_effort
+            and config.reasoning_effort != "none"
+        ):
+            generation_config["reasoning_effort"] = config.reasoning_effort
         return generation_config
 
     elif provider == "OpenRouter":
@@ -1004,6 +1049,24 @@ def _call_llm_endpoint(
                 parts=api_parts,
                 generation_config=generation_config,
                 system_prompt=system_prompt,
+                debug=debug,
+                enable_web_search=config.enable_web_search,
+            )
+        elif provider == "OpenCode":
+            api_key = config.opencode_api_key
+            if not api_key:
+                raise TranslationError("OpenCode API key is missing.")
+            generation_config = _build_generation_config(
+                provider, model_name, config, debug
+            )
+            tier = getattr(config, "opencode_tier", "zen") or "zen"
+            return call_opencode_endpoint(
+                api_key=api_key,
+                model_name=model_name,
+                parts=api_parts,
+                generation_config=generation_config,
+                system_prompt=system_prompt,
+                tier=tier,
                 debug=debug,
                 enable_web_search=config.enable_web_search,
             )
