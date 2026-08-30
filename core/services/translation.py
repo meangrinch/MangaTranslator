@@ -581,13 +581,21 @@ def _build_generation_config(
                 }
             )
         if is_reasoning:
-            reasoning_effort = config.reasoning_effort or (
-                "high" if supports_zai_reasoning_effort(model_name) else "auto"
-            )
-            thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
-            generation_config["thinking"] = {"type": thinking_type}
-            if thinking_type == "enabled" and supports_zai_reasoning_effort(model_name):
+            lm = (model_name or "").lower()
+            if "glm-5.3" in lm:
+                reasoning_effort = config.reasoning_effort or "high"
+                generation_config["thinking"] = {"type": "enabled"}
                 generation_config["reasoning_effort"] = reasoning_effort
+            else:
+                reasoning_effort = config.reasoning_effort or (
+                    "high" if supports_zai_reasoning_effort(model_name) else "auto"
+                )
+                thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
+                generation_config["thinking"] = {"type": thinking_type}
+                if thinking_type == "enabled" and supports_zai_reasoning_effort(
+                    model_name
+                ):
+                    generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     elif provider == "Moonshot AI":

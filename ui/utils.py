@@ -24,6 +24,7 @@ from utils.model_metadata import (
     is_anthropic_reasoning_model,
     is_azure_url,
     is_deepseek_reasoning_model,
+    is_deepseek_vision_model,
     is_gemini_3_flash_model,
     is_gemini_3_model,
     is_gemini_25_flash_model,
@@ -48,6 +49,7 @@ from utils.model_metadata import (
     is_qwencloud_reasoning_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
+    is_zai_vision_model,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
     supports_meta_reasoning_effort,
@@ -63,13 +65,7 @@ from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_setti
 
 def get_available_providers(ocr_method: str) -> List[str]:
     """Get list of available providers based on OCR method."""
-    all_providers = list(PROVIDER_MODELS.keys())
-
-    if ocr_method in ("manga-ocr", "paddleocr-vl-1.6"):
-        return all_providers
-    else:
-        # For LLM OCR, exclude text-only providers (DeepSeek)
-        return [p for p in all_providers if p not in ("DeepSeek",)]
+    return list(PROVIDER_MODELS.keys())
 
 
 ERROR_PREFIX = "❌ Error: "
@@ -743,8 +739,10 @@ def get_reasoning_effort_config(
         is_reasoning = is_zai_reasoning_model(model_name)
         if not is_reasoning:
             return False, [], None
+        if "glm-5.3" in lm:
+            return True, ["max", "high", "low"], "high"
         if supports_zai_reasoning_effort(model_name):
-            return True, ["max", "high", "none"], "high"
+            return True, ["max", "high", "low", "none"], "high"
         return True, ["auto", "none"], "auto"
 
     elif provider == "Moonshot AI":
@@ -780,8 +778,10 @@ def get_reasoning_effort_config(
             return True, ["xhigh", "medium", "low", "none"], "xhigh"
         if is_qwencloud_reasoning_model(model_name):
             return True, ["auto", "none"], "auto"
+        if "glm-5.3" in lm:
+            return True, ["max", "high", "low"], "high"
         if supports_zai_reasoning_effort(model_name):
-            return True, ["max", "high", "none"], "high"
+            return True, ["max", "high", "low", "none"], "high"
         if is_zai_reasoning_model(model_name):
             return True, ["auto", "none"], "auto"
         if supports_moonshot_reasoning_effort(model_name):
@@ -1062,9 +1062,11 @@ def update_translation_ui(
     models = PROVIDER_MODELS.get(provider, [])
 
     if provider == "Z.ai" and ocr_method == "LLM":
-        models = [m for m in models if "v" in m]
+        models = [m for m in models if is_zai_vision_model(m)]
     elif provider == "Xiaomi MiMo" and ocr_method == "LLM":
         models = [m for m in models if m.lower() == "mimo-v2.5"]
+    elif provider == "DeepSeek" and ocr_method == "LLM":
+        models = [m for m in models if is_deepseek_vision_model(m)]
 
     selected_model = (
         remembered_model
@@ -1872,6 +1874,15 @@ def format_thinking_status(
                 thinking_status_str = " (no thinking)"
             else:
                 thinking_status_str = f" (thinking: {effort})"
+    elif provider == "DeepSeek" and is_deepseek_reasoning_model(model_name):
+        effort = reasoning_effort or "high"
+        if effort == "none":
+            thinking_status_str = " (no thinking)"
+        else:
+            thinking_status_str = f" (thinking: {effort})"
+    elif provider == "Z.ai" and "glm-5.3" in model_name.lower():
+        effort = reasoning_effort or "high"
+        thinking_status_str = f" (thinking: {effort})"
     elif provider == "Z.ai" and supports_zai_reasoning_effort(model_name):
         effort = reasoning_effort or "high"
         if effort == "none":

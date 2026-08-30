@@ -6,6 +6,7 @@ import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
+from utils.model_metadata import is_zai_vision_model
 
 
 def call_zai_endpoint(
@@ -64,8 +65,7 @@ def call_zai_endpoint(
         messages.append({"role": "system", "content": system_prompt})
 
     # Check if this is a vision model
-    model_lower = (model_name or "").lower()
-    is_vision_model = model_lower.endswith("v") or "v-" in model_lower
+    is_vision_model = is_zai_vision_model(model_name)
 
     if image_parts and is_vision_model:
         # Build multimodal content for vision models

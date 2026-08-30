@@ -78,15 +78,18 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "grok-4.20-multi-agent-0309",
     ],
     "Meta Model": [
-        "muse-spark-1.2",
         "muse-spark-1.2-contributor",
+        "muse-spark-1.2",
         "muse-spark-1.1",
     ],
     "DeepSeek": [
+        "deepseek-v4-flash-vision-exp",
         "deepseek-v4-pro",
         "deepseek-v4-flash",
     ],
     "Z.ai": [
+        "glm-5.3-flash",
+        "glm-5.3",
         "glm-5.2",
         "glm-5.1",
         "glm-5v-turbo",
@@ -103,6 +106,7 @@ PROVIDER_MODELS: Dict[str, List[str]] = {
         "mimo-v2.5",
     ],
     "QwenCloud": [
+        "qwen3.8-flash",
         "qwen3.8-max",
         "qwen3.7-max",
         "qwen3.7-plus",

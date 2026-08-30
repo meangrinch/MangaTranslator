@@ -19,8 +19,10 @@ from utils.model_metadata import (
     flux_sdcpp_text_encoder_quants,
     flux_sdcpp_valid_text_encoder_quant,
     is_anthropic_model_family,
+    is_deepseek_vision_model,
     is_openai_model_family,
     is_opencode_multimodal_model,
+    is_zai_vision_model,
 )
 from utils.path_list import read_image_paths_from_txt
 
@@ -2188,6 +2190,19 @@ def handle_ocr_method_change(
                 else (models[0] if models else None)
             )
             updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "DeepSeek":
+            models = settings_manager.PROVIDER_MODELS.get("DeepSeek", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("DeepSeek")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
         elif current_provider == "OpenCode":
             saved_settings = settings_manager.get_saved_settings()
             tier = opencode_tier or saved_settings.get("opencode_tier") or "zen"
@@ -2317,6 +2332,19 @@ def handle_ocr_method_change(
                 else (models[0] if models else None)
             )
             updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "DeepSeek":
+            models = settings_manager.PROVIDER_MODELS.get("DeepSeek", [])
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("DeepSeek")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
         elif current_provider == "OpenCode":
             saved_settings = settings_manager.get_saved_settings()
             tier = opencode_tier or saved_settings.get("opencode_tier") or "zen"
@@ -2399,7 +2427,9 @@ def handle_ocr_method_change(
         elif current_provider == "Z.ai":
             # For LLM OCR mode, only show Z.ai vision models
             models = [
-                m for m in settings_manager.PROVIDER_MODELS.get("Z.ai", []) if "v" in m
+                m
+                for m in settings_manager.PROVIDER_MODELS.get("Z.ai", [])
+                if is_zai_vision_model(m)
             ]
             saved_settings = settings_manager.get_saved_settings()
             provider_models_dict = saved_settings.get(
@@ -2462,6 +2492,23 @@ def handle_ocr_method_change(
                 "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
             )
             remembered_model = provider_models_dict.get("QwenCloud")
+            selected_model = (
+                remembered_model
+                if remembered_model in models
+                else (models[0] if models else None)
+            )
+            updates.append(gr.update(choices=models, value=selected_model))
+        elif current_provider == "DeepSeek":
+            models = [
+                m
+                for m in settings_manager.PROVIDER_MODELS.get("DeepSeek", [])
+                if is_deepseek_vision_model(m)
+            ]
+            saved_settings = settings_manager.get_saved_settings()
+            provider_models_dict = saved_settings.get(
+                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+            )
+            remembered_model = provider_models_dict.get("DeepSeek")
             selected_model = (
                 remembered_model
                 if remembered_model in models

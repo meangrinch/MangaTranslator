@@ -22,12 +22,12 @@ def call_deepseek_endpoint(
 ) -> Optional[str]:
     """
     Calls the DeepSeek Responses API endpoint with the provided data and handles retries.
-    DeepSeek Responses API format is text-only (no image support).
+    Supports text and multimodal images (e.g., deepseek-v4-flash-vision-exp).
 
     Args:
         api_key (str): DeepSeek API key.
-        model_name (str): DeepSeek model to use (e.g., deepseek-v4-flash, deepseek-v4-pro).
-        parts (List[Dict[str, Any]]): List of content parts (text only, images are ignored).
+        model_name (str): DeepSeek model to use (e.g., deepseek-v4-flash, deepseek-v4-flash-vision-exp, deepseek-v4-pro).
+        parts (List[Dict[str, Any]]): List of content parts (text and optional images).
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens/max_output_tokens,
             thinking, reasoning_effort).
         system_prompt (Optional[str]): System prompt for the conversation.
@@ -49,8 +49,9 @@ def call_deepseek_endpoint(
     if not api_key:
         raise ValidationError("API key is required for DeepSeek endpoint")
 
-    # DeepSeek is text-only, so we only extract text parts
     text_part = next((p for p in parts if "text" in p), None)
+    image_parts = [p for p in parts if "inline_data" in p]
+
     if not text_part:
         raise ValidationError(
             "Invalid 'parts' format for DeepSeek: No text prompt found."
@@ -62,8 +63,36 @@ def call_deepseek_endpoint(
         "Content-Type": "application/json",
     }
 
-    input_content = [{"type": "input_text", "text": text_part["text"]}]
-    input_messages = [{"role": "user", "content": input_content}]
+    if image_parts:
+        content_list = []
+        for part in image_parts:
+            if (
+                "inline_data" in part
+                and "data" in part["inline_data"]
+                and "mime_type" in part["inline_data"]
+            ):
+                mime_type = part["inline_data"]["mime_type"]
+                base64_image = part["inline_data"]["data"]
+                content_list.append(
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:{mime_type};base64,{base64_image}",
+                    }
+                )
+            else:
+                log_message(
+                    f"Invalid image part format for DeepSeek: {part}",
+                    always_print=True,
+                )
+        content_list.append({"type": "input_text", "text": text_part["text"]})
+        input_messages = [{"role": "user", "content": content_list}]
+    else:
+        input_messages = [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": text_part["text"]}],
+            }
+        ]
 
     max_output_tokens = generation_config.get(
         "max_output_tokens"

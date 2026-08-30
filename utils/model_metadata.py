@@ -361,7 +361,28 @@ def supports_zai_reasoning_effort(model_name: Optional[str]) -> bool:
     if not model_name:
         return False
     lm = model_name.lower()
-    return lm == "glm-5.2" or lm.startswith("glm-5.2-")
+    return (
+        lm == "glm-5.2"
+        or lm.startswith("glm-5.2-")
+        or lm == "glm-5.3"
+        or lm.startswith("glm-5.3-")
+    )
+
+
+def is_zai_vision_model(model_name: Optional[str]) -> bool:
+    """Check if a Z.ai model supports vision/multimodal input."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "glm-5.3-flash" in lm or lm.endswith("v") or "v-" in lm
+
+
+def is_deepseek_vision_model(model_name: Optional[str]) -> bool:
+    """Check if a DeepSeek model supports vision/multimodal input."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "deepseek" in lm and "vision" in lm
 
 
 def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
@@ -456,7 +477,10 @@ def is_opencode_multimodal_model(model_name: Optional[str]) -> bool:
         or "starcoder" in base_name
         or "codegeex" in base_name
         or "embed" in base_name
-        or is_deepseek_reasoning_model(model_name)
+        or (
+            is_deepseek_reasoning_model(model_name)
+            and not is_deepseek_vision_model(model_name)
+        )
     ):
         return False
 
@@ -467,6 +491,8 @@ def is_opencode_multimodal_model(model_name: Optional[str]) -> bool:
         or is_mimo_multimodal_model(model_name)
         or is_moonshot_k3_model(model_name)
         or is_meta_reasoning_model(model_name)
+        or is_deepseek_vision_model(model_name)
+        or is_zai_vision_model(model_name)
         or "grok" in lm
         or "vl" in lm
         or "-v" in lm
