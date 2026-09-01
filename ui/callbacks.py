@@ -549,8 +549,19 @@ def _format_single_success_message(
     msg_parts = [
         f"{SUCCESS_PREFIX}{processing_mode_str} completed!\n",
         f"• Image Size: {width}x{height} pixels\n",
-        f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n",
     ]
+
+    if (
+        getattr(backend_config, "preprocessing", None)
+        and backend_config.preprocessing.enabled
+    ):
+        msg_parts.append(
+            f"• Initial Image Upscaling: {backend_config.preprocessing.factor}x\n"
+        )
+
+    msg_parts.append(
+        f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n"
+    )
 
     if backend_config.outside_text.enabled:
         msg_parts.append(
@@ -559,18 +570,6 @@ def _format_single_success_message(
         if backend_config.outside_text.osb_font_dir:
             osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
             msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
-
-    if not backend_config.cleaning_only and not backend_config.upscaling_only:
-        msg_parts.append(
-            f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
-        )
-        previous_context_count = backend_config.translation.previous_context_image_count
-        if previous_context_count:
-            msg_parts.append(f"• Previous Context Images: {previous_context_count}\n")
-
-    msg_parts.append(
-        f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"
-    )
 
     msg_parts.extend(
         [
@@ -584,17 +583,21 @@ def _format_single_success_message(
     )
 
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
+        msg_parts.append(
+            f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
+        )
+        previous_context_count = backend_config.translation.previous_context_image_count
+        if previous_context_count:
+            msg_parts.append(f"• Previous Context Images: {previous_context_count}\n")
+
+    msg_parts.append(
+        f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"
+    )
+
+    if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(f"{llm_params_str}\n")
 
     msg_parts.append(f"• Font Pack: {font_dir_path.name}\n")
-
-    if (
-        getattr(backend_config, "preprocessing", None)
-        and backend_config.preprocessing.enabled
-    ):
-        msg_parts.append(
-            f"• Initial Image Upscaling: {backend_config.preprocessing.factor}x\n"
-        )
 
     if backend_config.output.upscale_final_image:
         msg_parts.append(
@@ -678,12 +681,6 @@ def _format_batch_success_message(
         param_notes = " (Top-K N/A)"
     llm_params_str += param_notes
 
-    if not backend_config.cleaning_only and not backend_config.upscaling_only:
-        llm_params_str = (
-            f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
-            + llm_params_str
-        )
-
     failure_details = ""
     if error_count > 0:
         failed_pages = results.get("errors", {})
@@ -715,8 +712,19 @@ def _format_batch_success_message(
 
     msg_parts = [
         f"{SUCCESS_PREFIX}Batch {processing_mode_str.lower()} completed!\n",
-        f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n",
     ]
+
+    if (
+        getattr(backend_config, "preprocessing", None)
+        and backend_config.preprocessing.enabled
+    ):
+        msg_parts.append(
+            f"• Initial Image Upscaling: {backend_config.preprocessing.factor}x\n"
+        )
+
+    msg_parts.append(
+        f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n"
+    )
 
     if backend_config.outside_text.enabled:
         msg_parts.append(
@@ -725,18 +733,6 @@ def _format_batch_success_message(
         if backend_config.outside_text.osb_font_dir:
             osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
             msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
-
-    if not backend_config.cleaning_only and not backend_config.upscaling_only:
-        msg_parts.append(
-            f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
-        )
-        previous_context_count = backend_config.translation.previous_context_image_count
-        if previous_context_count:
-            msg_parts.append(f"• Previous Context Images: {previous_context_count}\n")
-
-    msg_parts.append(
-        f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"
-    )
 
     msg_parts.extend(
         [
@@ -750,17 +746,21 @@ def _format_batch_success_message(
     )
 
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
+        msg_parts.append(
+            f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
+        )
+        previous_context_count = backend_config.translation.previous_context_image_count
+        if previous_context_count:
+            msg_parts.append(f"• Previous Context Images: {previous_context_count}\n")
+
+    msg_parts.append(
+        f"• Upscale Method: {backend_config.translation.upscale_method.title()}\n"
+    )
+
+    if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(f"{llm_params_str}\n")
 
     msg_parts.append(f"• Font Pack: {font_dir_path.name}\n")
-
-    if (
-        getattr(backend_config, "preprocessing", None)
-        and backend_config.preprocessing.enabled
-    ):
-        msg_parts.append(
-            f"• Initial Image Upscaling: {backend_config.preprocessing.factor}x\n"
-        )
 
     if backend_config.output.upscale_final_image:
         msg_parts.append(
