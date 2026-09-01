@@ -395,7 +395,7 @@ class OutsideTextDetector:
                     always_print=True,
                 )
                 osbtext_boxes = torch.tensor(
-                    text_free_boxes, device=self.device, dtype=torch.float32
+                    np.array(text_free_boxes), device=self.device, dtype=torch.float32
                 )
                 osbtext_confs = torch.ones(
                     len(text_free_boxes), device=self.device, dtype=torch.float32
@@ -454,7 +454,9 @@ class OutsideTextDetector:
                         always_print=True,
                     )
                     osbtext_boxes = torch.tensor(
-                        text_free_boxes, device=self.device, dtype=torch.float32
+                        np.array(text_free_boxes),
+                        device=self.device,
+                        dtype=torch.float32,
                     )
                     osbtext_confs = torch.ones(
                         len(text_free_boxes), device=self.device, dtype=torch.float32
