@@ -552,9 +552,13 @@ def _format_single_success_message(
         f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n",
     ]
 
-    if backend_config.outside_text.enabled and backend_config.outside_text.osb_font_dir:
-        osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
-        msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
+    if backend_config.outside_text.enabled:
+        msg_parts.append(
+            f"• Inpainting Method: {backend_config.outside_text.inpainting_method}\n"
+        )
+        if backend_config.outside_text.osb_font_dir:
+            osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
+            msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
 
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(
@@ -714,9 +718,13 @@ def _format_batch_success_message(
         f"• Outside Text Detection: {'Enabled' if backend_config.outside_text.enabled else 'Disabled'}\n",
     ]
 
-    if backend_config.outside_text.enabled and backend_config.outside_text.osb_font_dir:
-        osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
-        msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
+    if backend_config.outside_text.enabled:
+        msg_parts.append(
+            f"• Inpainting Method: {backend_config.outside_text.inpainting_method}\n"
+        )
+        if backend_config.outside_text.osb_font_dir:
+            osb_font_pack_name = Path(backend_config.outside_text.osb_font_dir).name
+            msg_parts.append(f"• OSB Font Pack: {osb_font_pack_name}\n")
 
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(
