@@ -33,9 +33,10 @@ AIを使用して漫画やコミックページの画像翻訳を自動化する
 - **検出**: 吹き出しの検出とセグメンテーション（YOLO、SAM 2.1/3）
 - **クリーニング**: 吹き出し内および吹き出し外（OSB）テキストのインペインティング（FLUX.2 Klein、FLUX.1 Kontext、またはOpenCV）
 - **翻訳**: LLMを活用したOCRと翻訳（60言語対応）
-- **レンダリング**: 位置合わせやカスタムフォントパックをサポートしたテキスト描画
-- **アップスケーリング**: 画質向上のための2x-AnimeSharpV4対応
+- **レンダリング**: 位置合わせやカスタムフォントパックをサポートしたカスタムテキスト描画エンジン
+- **アップスケーリング**: テキスト領域およびページ全体のイラストのアップスケーリング（2x-AnimeSharpV4）
 - **処理**: ディレクトリ構造を維持した、単一画像またはバッチ処理（ZIP対応）
+- **設定**: 多様なページレイアウトに対応し、出力品質を微調整するための柔軟な設定項目
 - **インターフェース**: Web UI（Gradio）およびCLI
 - **自動化**: ワンクリックで翻訳完了、手動操作は不要
 
@@ -56,27 +57,6 @@ AIを使用して漫画やコミックページの画像翻訳を自動化する
 
 - **Windows:** PythonとGitが同梱されているため、事前準備は不要です。
 - **Linux/macOS:** システムにPython 3.10以上およびGitがインストールされている必要があります。
-
-**セットアップ方法：**
-
-1. zipファイルを解凍します。
-2. プラットフォームに応じたセットアップスクリプトを実行します：
-   - **Windows:** `setup.bat` をダブルクリック
-   - **Linux/macOS:** ターミナルで `./setup.sh` を実行
-3. システム環境に合わせて、PyTorchが自動的に検出およびインストールされます。
-4. 生成されたランチャースクリプトを `./MangaTranslator/` フォルダ内から起動します：
-   - **Windows:** `start-webui.bat` を実行
-   - **Linux/macOS:** `start-webui.sh` を実行
-
-同梱フォントパック：
-
-- _Komika_（通常のセリフ用）
-- _Comicka_（通常/OSBテキスト用）
-- _Roboto_（アクセント記号対応）
-- _Noto Sans SC_（簡体字中国語）
-- _Noto Sans KR_（韓国語）
-- _Noto Sans JP_（日本語）
-- _Noto Sans Thai_（タイ語）
 
 > [!TIP]
 > 新しいポータブルパッケージにデータを移行する必要がある場合：
@@ -156,7 +136,7 @@ fonts/
 │  ├─ CCWildWords-Italic.otf
 │  ├─ CCWildWords-Bold.otf
 │  └─ CCWildWords-BoldItalic.otf
-└─ Komika/
+└─ Komika Hand/
    ├─ KOMIKA-HAND.ttf
    └─ KOMIKA-HANDBOLD.ttf
 ```
@@ -199,12 +179,11 @@ fonts/
 ### Web UI（Gradio）
 
 - **ポータブルパッケージ：**
-  - Windows：`MangaTranslator`フォルダ内の `start-webui.bat` をダブルクリック
-  - Linux/macOS：ターミナルで `MangaTranslator`フォルダ内の `./start-webui.sh` を実行
+  - `MangaTranslator/` ディレクトリ内で `start-webui.bat`（Windows）または `./start-webui.sh`（Linux/macOS）を実行
 - **手動インストール：**
-  - Windows/Linux/macOS：`python app.py --open-browser` を実行
+  - `python app.py --open-browser` を実行
 
-コマンドライン引数：`--models`（デフォルトは `./models`）、`--fonts`（デフォルトは `./fonts`）、`--port`（デフォルトは `7676`）、`--cpu`。
+起動オプションについては `python app.py --help` を実行してください。
 初回の起動には1〜2分かかる場合があります。
 
 起動後、ConfigタブでLLMプロバイダーを設定し、画像をアップロードして Translate をクリックします。
@@ -214,30 +193,22 @@ fonts/
 使用例：
 
 ```bash
-# 単一画像、日本語 → 英語、Googleプロバイダー使用
+# 単一画像、日本語 → 英語、Googleプロバイダー、吹き出し外テキストパイプライン有効、吹き出し外テキスト専用フォント指定
 python main.py --input <画像パス> \
-  --font-dir "fonts/Komika" --provider Google --google-api-key <AIキー...>
+  --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> \
+  --osb-enable --osb-font-dir "fonts/Comicka"
 
-# フォルダ内の一括処理、翻訳言語の指定、OpenAI互換プロバイダー (llama.cpp) 사용
+# フォルダ内の一括処理、日本語 → 簡体字中国語、OpenAI互換プロバイダー（llama.cpp）、吹き出し外テキストパイプライン有効、吹き出し外テキスト専用フォント指定
 python main.py --input <フォルダパス> --batch \
-  --font-dir "fonts/Komika" \
-  --input-language <翻訳元言語> --output-language <翻訳先言語> \
+  --font-dir "fonts/Noto Sans SC" --output-language "Chinese (Simplified)" \
   --provider OpenAI-Compatible --openai-compatible-url http://localhost:8080/v1 \
-  --output ./output
+  --output ./output --osb-enable --osb-font-dir "fonts/Noto Sans SC"
 
-# 単一画像、日本語 → 英語 (Google)、吹き出し外テキストパイプライン有効、吹き出し外テキスト専用フォント指定
-python main.py --input <画像パス> \
-  --font-dir "fonts/Komika" --provider Google --google-api-key <AIキー...> \
-  --osb-enable --osb-font-dir "fonts/Clementine"
-
-# クリーニング（消去）専用モード（翻訳や描画は行わず、文字消去のみを実行）
+# クリーニング（消去）専用モード（翻訳なし）
 python main.py --input <画像パス> --cleaning-only
 
-# アップスケーリング専用モード（検出や翻訳は行わず、画像のみを2倍に拡大）
+# アップスケーリング専用モード（翻訳なし）
 python main.py --input <画像パス> --upscaling-only --image-upscale-mode final --image-upscale-factor 2.0
-
-# テストモード（実際の翻訳は行わず、プレースホルダーテキストを描画）
-python main.py --input <画像パス> --test-mode
 
 # 全てのオプションを表示
 python main.py --help
@@ -253,8 +224,7 @@ python main.py --help
 
 ### ポータブルパッケージ
 
-- Windows：ポータブルパッケージのルートにある `update.bat` を実行
-- Linux/macOS：ポータブルパッケージのルートにある `./update.sh` を実行
+- ポータブルパッケージのルートから `update.bat`（Windows）または `./update.sh`（Linux/macOS）を実行
 
 ### 手動インストール
 

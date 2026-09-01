@@ -33,9 +33,10 @@
 - **检测**：对话框（气泡框）检测与分割（YOLO、SAM 2.1/3）
 - **擦除**：擦除对话框和对话框外 (OSB) 的文本（FLUX.2 Klein、FLUX.1 Kontext 或 OpenCV）
 - **翻译**：基于大语言模型 (LLM) 的 OCR 与翻译（支持 60 种语言）
-- **渲染**：支持排版对齐和自定义字体包的文本渲染
-- **超分辨率**：使用 2x-AnimeSharpV4 提升输出图像质量
+- **渲染**：支持排版对齐和自定义字体包的自定义文本渲染引擎
+- **超分辨率**：文本区域与整页原画超分辨率放大（2x-AnimeSharpV4）
 - **处理**：支持目录结构保留与 ZIP 压缩包的单张/批量处理
+- **配置**：灵活的配置选项，可适应多样的页面布局并精细调整输出质量
 - **界面**：Web UI (Gradio) 和命令行界面 (CLI)
 - **自动化**：一键翻译，无需人工干预
 
@@ -56,27 +57,6 @@
 
 - **Windows：** 已捆绑 Python/Git；无其他额外系统要求
 - **Linux/macOS：** 系统中必须安装有 Python 3.10+ 和 Git
-
-**设置方法：**
-
-1. 解压 zip 压缩包
-2. 运行对应平台的设置脚本：
-   - **Windows：** 双击 `setup.bat`
-   - **Linux/macOS：** 在终端中运行 `./setup.sh`
-3. 系统将自动检测并安装适配您系统的 PyTorch 版本
-4. 运行 `./MangaTranslator/` 目录下的启动脚本：
-   - **Windows：** 双击 `start-webui.bat`
-   - **Linux/macOS：** 运行 `start-webui.sh`
-
-包含的字体包：
-
-- _Komika_（普通文本）
-- _Comicka_（普通/OSB文本）
-- _Roboto_（支持变音符号）
-- _Noto Sans SC_（简体中文）
-- _Noto Sans KR_（韩语）
-- _Noto Sans JP_（日语）
-- _Noto Sans Thai_（泰语）
 
 > [!TIP]
 > 如果您需要迁移到新的便携版：
@@ -156,7 +136,7 @@ fonts/
 │  ├─ CCWildWords-Italic.otf
 │  ├─ CCWildWords-Bold.otf
 │  └─ CCWildWords-BoldItalic.otf
-└─ Komika/
+└─ Komika Hand/
    ├─ KOMIKA-HAND.ttf
    └─ KOMIKA-HANDBOLD.ttf
 ```
@@ -199,12 +179,11 @@ fonts/
 ### Web UI (Gradio)
 
 - **便携版：**
-  - Windows：双击 `MangaTranslator` 目录下的 `start-webui.bat`
-  - Linux/macOS：在终端运行 `MangaTranslator` 目录下的 `./start-webui.sh`
+  - 在 `MangaTranslator/` 目录下运行 `start-webui.bat`（Windows）或 `./start-webui.sh`（Linux/macOS）
 - **手动安装：**
-  - Windows/Linux/macOS：运行 `python app.py --open-browser`
+  - 运行 `python app.py --open-browser`
 
-可选参数：`--models`（默认 `./models`）、`--fonts`（默认 `./fonts`）、`--port`（默认 `7676`）、`--cpu`。
+运行 `python app.py --help` 查看启动选项。
 首次启动可能需要大约 1–2 分钟。
 
 启动后，在 Config 选项卡中配置您的大语言模型服务商，然后上传图片并点击 Translate。
@@ -214,30 +193,22 @@ fonts/
 使用示例：
 
 ```bash
-# 单张图片，日译英，使用 Google 服务商
+# 单张图片，日译英，Google 服务商，对话框外文本管线，自定义对话框外文本字体
 python main.py --input <图片路径> \
-  --font-dir "fonts/Komika" --provider Google --google-api-key <API密钥>
+  --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> \
+  --osb-enable --osb-font-dir "fonts/Comicka"
 
-# 批量文件夹，自定义源/目标语言，使用 OpenAI 兼容服务商 (llama.cpp)
+# 批量文件夹，日译简体中文，OpenAI 兼容服务商 (llama.cpp)，对话框外文本管线，自定义对话框外文本字体
 python main.py --input <文件夹路径> --batch \
-  --font-dir "fonts/Komika" \
-  --input-language <源语言> --output-language <目标语言> \
+  --font-dir "fonts/Noto Sans SC" --output-language "Chinese (Simplified)" \
   --provider OpenAI-Compatible --openai-compatible-url http://localhost:8080/v1 \
-  --output ./output
+  --output ./output --osb-enable --osb-font-dir "fonts/Noto Sans SC"
 
-# 单张图片，日译英 (Google)，启用对话框外文本管线，使用自定义的对话框外文本字体
-python main.py --input <图片路径> \
-  --font-dir "fonts/Komika" --provider Google --google-api-key <API密钥> \
-  --osb-enable --osb-font-dir "fonts/Clementine"
-
-# 仅擦除模式（不进行翻译/文本渲染）
+# 仅擦除模式（不进行翻译）
 python main.py --input <图片路径> --cleaning-only
 
-# 仅超分辨率模式（不进行检测/翻译，仅进行放大）
+# 仅超分辨率模式（不进行翻译）
 python main.py --input <图片路径> --upscaling-only --image-upscale-mode final --image-upscale-factor 2.0
-
-# 测试模式（不进行实际翻译；渲染占位符文本）
-python main.py --input <图片路径> --test-mode
 
 # 查看全部选项
 python main.py --help
@@ -253,8 +224,7 @@ python main.py --help
 
 ### 便携版
 
-- Windows：运行便携版根目录下的 `update.bat`
-- Linux/macOS：运行便携版根目录下的 `./update.sh`
+- 在便携版根目录下运行 `update.bat`（Windows）或 `./update.sh`（Linux/macOS）
 
 ### 手动安装
 

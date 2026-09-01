@@ -33,9 +33,10 @@ Gradio-based web application for automating the translation of manga/comic page 
 - **Detection**: Speech bubble detection & segmentation (YOLO, SAM 2.1/3)
 - **Cleaning**: Inpaint speech bubbles and OSB text (FLUX.2 Klein, FLUX.1 Kontext, or OpenCV)
 - **Translation**: LLM-powered OCR & translation (60 languages)
-- **Rendering**: Text rendering with alignment and custom font packs
-- **Upscaling**: 2x-AnimeSharpV4 for enhanced output quality
+- **Rendering**: Custom text rendering engine with alignment and custom font packs
+- **Upscaling**: Text region and full page artwork upscaling (2x-AnimeSharpV4)
 - **Processing**: Single/batch processing with directory preservation and ZIP support
+- **Configuration**: Flexible controls to adapt to diverse page layouts and fine-tune output quality
 - **Interfaces**: Web UI (Gradio) and CLI
 - **Automation**: One-click translation; no intervention required
 
@@ -56,27 +57,6 @@ Download the standalone zip from the releases page: [Portable Build](https://git
 
 - **Windows:** Bundled Python/Git included; no additional requirements
 - **Linux/macOS:** Python 3.10+ and Git must be installed on your system
-
-**Setup:**
-
-1. Extract the zip file
-2. Run the setup script for your platform:
-   - **Windows:** Double-click `setup.bat`
-   - **Linux/macOS:** Run `./setup.sh` in terminal
-3. PyTorch version is automatically detected and installed based on your system
-4. Open the launcher script created in `./MangaTranslator/`:
-   - **Windows:** `start-webui.bat`
-   - **Linux/macOS:** `start-webui.sh`
-
-Included font packs:
-
-- _Komika_ (normal text)
-- _Comicka_ (normal/OSB text)
-- _Roboto_ (supports accents)
-- _Noto Sans SC_ (Simplified Chinese)
-- _Noto Sans KR_ (Korean)
-- _Noto Sans JP_ (Japanese)
-- _Noto Sans Thai_ (Thai)
 
 > [!TIP]
 > In the event that you need to transfer to a fresh portable package:
@@ -156,7 +136,7 @@ fonts/
 │  ├─ CCWildWords-Italic.otf
 │  ├─ CCWildWords-Bold.otf
 │  └─ CCWildWords-BoldItalic.otf
-└─ Komika/
+└─ Komika Hand/
    ├─ KOMIKA-HAND.ttf
    └─ KOMIKA-HANDBOLD.ttf
 ```
@@ -199,12 +179,11 @@ If you want to use the OSB text pipeline, you need a Hugging Face token with acc
 ### Web UI (Gradio)
 
 - **Portable package:**
-  - Windows: Double-click `start-webui.bat` inside the `MangaTranslator` folder
-  - Linux/macOS: Run `./start-webui.sh` inside the `MangaTranslator` folder
+  - Run `start-webui.bat` (Windows) or `./start-webui.sh` (Linux/macOS) inside the `MangaTranslator/` directory
 - **Manual install:**
-  - Windows: Run `python app.py --open-browser`
+  - Run `python app.py --open-browser`
 
-Options: `--models` (default `./models`), `--fonts` (default `./fonts`), `--port` (default `7676`), `--cpu`.
+Run `python app.py --help` for launch options.
 First launch can take ~1–2 minutes.
 
 Once launched, configure your LLM provider in the Config tab, then upload images and click Translate.
@@ -214,30 +193,22 @@ Once launched, configure your LLM provider in the Config tab, then upload images
 Examples:
 
 ```bash
-# Single image, Japanese → English, Google provider
+# Single image, Japanese → English, Google provider, OSB text pipeline, custom OSB text font
 python main.py --input <image_path> \
-  --font-dir "fonts/Komika" --provider Google --google-api-key <AI...>
+  --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> \
+  --osb-enable --osb-font-dir "fonts/Comicka"
 
-# Batch folder, custom source/target languages, OpenAI-Compatible provider (llama.cpp)
+# Batch folder, Japanese → Chinese (Simplified), OpenAI-Compatible provider (llama.cpp), OSB text pipeline, custom OSB text font
 python main.py --input <folder_path> --batch \
-  --font-dir "fonts/Komika" \
-  --input-language <src_lang> --output-language <tgt_lang> \
+  --font-dir "fonts/Noto Sans SC" --output-language "Chinese (Simplified)" \
   --provider OpenAI-Compatible --openai-compatible-url http://localhost:8080/v1 \
-  --output ./output
+  --output ./output --osb-enable --osb-font-dir "fonts/Noto Sans SC"
 
-# Single Image, Japanese → English (Google), OSB text pipeline, custom OSB text font
-python main.py --input <image_path> \
-  --font-dir "fonts/Komika" --provider Google --google-api-key <AI...> \
-  --osb-enable --osb-font-dir "fonts/Clementine"
-
-# Cleaning-only mode (no translation/text rendering)
+# Cleaning-only mode (no translation)
 python main.py --input <image_path> --cleaning-only
 
-# Upscaling-only mode (no detection/translation, only upscale)
+# Upscaling-only mode (no translation)
 python main.py --input <image_path> --upscaling-only --image-upscale-mode final --image-upscale-factor 2.0
-
-# Test mode (no translation; render placeholder text)
-python main.py --input <image_path> --test-mode
 
 # Full options
 python main.py --help
@@ -253,8 +224,7 @@ python main.py --help
 
 ### Portable Package
 
-- Windows: Run `update.bat` from the portable package root
-- Linux/macOS: Run `./update.sh` from the portable package root
+- Run `update.bat` (Windows) or `./update.sh` (Linux/macOS) from the portable package root
 
 ### Manual Install
 

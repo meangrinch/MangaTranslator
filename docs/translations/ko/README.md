@@ -33,9 +33,10 @@ AI를 사용하여 만화/코믹스 페이지 이미지 번역을 자동화하�
 - **감지**: 말풍선 감지 및 세분화 (YOLO, SAM 2.1/3)
 - **클리닝**: 말풍선 내부 및 말풍선 외부(OSB) 텍스트 인페인팅 (FLUX.2 Klein, FLUX.1 Kontext 또는 OpenCV)
 - **번역**: LLM 기반 OCR 및 번역 (60개 언어 지원)
-- **렌더링**: 정렬 및 사용자 정의 폰트 팩을 지원하는 텍스트 렌더링
-- **업스케일링**: 화질 향상을 위한 2x-AnimeSharpV4 지원
+- **렌더링**: 정렬 및 사용자 정의 폰트 팩을 지원하는 커스텀 텍스트 렌더링 엔진
+- **업스케일링**: 텍스트 영역 및 전체 페이지 아트워크 업스케일링 (2x-AnimeSharpV4)
 - **처리**: 디렉토리 구조 보존 및 ZIP 지원을 통한 단일/배치 처리
+- **설정**: 다양한 페이지 레이아웃에 맞추고 출력 품질을 세밀하게 조정할 수 있는 유연한 설정 제어
 - **인터페이스**: 웹 UI (Gradio) 및 CLI
 - **자동화**: 클릭 한 번으로 번역 완료, 수동 개입 불필요
 
@@ -56,27 +57,6 @@ AI를 사용하여 만화/코믹스 페이지 이미지 번역을 자동화하�
 
 - **Windows:** 내장 Python/Git 포함, 별도의 요구 사항 없음
 - **Linux/macOS:** 시스템에 Python 3.10+ 및 Git이 설치되어 있어야 함
-
-**설정 방법:**
-
-1. zip 파일 압축 해제
-2. 해당 플랫폼의 설치 스크립트 실행:
-   - **Windows:** `setup.bat` 더블 클릭
-   - **Linux/macOS:** 터미널에서 `./setup.sh` 실행
-3. 시스템 사양에 맞는 PyTorch 버전이 자동으로 감지되고 설치됨
-4. `./MangaTranslator/` 내부에 생성된 실행 스크립트 열기:
-   - **Windows:** `start-webui.bat`
-   - **Linux/macOS:** `start-webui.sh`
-
-포함된 폰트 팩:
-
-- _Komika_ (일반 텍스트)
-- _Comicka_ (일반/OSB 텍스트)
-- _Roboto_ (악센트 기호 지원)
-- _Noto Sans SC_ (간체 중국어)
-- _Noto Sans KR_ (한국어)
-- _Noto Sans JP_ (일본어)
-- _Noto Sans Thai_ (태국어)
 
 > [!TIP]
 > 새로운 포터블 패키지로 데이터를 이전해야 하는 경우:
@@ -156,7 +136,7 @@ fonts/
 │  ├─ CCWildWords-Italic.otf
 │  ├─ CCWildWords-Bold.otf
 │  └─ CCWildWords-BoldItalic.otf
-└─ Komika/
+└─ Komika Hand/
    ├─ KOMIKA-HAND.ttf
    └─ KOMIKA-HANDBOLD.ttf
 ```
@@ -199,12 +179,11 @@ fonts/
 ### 웹 UI (Gradio)
 
 - **포터블 패키지:**
-  - Windows: `MangaTranslator` 폴더 내의 `start-webui.bat` 더블 클릭
-  - Linux/macOS: 터미널에서 `MangaTranslator` 폴더 내의 `./start-webui.sh` 실행
+  - `MangaTranslator/` 디렉토리 내에서 `start-webui.bat` (Windows) 또는 `./start-webui.sh` (Linux/macOS) 실행
 - **수동 설치:**
-  - Windows/Linux/macOS: `python app.py --open-browser` 실행
+  - `python app.py --open-browser` 실행
 
-옵션 플래그: `--models` (기본값 `./models`), `--fonts` (기본값 `./fonts`), `--port` (기본값 `7676`), `--cpu`.
+실행 옵션은 `python app.py --help`를 실행하여 확인하세요.
 첫 실행 시 로딩에 1~2분 정도 걸릴 수 있습니다.
 
 웹 UI가 실행되면 Config 탭에서 LLM 제공자를 설정한 후, 이미지를 업로드하고 Translate를 클릭하세요.
@@ -214,30 +193,22 @@ fonts/
 사용 예시:
 
 ```bash
-# 단일 이미지, 일본어 → 영어, Google 번역 제공자 사용
+# 단일 이미지, 일본어 → 영어, Google 제공자, 말풍선 외부 텍스트 파이프라인 활성화, 사용자 정의 OSB 텍스트 폰트
 python main.py --input <이미지_경로> \
-  --font-dir "fonts/Komika" --provider Google --google-api-key <AI_키...>
+  --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> \
+  --osb-enable --osb-font-dir "fonts/Comicka"
 
-# 배치 폴더, 소스 및 타겟 언어 지정, OpenAI 호환 제공자 (llama.cpp) 사용
+# 배치 폴더, 일본어 → 중국어(간체), OpenAI 호환 제공자 (llama.cpp), 말풍선 외부 텍스트 파이프라인 활성화, 사용자 정의 OSB 텍스트 폰트
 python main.py --input <폴더_경로> --batch \
-  --font-dir "fonts/Komika" \
-  --input-language <소스_언어> --output-language <타겟_언어> \
+  --font-dir "fonts/Noto Sans SC" --output-language "Chinese (Simplified)" \
   --provider OpenAI-Compatible --openai-compatible-url http://localhost:8080/v1 \
-  --output ./output
+  --output ./output --osb-enable --osb-font-dir "fonts/Noto Sans SC"
 
-# 단일 이미지, 일본어 → 영어 (Google), 말풍선 외부 텍스트 파이프라인 활성화 및 전용 폰트 지정
-python main.py --input <이미지_경로> \
-  --font-dir "fonts/Komika" --provider Google --google-api-key <AI_키...> \
-  --osb-enable --osb-font-dir "fonts/Clementine"
-
-# 클리닝 전용 모드 (번역 및 텍스트 렌더링 없이 글자 지우기만 수행)
+# 클리닝 전용 모드 (번역 없음)
 python main.py --input <이미지_경로> --cleaning-only
 
-# 업스케일링 전용 모드 (감지/번역 없이 이미지만 2배 확대)
+# 업스케일링 전용 모드 (번역 없음)
 python main.py --input <이미지_경로> --upscaling-only --image-upscale-mode final --image-upscale-factor 2.0
-
-# 테스트 모드 (실제 번역 없이 임시 플레이스홀더 텍스트 렌더링)
-python main.py --input <이미지_경로> --test-mode
 
 # 전체 명령줄 옵션 확인
 python main.py --help
@@ -253,8 +224,7 @@ python main.py --help
 
 ### 포터블 패키지
 
-- Windows: 포터블 패키지 루트 디렉토리의 `update.bat` 실행
-- Linux/macOS: 포터블 패키지 루트 디렉토리의 `./update.sh` 실행
+- 포터블 패키지 루트 디렉토리에서 `update.bat` (Windows) 또는 `./update.sh` (Linux/macOS) 실행
 
 ### 수동 설치
 
