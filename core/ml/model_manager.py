@@ -939,41 +939,58 @@ class ModelManager:
 
             log_message("Initializing PaddleOCR-VL-1.6...", verbose=verbose)
 
-            from transformers import AutoModelForImageTextToText, AutoProcessor
+            from transformers import (
+                AutoConfig,
+                AutoModelForImageTextToText,
+                AutoProcessor,
+            )
+            from transformers import logging as transformers_logging
 
             model_path = self.load_paddle_ocr_vl(verbose=verbose)
             model_path_str = str(model_path)
             token = self.hf_token or os.environ.get("HF_TOKEN")
 
-            processor = AutoProcessor.from_pretrained(
-                model_path_str, token=token, backend="torchvision"
-            )
+            # Suppress upstream config, RoPE, and processor deprecation warnings
+            previous_level = transformers_logging.get_verbosity()
+            transformers_logging.set_verbosity_error()
+            try:
+                config = AutoConfig.from_pretrained(model_path_str, token=token)
+                config.tie_word_embeddings = False
+                if hasattr(config, "text_config"):
+                    config.text_config.tie_word_embeddings = False
 
-            # Prefer flash_attention_2 on CUDA, fall back to sdpa on Windows/CPU
-            dtype = self.dtype if self.device.type == "cuda" else None
-            for attn_impl in ("flash_attention_2", "sdpa", "eager"):
-                try:
-                    model = (
-                        AutoModelForImageTextToText.from_pretrained(
-                            model_path_str,
-                            dtype=dtype,
-                            attn_implementation=attn_impl,
-                            token=token,
+                processor = AutoProcessor.from_pretrained(
+                    model_path_str, token=token, backend="torchvision"
+                )
+
+                # Prefer flash_attention_2 on CUDA, fall back to sdpa on Windows/CPU
+                dtype = self.dtype if self.device.type == "cuda" else None
+                for attn_impl in ("flash_attention_2", "sdpa", "eager"):
+                    try:
+                        model = (
+                            AutoModelForImageTextToText.from_pretrained(
+                                model_path_str,
+                                config=config,
+                                dtype=dtype,
+                                attn_implementation=attn_impl,
+                                token=token,
+                            )
+                            .to(self.device)
+                            .eval()
                         )
-                        .to(self.device)
-                        .eval()
-                    )
-                    log_message(
-                        f"PaddleOCR-VL-1.6 loaded with {attn_impl}", verbose=verbose
-                    )
-                    break
-                except (ImportError, ValueError, RuntimeError):
-                    if attn_impl == "eager":
-                        raise
-                    log_message(
-                        f"PaddleOCR-VL-1.6: {attn_impl} unavailable, trying fallback",
-                        verbose=verbose,
-                    )
+                        log_message(
+                            f"PaddleOCR-VL-1.6 loaded with {attn_impl}", verbose=verbose
+                        )
+                        break
+                    except (ImportError, ValueError, RuntimeError):
+                        if attn_impl == "eager":
+                            raise
+                        log_message(
+                            f"PaddleOCR-VL-1.6: {attn_impl} unavailable, trying fallback",
+                            verbose=verbose,
+                        )
+            finally:
+                transformers_logging.set_verbosity(previous_level)
 
             self.models[ModelType.PADDLE_OCR_VL] = (processor, model)
             log_message("PaddleOCR-VL-1.6 initialized.", verbose=verbose)
