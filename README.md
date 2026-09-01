@@ -179,7 +179,7 @@ If you want to use the OSB text pipeline, you need a Hugging Face token with acc
 ### Web UI (Gradio)
 
 - **Portable package:**
-  - Run `start-webui.bat` (Windows) or `./start-webui.sh` (Linux/macOS) inside the `MangaTranslator/` directory
+  - Run `start-webui.bat` (Windows) or `./start-webui.sh` (Linux/macOS), located in `MangaTranslator/`
 - **Manual install:**
   - Run `python app.py --open-browser`
 
