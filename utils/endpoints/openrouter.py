@@ -168,7 +168,11 @@ def call_openrouter_endpoint(
         or metadata.get("is_gemini_no_sampling", False)
         or is_gemini_no_sampling_model(model_name)
     )
-    if temp is not None and not is_gemini_no_sampling_model(model_name) and not (is_anthropic_model and no_sampling):
+    if (
+        temp is not None
+        and not is_gemini_no_sampling_model(model_name)
+        and not (is_anthropic_model and no_sampling)
+    ):
         if is_anthropic_model or is_openai_model:
             payload["temperature"] = min(temp, 1.0)
         else:
@@ -207,8 +211,8 @@ def call_openrouter_endpoint(
     except Exception:
         is_reasoning_model = False
 
-    # Claude 4.6/4.7/4.8/5: reasoning.enabled turns on adaptive thinking.
-    # Fable 5 has always-on thinking; omit reasoning config entirely.
+    # Claude 4.6+: reasoning.enabled turns on adaptive thinking.
+    # Fable 5+ has always-on thinking; omit reasoning config entirely.
     is_claude_max = metadata.get("is_claude_effort_max", False)
     is_claude_xhigh = metadata.get("is_claude_effort_xhigh", False)
     is_claude_adaptive_default = metadata.get("is_claude_adaptive_default", False)

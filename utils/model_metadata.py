@@ -592,7 +592,7 @@ def is_opus_5_model(model_name: Optional[str]) -> bool:
 
 
 def is_fable_5_model(model_name: Optional[str]) -> bool:
-    """Check if a model is Claude Fable 5 (always-on adaptive thinking, no sampling params)."""
+    """Check if a model is Claude Fable 5+ (always-on adaptive thinking, no sampling params)."""
     if not model_name:
         return False
     lm = model_name.lower()
@@ -617,7 +617,7 @@ def anthropic_model_flags(model_name: Optional[str]) -> Dict[str, bool]:
     - Sonnet/Opus 4.6: + is_claude_effort_max
     - Sonnet/Opus 4.7/4.8/5: + is_claude_effort_xhigh (also strips sampling params)
     - Sonnet/Opus 5: + is_claude_adaptive_default
-    - Fable 5: same as 4.7+ plus is_claude_omit_thinking
+    - Fable 5/5.1: same as 4.7+ plus is_claude_omit_thinking
     """
     if not model_name:
         return {}
@@ -660,7 +660,7 @@ def is_anthropic_no_sampling_model(model_name: Optional[str]) -> bool:
 
 
 def anthropic_omits_thinking_config(model_name: Optional[str]) -> bool:
-    """Models with always-on thinking that omit reasoning-effort API config (e.g. Fable 5)."""
+    """Models with always-on thinking that omit reasoning-effort API config (e.g. Fable 5+)."""
     return anthropic_model_flags(model_name).get("is_claude_omit_thinking", False)
 
 

@@ -1017,7 +1017,7 @@ def create_layout(
                                 choices=_initial_effort_choices,
                                 label="Effort",
                                 value=_initial_effort_value,
-                                info="Controls token spending eagerness. Opus 4.5+, Sonnet 4.6, Fable 5 only.",
+                                info="Controls token spending eagerness. Opus 4.5+, Sonnet 4.6+, Fable 5+ only.",
                                 visible=_initial_effort_visible,
                                 elem_id="effort_dropdown",
                             )
