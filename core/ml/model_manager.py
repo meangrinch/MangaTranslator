@@ -1168,7 +1168,7 @@ class ModelManager:
                     pipeline_repo,
                     transformer=transformer,
                     text_encoder_2=text_encoder,
-                    torch_dtype=self.dtype,
+                    dtype=self.dtype,
                     cache_dir=str(self.flux_cache_dir),
                     token=effective_token,
                 ).to(self.device)
@@ -1223,7 +1223,7 @@ class ModelManager:
                 log_message(f"Loading SDNQ pipeline from {repo_id}...", verbose=verbose)
                 pipeline = FluxKontextPipeline.from_pretrained(
                     repo_id,
-                    torch_dtype=self.dtype,
+                    dtype=self.dtype,
                     cache_dir=str(self.flux_cache_dir),
                 )
 
@@ -1309,7 +1309,7 @@ class ModelManager:
                 log_message(f"Loading SDNQ pipeline from {repo_id}...", verbose=verbose)
                 pipeline = Flux2KleinPipeline.from_pretrained(
                     repo_id,
-                    torch_dtype=self.dtype,
+                    dtype=self.dtype,
                     cache_dir=str(self.flux_cache_dir),
                 )
 
