@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import threading
@@ -950,9 +951,11 @@ class ModelManager:
             model_path_str = str(model_path)
             token = self.hf_token or os.environ.get("HF_TOKEN")
 
-            # Suppress upstream config, RoPE, and processor deprecation warnings
-            previous_level = transformers_logging.get_verbosity()
-            transformers_logging.set_verbosity_error()
+            # Suppress upstream config, RoPE, and processor deprecation warnings from normal logs
+            previous_level = None
+            if not verbose:
+                previous_level = transformers_logging.get_verbosity()
+                transformers_logging.set_verbosity_error()
             try:
                 config = AutoConfig.from_pretrained(model_path_str, token=token)
                 config.tie_word_embeddings = False
@@ -990,7 +993,8 @@ class ModelManager:
                             verbose=verbose,
                         )
             finally:
-                transformers_logging.set_verbosity(previous_level)
+                if previous_level is not None:
+                    transformers_logging.set_verbosity(previous_level)
 
             self.models[ModelType.PADDLE_OCR_VL] = (processor, model)
             log_message("PaddleOCR-VL-1.6 initialized.", verbose=verbose)
@@ -1212,6 +1216,9 @@ class ModelManager:
             )
 
             try:
+                logging.getLogger("sdnq").setLevel(
+                    logging.WARNING if verbose else logging.ERROR
+                )
                 from diffusers import FluxKontextPipeline
                 from sdnq import SDNQConfig  # noqa: F401 - registers into diffusers
                 from sdnq.common import use_torch_compile as triton_is_available
@@ -1298,6 +1305,9 @@ class ModelManager:
             )
 
             try:
+                logging.getLogger("sdnq").setLevel(
+                    logging.WARNING if verbose else logging.ERROR
+                )
                 from diffusers import Flux2KleinPipeline
                 from sdnq import SDNQConfig  # noqa: F401 - registers into diffusers
                 from sdnq.common import use_torch_compile as triton_is_available
