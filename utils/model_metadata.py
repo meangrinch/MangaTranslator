@@ -303,9 +303,7 @@ def is_openai_reasoning_model(model_name: str | None) -> bool:
     if not model_name:
         return False
     lm = model_name.lower()
-    return (
-        lm.startswith(("gpt-5", "o3")) or "/gpt-5" in lm or "/o3" in lm
-    )
+    return lm.startswith(("gpt-5", "o3")) or "/gpt-5" in lm or "/o3" in lm
 
 
 def is_azure_url(url: str | None) -> bool:
@@ -356,9 +354,7 @@ def supports_zai_reasoning_effort(model_name: str | None) -> bool:
     if not model_name:
         return False
     lm = model_name.lower()
-    return (
-        lm == "glm-5.2" or lm.startswith(("glm-5.2-", "glm-5.3-")) or lm == "glm-5.3"
-    )
+    return lm == "glm-5.2" or lm.startswith(("glm-5.2-", "glm-5.3-")) or lm == "glm-5.3"
 
 
 def is_zai_vision_model(model_name: str | None) -> bool:
@@ -385,7 +381,10 @@ def is_xai_reasoning_model(model_name: str | None) -> bool:
     if "non-reasoning" in lm:
         return False
     return (
-        lm.startswith(("grok-4.3", "grok-4.5", "grok-4.6")) or "grok-4.20" in lm or "reasoning" in lm or "multi-agent" in lm
+        lm.startswith(("grok-4.3", "grok-4.5", "grok-4.6"))
+        or "grok-4.20" in lm
+        or "reasoning" in lm
+        or "multi-agent" in lm
     )
 
 
@@ -721,6 +720,14 @@ def is_gemini_3_flash_model(model_name: str | None) -> bool:
     return "gemini-3" in lm and "flash" in lm and "lite" not in lm
 
 
+def is_gemini_38_flash_model(model_name: str | None) -> bool:
+    """Check if a model is Gemini 3.8 Flash."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "gemini-3.8" in lm and "flash" in lm
+
+
 def is_gemini_37_flash_model(model_name: str | None) -> bool:
     """Check if a model is Gemini 3.7 Flash."""
     if not model_name:
@@ -748,7 +755,8 @@ def is_gemini_35_flash_lite_model(model_name: str | None) -> bool:
 def is_gemini_no_sampling_model(model_name: str | None) -> bool:
     """Check if a Gemini model does not support custom sampling parameters."""
     return (
-        is_gemini_37_flash_model(model_name)
+        is_gemini_38_flash_model(model_name)
+        or is_gemini_37_flash_model(model_name)
         or is_gemini_36_flash_model(model_name)
         or is_gemini_35_flash_lite_model(model_name)
     )

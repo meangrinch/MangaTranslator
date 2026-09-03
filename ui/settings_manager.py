@@ -16,6 +16,7 @@ CONFIG_FILE = (
 
 PROVIDER_MODELS: dict[str, list[str]] = {
     "Google": [
+        "gemini-3.8-flash",
         "gemini-3.7-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash",
@@ -79,6 +80,8 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "grok-4.20-multi-agent-0309",
     ],
     "Meta Model": [
+        "muse-spark-1.3-contributor",
+        "muse-spark-1.3",
         "muse-spark-1.2-contributor",
         "muse-spark-1.2",
         "muse-spark-1.1",
@@ -108,6 +111,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
     ],
     "QwenCloud": [
         "qwen3.8-flash",
+        "qwen3.8-max-0902",
         "qwen3.8-max",
         "qwen3.7-max",
         "qwen3.7-plus",

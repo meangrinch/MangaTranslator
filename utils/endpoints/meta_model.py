@@ -26,7 +26,7 @@ def call_meta_model_endpoint(
 
     Args:
         api_key (str): Meta Model API key.
-        model_name (str): Meta Model API model to use (e.g., muse-spark-1.2, muse-spark-1.1).
+        model_name (str): Meta Model API model to use (e.g., muse-spark-1.3, muse-spark-1.2, muse-spark-1.1).
         parts (List[Dict[str, Any]]): List of content parts (text and optional images).
         generation_config (Dict[str, Any]): Configuration for generation.
         system_prompt (Optional[str]): System prompt for the conversation.

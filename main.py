@@ -223,7 +223,7 @@ def main():
         "--model-name",
         type=str,
         default=None,
-        help="Model name for the selected provider (e.g., 'gemini-3.7-flash'). "
+        help="Model name for the selected provider (e.g., 'gemini-3.8-flash'). "
         "If not provided, a default will be attempted based on the provider.",
     )
     parser.add_argument(
@@ -1022,7 +1022,7 @@ def main():
         )
         api_key_arg_name = "--google-api-key"
         api_key_env_var = "GOOGLE_API_KEY or GEMINI_API_KEY"
-        default_model = "gemini-3.7-flash"
+        default_model = "gemini-3.8-flash"
     elif provider == "OpenAI":
         api_key = args.openai_api_key or os.environ.get("OPENAI_API_KEY")
         api_key_arg_name = "--openai-api-key"
@@ -1050,7 +1050,7 @@ def main():
         )
         api_key_arg_name = "--meta-api-key"
         api_key_env_var = "META_MODEL_API_KEY or META_API_KEY"
-        default_model = "muse-spark-1.2"
+        default_model = "muse-spark-1.3-contributor"
     elif provider == "DeepSeek":
         api_key = args.deepseek_api_key or os.environ.get("DEEPSEEK_API_KEY")
         api_key_arg_name = "--deepseek-api-key"
@@ -1079,7 +1079,7 @@ def main():
         )
         api_key_arg_name = "--qwencloud-api-key"
         api_key_env_var = "QWENCLOUD_API_KEY or QWEN_API_KEY"
-        default_model = "qwen3.8-max"
+        default_model = "qwen3.8-flash"
     elif provider == "OpenCode":
         api_key = (
             args.opencode_api_key
@@ -1094,7 +1094,7 @@ def main():
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
         api_key_env_var = "OPENROUTER_API_KEY"
-        default_model = "google/gemini-3.7-flash"
+        default_model = "google/gemini-3.8-flash"
     elif provider == "OpenAI-Compatible":
         compatible_url = args.openai_compatible_url
         api_key = args.openai_compatible_api_key or os.environ.get(

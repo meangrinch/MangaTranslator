@@ -45,6 +45,7 @@ from utils.model_metadata import (
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
     is_gemini_37_flash_model,
+    is_gemini_38_flash_model,
     is_gemini_no_sampling_model,
     is_gemma_model,
     is_google_model_family,
@@ -421,7 +422,10 @@ def _build_generation_config(
             generation_config["media_resolution"] = backend_media_resolution
         if is_gemini_3 or is_gemma:
             reasoning_effort = config.reasoning_effort or "high"
-            if is_gemini_37_flash_model(model_name) and reasoning_effort == "minimal":
+            if (
+                is_gemini_37_flash_model(model_name)
+                or is_gemini_38_flash_model(model_name)
+            ) and reasoning_effort == "minimal":
                 reasoning_effort = "high"
             generation_config["thinkingConfig"] = {"thinkingLevel": reasoning_effort}
             log_message(
@@ -789,11 +793,18 @@ def _build_generation_config(
                     "auto" if (is_claude_46 or is_claude_adaptive_default) else "none"
                 )
                 generation_config["reasoning_effort"] = reasoning_effort
-            elif is_gpt5_1 or config.reasoning_effort and config.reasoning_effort != "none":
+            elif (
+                is_gpt5_1
+                or config.reasoning_effort
+                and config.reasoning_effort != "none"
+            ):
                 generation_config["reasoning_effort"] = config.reasoning_effort
         elif is_google_model and config.reasoning_effort:
             effort = config.reasoning_effort
-            if is_gemini_37_flash_model(model_name) and effort == "minimal":
+            if (
+                is_gemini_37_flash_model(model_name)
+                or is_gemini_38_flash_model(model_name)
+            ) and effort == "minimal":
                 effort = "high"
             generation_config["reasoning_effort"] = effort
 
