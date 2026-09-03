@@ -1185,69 +1185,85 @@ class FluxKleinInpainter:
         original_crop_pil: Image.Image,
         mask_crop_np: np.ndarray,
         verbose: bool = False,
+        boundary_width: int = 12,
     ) -> Image.Image:
-        """Match luminance of generated patch to original context using affine correction.
+        """Match patch luminance and color to surrounding context.
 
-        Uses all non-mask pixels in the crop as context (rather than only
-        outside-bbox pixels), giving a more stable luminance reference.
-        Applies an affine remap (mean + std matching) to preserve the
-        generated patch's internal contrast while aligning brightness.
-        Correction is applied only to the masked region.
-
-        For B&W manga, also neutralizes any chroma drift in the a/b channels.
+        Uses a local boundary band around the mask to avoid distant margin/gutter
+        contamination, applies an additive luminance shift to preserve internal
+        contrast without false scaling artifacts, and forces true neutral chroma
+        on monochrome manga to eliminate diffusion color casts.
 
         Args:
             generated_pil: Generated patch from Flux Klein (at crop size)
             original_crop_pil: Original cropped region
             mask_crop_np: Boolean mask of inpaint region within crop
             verbose: Whether to print verbose output
+            boundary_width: Width in pixels of the local reference boundary ring
 
         Returns:
             Luminance-corrected generated patch
         """
-        context_mask = ~mask_crop_np
-        if not np.any(context_mask) or not np.any(mask_crop_np):
+        mask_bool = np.asarray(mask_crop_np, dtype=bool)
+        if not np.any(mask_bool):
             return generated_pil
+
+        # Prefer immediate boundary ring to avoid distant gutters/borders skewing statistics
+        kernel = cv2.getStructuringElement(
+            cv2.MORPH_RECT, (boundary_width * 2 + 1, boundary_width * 2 + 1)
+        )
+        dilated_mask = cv2.dilate(mask_bool.astype(np.uint8), kernel) > 0
+        boundary_band = dilated_mask & (~mask_bool)
+
+        ref_mask = (
+            boundary_band if np.count_nonzero(boundary_band) >= 32 else (~mask_bool)
+        )
+        if not np.any(ref_mask):
+            return generated_pil
+
+        if original_crop_pil.mode != "RGB":
+            original_crop_pil = original_crop_pil.convert("RGB")
+        if generated_pil.mode != "RGB":
+            generated_pil = generated_pil.convert("RGB")
 
         original_np = np.asarray(original_crop_pil)
         generated_np = np.asarray(generated_pil).copy()
 
-        orig_mean, orig_std = self._compute_luminance_stats(original_np, context_mask)
-        gen_mean, gen_std = self._compute_luminance_stats(generated_np, context_mask)
-
-        if abs(orig_mean - gen_mean) < 1.3 and abs(orig_std - gen_std) < 2.0:
-            return generated_pil
-
-        scale = orig_std / gen_std
-        scale = max(
-            0.5, min(2.0, scale)
-        )  # Prevent extreme stretching from degenerate distributions
-
-        log_message(
-            f"  - Luminance correction: mean {gen_mean:.1f}->{orig_mean:.1f}, "
-            f"std {gen_std:.1f}->{orig_std:.1f} (scale={scale:.2f})",
-            verbose=verbose,
-        )
-
-        lab = cv2.cvtColor(generated_np, cv2.COLOR_RGB2LAB).astype(np.float32)
-
-        l_masked = lab[:, :, 0][mask_crop_np]
-        lab[:, :, 0][mask_crop_np] = np.clip(
-            (l_masked - gen_mean) * scale + orig_mean, 0, 255
-        )
-
-        # Neutralize chroma drift (Klein can introduce color casts on B&W content)
         orig_lab = cv2.cvtColor(original_np, cv2.COLOR_RGB2LAB).astype(np.float32)
-        for ch in (1, 2):
-            orig_ch_mean = float(np.mean(orig_lab[:, :, ch][context_mask]))
-            gen_ch_mean = float(np.mean(lab[:, :, ch][context_mask]))
-            ch_shift = orig_ch_mean - gen_ch_mean
-            if abs(ch_shift) > 1.0:
-                lab[:, :, ch][mask_crop_np] = np.clip(
-                    lab[:, :, ch][mask_crop_np] + ch_shift, 0, 255
-                )
+        gen_lab = cv2.cvtColor(generated_np, cv2.COLOR_RGB2LAB).astype(np.float32)
 
-        corrected_np = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2RGB)
+        orig_l_mean = float(np.mean(orig_lab[:, :, 0][ref_mask]))
+        gen_l_mean = float(np.mean(gen_lab[:, :, 0][ref_mask]))
+        l_shift = orig_l_mean - gen_l_mean
+
+        if abs(l_shift) >= 1.0:
+            log_message(
+                f"  - Luminance correction: L shift {l_shift:+.1f} (mean {gen_l_mean:.1f}->{orig_l_mean:.1f})",
+                verbose=verbose,
+            )
+            gen_lab[:, :, 0][mask_bool] = np.clip(
+                gen_lab[:, :, 0][mask_bool] + l_shift, 0, 255
+            )
+
+        # In OpenCV LAB, neutral gray is a=128, b=128
+        a_dev = float(np.mean(np.abs(orig_lab[:, :, 1][ref_mask] - 128.0)))
+        b_dev = float(np.mean(np.abs(orig_lab[:, :, 2][ref_mask] - 128.0)))
+        is_monochrome = (a_dev < 3.0) and (b_dev < 3.0)
+
+        if is_monochrome:
+            gen_lab[:, :, 1][mask_bool] = 128.0
+            gen_lab[:, :, 2][mask_bool] = 128.0
+        else:
+            for ch in (1, 2):
+                orig_ch_mean = float(np.mean(orig_lab[:, :, ch][ref_mask]))
+                gen_ch_mean = float(np.mean(gen_lab[:, :, ch][ref_mask]))
+                ch_shift = orig_ch_mean - gen_ch_mean
+                if abs(ch_shift) > 1.0:
+                    gen_lab[:, :, ch][mask_bool] = np.clip(
+                        gen_lab[:, :, ch][mask_bool] + ch_shift, 0, 255
+                    )
+
+        corrected_np = cv2.cvtColor(gen_lab.astype(np.uint8), cv2.COLOR_LAB2RGB)
         return Image.fromarray(corrected_np)
 
     def _prepare_image_for_inference(
