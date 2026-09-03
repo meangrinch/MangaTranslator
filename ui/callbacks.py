@@ -1,7 +1,7 @@
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import gradio as gr
 import torch
@@ -44,7 +44,7 @@ from .ui_models import (
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
 
-CANCELLATION_MANAGER: Optional[CancellationManager] = None
+CANCELLATION_MANAGER: CancellationManager | None = None
 
 
 def _radio_choices(values):
@@ -424,7 +424,7 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
             ui_state.general.test_mode,
         )
     except ValidationError as e:
-        raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
+        raise gr.Error(f"{ERROR_PREFIX}{e!s}")
 
     # Skip API key validation if in cleaning-only, upscaling-only, or test mode
     if (
@@ -640,7 +640,7 @@ def _format_single_success_message(
 
 
 def _format_batch_success_message(
-    results: Dict[str, Any],
+    results: dict[str, Any],
     backend_config: MangaTranslatorConfig,
     font_dir_path: Path,
 ) -> str:
@@ -821,8 +821,8 @@ def handle_translate_click(
     *args: Any,
     models_dir: Path,
     fonts_base_dir: Path,
-    target_device: Optional[torch.device],
-) -> Tuple[Optional[Image.Image], str]:
+    target_device: torch.device | None,
+) -> tuple[Image.Image | None, str]:
     """Callback for the 'Translate' button click. Uses dataclasses for config."""
     input_image_path = args[0]
     start_time = time.time()
@@ -886,14 +886,14 @@ def handle_translate_click(
         import traceback
 
         traceback.print_exc()
-        cleaned = _clean_error_message(f"An unexpected error occurred: {str(e)}")
+        cleaned = _clean_error_message(f"An unexpected error occurred: {e!s}")
         gr.Error(cleaned)
         return None, _status_update(cleaned)
 
 
 def handle_zip_or_failed_paths_upload(
-    file_path: Optional[str],
-) -> Tuple[Any, Any]:
+    file_path: str | None,
+) -> tuple[Any, Any]:
     """Expand a failed-paths .txt into the images uploader; leave ZIPs unchanged."""
     if not file_path:
         return gr.update(), gr.update()
@@ -916,9 +916,9 @@ def handle_batch_click(
     *args: Any,
     models_dir: Path,
     fonts_base_dir: Path,
-    target_device: Optional[torch.device],
-    progress=gr.Progress(track_tqdm=True),
-) -> Tuple[List[str], str]:
+    target_device: torch.device | None,
+    progress=gr.Progress(track_tqdm=True),  # noqa: B008
+) -> tuple[list[str], str]:
     """Callback for the 'Start Batch Translating' button click. Uses dataclasses."""
     input_files = args[0]
     input_zip = args[1] if len(args) > 1 else None
@@ -945,13 +945,12 @@ def handle_batch_click(
                 try:
                     zip_file_path = validate_zip_file(input_zip)
                 except (ValidationError, FileNotFoundError) as e:
-                    raise gr.Error(f"{ERROR_PREFIX}{str(e)}")
+                    raise gr.Error(f"{ERROR_PREFIX}{e!s}")
 
-        if input_files:
-            if not isinstance(input_files, list):
-                raise gr.Error(
-                    f"{ERROR_PREFIX}Invalid input format. Expected a list of files."
-                )
+        if input_files and not isinstance(input_files, list):
+            raise gr.Error(
+                f"{ERROR_PREFIX}Invalid input format. Expected a list of files."
+            )
 
         if not zip_file_path and not input_files:
             raise gr.Error(
@@ -1042,7 +1041,7 @@ def handle_batch_click(
 
         traceback.print_exc()
         cleaned = _clean_error_message(
-            f"An unexpected error occurred during batch processing: {str(e)}"
+            f"An unexpected error occurred during batch processing: {e!s}"
         )
         gr.Error(cleaned)
         return None, _status_update(cleaned)
@@ -1369,7 +1368,7 @@ def handle_save_config_click(*args: Any) -> str:
     return message
 
 
-def handle_reset_defaults_click(fonts_base_dir: Path) -> List[gr.update]:
+def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
     """Callback for the 'Reset Defaults' button. Uses dataclasses."""
 
     default_settings_dict = settings_manager.reset_to_defaults()
@@ -1748,7 +1747,7 @@ def handle_provider_change(
     provider: str,
     ocr_method: str = "LLM",
     use_custom_sampling: bool = True,
-    opencode_tier: Optional[str] = None,
+    opencode_tier: str | None = None,
 ):
     """Handles changes in the provider selector."""
     from core.caching import get_cache
@@ -1763,7 +1762,7 @@ def handle_provider_change(
 
 def handle_opencode_tier_change(
     opencode_tier: str,
-    current_model: Optional[str],
+    current_model: str | None,
     current_temp: float,
     use_custom_sampling: bool = True,
     ocr_method: str = "LLM",
@@ -1842,12 +1841,12 @@ def handle_unload_models_click():
         model_manager.unload_all()
         gr.Info("All models unloaded from memory successfully.")
     except Exception as e:
-        gr.Error(f"Error unloading models: {str(e)}")
+        gr.Error(f"Error unloading models: {e!s}")
 
 
 def handle_model_change(
     provider: str,
-    model_name: Optional[str],
+    model_name: str | None,
     current_temp: float,
     use_custom_sampling: bool = True,
 ):
@@ -1864,8 +1863,8 @@ def handle_model_change(
 
 def handle_reasoning_effort_change(
     provider: str,
-    model_name: Optional[str],
-    reasoning_effort: Optional[str],
+    model_name: str | None,
+    reasoning_effort: str | None,
     use_custom_sampling: bool = True,
 ):
     """Updates temp/top_p slider interactivity when reasoning effort changes."""
@@ -1888,7 +1887,7 @@ def handle_reasoning_effort_change(
 
 def handle_use_custom_sampling_change(
     provider: str,
-    model_name: Optional[str],
+    model_name: str | None,
     current_temp: float,
     use_custom_sampling: bool,
 ):
@@ -1902,9 +1901,9 @@ def handle_use_custom_sampling_change(
 def handle_app_load(
     provider: str,
     url: str,
-    key: Optional[str],
-    opencode_tier: Optional[str] = None,
-    opencode_key: Optional[str] = None,
+    key: str | None,
+    opencode_tier: str | None = None,
+    opencode_key: str | None = None,
     ocr_method: str = "LLM",
 ):
     """Callback for the app.load event to fetch dynamic models."""
@@ -2037,7 +2036,6 @@ def handle_confidence_threshold_change(_confidence: float):
 
     cache = get_cache()
     cache.clear_yolo_cache()
-    return None
 
 
 def handle_luminance_correction_change(_enabled: bool):
@@ -2046,7 +2044,6 @@ def handle_luminance_correction_change(_enabled: bool):
 
     cache = get_cache()
     cache.clear_inpaint_cache()
-    return None
 
 
 def handle_ocr_method_change(
@@ -2056,11 +2053,11 @@ def handle_ocr_method_change(
     batch_input_language: str,
     batch_original_language_state: str,
     provider: str,
-    current_model: Optional[str],
+    current_model: str | None,
     openai_compatible_url: str,
-    openai_compatible_api_key: Optional[str],
-    opencode_tier: Optional[str] = None,
-    opencode_api_key: Optional[str] = None,
+    openai_compatible_api_key: str | None,
+    opencode_tier: str | None = None,
+    opencode_api_key: str | None = None,
 ):
     """Handles changes in OCR method selection."""
     import gradio as gr

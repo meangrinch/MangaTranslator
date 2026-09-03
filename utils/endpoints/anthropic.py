@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -8,7 +8,7 @@ from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 
 
-def _claude_capability_flag(generation_config: Dict[str, Any], key: str) -> bool:
+def _claude_capability_flag(generation_config: dict[str, Any], key: str) -> bool:
     metadata = generation_config.get("_metadata")
     if isinstance(metadata, dict) and key in metadata:
         return bool(metadata[key])
@@ -18,15 +18,15 @@ def _claude_capability_flag(generation_config: Dict[str, Any], key: str) -> bool
 def call_anthropic_endpoint(
     api_key: str,
     model_name: str,
-    parts: List[Dict[str, Any]],
-    generation_config: Dict[str, Any],
-    system_prompt: Optional[str] = None,
+    parts: list[dict[str, Any]],
+    generation_config: dict[str, Any],
+    system_prompt: str | None = None,
     debug: bool = False,
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """
     Calls the Anthropic Messages API endpoint with the provided data and handles retries.
 
@@ -165,9 +165,11 @@ def call_anthropic_endpoint(
     except Exception:
         pass
 
-    if payload.get("thinking") == {"type": "disabled"}:
-        if payload.get("output_config", {}).get("effort") in ("xhigh", "max"):
-            payload["output_config"]["effort"] = "high"
+    if (
+        payload.get("thinking") == {"type": "disabled"}
+        and payload.get("output_config", {}).get("effort") in ("xhigh", "max")
+    ):
+        payload["output_config"]["effort"] = "high"
 
     if enable_web_search:
         payload["tools"] = [{"type": "web_search_20250305", "name": "web_search"}]
@@ -233,7 +235,7 @@ def call_anthropic_endpoint(
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
-                    f"Error processing successful Anthropic API response: {str(e)}"
+                    f"Error processing successful Anthropic API response: {e!s}"
                 ) from e
 
         except requests.exceptions.HTTPError as e:
@@ -268,14 +270,14 @@ def call_anthropic_endpoint(
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
                     verbose=debug,
                 )
                 time.sleep(current_delay)
                 continue
             else:
                 raise TranslationError(
-                    f"Anthropic API Connection Error after retries: {str(e)}"
+                    f"Anthropic API Connection Error after retries: {e!s}"
                 ) from e
 
     raise TranslationError(

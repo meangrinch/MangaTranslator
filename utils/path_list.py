@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Union
 
 from utils.logging import log_message
 
@@ -10,8 +10,8 @@ FAILED_PATHS_FILENAME = "failed_paths.txt"
 
 
 def resolve_source_path(
-    img_path: Union[str, Path],
-    source_path_map: Optional[Dict[str, str]] = None,
+    img_path: str | Path,
+    source_path_map: dict[str, str] | None = None,
 ) -> str:
     """Return absolute source path, remapping through source_path_map when present."""
     path = Path(img_path)
@@ -34,16 +34,16 @@ def resolve_source_path(
 
 
 def write_failed_paths(
-    output_dir: Union[str, Path],
+    output_dir: str | Path,
     paths: Iterable[str],
-) -> Optional[Path]:
+) -> Path | None:
     """Write unique absolute paths to ``{output_dir}/failed_paths.txt``.
 
     Returns the file path when something was written, otherwise None.
     Paths are recorded as given (after resolve); callers may pass Gradio
     cache paths or real disk paths depending on how inputs were provided.
     """
-    unique: List[str] = []
+    unique: list[str] = []
     seen = set()
     for raw in paths:
         if raw is None:
@@ -77,7 +77,7 @@ def write_failed_paths(
         return None
 
 
-def read_image_paths_from_txt(txt_path: Union[str, Path]) -> List[Path]:
+def read_image_paths_from_txt(txt_path: str | Path) -> list[Path]:
     """Read a path list file; return existing image files only.
 
     Skips blank lines, ``#`` comments, missing paths, and non-image extensions.
@@ -92,7 +92,7 @@ def read_image_paths_from_txt(txt_path: Union[str, Path]) -> List[Path]:
         )
         return []
 
-    found: List[Path] = []
+    found: list[Path] = []
     seen = set()
     for line in content.splitlines():
         text = line.strip()

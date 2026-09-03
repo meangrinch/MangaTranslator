@@ -2,7 +2,6 @@ import io
 import os
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from fontTools.ttLib import TTFont
 
@@ -42,7 +41,7 @@ class LRUCache:
 _font_data_cache = LRUCache(max_size=50)
 _font_features_cache = LRUCache(max_size=50)
 _font_cmap_cache = LRUCache(max_size=50)
-_font_variants_cache: Dict[str, Dict[str, Optional[Path]]] = {}
+_font_variants_cache: dict[str, dict[str, Path | None]] = {}
 
 # Font style detection keywords
 FONT_KEYWORDS = {
@@ -52,7 +51,7 @@ FONT_KEYWORDS = {
 }
 
 
-def get_font_features(font_path: str) -> Dict[str, List[str]]:
+def get_font_features(font_path: str) -> dict[str, list[str]]:
     """
     Uses fontTools to list GSUB and GPOS features in a font file. Caches results.
 
@@ -168,15 +167,13 @@ def sanitize_text_for_font(text: str, font_path: str, verbose: bool = False) -> 
     STYLE_MARKER_CHARS = {"*"}
     WHITESPACE_CHARS = {" ", "\t", "\n", "\r"}
 
-    removed_chars: List[str] = []
-    sanitized_chars: List[str] = []
+    removed_chars: list[str] = []
+    sanitized_chars: list[str] = []
 
     for char in text:
         codepoint = ord(char)
 
-        if char in STYLE_MARKER_CHARS or char in WHITESPACE_CHARS:
-            sanitized_chars.append(char)
-        elif codepoint in supported_codepoints:
+        if char in STYLE_MARKER_CHARS or char in WHITESPACE_CHARS or codepoint in supported_codepoints:
             sanitized_chars.append(char)
         else:
             removed_chars.append(char)
@@ -230,7 +227,7 @@ def _validate_font_file(font_file: Path, verbose: bool = False) -> bool:
 
 def find_font_variants(
     font_dir: str, verbose: bool = False
-) -> Dict[str, Optional[Path]]:
+) -> dict[str, Path | None]:
     """
     Finds regular, italic, bold, and bold-italic font variants (.ttf, .otf)
     in a directory based on filename keywords. Caches results per directory.
@@ -248,8 +245,8 @@ def find_font_variants(
         return _font_variants_cache[resolved_dir]
 
     log_message(f"Scanning fonts in {os.path.basename(resolved_dir)}", verbose=verbose)
-    font_files: List[Path] = []
-    font_variants: Dict[str, Optional[Path]] = {
+    font_files: list[Path] = []
+    font_variants: dict[str, Path | None] = {
         "regular": None,
         "italic": None,
         "bold": None,
@@ -296,11 +293,10 @@ def find_font_variants(
         is_bold = any(kw in stem_lower for kw in FONT_KEYWORDS["bold"])
         is_italic = any(kw in stem_lower for kw in FONT_KEYWORDS["italic"])
         assigned = False
-        if is_bold and is_italic:
-            if not font_variants["bold_italic"]:
-                font_variants["bold_italic"] = font_file
-                assigned = True
-                log_message(f"Found bold-italic: {font_file.name}", verbose=verbose)
+        if is_bold and is_italic and not font_variants["bold_italic"]:
+            font_variants["bold_italic"] = font_file
+            assigned = True
+            log_message(f"Found bold-italic: {font_file.name}", verbose=verbose)
         if assigned:
             identified_files.add(font_file)
 
@@ -322,11 +318,10 @@ def find_font_variants(
                 font_variants["bold"] = font_file
                 assigned = True
                 log_message(f"Found bold: {font_file.name}", verbose=verbose)
-        elif is_italic and not is_bold:
-            if not font_variants["italic"]:
-                font_variants["italic"] = font_file
-                assigned = True
-                log_message(f"Found italic: {font_file.name}", verbose=verbose)
+        elif is_italic and not is_bold and not font_variants["italic"]:
+            font_variants["italic"] = font_file
+            assigned = True
+            log_message(f"Found italic: {font_file.name}", verbose=verbose)
         if assigned:
             identified_files.add(font_file)
 
@@ -344,11 +339,10 @@ def find_font_variants(
         is_bold = any(kw in stem_lower for kw in FONT_KEYWORDS["bold"])
         is_italic = any(kw in stem_lower for kw in FONT_KEYWORDS["italic"])
         assigned = False
-        if is_regular and not is_bold and not is_italic:
-            if not font_variants["regular"]:
-                font_variants["regular"] = font_file
-                assigned = True
-                log_message(f"Found regular: {font_file.name}", verbose=verbose)
+        if is_regular and not is_bold and not is_italic and not font_variants["regular"]:
+            font_variants["regular"] = font_file
+            assigned = True
+            log_message(f"Found regular: {font_file.name}", verbose=verbose)
         if assigned:
             identified_files.add(font_file)
 
@@ -531,7 +525,7 @@ def load_font_data(font_path: str) -> bytes:
     return font_data
 
 
-def load_font_family(font_dir: str, verbose: bool = False) -> Dict[str, Optional[str]]:
+def load_font_family(font_dir: str, verbose: bool = False) -> dict[str, str | None]:
     """
     High-level function to load a complete font family from a directory.
 

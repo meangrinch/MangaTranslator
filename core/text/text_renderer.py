@@ -1,4 +1,3 @@
-from typing import Optional, Tuple
 
 import numpy as np
 import skia
@@ -82,20 +81,20 @@ def _auto_vertical_layout_is_better(
 def render_text_skia(
     pil_image: Image.Image,
     text: str,
-    bbox: Tuple[int, int, int, int],
+    bbox: tuple[int, int, int, int],
     font_dir: str,
-    cleaned_mask: Optional[np.ndarray] = None,
-    bubble_color_bgr: Optional[Tuple[int, int, int]] = (255, 255, 255),
-    config: Optional[RenderingConfig] = None,
+    cleaned_mask: np.ndarray | None = None,
+    bubble_color_bgr: tuple[int, int, int] | None = (255, 255, 255),
+    config: RenderingConfig | None = None,
     raise_on_safe_error: bool = False,
     verbose: bool = False,
-    bubble_id: Optional[str] = None,
+    bubble_id: str | None = None,
     rotation_deg: float = 0.0,
     vertical_stack: bool = False,
-    text_color_rgb: Optional[Tuple[int, int, int]] = None,
-    text_background_color: Optional[Tuple[int, int, int]] = None,
+    text_color_rgb: tuple[int, int, int] | None = None,
+    text_background_color: tuple[int, int, int] | None = None,
     layout_only: bool = False,
-    fallback_padding_pixels: Optional[float] = None,
+    fallback_padding_pixels: float | None = None,
 ) -> Image.Image:
     """
     Fits and renders text within a bounding box using Skia and HarfBuzz.
@@ -255,8 +254,8 @@ def render_text_skia(
         min_font = config.min_font_size
         max_font = config.max_font_size
         if use_vertical_stack and config.vertical_font_size_mult != 1.0:
-            min_font = max(1, int(round(min_font * config.vertical_font_size_mult)))
-            max_font = max(1, int(round(max_font * config.vertical_font_size_mult)))
+            min_font = max(1, round(min_font * config.vertical_font_size_mult))
+            max_font = max(1, round(max_font * config.vertical_font_size_mult))
 
         return find_optimal_layout(
             layout_text,

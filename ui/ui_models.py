@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import torch
 
@@ -49,32 +49,32 @@ class UITranslationProviderSettings:
     """UI state for translation provider settings."""
 
     provider: str = "Google"
-    google_api_key: Optional[str] = ""
-    openai_api_key: Optional[str] = ""
-    anthropic_api_key: Optional[str] = ""
-    xai_api_key: Optional[str] = ""
-    meta_api_key: Optional[str] = ""
-    deepseek_api_key: Optional[str] = ""
-    zai_api_key: Optional[str] = ""
-    moonshot_api_key: Optional[str] = ""
-    mimo_api_key: Optional[str] = ""
-    qwencloud_api_key: Optional[str] = ""
-    opencode_api_key: Optional[str] = ""
+    google_api_key: str | None = ""
+    openai_api_key: str | None = ""
+    anthropic_api_key: str | None = ""
+    xai_api_key: str | None = ""
+    meta_api_key: str | None = ""
+    deepseek_api_key: str | None = ""
+    zai_api_key: str | None = ""
+    moonshot_api_key: str | None = ""
+    mimo_api_key: str | None = ""
+    qwencloud_api_key: str | None = ""
+    opencode_api_key: str | None = ""
     opencode_tier: str = "zen"
-    openrouter_api_key: Optional[str] = ""
+    openrouter_api_key: str | None = ""
     openai_compatible_url: str = "http://localhost:8080/v1"
-    openai_compatible_api_key: Optional[str] = ""
+    openai_compatible_api_key: str | None = ""
 
 
 @dataclass
 class UITranslationLLMSettings:
     """UI state for LLM-specific translation settings."""
 
-    model_name: Optional[str] = None
+    model_name: str | None = None
     temperature: float = 0.1
     top_p: float = 0.95
     top_k: int = 64
-    max_tokens: Optional[int] = None
+    max_tokens: int | None = None
     translation_mode: str = "one-step"
     reading_direction: str = "rtl"
     send_full_page_context: bool = True
@@ -83,7 +83,7 @@ class UITranslationLLMSettings:
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
-    special_instructions: Optional[str] = None
+    special_instructions: str | None = None
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"
 
 
@@ -199,9 +199,9 @@ class UIGeneralSettings:
     )
     media_resolution_bubbles: str = "auto"  # Gemini 3 models
     media_resolution_context: str = "auto"  # Gemini 3 models
-    reasoning_effort: Optional[str] = None
-    effort: Optional[str] = None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness
-    verbosity: Optional[str] = (
+    reasoning_effort: str | None = None
+    effort: str | None = None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness
+    verbosity: str | None = (
         None  # GPT-5 series only: controls response verbosity (high/medium/low)
     )
     auto_scale: bool = True
@@ -228,11 +228,11 @@ class UIConfigState:
     # Specific UI elements state (saved in config.json)
     input_language: str = "Japanese"
     output_language: str = "English"
-    font_pack: Optional[str] = None
+    font_pack: str | None = None
     batch_input_language: str = "Japanese"
     batch_output_language: str = "English"
-    batch_font_pack: Optional[str] = None
-    batch_special_instructions: Optional[str] = None
+    batch_font_pack: str | None = None
+    batch_special_instructions: str | None = None
     batch_parallel_requests: int = 1
     batch_parallel_within_pages: bool = False
     batch_overlap_llm_with_inpaint: bool = False
@@ -240,7 +240,7 @@ class UIConfigState:
     batch_previous_context_image_count: int = 0
     batch_previous_context_text_count: int = 3
 
-    def to_save_dict(self) -> Dict[str, Any]:
+    def to_save_dict(self) -> dict[str, Any]:
         """Converts the UI state into a dictionary suitable for saving to config.json."""
         data = {
             "confidence": self.detection.confidence,
@@ -395,7 +395,7 @@ class UIConfigState:
         return data
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> "UIConfigState":
+    def from_dict(data: dict[str, Any]) -> "UIConfigState":
         """Creates a UIConfigState instance from a dictionary (e.g., loaded from config.json)."""
 
         from . import (  # Local import to avoid circular dependency issues
@@ -758,7 +758,7 @@ class UIConfigState:
 def map_ui_to_backend_config(
     ui_state: UIConfigState,
     fonts_base_dir: Path,
-    target_device: Optional[torch.device],
+    target_device: torch.device | None,
     is_batch: bool = False,
 ) -> MangaTranslatorConfig:
     """Maps the UIConfigState to the backend MangaTranslatorConfig."""

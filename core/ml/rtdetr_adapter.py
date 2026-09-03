@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import cv2
 import numpy as np
@@ -28,7 +28,7 @@ class _RTDetrBoxes:
 class _RTDetrResults:
     """Minimal stand-in for ultralytics Results."""
 
-    def __init__(self, boxes: _RTDetrBoxes, names: Dict[int, str]):
+    def __init__(self, boxes: _RTDetrBoxes, names: dict[int, str]):
         self.boxes = boxes
         self.names = names
 
@@ -47,7 +47,7 @@ class RTDetrYOLOAdapter:
         model: Any,
         processor: Any,
         device: torch.device,
-        names: Optional[Dict[int, str]] = None,
+        names: dict[int, str] | None = None,
     ):
         self.model = model
         self.processor = processor
@@ -60,13 +60,13 @@ class RTDetrYOLOAdapter:
 
     def __call__(
         self,
-        source: Union[np.ndarray, Image.Image, str],
+        source: np.ndarray | Image.Image | str,
         conf: float = 0.35,
-        device: Optional[Union[torch.device, str]] = None,
+        device: torch.device | str | None = None,
         verbose: bool = False,
-        imgsz: Optional[int] = None,
+        imgsz: int | None = None,
         **_kwargs,
-    ) -> List[_RTDetrResults]:
+    ) -> list[_RTDetrResults]:
         del verbose  # accepted for YOLO API compatibility
         run_device = torch.device(device) if device is not None else self.device
         image_pil, orig_h, orig_w = self._to_pil(source)
@@ -114,7 +114,7 @@ class RTDetrYOLOAdapter:
 
     @staticmethod
     def _to_pil(
-        source: Union[np.ndarray, Image.Image, str],
+        source: np.ndarray | Image.Image | str,
     ) -> tuple[Image.Image, int, int]:
         if isinstance(source, Image.Image):
             image = source.convert("RGB") if source.mode != "RGB" else source

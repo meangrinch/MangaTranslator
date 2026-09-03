@@ -11,7 +11,6 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Optional
 
 import torch
 from PIL import Image
@@ -28,7 +27,7 @@ def pil_to_base64_png(image_pil: Image.Image) -> str:
 
 
 def _json_request(
-    url: str, payload: Optional[dict] = None, timeout: Optional[int] = None
+    url: str, payload: dict | None = None, timeout: int | None = None
 ) -> dict:
     data = None
     headers = {}
@@ -237,7 +236,7 @@ class SDCppServerManager:
             )
 
     def _cleanup_stale_logs(
-        self, current_log_path: Optional[Path] = None, verbose: bool = False
+        self, current_log_path: Path | None = None, verbose: bool = False
     ) -> None:
         if not self.install_dir.exists():
             return
@@ -320,7 +319,7 @@ class SDCppServerManager:
             return archive_name
         return f"{self.RELEASE_BASE_URL}/{self.RELEASE_TAG}/{archive_name}"
 
-    def _find_server_executable(self, extract_dir: Path) -> Optional[Path]:
+    def _find_server_executable(self, extract_dir: Path) -> Path | None:
         names = (
             ("sd-server.exe", "sd-server")
             if platform.system().lower() == "windows"
@@ -503,7 +502,7 @@ class SDCppServerManager:
         except Exception:
             return False
 
-    def _log_tail(self, log_path: Optional[Path], limit: int = 2000) -> str:
+    def _log_tail(self, log_path: Path | None, limit: int = 2000) -> str:
         if log_path is None or not log_path.exists():
             return ""
         try:
@@ -616,7 +615,7 @@ class SDCppServerManager:
         self,
         base_url: str,
         process: subprocess.Popen,
-        log_path: Optional[Path],
+        log_path: Path | None,
         timeout_sec: int = 900,
         label: str = "sd.cpp",
         verbose: bool = False,
@@ -686,7 +685,7 @@ class SDCppServerManager:
                 self.install_dir / f"{self._safe_server_key(server_key)}-server.log"
             )
             self._cleanup_stale_logs(log_path, verbose=verbose)
-            log_file = open(log_path, "ab")
+            log_file = open(log_path, "ab")  # noqa: SIM115
             cache_args, normalized_cache_mode, warmup, steps = self._cache_args(
                 cache_mode, num_inference_steps
             )
@@ -788,7 +787,7 @@ class SDCppServerManager:
             return server
 
     def _stop_server_record(
-        self, server: Optional[dict], verbose: bool = False
+        self, server: dict | None, verbose: bool = False
     ) -> None:
         if not server:
             return

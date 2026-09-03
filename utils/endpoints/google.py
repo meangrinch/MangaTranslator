@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -11,16 +11,16 @@ from utils.logging import log_message
 def call_gemini_endpoint(
     api_key: str,
     model_name: str,
-    parts: List[Dict[str, Any]],
-    generation_config: Dict[str, Any],
-    system_prompt: Optional[str] = None,
+    parts: list[dict[str, Any]],
+    generation_config: dict[str, Any],
+    system_prompt: str | None = None,
     debug: bool = False,
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
     enable_code_execution: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """
     Calls the Google API endpoint with the provided data and handles retries.
 
@@ -139,7 +139,7 @@ def call_gemini_endpoint(
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
-                    f"Error processing successful Google API response: {str(e)}"
+                    f"Error processing successful Google API response: {e!s}"
                 ) from e
 
         except requests.exceptions.HTTPError as e:
@@ -164,14 +164,14 @@ def call_gemini_endpoint(
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
                     verbose=debug,
                 )
                 time.sleep(current_delay)
                 continue
             else:
                 raise TranslationError(
-                    f"Google API Connection Error after retries: {str(e)}"
+                    f"Google API Connection Error after retries: {e!s}"
                 ) from e
 
     raise TranslationError(

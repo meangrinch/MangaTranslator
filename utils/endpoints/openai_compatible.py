@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
@@ -10,7 +10,7 @@ from utils.logging import log_message
 from utils.model_metadata import is_azure_url, is_gemini_no_sampling_model
 
 
-def build_openai_compatible_url(base_url: str, model_name: Optional[str] = None) -> str:
+def build_openai_compatible_url(base_url: str, model_name: str | None = None) -> str:
     """Builds the full chat completions URL for generic or Azure OpenAI endpoints."""
     if not base_url:
         raise ValidationError("Base URL is required for OpenAI-Compatible endpoint")
@@ -70,16 +70,16 @@ def build_openai_compatible_url(base_url: str, model_name: Optional[str] = None)
 
 def call_openai_compatible_endpoint(
     base_url: str,
-    api_key: Optional[str],
+    api_key: str | None,
     model_name: str,
-    parts: List[Dict[str, Any]],
-    generation_config: Dict[str, Any],
-    system_prompt: Optional[str] = None,
+    parts: list[dict[str, Any]],
+    generation_config: dict[str, Any],
+    system_prompt: str | None = None,
     debug: bool = False,
     timeout: int = 480,
     max_retries: int = 5,
     base_delay: float = 1.0,
-) -> Optional[str]:
+) -> str | None:
     """
     Calls a generic or Azure OpenAI-Compatible Chat Completions API endpoint and handles retries.
 
@@ -265,7 +265,7 @@ def call_openai_compatible_endpoint(
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
-                    f"Error processing successful OpenAI-Compatible API response: {str(e)}"
+                    f"Error processing successful OpenAI-Compatible API response: {e!s}"
                 ) from e
 
         except requests.exceptions.HTTPError as e:
@@ -298,14 +298,14 @@ def call_openai_compatible_endpoint(
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
                     verbose=debug,
                 )
                 time.sleep(current_delay)
                 continue
             else:
                 raise TranslationError(
-                    f"OpenAI-Compatible API Connection Error after retries: {str(e)}"
+                    f"OpenAI-Compatible API Connection Error after retries: {e!s}"
                 ) from e
 
     raise TranslationError(

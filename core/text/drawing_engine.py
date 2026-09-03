@@ -1,6 +1,5 @@
 import os
 import threading
-from typing import Dict, Optional, Tuple
 
 import skia
 import uharfbuzz as hb
@@ -19,7 +18,7 @@ _font_cache_lock = threading.RLock()
 
 def load_font_resources(
     font_path: str,
-) -> Tuple[bytes, skia.Typeface, hb.Face]:
+) -> tuple[bytes, skia.Typeface, hb.Face]:
     """
     Loads font data, Skia Typeface, and HarfBuzz Face, using LRU caching.
 
@@ -32,10 +31,7 @@ def load_font_resources(
     Raises:
         FontError: If font data cannot be loaded or Skia/HarfBuzz resources fail to load
     """
-    try:
-        font_data = load_font_data(font_path)
-    except FontError:
-        raise
+    font_data = load_font_data(font_path)
 
     with _font_cache_lock:
         typeface = _typeface_cache.get(font_path)
@@ -103,7 +99,7 @@ def skia_surface_to_pil(surface: skia.Surface) -> Image.Image:
         RenderingError: If conversion fails
     """
     try:
-        skia_image: Optional[skia.Image] = surface.makeImageSnapshot()
+        skia_image: skia.Image | None = surface.makeImageSnapshot()
         if skia_image is None:
             log_message("Skia surface snapshot failed", always_print=True)
             raise RenderingError("Failed to create Skia image snapshot")
@@ -120,14 +116,14 @@ def skia_surface_to_pil(surface: skia.Surface) -> Image.Image:
 
 def draw_layout(
     surface: skia.Surface,
-    layout_data: Dict,
+    layout_data: dict,
     target_center_x: float,
     target_center_y: float,
-    loaded_typefaces: Dict[str, Optional[skia.Typeface]],
-    loaded_hb_faces: Dict[str, Optional[hb.Face]],
+    loaded_typefaces: dict[str, skia.Typeface | None],
+    loaded_hb_faces: dict[str, hb.Face | None],
     regular_typeface: skia.Typeface,
     regular_hb_face: hb.Face,
-    features_to_enable: Dict[str, bool],
+    features_to_enable: dict[str, bool],
     text_color: int,
     use_subpixel_rendering: bool,
     font_hinting: str,
@@ -136,7 +132,7 @@ def draw_layout(
     pre_translate_x: float = 0.0,
     pre_translate_y: float = 0.0,
     pre_rotate_deg: float = 0.0,
-    text_background_color: Optional[int] = None,
+    text_background_color: int | None = None,
 ) -> bool:
     """
     Draws the text layout onto a Skia surface.

@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -12,15 +12,15 @@ from utils.model_metadata import supports_meta_reasoning_effort
 def call_meta_model_endpoint(
     api_key: str,
     model_name: str,
-    parts: List[Dict[str, Any]],
-    generation_config: Dict[str, Any],
-    system_prompt: Optional[str] = None,
+    parts: list[dict[str, Any]],
+    generation_config: dict[str, Any],
+    system_prompt: str | None = None,
     debug: bool = False,
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """
     Calls the Meta Model API chat completions endpoint with the provided data and handles retries.
 
@@ -87,7 +87,7 @@ def call_meta_model_endpoint(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_content})
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "model": model_name,
         "messages": messages,
         "max_tokens": generation_config.get("max_tokens", 4096),
@@ -163,7 +163,7 @@ def call_meta_model_endpoint(
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
-                    f"Error processing successful Meta Model API response: {str(e)}"
+                    f"Error processing successful Meta Model API response: {e!s}"
                 ) from e
 
         except requests.exceptions.HTTPError as e:
@@ -196,13 +196,13 @@ def call_meta_model_endpoint(
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
                     verbose=debug,
                 )
                 time.sleep(current_delay)
                 continue
             raise TranslationError(
-                f"Meta Model API Connection Error after retries: {str(e)}"
+                f"Meta Model API Connection Error after retries: {e!s}"
             ) from e
 
     raise TranslationError(

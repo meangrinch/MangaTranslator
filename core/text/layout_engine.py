@@ -1,6 +1,5 @@
 import re
 import unicodedata
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import skia
@@ -29,8 +28,8 @@ VERTICAL_GROUPED_PUNCTUATION = set(".,;:!?…。．！？｡")
 
 
 def shape_line(
-    text_line: str, hb_font: hb.Font, features: Dict[str, bool]
-) -> Tuple[List[hb.GlyphInfo], List[hb.GlyphPosition], str]:
+    text_line: str, hb_font: hb.Font, features: dict[str, bool]
+) -> tuple[list[hb.GlyphInfo], list[hb.GlyphPosition], str]:
     """Shapes a line of text with HarfBuzz.
 
     Returns:
@@ -52,7 +51,7 @@ def shape_line(
         raise RenderingError("HarfBuzz text shaping failed") from e
 
 
-def calculate_line_width(positions: List[hb.GlyphPosition]) -> float:
+def calculate_line_width(positions: list[hb.GlyphPosition]) -> float:
     """Calculate visual width using advances and first/last x_offset."""
     if not positions:
         return 0.0
@@ -70,8 +69,8 @@ def calculate_line_width(positions: List[hb.GlyphPosition]) -> float:
 def calculate_styled_line_width(
     line_with_markers: str,
     font_size: int,
-    loaded_hb_faces: Dict[str, Optional[hb.Face]],
-    features: Dict[str, bool],
+    loaded_hb_faces: dict[str, hb.Face | None],
+    features: dict[str, bool],
 ) -> float:
     """Calculate the width of a line that may contain style markers.
 
@@ -90,8 +89,8 @@ def calculate_styled_line_width(
         return 0.0
 
     total_advance_fixed_all = 0
-    first_offset_fixed_global: Optional[int] = None
-    last_offset_fixed_global: Optional[int] = None
+    first_offset_fixed_global: int | None = None
+    last_offset_fixed_global: int | None = None
 
     for segment_text, style_name in segments:
         hb_face_to_use = (
@@ -136,8 +135,8 @@ def _is_separator_or_space(ch: str) -> bool:
     return ch.isspace() or (len(category) > 0 and category[0] == "Z")
 
 
-def _iter_vertical_units(text: str) -> List[Tuple[str, str]]:
-    units: List[Tuple[str, str]] = []
+def _iter_vertical_units(text: str) -> list[tuple[str, str]]:
+    units: list[tuple[str, str]] = []
     for segment_text, style_name in parse_styled_segments(text):
         current = ""
         current_is_punctuation = False
@@ -168,9 +167,9 @@ def _measure_vertical_unit(
     text: str,
     style_name: str,
     font_size: int,
-    loaded_hb_faces: Dict[str, Optional[hb.Face]],
-    features: Dict[str, bool],
-) -> Optional[Dict]:
+    loaded_hb_faces: dict[str, hb.Face | None],
+    features: dict[str, bool],
+) -> dict | None:
     hb_face = loaded_hb_faces.get(style_name) or loaded_hb_faces.get("regular")
     if hb_face is None:
         return None
@@ -190,7 +189,7 @@ def _measure_vertical_unit(
     top = float("inf")
     bottom = float("-inf")
     vertical_advances = []
-    first_vertical_origin_y: Optional[float] = None
+    first_vertical_origin_y: float | None = None
 
     for info, pos in zip(infos, positions):
         extents = hb_font.get_glyph_extents(info.codepoint)
@@ -257,11 +256,11 @@ def _build_vertical_layout(
     font_size: int,
     max_render_width: float,
     max_render_height: float,
-    loaded_hb_faces: Dict[str, Optional[hb.Face]],
-    features_to_enable: Dict[str, bool],
+    loaded_hb_faces: dict[str, hb.Face | None],
+    features_to_enable: dict[str, bool],
     line_spacing_mult: float,
     metrics,
-) -> Optional[Dict]:
+) -> dict | None:
     lines_data_at_size = []
     for unit_text, style_name in _iter_vertical_units(text):
         unit = _measure_vertical_unit(
@@ -326,18 +325,18 @@ def check_fit(
     max_render_height: float,
     regular_hb_face: hb.Face,
     regular_typeface: skia.Typeface,
-    loaded_hb_faces: Dict[str, Optional[hb.Face]],
-    features_to_enable: Dict[str, bool],
+    loaded_hb_faces: dict[str, hb.Face | None],
+    features_to_enable: dict[str, bool],
     line_spacing_mult: float,
     hyphenate_before_scaling: bool,
     hyphen_penalty: float,
     hyphenation_min_word_length: int,
     badness_exponent: float,
-    word_width_cache: Optional[Dict[Tuple[str, int], float]] = None,
+    word_width_cache: dict[tuple[str, int], float] | None = None,
     verbose: bool = False,
     detach_trailing_punctuation: bool = True,
     vertical_stack: bool = False,
-) -> Optional[Dict]:
+) -> dict | None:
     """Check if text fits within the given dimensions at the specified font size.
 
     Args:
@@ -427,10 +426,10 @@ def check_fit(
                 }
             return None
 
-        tokens: List[Tuple[str, bool]] = tokenize_styled_text(
+        tokens: list[tuple[str, bool]] = tokenize_styled_text(
             text, detach_trailing_punctuation
         )
-        augmented_tokens: List[str] = []
+        augmented_tokens: list[str] = []
 
         if hyphenate_before_scaling:
             for token_text, is_styled in tokens:
@@ -458,12 +457,12 @@ def check_fit(
 
                     if word_width > max_render_width:
 
-                        def wrap_part(part: str) -> str:
+                        def wrap_part(part: str, m: str = marker) -> str:
                             no_space_before = part.startswith(NO_SPACE_BEFORE_MARKER)
                             clean_part = strip_no_space_before_marker(part)
                             wrapped = (
-                                f"{marker}{clean_part}{marker}"
-                                if marker
+                                f"{m}{clean_part}{m}"
+                                if m
                                 else clean_part
                             )
                             if no_space_before:
@@ -503,9 +502,9 @@ def check_fit(
             GLUE_CLOSERS_RE = re.compile(r"^[\)\]\}\u2019\u201D\'\"]+$")
 
             def _glue_trailing_punctuation(
-                tokens_list: List[str], _detach: bool = True
-            ) -> List[str]:
-                glued: List[str] = []
+                tokens_list: list[str], _detach: bool = True
+            ) -> list[str]:
+                glued: list[str] = []
                 for tok in tokens_list:
                     clean_tok = strip_no_space_before_marker(tok)
                     match = STYLE_PATTERN.match(clean_tok)
@@ -608,11 +607,11 @@ def check_fit(
 
 
 def _check_collision(
-    lines_data: List[Dict],
-    box_top_left: Tuple[int, int],
+    lines_data: list[dict],
+    box_top_left: tuple[int, int],
     cleaned_mask: np.ndarray,
     line_height: float,
-    render_size: Tuple[float, float],
+    render_size: tuple[float, float],
 ) -> bool:
     """
     Check if any text pixel overlaps with background (0) in mask.
@@ -662,8 +661,8 @@ def find_optimal_layout(
     max_render_height: float,
     regular_hb_face: hb.Face,
     regular_typeface: skia.Typeface,
-    loaded_hb_faces: Dict[str, Optional[hb.Face]],
-    features_to_enable: Dict[str, bool],
+    loaded_hb_faces: dict[str, hb.Face | None],
+    features_to_enable: dict[str, bool],
     min_font_size: int = 8,
     max_font_size: int = 16,
     line_spacing_mult: float = 1.0,
@@ -672,12 +671,12 @@ def find_optimal_layout(
     hyphenation_min_word_length: int = 8,
     badness_exponent: float = 3.0,
     verbose: bool = False,
-    bubble_id: Optional[str] = None,
-    cleaned_mask: Optional[np.ndarray] = None,
-    box_top_left: Optional[Tuple[int, int]] = None,
+    bubble_id: str | None = None,
+    cleaned_mask: np.ndarray | None = None,
+    box_top_left: tuple[int, int] | None = None,
     detach_trailing_punctuation: bool = True,
     vertical_stack: bool = False,
-) -> Dict:
+) -> dict:
     """Find the optimal font size and layout for text within given dimensions.
 
     Uses binary search to find the largest font size that fits.
@@ -724,7 +723,7 @@ def find_optimal_layout(
     best_fit_line_height = 0.0
     best_fit_block_height = 0.0
 
-    word_width_cache: Dict[Tuple[str, int], float] = {}
+    word_width_cache: dict[tuple[str, int], float] = {}
 
     low = min_font_size
     high = max_font_size

@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -73,10 +72,10 @@ def _mask_to_bbox(mask, fallback_box=None) -> tuple[int, int, int, int]:
             fallback_box.tolist() if hasattr(fallback_box, "tolist") else fallback_box
         )
         return (
-            int(round(x0_f)),
-            int(round(y0_f)),
-            int(round(x1_f)),
-            int(round(y1_f)),
+            round(x0_f),
+            round(y0_f),
+            round(x1_f),
+            round(y1_f),
         )
 
     y_coords, x_coords = coords
@@ -218,7 +217,7 @@ def _calculate_iou(box_a, box_b):
 
 def _deduplicate_primary_boxes(
     boxes: torch.Tensor, confidences: torch.Tensor, threshold: float
-) -> Tuple[torch.Tensor, List[int]]:
+) -> tuple[torch.Tensor, list[int]]:
     """Remove duplicate primary detections using IoU-based NMS.
 
     When two boxes have IoU > threshold, keeps the one with higher confidence.
@@ -256,9 +255,9 @@ def _deduplicate_primary_boxes(
 
 def _remove_contained_boxes(
     boxes: torch.Tensor,
-    indices: Optional[List[Tuple[str, int]]] = None,
+    indices: list[tuple[str, int]] | None = None,
     threshold: float = 0.9,
-) -> Tuple[torch.Tensor, List[Tuple[str, int]]]:
+) -> tuple[torch.Tensor, list[tuple[str, int]]]:
     """Remove boxes that are fully or almost fully contained within other boxes.
 
     Args:
@@ -620,8 +619,8 @@ def _filter_encompassing_osb_text_boxes(
 
 
 def _get_group_osb_text_boxes(
-    osb_text_boxes: Optional[np.ndarray], primary_box
-) -> Optional[np.ndarray]:
+    osb_text_boxes: np.ndarray | None, primary_box
+) -> np.ndarray | None:
     """Scope OSB text boxes to those intersecting a primary bubble box."""
     if osb_text_boxes is None or len(osb_text_boxes) == 0:
         return None
@@ -671,10 +670,10 @@ def _split_overlap_zone_with_line(
     center_b: tuple[float, float],
     line_start: tuple[float, float],
     line_end: tuple[float, float],
-    text_boxes_a: Optional[list] = None,
-    text_boxes_b: Optional[list] = None,
+    text_boxes_a: list | None = None,
+    text_boxes_b: list | None = None,
     require_text_safe_split: bool = False,
-) -> Optional[tuple[np.ndarray, np.ndarray]]:
+) -> tuple[np.ndarray, np.ndarray] | None:
     """Split an overlap zone along a line, optionally requiring a text-safe offset."""
     line_vec_x = line_end[0] - line_start[0]
     line_vec_y = line_end[1] - line_start[1]
@@ -790,7 +789,7 @@ def _split_overlap_zone_with_line(
     return mask_a, mask_b
 
 
-def _detect_group_arrangement(group_boxes: list) -> Optional[str]:
+def _detect_group_arrangement(group_boxes: list) -> str | None:
     """Determine if all boxes in a group are arranged along a single axis.
 
     Returns "horizontal" when every pair of box centres has a dominant
@@ -804,7 +803,7 @@ def _detect_group_arrangement(group_boxes: list) -> Optional[str]:
         b = box.tolist() if hasattr(box, "tolist") else box
         return (b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0
 
-    arrangement: Optional[str] = None
+    arrangement: str | None = None
     for i in range(len(group_boxes)):
         ci = _center(group_boxes[i])
         for j in range(i + 1, len(group_boxes)):
@@ -831,9 +830,9 @@ def _split_overlap_zone_with_box_diagonal(
     overlap_mask: np.ndarray,
     box_a,
     box_b,
-    text_boxes_a: Optional[list] = None,
-    text_boxes_b: Optional[list] = None,
-    group_arrangement: Optional[str] = None,
+    text_boxes_a: list | None = None,
+    text_boxes_b: list | None = None,
+    group_arrangement: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Split an overlap zone, choosing axis-aligned or diagonal lines.
 
@@ -972,7 +971,7 @@ def _split_conjoined_mask(
     primary_mask,
     group_boxes: list,
     verbose: bool = False,
-    osb_text_boxes: Optional[np.ndarray] = None,
+    osb_text_boxes: np.ndarray | None = None,
 ) -> list[np.ndarray]:
     """Partition one mask into per-secondary masks for a conjoined group."""
     if primary_mask is None or len(group_boxes) == 0:
@@ -1086,10 +1085,10 @@ def _build_segmentation_detections(
     img_h: int,
     img_w: int,
     conjoined_confidence: float,
-    osb_text_boxes_np: Optional[np.ndarray] = None,
+    osb_text_boxes_np: np.ndarray | None = None,
     verbose: bool = False,
-    sam_masks: Optional[list] = None,
-    synthetic_conjoined_groups: Optional[list] = None,
+    sam_masks: list | None = None,
+    synthetic_conjoined_groups: list | None = None,
 ):
     """Build final detections from masks, including conjoined-mask partitioning."""
     detections = []
@@ -1119,10 +1118,10 @@ def _build_segmentation_detections(
         detections.append(
             {
                 "bbox": (
-                    int(round(x0_f)),
-                    int(round(y0_f)),
-                    int(round(x1_f)),
-                    int(round(y1_f)),
+                    round(x0_f),
+                    round(y0_f),
+                    round(x1_f),
+                    round(y1_f),
                 ),
                 "confidence": conf,
                 "class": cls_name,
@@ -1180,7 +1179,7 @@ def _build_segmentation_detections(
         for b in group_boxes:
             bx0, by0, bx1, by1 = b.tolist() if hasattr(b, "tolist") else b
             group_bboxes.append(
-                (int(round(bx0)), int(round(by0)), int(round(bx1)), int(round(by1)))
+                (round(bx0), round(by0), round(bx1), round(by1))
             )
 
         for local_idx, s_idx in enumerate(s_indices):
@@ -1233,7 +1232,7 @@ def _build_segmentation_detections(
         for b in group_boxes:
             bx0, by0, bx1, by1 = b.tolist() if hasattr(b, "tolist") else b
             group_bboxes.append(
-                (int(round(bx0)), int(round(by0)), int(round(bx1)), int(round(by1)))
+                (round(bx0), round(by0), round(bx1), round(by1))
             )
 
         for local_idx, p_idx in enumerate(member_indices):
@@ -1269,7 +1268,7 @@ def detect_speech_bubbles(
     seg_model: str = "yolo",
     conjoined_detection: bool = True,
     conjoined_confidence=0.35,
-    image_override: Optional[Image.Image] = None,
+    image_override: Image.Image | None = None,
     osb_enabled: bool = False,
     osb_text_verification: bool = False,
     osb_text_hf_token: str = "",
@@ -1296,7 +1295,7 @@ def detect_speech_bubbles(
         tuple[list, list]: (speech bubble detections, text_free boxes from secondary model)
     """
     detections = []
-    text_free_boxes: List[List[float]] = []
+    text_free_boxes: list[list[float]] = []
 
     _device = device if device is not None else get_best_device()
     try:
@@ -1819,8 +1818,8 @@ def detect_panels(
     confidence: float = 0.25,
     device=None,
     verbose=False,
-    image_override: Optional[Image.Image] = None,
-) -> List[Tuple[int, int, int, int]]:
+    image_override: Image.Image | None = None,
+) -> list[tuple[int, int, int, int]]:
     """Detect manga/comic panels using YOLO model.
 
     Args:
@@ -1890,17 +1889,16 @@ def detect_panels(
         for i, box in enumerate(boxes):
             # If we found a frame class ID, only include detections of that class
             # Otherwise, include all detections (fallback)
-            if frame_class_id is not None:
-                if int(classes[i]) != frame_class_id:
-                    continue
+            if frame_class_id is not None and int(classes[i]) != frame_class_id:
+                continue
 
             x0_f, y0_f, x1_f, y1_f = box.tolist()
             panel_boxes.append(
                 (
-                    int(round(x0_f)),
-                    int(round(y0_f)),
-                    int(round(x1_f)),
-                    int(round(y1_f)),
+                    round(x0_f),
+                    round(y0_f),
+                    round(x1_f),
+                    round(y1_f),
                 )
             )
 

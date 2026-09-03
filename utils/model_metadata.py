@@ -1,5 +1,4 @@
 import re
-from typing import Dict, List, Optional, Tuple
 
 FLUX_SDCPP_QUANT_FILES = {
     "flux_klein_4b": {
@@ -93,7 +92,7 @@ FLUX_SDCPP_TEXT_ENCODER_QUANTS = FLUX_SDCPP_QWEN_QUANTS + tuple(
 FLUX_BACKENDS = ("sdcpp", "sdnq", "nunchaku")
 
 
-def flux_sdcpp_text_encoder_asset_key(model_key: str) -> Optional[str]:
+def flux_sdcpp_text_encoder_asset_key(model_key: str) -> str | None:
     """Map a Flux model key to its sd.cpp text-encoder asset key."""
     if model_key == "flux_kontext":
         return "t5xxl"
@@ -141,7 +140,7 @@ def flux_valid_backend(model_key: str, backend: str) -> str:
     return backend if backend in FLUX_BACKENDS else "sdnq"
 
 
-def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int]:
+def get_max_tokens_cap(provider: str, model_name: str | None) -> int | None:
     """
     Get the maximum allowed max_tokens value for a specific provider/model combination.
 
@@ -179,7 +178,7 @@ def get_max_tokens_cap(provider: str, model_name: Optional[str]) -> Optional[int
     return None
 
 
-def is_gpt5_series(model_name: Optional[str]) -> bool:
+def is_gpt5_series(model_name: str | None) -> bool:
     """Check if a model is any GPT-5 variant (5, 5.1, 5.2, etc.)."""
     if not model_name:
         return False
@@ -187,31 +186,27 @@ def is_gpt5_series(model_name: Optional[str]) -> bool:
     return lm.startswith("gpt-5") or "/gpt-5" in lm
 
 
-def is_gpt5_chat_variant(model_name: Optional[str]) -> bool:
+def is_gpt5_chat_variant(model_name: str | None) -> bool:
     """Check if a GPT-5 model is a chat variant (non-reasoning)."""
     return is_gpt5_series(model_name) and "chat" in (model_name or "").lower()
 
 
-def is_gpt5_pro(model_name: Optional[str]) -> bool:
+def is_gpt5_pro(model_name: str | None) -> bool:
     """Check if a GPT-5 model is a pro variant (real slug or virtual GPT-5.6 pro)."""
     return is_gpt5_series(model_name) and "-pro" in (model_name or "").lower()
 
 
-def is_openai_model_family(model_name: Optional[str]) -> bool:
+def is_openai_model_family(model_name: str | None) -> bool:
     """Check if a model name is OpenAI-family, including OpenRouter-prefixed IDs."""
     if not model_name:
         return False
     lm = model_name.lower()
     return (
-        "openai/" in lm
-        or lm.startswith("gpt-")
-        or lm.startswith("o3")
-        or "/gpt-" in lm
-        or "/o3" in lm
+        "openai/" in lm or lm.startswith(("gpt-", "o3")) or "/gpt-" in lm or "/o3" in lm
     )
 
 
-def is_google_model_family(model_name: Optional[str]) -> bool:
+def is_google_model_family(model_name: str | None) -> bool:
     """Check if a model name is Google/Gemini-family, including OpenRouter-prefixed IDs."""
     if not model_name:
         return False
@@ -219,7 +214,7 @@ def is_google_model_family(model_name: Optional[str]) -> bool:
     return "google/" in lm or "gemini" in lm or "gemma" in lm
 
 
-def is_anthropic_model_family(model_name: Optional[str]) -> bool:
+def is_anthropic_model_family(model_name: str | None) -> bool:
     """Check if a model name is Anthropic/Claude-family, including OpenRouter-prefixed IDs."""
     if not model_name:
         return False
@@ -230,7 +225,7 @@ def is_anthropic_model_family(model_name: Optional[str]) -> bool:
 _GPT5_GEN_RE = re.compile(r"gpt-(5(?:\.\d+)?)", re.IGNORECASE)
 
 
-def get_gpt5_generation(model_name: Optional[str]) -> Optional[str]:
+def get_gpt5_generation(model_name: str | None) -> str | None:
     """Extract the GPT-5 generation string.
 
     Returns '5', '5.1', '5.2', '5.3', '5.4', '5.5', '5.6', etc. or None if not a GPT-5 model.
@@ -241,7 +236,7 @@ def get_gpt5_generation(model_name: Optional[str]) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def _parse_gpt5_gen_parts(gen: Optional[str]) -> Optional[Tuple[int, int]]:
+def _parse_gpt5_gen_parts(gen: str | None) -> tuple[int, int] | None:
     if not gen:
         return None
     try:
@@ -253,7 +248,7 @@ def _parse_gpt5_gen_parts(gen: Optional[str]) -> Optional[Tuple[int, int]]:
         return None
 
 
-def supports_gpt5_xhigh_effort(model_name: Optional[str]) -> bool:
+def supports_gpt5_xhigh_effort(model_name: str | None) -> bool:
     """Whether a GPT-5 model accepts reasoning.effort='xhigh'."""
     parts = _parse_gpt5_gen_parts(get_gpt5_generation(model_name))
     if parts is None:
@@ -261,7 +256,7 @@ def supports_gpt5_xhigh_effort(model_name: Optional[str]) -> bool:
     return parts >= (5, 2)
 
 
-def supports_gpt5_max_effort(model_name: Optional[str]) -> bool:
+def supports_gpt5_max_effort(model_name: str | None) -> bool:
     """Whether a GPT-5 model accepts reasoning.effort='max' (GPT-5.6+)."""
     parts = _parse_gpt5_gen_parts(get_gpt5_generation(model_name))
     if parts is None:
@@ -269,12 +264,12 @@ def supports_gpt5_max_effort(model_name: Optional[str]) -> bool:
     return parts >= (5, 6)
 
 
-def is_gpt56_virtual_pro(model_name: Optional[str]) -> bool:
+def is_gpt56_virtual_pro(model_name: str | None) -> bool:
     """GPT-5.6 pro is not a separate API slug; UI uses *-pro entries mapped to reasoning.mode."""
     return get_gpt5_generation(model_name) == "5.6" and is_gpt5_pro(model_name)
 
 
-def resolve_openai_api_model_name(model_name: Optional[str]) -> Optional[str]:
+def resolve_openai_api_model_name(model_name: str | None) -> str | None:
     """Map UI model names to the slug sent to the OpenAI API.
 
     Virtual GPT-5.6 pro entries (e.g. gpt-5.6-sol-pro) strip the trailing -pro suffix.
@@ -287,7 +282,7 @@ def resolve_openai_api_model_name(model_name: Optional[str]) -> Optional[str]:
     return model_name
 
 
-def supports_openai_original_image_detail(model_name: Optional[str]) -> bool:
+def supports_openai_original_image_detail(model_name: str | None) -> bool:
     """Whether an OpenAI model supports image detail='original'."""
     if not is_gpt5_series(model_name):
         return False
@@ -303,17 +298,17 @@ def supports_openai_original_image_detail(model_name: Optional[str]) -> bool:
     return parts >= (5, 4)
 
 
-def is_openai_reasoning_model(model_name: Optional[str]) -> bool:
+def is_openai_reasoning_model(model_name: str | None) -> bool:
     """Check if an OpenAI model is reasoning-capable (GPT-5 series, o3)."""
     if not model_name:
         return False
     lm = model_name.lower()
     return (
-        lm.startswith("gpt-5") or "/gpt-5" in lm or lm.startswith("o3") or "/o3" in lm
+        lm.startswith(("gpt-5", "o3")) or "/gpt-5" in lm or "/o3" in lm
     )
 
 
-def is_azure_url(url: Optional[str]) -> bool:
+def is_azure_url(url: str | None) -> bool:
     """Check if a URL is an Azure OpenAI or Azure AI Services endpoint."""
     if not url:
         return False
@@ -328,7 +323,7 @@ def is_azure_url(url: Optional[str]) -> bool:
     return any(domain in url_lower for domain in azure_domains)
 
 
-def is_openai_compatible_reasoning_model(model_name: Optional[str]) -> bool:
+def is_openai_compatible_reasoning_model(model_name: str | None) -> bool:
     """Check if an OpenAI-Compatible model is reasoning-capable."""
     if not model_name:
         return False
@@ -341,35 +336,32 @@ def is_openai_compatible_reasoning_model(model_name: Optional[str]) -> bool:
     )
 
 
-def is_deepseek_reasoning_model(model_name: Optional[str]) -> bool:
+def is_deepseek_reasoning_model(model_name: str | None) -> bool:
     """Check if a DeepSeek model is reasoning-capable."""
     if not model_name:
         return False
     return "deepseek-v4" in model_name.lower()
 
 
-def is_zai_reasoning_model(model_name: Optional[str]) -> bool:
+def is_zai_reasoning_model(model_name: str | None) -> bool:
     """Check if a Z.ai model is reasoning-capable."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return lm.startswith("glm-4.") or lm.startswith("glm-5")
+    return lm.startswith(("glm-4.", "glm-5"))
 
 
-def supports_zai_reasoning_effort(model_name: Optional[str]) -> bool:
+def supports_zai_reasoning_effort(model_name: str | None) -> bool:
     """Check if a Z.ai model supports the reasoning_effort API parameter."""
     if not model_name:
         return False
     lm = model_name.lower()
     return (
-        lm == "glm-5.2"
-        or lm.startswith("glm-5.2-")
-        or lm == "glm-5.3"
-        or lm.startswith("glm-5.3-")
+        lm == "glm-5.2" or lm.startswith(("glm-5.2-", "glm-5.3-")) or lm == "glm-5.3"
     )
 
 
-def is_zai_vision_model(model_name: Optional[str]) -> bool:
+def is_zai_vision_model(model_name: str | None) -> bool:
     """Check if a Z.ai model supports vision/multimodal input."""
     if not model_name:
         return False
@@ -377,7 +369,7 @@ def is_zai_vision_model(model_name: Optional[str]) -> bool:
     return "glm-5.3-flash" in lm or lm.endswith("v") or "v-" in lm
 
 
-def is_deepseek_vision_model(model_name: Optional[str]) -> bool:
+def is_deepseek_vision_model(model_name: str | None) -> bool:
     """Check if a DeepSeek model supports vision/multimodal input."""
     if not model_name:
         return False
@@ -385,7 +377,7 @@ def is_deepseek_vision_model(model_name: Optional[str]) -> bool:
     return "deepseek" in lm and "vision" in lm
 
 
-def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
+def is_xai_reasoning_model(model_name: str | None) -> bool:
     """Check if a SpaceXAI model is reasoning-capable."""
     if not model_name:
         return False
@@ -393,29 +385,21 @@ def is_xai_reasoning_model(model_name: Optional[str]) -> bool:
     if "non-reasoning" in lm:
         return False
     return (
-        lm.startswith("grok-4.3")
-        or lm.startswith("grok-4.5")
-        or lm.startswith("grok-4.6")
-        or "grok-4.20" in lm
-        or "reasoning" in lm
-        or "multi-agent" in lm
+        lm.startswith(("grok-4.3", "grok-4.5", "grok-4.6")) or "grok-4.20" in lm or "reasoning" in lm or "multi-agent" in lm
     )
 
 
-def supports_xai_reasoning_parameter(model_name: Optional[str]) -> bool:
+def supports_xai_reasoning_parameter(model_name: str | None) -> bool:
     """Whether SpaceXAI accepts the Responses API `reasoning` parameter."""
     if not model_name:
         return False
     lm = model_name.lower()
     return (
-        lm.startswith("grok-4.3")
-        or lm.startswith("grok-4.5")
-        or lm.startswith("grok-4.6")
-        or "multi-agent" in lm
+        lm.startswith(("grok-4.3", "grok-4.5", "grok-4.6")) or "multi-agent" in lm
     ) and "non-reasoning" not in lm
 
 
-def is_anthropic_reasoning_model(model_name: Optional[str]) -> bool:
+def is_anthropic_reasoning_model(model_name: str | None) -> bool:
     """Check if an Anthropic model is reasoning-capable.
 
     Uses `in` (not `startswith`) so OpenRouter-prefixed names also match.
@@ -435,15 +419,15 @@ def is_anthropic_reasoning_model(model_name: Optional[str]) -> bool:
     )
 
 
-def is_moonshot_k3_model(model_name: Optional[str]) -> bool:
+def is_moonshot_k3_model(model_name: str | None) -> bool:
     """Check if a model is Kimi K3 (kimi-k3 or future kimi-k3-* variants)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return lm == "kimi-k3" or lm.startswith("kimi-k3-") or lm.startswith("kimi-k3.")
+    return lm == "kimi-k3" or lm.startswith(("kimi-k3-", "kimi-k3."))
 
 
-def is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
+def is_moonshot_reasoning_model(model_name: str | None) -> bool:
     """Check if a Moonshot model is reasoning-capable."""
     if not model_name:
         return False
@@ -451,19 +435,19 @@ def is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
     return "kimi-k2." in lm or is_moonshot_k3_model(model_name)
 
 
-def supports_moonshot_reasoning_effort(model_name: Optional[str]) -> bool:
+def supports_moonshot_reasoning_effort(model_name: str | None) -> bool:
     """Check if a Moonshot model supports the reasoning_effort API parameter."""
     return is_moonshot_k3_model(model_name)
 
 
-def is_mimo_multimodal_model(model_name: Optional[str]) -> bool:
+def is_mimo_multimodal_model(model_name: str | None) -> bool:
     """Check if a MiMo model supports multimodal (image) input."""
     if not model_name:
         return False
     return model_name.lower() == "mimo-v2.5"
 
 
-def is_opencode_multimodal_model(model_name: Optional[str]) -> bool:
+def is_opencode_multimodal_model(model_name: str | None) -> bool:
     """Check if an OpenCode model is multimodal/vision-capable for LLM OCR mode."""
     if not model_name:
         return False
@@ -502,7 +486,7 @@ def is_opencode_multimodal_model(model_name: Optional[str]) -> bool:
     )
 
 
-def is_mimo_reasoning_model(model_name: Optional[str]) -> bool:
+def is_mimo_reasoning_model(model_name: str | None) -> bool:
     """Check if a MiMo model is reasoning-capable (hybrid thinking)."""
     if not model_name:
         return False
@@ -510,7 +494,7 @@ def is_mimo_reasoning_model(model_name: Optional[str]) -> bool:
     return lm in ("mimo-v2.5-pro", "mimo-v2.5")
 
 
-def is_qwencloud_reasoning_model(model_name: Optional[str]) -> bool:
+def is_qwencloud_reasoning_model(model_name: str | None) -> bool:
     """Check if a QwenCloud model is reasoning-capable (toggleable thinking mode)."""
     if not model_name:
         return False
@@ -518,14 +502,14 @@ def is_qwencloud_reasoning_model(model_name: Optional[str]) -> bool:
     return "qwen" in lm
 
 
-def supports_qwencloud_reasoning_effort(model_name: Optional[str]) -> bool:
+def supports_qwencloud_reasoning_effort(model_name: str | None) -> bool:
     """Check if a QwenCloud model supports the reasoning_effort API parameter (Qwen 3.8+)."""
     if not model_name:
         return False
     return "qwen3.8" in model_name.lower()
 
 
-def is_meta_reasoning_model(model_name: Optional[str]) -> bool:
+def is_meta_reasoning_model(model_name: str | None) -> bool:
     """Check if a Meta Model API model is reasoning-capable (muse-spark series)."""
     if not model_name:
         return False
@@ -533,7 +517,7 @@ def is_meta_reasoning_model(model_name: Optional[str]) -> bool:
     return "muse-spark" in lm
 
 
-def supports_meta_reasoning_effort(model_name: Optional[str]) -> bool:
+def supports_meta_reasoning_effort(model_name: str | None) -> bool:
     """Check if a Meta Model API model supports reasoning effort configuration."""
     if not model_name:
         return False
@@ -541,7 +525,7 @@ def supports_meta_reasoning_effort(model_name: Optional[str]) -> bool:
     return "muse-spark" in lm
 
 
-def is_opus_45_model(model_name: Optional[str]) -> bool:
+def is_opus_45_model(model_name: str | None) -> bool:
     """Check if a model is Claude Opus 4.5 (supports effort parameter)."""
     if not model_name:
         return False
@@ -551,7 +535,7 @@ def is_opus_45_model(model_name: Optional[str]) -> bool:
     return ("4.5" in lm) or ("4-5" in lm)
 
 
-def is_opus_46_model(model_name: Optional[str]) -> bool:
+def is_opus_46_model(model_name: str | None) -> bool:
     """Check if a model is Claude Opus 4.6 (adaptive thinking, max effort)."""
     if not model_name:
         return False
@@ -561,7 +545,7 @@ def is_opus_46_model(model_name: Optional[str]) -> bool:
     return ("4.6" in lm) or ("4-6" in lm)
 
 
-def is_opus_47_model(model_name: Optional[str]) -> bool:
+def is_opus_47_model(model_name: str | None) -> bool:
     """Check if a model is Claude Opus 4.7 (adaptive thinking, xhigh effort, no sampling params)."""
     if not model_name:
         return False
@@ -571,7 +555,7 @@ def is_opus_47_model(model_name: Optional[str]) -> bool:
     return ("4.7" in lm) or ("4-7" in lm)
 
 
-def is_opus_48_model(model_name: Optional[str]) -> bool:
+def is_opus_48_model(model_name: str | None) -> bool:
     """Check if a model is Claude Opus 4.8 (same API constraints as Opus 4.7)."""
     if not model_name:
         return False
@@ -581,7 +565,7 @@ def is_opus_48_model(model_name: Optional[str]) -> bool:
     return ("4.8" in lm) or ("4-8" in lm)
 
 
-def is_opus_5_model(model_name: Optional[str]) -> bool:
+def is_opus_5_model(model_name: str | None) -> bool:
     """Check if a model is Claude Opus 5 (adaptive thinking on by default, max effort support, no sampling params)."""
     if not model_name:
         return False
@@ -591,7 +575,7 @@ def is_opus_5_model(model_name: Optional[str]) -> bool:
     return "claude-opus-5" in lm
 
 
-def is_fable_5_model(model_name: Optional[str]) -> bool:
+def is_fable_5_model(model_name: str | None) -> bool:
     """Check if a model is Claude Fable 5+ (always-on adaptive thinking, no sampling params)."""
     if not model_name:
         return False
@@ -599,7 +583,7 @@ def is_fable_5_model(model_name: Optional[str]) -> bool:
     return "claude-fable-5" in lm
 
 
-def is_sonnet_5_model(model_name: Optional[str]) -> bool:
+def is_sonnet_5_model(model_name: str | None) -> bool:
     """Check if a model is Claude Sonnet 5 (adaptive thinking on by default, no sampling params)."""
     if not model_name:
         return False
@@ -609,7 +593,7 @@ def is_sonnet_5_model(model_name: Optional[str]) -> bool:
     return "claude-sonnet-5" in lm
 
 
-def anthropic_model_flags(model_name: Optional[str]) -> Dict[str, bool]:
+def anthropic_model_flags(model_name: str | None) -> dict[str, bool]:
     """Cumulative Claude API capability flags for generation_config / OpenRouter metadata.
 
     Tiers (each includes the capabilities of tiers below):
@@ -651,7 +635,7 @@ def anthropic_model_flags(model_name: Optional[str]) -> Dict[str, bool]:
     return {}
 
 
-def is_anthropic_no_sampling_model(model_name: Optional[str]) -> bool:
+def is_anthropic_no_sampling_model(model_name: str | None) -> bool:
     """Anthropic models that reject temperature/top_k at the API."""
     flags = anthropic_model_flags(model_name)
     return flags.get("is_claude_effort_xhigh", False) or flags.get(
@@ -659,12 +643,12 @@ def is_anthropic_no_sampling_model(model_name: Optional[str]) -> bool:
     )
 
 
-def anthropic_omits_thinking_config(model_name: Optional[str]) -> bool:
+def anthropic_omits_thinking_config(model_name: str | None) -> bool:
     """Models with always-on thinking that omit reasoning-effort API config (e.g. Fable 5+)."""
     return anthropic_model_flags(model_name).get("is_claude_omit_thinking", False)
 
 
-def anthropic_uses_adaptive_thinking_info(model_name: Optional[str]) -> bool:
+def anthropic_uses_adaptive_thinking_info(model_name: str | None) -> bool:
     """Whether reasoning-effort UI should offer/describe adaptive (auto/none) thinking."""
     flags = anthropic_model_flags(model_name)
     return bool(
@@ -673,8 +657,8 @@ def anthropic_uses_adaptive_thinking_info(model_name: Optional[str]) -> bool:
 
 
 def anthropic_reasoning_effort_config(
-    model_name: Optional[str],
-) -> Tuple[bool, List[str], Optional[str]]:
+    model_name: str | None,
+) -> tuple[bool, list[str], str | None]:
     """Reasoning-effort dropdown config for Anthropic and OpenRouter Claude models."""
     if anthropic_omits_thinking_config(model_name):
         return False, [], None
@@ -687,8 +671,8 @@ def anthropic_reasoning_effort_config(
 
 
 def anthropic_effort_config(
-    model_name: Optional[str],
-) -> Tuple[bool, List[str], Optional[str]]:
+    model_name: str | None,
+) -> tuple[bool, list[str], str | None]:
     """Effort dropdown config for Anthropic and OpenRouter Claude models."""
     flags = anthropic_model_flags(model_name)
     if not flags.get("is_claude_effort"):
@@ -700,7 +684,7 @@ def anthropic_effort_config(
     return True, ["high", "medium", "low"], "high"
 
 
-def is_sonnet_46_model(model_name: Optional[str]) -> bool:
+def is_sonnet_46_model(model_name: str | None) -> bool:
     """Check if a model is Claude Sonnet 4.6 (adaptive thinking, max effort)."""
     if not model_name:
         return False
@@ -710,26 +694,26 @@ def is_sonnet_46_model(model_name: Optional[str]) -> bool:
     return ("4.6" in lm) or ("4-6" in lm)
 
 
-def is_46_model(model_name: Optional[str]) -> bool:
+def is_46_model(model_name: str | None) -> bool:
     """Check if a model is any Claude 4.6 variant (Opus or Sonnet)."""
     return is_opus_46_model(model_name) or is_sonnet_46_model(model_name)
 
 
-def is_gemma_model(model_name: Optional[str]) -> bool:
+def is_gemma_model(model_name: str | None) -> bool:
     """Check if a model is a Gemma model (e.g., gemma-4-31b-it)."""
     if not model_name:
         return False
     return "gemma-" in model_name.lower()
 
 
-def is_gemini_3_model(model_name: Optional[str]) -> bool:
+def is_gemini_3_model(model_name: str | None) -> bool:
     """Check if a model is any Gemini 3 variant (3, 3.1, etc.)."""
     if not model_name:
         return False
     return "gemini-3" in model_name.lower()
 
 
-def is_gemini_3_flash_model(model_name: Optional[str]) -> bool:
+def is_gemini_3_flash_model(model_name: str | None) -> bool:
     """Check if a model is Gemini 3 Flash (not Flash Lite)."""
     if not model_name:
         return False
@@ -737,7 +721,7 @@ def is_gemini_3_flash_model(model_name: Optional[str]) -> bool:
     return "gemini-3" in lm and "flash" in lm and "lite" not in lm
 
 
-def is_gemini_37_flash_model(model_name: Optional[str]) -> bool:
+def is_gemini_37_flash_model(model_name: str | None) -> bool:
     """Check if a model is Gemini 3.7 Flash."""
     if not model_name:
         return False
@@ -745,7 +729,7 @@ def is_gemini_37_flash_model(model_name: Optional[str]) -> bool:
     return "gemini-3.7" in lm and "flash" in lm
 
 
-def is_gemini_36_flash_model(model_name: Optional[str]) -> bool:
+def is_gemini_36_flash_model(model_name: str | None) -> bool:
     """Check if a model is Gemini 3.6 Flash."""
     if not model_name:
         return False
@@ -753,7 +737,7 @@ def is_gemini_36_flash_model(model_name: Optional[str]) -> bool:
     return "gemini-3.6" in lm and "flash" in lm
 
 
-def is_gemini_35_flash_lite_model(model_name: Optional[str]) -> bool:
+def is_gemini_35_flash_lite_model(model_name: str | None) -> bool:
     """Check if a model is Gemini 3.5 Flash Lite."""
     if not model_name:
         return False
@@ -761,7 +745,7 @@ def is_gemini_35_flash_lite_model(model_name: Optional[str]) -> bool:
     return "gemini-3.5" in lm and "flash" in lm and "lite" in lm
 
 
-def is_gemini_no_sampling_model(model_name: Optional[str]) -> bool:
+def is_gemini_no_sampling_model(model_name: str | None) -> bool:
     """Check if a Gemini model does not support custom sampling parameters."""
     return (
         is_gemini_37_flash_model(model_name)
@@ -770,7 +754,7 @@ def is_gemini_no_sampling_model(model_name: Optional[str]) -> bool:
     )
 
 
-def is_gemini_25_flash_model(model_name: Optional[str]) -> bool:
+def is_gemini_25_flash_model(model_name: str | None) -> bool:
     """Check if a model is Gemini 2.5 Flash."""
     if not model_name:
         return False
@@ -778,14 +762,14 @@ def is_gemini_25_flash_model(model_name: Optional[str]) -> bool:
     return "gemini-2.5" in lm and "flash" in lm
 
 
-def is_gemini_25_pro_model(model_name: Optional[str]) -> bool:
+def is_gemini_25_pro_model(model_name: str | None) -> bool:
     """Check if a model is Gemini 2.5 Pro."""
     if not model_name:
         return False
     return "gemini-2.5-pro" in model_name.lower()
 
 
-def is_google_reasoning_model(model_name: Optional[str]) -> bool:
+def is_google_reasoning_model(model_name: str | None) -> bool:
     """Check if a Google model is reasoning-capable (Gemini 2.5, 3 series, or Gemma)."""
     if not model_name:
         return False
@@ -793,7 +777,7 @@ def is_google_reasoning_model(model_name: Optional[str]) -> bool:
     return "gemini-2.5" in lm or "gemini-3" in lm or "gemma-" in lm
 
 
-def is_rosetta_model(model_name: Optional[str]) -> bool:
+def is_rosetta_model(model_name: str | None) -> bool:
     """Check if a model is a YanoljaNEXT Rosetta translation model.
 
     Requires both 'rosetta' and 'yanoljanext' in the name to avoid false positives.
@@ -805,7 +789,7 @@ def is_rosetta_model(model_name: Optional[str]) -> bool:
     return "rosetta" in lm and "yanoljanext" in lm
 
 
-def is_hy_mt2_model(model_name: Optional[str]) -> bool:
+def is_hy_mt2_model(model_name: str | None) -> bool:
     """Check if a model is a Tencent Hy-MT2 translation model."""
     if not model_name:
         return False
@@ -813,8 +797,8 @@ def is_hy_mt2_model(model_name: Optional[str]) -> bool:
 
 
 def get_hy_mt2_sampling_defaults(
-    model_name: Optional[str],
-) -> Dict[str, float | int | None]:
+    model_name: str | None,
+) -> dict[str, float | int | None]:
     """Model-card sampling defaults for Hy-MT2 (1.8B/7B vs 30B-A3B)."""
     lm = (model_name or "").lower()
     if "30b" in lm or "a3b" in lm:

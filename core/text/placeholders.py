@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PIL import Image
 
@@ -9,18 +9,18 @@ from utils.logging import log_message
 
 
 def generate_test_placeholders(
-    sorted_bubble_data: List[Dict[str, Any]],
-    processed_bubbles_info: List[Dict[str, Any]],
+    sorted_bubble_data: list[dict[str, Any]],
+    processed_bubbles_info: list[dict[str, Any]],
     config: MangaTranslatorConfig,
     main_min_font: int,
     main_max_font: int,
     osb_min_font: int,
     osb_max_font: int,
-    padding_pixels: Optional[float] = None,
-    osb_padding_pixels: Optional[float] = None,
+    padding_pixels: float | None = None,
+    osb_padding_pixels: float | None = None,
     osb_outline_width: float = 0.0,
     verbose: bool = False,
-) -> List[str]:
+) -> list[str]:
     """
     Generates test placeholder text by probing the rendering engine.
     Finds the largest text string that fits in the bounding box.

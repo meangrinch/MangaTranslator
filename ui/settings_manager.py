@@ -2,7 +2,7 @@ import json
 import os
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from core.llm_defaults import DEFAULT_LLM_PROVIDER, get_provider_sampling_defaults
 from core.validation import clamp_settings
@@ -14,7 +14,7 @@ CONFIG_FILE = (
     / "config.json"
 )
 
-PROVIDER_MODELS: Dict[str, List[str]] = {
+PROVIDER_MODELS: dict[str, list[str]] = {
     "Google": [
         "gemini-3.7-flash",
         "gemini-3.6-flash",
@@ -299,7 +299,7 @@ DEFAULT_BATCH_SETTINGS = {
 }
 
 
-def _apply_provider_sampling_defaults(settings: Dict[str, Any], provider: str):
+def _apply_provider_sampling_defaults(settings: dict[str, Any], provider: str):
     sampling = get_provider_sampling_defaults(provider)
     settings["temperature"] = sampling["temperature"]
     settings["top_p"] = sampling["top_p"]
@@ -307,7 +307,7 @@ def _apply_provider_sampling_defaults(settings: Dict[str, Any], provider: str):
 
 
 # Canonical save order for config.json (unknown keys appended alphabetically at the end)
-CANONICAL_CONFIG_KEY_ORDER: List[str] = [
+CANONICAL_CONFIG_KEY_ORDER: list[str] = [
     # Provider and model selection
     "provider_models",
     "provider",
@@ -442,7 +442,7 @@ CANONICAL_CONFIG_KEY_ORDER: List[str] = [
 ]
 
 
-def save_config(incoming_settings: Dict[str, Any]):
+def save_config(incoming_settings: dict[str, Any]):
     """Save all settings to config file, updating provider_models and cleaning old keys."""
     try:
         current_config_on_disk = {}
@@ -524,10 +524,10 @@ def save_config(incoming_settings: Dict[str, Any]):
         # Reorder keys according to canonical order, then append unknown keys alphabetically
         known_in_order = [k for k in CANONICAL_CONFIG_KEY_ORDER if k in config_to_write]
         unknown_keys = sorted(
-            [k for k in config_to_write.keys() if k not in CANONICAL_CONFIG_KEY_ORDER]
+            [k for k in config_to_write if k not in CANONICAL_CONFIG_KEY_ORDER]
         )
         ordered_keys = known_in_order + unknown_keys
-        ordered_config: Dict[str, Any] = OrderedDict(
+        ordered_config: dict[str, Any] = OrderedDict(
             (k, config_to_write[k]) for k in ordered_keys
         )
 
@@ -545,10 +545,10 @@ def save_config(incoming_settings: Dict[str, Any]):
         import traceback
 
         traceback.print_exc()
-        return f"Failed to save settings: {str(e)}"
+        return f"Failed to save settings: {e!s}"
 
 
-def get_saved_settings() -> Dict[str, Any]:
+def get_saved_settings() -> dict[str, Any]:
     """Get all saved settings from config file, falling back to defaults."""
     settings = {}
     settings.update(DEFAULT_SETTINGS)
@@ -559,7 +559,7 @@ def get_saved_settings() -> Dict[str, Any]:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 saved_config = json.load(f)
 
-            for key in settings.keys():
+            for key in settings:
                 if key in saved_config:
                     settings[key] = saved_config[key]
 
@@ -681,7 +681,7 @@ def get_saved_settings() -> Dict[str, Any]:
     return clamp_settings(settings)
 
 
-def reset_to_defaults() -> Dict[str, Any]:
+def reset_to_defaults() -> dict[str, Any]:
     """Reset all settings to default values, preserving API keys and YOLO model if they exist."""
     settings = {}
     settings.update(DEFAULT_SETTINGS)

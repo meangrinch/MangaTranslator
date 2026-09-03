@@ -4,7 +4,7 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from PIL import Image
 
@@ -33,11 +33,11 @@ class LogicError(Exception):
 
 
 def _collect_valid_images(
-    file_paths: List[Union[str, Path]],
-) -> tuple[List[Path], List[str]]:
+    file_paths: list[str | Path],
+) -> tuple[list[Path], list[str]]:
     """Return valid image paths and skip notes from a path list."""
-    image_files: List[Path] = []
-    skipped: List[str] = []
+    image_files: list[Path] = []
+    skipped: list[str] = []
     for f_path_str in file_paths:
         p = Path(f_path_str)
         if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
@@ -53,9 +53,9 @@ def _collect_valid_images(
 
 
 def _copy_images_with_source_map(
-    image_files: List[Path],
+    image_files: list[Path],
     dest_dir: Path,
-    source_path_map: Dict[str, str],
+    source_path_map: dict[str, str],
 ) -> None:
     """Copy images into dest_dir and record temp→original path mapping."""
     for img_file in image_files:
@@ -71,7 +71,7 @@ def _copy_images_with_source_map(
 
 
 def extract_zip_to_temp(
-    zip_file_path: Union[str, Path],
+    zip_file_path: str | Path,
 ) -> tuple[Path, tempfile.TemporaryDirectory]:
     """
     Extracts a ZIP archive to a temporary directory, preserving folder structure.
@@ -115,11 +115,11 @@ def extract_zip_to_temp(
         raise ValidationError(f"File '{zip_file_path}' is not a valid ZIP archive.")
     except Exception as e:
         temp_dir_obj.cleanup()
-        raise ValidationError(f"Failed to extract ZIP archive: {str(e)}")
+        raise ValidationError(f"Failed to extract ZIP archive: {e!s}")
 
 
 def translate_manga_logic(
-    image: Union[str, Path, Image.Image],
+    image: str | Path | Image.Image,
     config: MangaTranslatorConfig,
     selected_font_pack_name: str,
     models_dir: Path,
@@ -155,27 +155,23 @@ def translate_manga_logic(
     display_name = (
         Path(image).name if isinstance(image, (str, Path)) else "uploaded image"
     )
-    try:
-        # Create temporary config for validation since we only have the font pack name
-        rendering_cfg_for_val = RenderingConfig(
-            font_dir=selected_font_pack_name,
-            max_font_size=config.rendering.max_font_size,
-            min_font_size=config.rendering.min_font_size,
-            line_spacing_mult=config.rendering.line_spacing_mult,
-            font_hinting=config.rendering.font_hinting,
-        )
-        yolo_model_path, font_dir_path = validate_core_inputs(
-            translation_cfg=config.translation,
-            rendering_cfg=rendering_cfg_for_val,
-            models_dir=models_dir,
-            fonts_base_dir=fonts_base_dir,
-            bubble_detector_model=config.detection.bubble_detector_model,
-        )
-        config.yolo_model_path = str(yolo_model_path)
-        config.rendering.font_dir = str(font_dir_path)
-
-    except (FileNotFoundError, ValidationError, ValueError) as e:
-        raise e
+    # Create temporary config for validation since we only have the font pack name
+    rendering_cfg_for_val = RenderingConfig(
+        font_dir=selected_font_pack_name,
+        max_font_size=config.rendering.max_font_size,
+        min_font_size=config.rendering.min_font_size,
+        line_spacing_mult=config.rendering.line_spacing_mult,
+        font_hinting=config.rendering.font_hinting,
+    )
+    yolo_model_path, font_dir_path = validate_core_inputs(
+        translation_cfg=config.translation,
+        rendering_cfg=rendering_cfg_for_val,
+        models_dir=models_dir,
+        fonts_base_dir=fonts_base_dir,
+        bubble_detector_model=config.detection.bubble_detector_model,
+    )
+    config.yolo_model_path = str(yolo_model_path)
+    config.rendering.font_dir = str(font_dir_path)
 
     temp_image_path = None
     try:
@@ -229,22 +225,22 @@ def translate_manga_logic(
         return translated_image, save_path
 
     except (FontError, RenderingError) as e:
-        raise LogicError(f"Text rendering failed: {str(e)}") from e
+        raise LogicError(f"Text rendering failed: {e!s}") from e
     except CleaningError as e:
-        raise LogicError(f"Bubble cleaning failed: {str(e)}") from e
+        raise LogicError(f"Bubble cleaning failed: {e!s}") from e
     except TranslationError as e:
-        raise LogicError(f"Translation failed: {str(e)}") from e
+        raise LogicError(f"Translation failed: {e!s}") from e
     except ImageProcessingError as e:
-        raise LogicError(f"Image processing failed: {str(e)}") from e
-    except CancellationError as e:
+        raise LogicError(f"Image processing failed: {e!s}") from e
+    except CancellationError:
         log_message(f"Translation cancelled for {display_name}", verbose=config.verbose)
-        raise e
+        raise
     except Exception as e:
         import traceback
 
         traceback.print_exc()
         raise LogicError(
-            f"An unexpected error occurred during translation: {str(e)}"
+            f"An unexpected error occurred during translation: {e!s}"
         ) from e
     finally:
         if temp_image_path and temp_image_path.exists():
@@ -257,7 +253,7 @@ def translate_manga_logic(
 
 
 def process_batch_logic(
-    input_dir_or_files: Union[str, List[str], Dict[str, Any]],
+    input_dir_or_files: str | list[str] | dict[str, Any],
     config: MangaTranslatorConfig,
     selected_font_pack_name: str,
     models_dir: Path,
@@ -265,7 +261,7 @@ def process_batch_logic(
     output_base_dir: Path = Path("./output"),
     gradio_progress: Any = None,
     cancellation_manager: Optional["CancellationManager"] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Processes a batch of manga images. Handles core validation, calls the core batch pipeline,
     and returns results or raises standard exceptions.
@@ -305,26 +301,23 @@ def process_batch_logic(
     """
     start_time = time.time()
 
-    try:
-        # Create temporary config for validation since we only have the font pack name
-        rendering_cfg_for_val = RenderingConfig(
-            font_dir=selected_font_pack_name,
-            max_font_size=config.rendering.max_font_size,
-            min_font_size=config.rendering.min_font_size,
-            line_spacing_mult=config.rendering.line_spacing_mult,
-            font_hinting=config.rendering.font_hinting,
-        )
-        yolo_model_path, font_dir_path = validate_core_inputs(
-            translation_cfg=config.translation,
-            rendering_cfg=rendering_cfg_for_val,
-            models_dir=models_dir,
-            fonts_base_dir=fonts_base_dir,
-            bubble_detector_model=config.detection.bubble_detector_model,
-        )
-        config.yolo_model_path = str(yolo_model_path)
-        config.rendering.font_dir = str(font_dir_path)
-    except (FileNotFoundError, ValidationError, ValueError) as e:
-        raise e
+    # Create temporary config for validation since we only have the font pack name
+    rendering_cfg_for_val = RenderingConfig(
+        font_dir=selected_font_pack_name,
+        max_font_size=config.rendering.max_font_size,
+        min_font_size=config.rendering.min_font_size,
+        line_spacing_mult=config.rendering.line_spacing_mult,
+        font_hinting=config.rendering.font_hinting,
+    )
+    yolo_model_path, font_dir_path = validate_core_inputs(
+        translation_cfg=config.translation,
+        rendering_cfg=rendering_cfg_for_val,
+        models_dir=models_dir,
+        fonts_base_dir=fonts_base_dir,
+        bubble_detector_model=config.detection.bubble_detector_model,
+    )
+    config.yolo_model_path = str(yolo_model_path)
+    config.rendering.font_dir = str(font_dir_path)
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     batch_output_path = output_base_dir / timestamp
@@ -342,7 +335,7 @@ def process_batch_logic(
     try:
         process_dir = None
         preserve_structure = False
-        source_path_map: Dict[str, str] = {}
+        source_path_map: dict[str, str] = {}
 
         if (
             isinstance(input_dir_or_files, dict)
@@ -480,26 +473,26 @@ def process_batch_logic(
 
     except (FontError, RenderingError) as e:
         raise LogicError(
-            f"Text rendering failed during batch processing: {str(e)}"
+            f"Text rendering failed during batch processing: {e!s}"
         ) from e
     except CleaningError as e:
         raise LogicError(
-            f"Bubble cleaning failed during batch processing: {str(e)}"
+            f"Bubble cleaning failed during batch processing: {e!s}"
         ) from e
     except TranslationError as e:
-        raise LogicError(f"Translation failed during batch processing: {str(e)}") from e
+        raise LogicError(f"Translation failed during batch processing: {e!s}") from e
     except ImageProcessingError as e:
         raise LogicError(
-            f"Image processing failed during batch processing: {str(e)}"
+            f"Image processing failed during batch processing: {e!s}"
         ) from e
-    except CancellationError as e:
-        raise e
+    except CancellationError:
+        raise
     except Exception as e:
         import traceback
 
         traceback.print_exc()
         raise LogicError(
-            f"An unexpected error occurred during batch processing: {str(e)}"
+            f"An unexpected error occurred during batch processing: {e!s}"
         ) from e
 
     finally:

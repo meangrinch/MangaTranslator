@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import torch
 
@@ -54,26 +54,26 @@ class TranslationConfig:
     opencode_tier: str = "zen"
     openrouter_api_key: str = ""
     openai_compatible_url: str = "http://localhost:8080/v1"
-    openai_compatible_api_key: Optional[str] = ""
+    openai_compatible_api_key: str | None = ""
     model_name: str = "gemini-3.7-flash"
-    provider_models: dict[str, Optional[str]] = field(default_factory=dict)
+    provider_models: dict[str, str | None] = field(default_factory=dict)
     temperature: float = float(_DEFAULT_SAMPLING["temperature"])
     top_p: float = float(_DEFAULT_SAMPLING["top_p"])
     top_k: int = int(_DEFAULT_SAMPLING["top_k"])
-    max_tokens: Optional[int] = (
+    max_tokens: int | None = (
         None  # None = use default logic (16384 for reasoning, 4096 otherwise)
     )
     input_language: str = "Japanese"
     output_language: str = "English"
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
-    reasoning_effort: Optional[str] = (
+    reasoning_effort: str | None = (
         None  # Default: Google uses "auto", Anthropic uses "none", others use "high"
     )
-    effort: Optional[str] = (
+    effort: str | None = (
         None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)
     )
-    verbosity: Optional[str] = (
+    verbosity: str | None = (
         None  # GPT-5 series only: controls response verbosity (high/medium/low)
     )
     send_full_page_context: bool = True
@@ -93,9 +93,9 @@ class TranslationConfig:
     previous_context_image_count: int = 0
     previous_context_text_count: int = 0
     osb_min_side_pixels: int = 128
-    special_instructions: Optional[str] = None
+    special_instructions: str | None = None
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"
-    request_coordinator: Optional[Any] = None
+    request_coordinator: Any | None = None
 
 
 @dataclass
@@ -150,7 +150,7 @@ class OutsideTextConfig:
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.5
     osb_text_free_only: bool = False  # Use the RT-DETR text_free class as OSB source
-    osb_font_dir: Optional[str] = None  # None = use main font as fallback
+    osb_font_dir: str | None = None  # None = use main font as fallback
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
     osb_use_ligatures: bool = False
@@ -200,7 +200,7 @@ class MangaTranslatorConfig:
         default_factory=lambda: PreprocessingConfig()
     )
     verbose: bool = False
-    device: Optional[torch.device] = None
+    device: torch.device | None = None
     cleaning_only: bool = False
     upscaling_only: bool = False
     test_mode: bool = False
@@ -209,7 +209,7 @@ class MangaTranslatorConfig:
     batch_parallel_within_pages: bool = False
     overlap_llm_with_inpaint: bool = False
     retry_failed_once: bool = False
-    request_coordinator: Optional[Any] = None
+    request_coordinator: Any | None = None
 
     def __post_init__(self):
         # Load API keys from environment variables if not already set

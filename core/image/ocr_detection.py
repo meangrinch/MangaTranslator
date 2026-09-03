@@ -1,5 +1,4 @@
 import os
-from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -26,8 +25,8 @@ class OutsideTextDetector:
 
     def __init__(
         self,
-        device: Optional[torch.device] = None,
-        hf_token: Optional[str] = None,
+        device: torch.device | None = None,
+        hf_token: str | None = None,
     ):
         """Initialize the outside text detector.
 
@@ -189,13 +188,13 @@ class OutsideTextDetector:
     def detect_outside_text(
         self,
         image_path: str,
-        yolo_model_path: Optional[str] = None,
+        yolo_model_path: str | None = None,
         confidence: float = 0.6,
         conjoined_confidence: float = 0.35,
         verbose: bool = False,
-        image_override: Optional[Image.Image] = None,
-        existing_bubbles: Optional[List] = None,
-        text_free_boxes: Optional[List] = None,
+        image_override: Image.Image | None = None,
+        existing_bubbles: list | None = None,
+        text_free_boxes: list | None = None,
         bubble_detector_model: str = "yolo_2",
         min_area_ignore_ratio: float = 0.0,
         text_free_only: bool = False,
@@ -547,9 +546,9 @@ class OutsideTextDetector:
         bbox_expansion_percent_height: float = 0.0,
         text_box_proximity_ratio: float = 0.02,
         verbose: bool = False,
-        image_override: Optional[Image.Image] = None,
-        existing_results: Optional[List] = None,
-    ) -> Tuple[Optional[List], Optional[Image.Image]]:
+        image_override: Image.Image | None = None,
+        existing_results: list | None = None,
+    ) -> tuple[list | None, Image.Image | None]:
         """Create rectangular masks from OCR bounding boxes for inpainting.
 
         Args:
@@ -811,8 +810,8 @@ class OutsideTextDetector:
 
 
 def extract_text_with_manga_ocr(
-    images: List[Image.Image], verbose: bool = False
-) -> List[str]:
+    images: list[Image.Image], verbose: bool = False
+) -> list[str]:
     """Extract text from images using manga-ocr library.
 
     Args:
@@ -886,8 +885,8 @@ def _get_paddle_ocr_vl_size(processor, max_pixels: int) -> dict:
 
 
 def extract_text_with_paddle_ocr_vl(
-    images: List[Image.Image], verbose: bool = False
-) -> List[str]:
+    images: list[Image.Image], verbose: bool = False
+) -> list[str]:
     """Extract text from images using PaddleOCR-VL-1.6.
 
     Args:

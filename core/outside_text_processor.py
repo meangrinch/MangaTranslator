@@ -6,7 +6,7 @@ import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import cv2
 import numpy as np
@@ -42,8 +42,8 @@ class OutsideTextWork:
 
     pil_image: Image.Image
     config: MangaTranslatorConfig
-    image_path: Union[str, Path]
-    image_format: Optional[str]
+    image_path: str | Path
+    image_format: str | None
     verbose: bool
     outside_text_results: list
     raw_outside_text_results: list
@@ -55,7 +55,7 @@ class OutsideTextWork:
     img_h: int
     mime_type: str
     cv2_ext: str
-    outside_text_data: List[Dict[str, Any]] = field(default_factory=list)
+    outside_text_data: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _build_outside_text_data(
@@ -69,7 +69,7 @@ def _build_outside_text_data(
     cv2_ext: str,
     config: MangaTranslatorConfig,
     verbose: bool,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     outside_text_data = []
     original_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
 
@@ -176,7 +176,7 @@ def _build_outside_text_data(
 
 
 def _apply_inpaint_render_metadata(
-    outside_text_data: List[Dict[str, Any]],
+    outside_text_data: list[dict[str, Any]],
     extracted_text_colors: dict,
     none_skipped_clip_bboxes: set,
 ) -> None:
@@ -217,13 +217,13 @@ def _apply_inpaint_render_metadata(
 def prepare_outside_text_work(
     pil_image: Image.Image,
     config: MangaTranslatorConfig,
-    image_path: Union[str, Path],
-    image_format: Optional[str],
+    image_path: str | Path,
+    image_format: str | None,
     verbose: bool = False,
-    bubble_data: Optional[List[Dict[str, Any]]] = None,
-    text_free_boxes: Optional[List[List[float]]] = None,
-    panels: Optional[List[Tuple[int, int, int, int]]] = None,
-) -> Optional[OutsideTextWork]:
+    bubble_data: list[dict[str, Any]] | None = None,
+    text_free_boxes: list[list[float]] | None = None,
+    panels: list[tuple[int, int, int, int]] | None = None,
+) -> OutsideTextWork | None:
     """Detect outside text and build translation crops without inpainting."""
     if not config.outside_text.enabled:
         return None
@@ -637,7 +637,7 @@ def prepare_outside_text_work(
 
 def finish_outside_text_work(
     work: OutsideTextWork,
-) -> Tuple[Image.Image, List[Dict[str, Any]]]:
+) -> tuple[Image.Image, list[dict[str, Any]]]:
     """Run OSB inpainting for prepared work and attach render metadata."""
     pil_image = work.pil_image
     config = work.config
@@ -885,9 +885,9 @@ def finish_outside_text_work(
                     for wave in waves:
                         base_image = current_image
 
-                        def make_job(candidate):
+                        def make_job(candidate, base_img=base_image):
                             def job():
-                                image_for_job = base_image.copy()
+                                image_for_job = base_img.copy()
                                 try:
                                     result_image = inpainter.inpaint_mask(
                                         image_for_job,
@@ -1348,10 +1348,20 @@ def finish_outside_text_work(
                                                 verbose=verbose,
                                             )
 
-                    def apply_simple_fill(color_to_use):
-                        new_img = current_image.copy()
+                    def apply_simple_fill(
+                        color_to_use,
+                        new_img_src=current_image,
+                        grp=group,
+                        orig_dict=original_bbox_dict,
+                        b_ox0=ox0,
+                        b_oy0=oy0,
+                        b_ox1=ox1,
+                        b_oy1=oy1,
+                        comb_mask=combined_mask,
+                    ):
+                        new_img = new_img_src.copy()
 
-                        mask_indices = group.get("mask_indices", [])
+                        mask_indices = grp.get("mask_indices", [])
                         if mask_indices and outside_text_results:
                             p_x0 = max(
                                 0,
@@ -1398,17 +1408,17 @@ def finish_outside_text_work(
                                 ),
                             )
                         elif (
-                            original_bbox_dict
-                            and ox1 is not None
-                            and ox0 is not None
-                            and oy1 is not None
-                            and oy0 is not None
+                            orig_dict
+                            and b_ox1 is not None
+                            and b_ox0 is not None
+                            and b_oy1 is not None
+                            and b_oy0 is not None
                         ):
-                            p_x0, p_y0, p_x1, p_y1 = ox0, oy0, ox1, oy1
+                            p_x0, p_y0, p_x1, p_y1 = b_ox0, b_oy0, b_ox1, b_oy1
                         else:
                             # Full mask fill fallback
                             mask_pil = Image.fromarray(
-                                (combined_mask * 255).astype(np.uint8), mode="L"
+                                (comb_mask * 255).astype(np.uint8), mode="L"
                             )
                             patch = Image.new("RGB", new_img.size, color_to_use)
                             new_img.paste(patch, (0, 0), mask=mask_pil)
@@ -1607,7 +1617,7 @@ def finish_outside_text_work(
                             verbose=verbose,
                         )
                         try:
-                            group_seed = base_seed if base_seed > 0 else base_seed
+                            group_seed = base_seed
                             inpaint_kwargs = {
                                 "seed": group_seed,
                                 "verbose": verbose,
@@ -1694,13 +1704,13 @@ def finish_outside_text_work(
 def process_outside_text(
     pil_image: Image.Image,
     config: MangaTranslatorConfig,
-    image_path: Union[str, Path],
-    image_format: Optional[str],
+    image_path: str | Path,
+    image_format: str | None,
     verbose: bool = False,
-    bubble_data: Optional[List[Dict[str, Any]]] = None,
-    text_free_boxes: Optional[List[List[float]]] = None,
-    panels: Optional[List[Tuple[int, int, int, int]]] = None,
-) -> Tuple[Image.Image, List[Dict[str, Any]]]:
+    bubble_data: list[dict[str, Any]] | None = None,
+    text_free_boxes: list[list[float]] | None = None,
+    panels: list[tuple[int, int, int, int]] | None = None,
+) -> tuple[Image.Image, list[dict[str, Any]]]:
     """
     Process outside text detection, inpainting, and prepare data for translation.
 

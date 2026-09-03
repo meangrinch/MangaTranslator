@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -9,7 +9,7 @@ from utils.logging import log_message
 from utils.model_metadata import is_gemini_no_sampling_model
 
 # OpenRouter model metadata cache & reasoning detection
-_OPENROUTER_MODELS_META: Dict[str, Dict[str, Any]] = {}
+_OPENROUTER_MODELS_META: dict[str, dict[str, Any]] = {}
 
 
 def _ensure_openrouter_models_meta_loaded(debug: bool = False) -> None:
@@ -17,7 +17,6 @@ def _ensure_openrouter_models_meta_loaded(debug: bool = False) -> None:
 
     Populates a mapping of model id -> model dict (including description/architecture).
     """
-    global _OPENROUTER_MODELS_META
     if _OPENROUTER_MODELS_META:
         return
     try:
@@ -56,27 +55,21 @@ def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
 
     # Check if supported_parameters contains "include_reasoning"
     supported_parameters = meta.get("supported_parameters", [])
-    if (
-        isinstance(supported_parameters, list)
-        and "include_reasoning" in supported_parameters
-    ):
-        return True
-
-    return False
+    return bool(isinstance(supported_parameters, list) and "include_reasoning" in supported_parameters)
 
 
 def call_openrouter_endpoint(
     api_key: str,
     model_name: str,
-    parts: List[Dict[str, Any]],
-    generation_config: Dict[str, Any],
-    system_prompt: Optional[str] = None,
+    parts: list[dict[str, Any]],
+    generation_config: dict[str, Any],
+    system_prompt: str | None = None,
     debug: bool = False,
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """
     Calls the OpenRouter Chat Completions API endpoint (OpenAI compatible) and handles retries.
 
@@ -154,9 +147,8 @@ def call_openrouter_endpoint(
         "max_tokens": generation_config.get("max_tokens", 4096),
     }
 
-    if enable_web_search:
-        if not model_name.endswith(":online"):
-            payload["model"] = f"{model_name}:online"
+    if enable_web_search and not model_name.endswith(":online"):
+        payload["model"] = f"{model_name}:online"
 
     is_openai_model = metadata.get("is_openai_model", False)
     is_anthropic_model = metadata.get("is_anthropic_model", False)
@@ -281,7 +273,7 @@ def call_openrouter_endpoint(
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
-                    f"Error processing OpenRouter API response: {str(e)}"
+                    f"Error processing OpenRouter API response: {e!s}"
                 ) from e
 
         except requests.exceptions.HTTPError as e:
@@ -317,18 +309,18 @@ def call_openrouter_endpoint(
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
                     verbose=debug,
                 )
                 time.sleep(current_delay)
                 continue
             else:
                 log_message(
-                    f"OpenRouter connection failed after {max_retries + 1} attempts: {str(e)}",
+                    f"OpenRouter connection failed after {max_retries + 1} attempts: {e!s}",
                     always_print=True,
                 )
                 raise TranslationError(
-                    f"OpenRouter API Connection Error after retries: {str(e)}"
+                    f"OpenRouter API Connection Error after retries: {e!s}"
                 ) from e
 
     raise TranslationError(

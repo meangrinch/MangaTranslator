@@ -6,9 +6,10 @@ import re
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import cv2
 import numpy as np
@@ -75,13 +76,13 @@ def _should_overlap_llm_with_inpaint(config: MangaTranslatorConfig) -> bool:
 
 def _clean_speech_bubbles_for_page(
     pil_image_processed: Image.Image,
-    bubble_data: List[Dict[str, Any]],
+    bubble_data: list[dict[str, Any]],
     config: MangaTranslatorConfig,
     device,
     processing_scale: float,
     verbose: bool,
     fallback_cv_image: np.ndarray,
-) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
+) -> tuple[np.ndarray, list[dict[str, Any]]]:
     """Clean bubbles (including optional colored-bubble Flux). Returns (cv_image, info)."""
     try:
         use_otsu = config.cleaning.use_otsu_threshold
@@ -130,7 +131,7 @@ def _clean_speech_bubbles_for_page(
         return fallback_cv_image.copy(), []
 
 
-def _natural_text_sort_key(text: str) -> Tuple[Tuple[int, Union[int, str], str], ...]:
+def _natural_text_sort_key(text: str) -> tuple[tuple[int, int | str, str], ...]:
     return tuple(
         (0, int(part), part) if part.isdigit() else (1, part.lower(), part)
         for part in NATURAL_SORT_TOKEN_RE.split(text)
@@ -170,7 +171,7 @@ def _debug_mask_bbox(mask):
     ]
 
 
-def get_image_encoding_params(pil_image_format: Optional[str]) -> Tuple[str, str]:
+def get_image_encoding_params(pil_image_format: str | None) -> tuple[str, str]:
     """Returns (mime_type, cv2_ext) for a given PIL image format."""
     if pil_image_format and pil_image_format.upper() == "PNG":
         return "image/png", ".png"
@@ -208,7 +209,7 @@ def _encode_previous_context_source_page(
     image_path: Path,
     config: MangaTranslatorConfig,
     verbose: bool = False,
-) -> Optional[Dict[str, str]]:
+) -> dict[str, str] | None:
     try:
         with Image.open(image_path) as source_image:
             image_format = source_image.format
@@ -278,7 +279,7 @@ def _encode_previous_context_source_page(
 def _previous_context_cache_key(
     image_path: Path,
     config: MangaTranslatorConfig,
-) -> Tuple[Any, ...]:
+) -> tuple[Any, ...]:
     stat = image_path.stat()
     context_upscale_method = (
         "none" if config.test_mode else config.translation.upscale_method
@@ -295,9 +296,9 @@ def _previous_context_cache_key(
 def _get_cached_previous_context_image(
     image_path: Path,
     config: MangaTranslatorConfig,
-    context_cache: Optional[OrderedDict],
-    context_cache_lock: Optional[threading.Lock],
-) -> Optional[Dict[str, str]]:
+    context_cache: OrderedDict | None,
+    context_cache_lock: threading.Lock | None,
+) -> dict[str, str] | None:
     verbose = config.verbose
     if context_cache is None:
         return _encode_previous_context_source_page(image_path, config, verbose)
@@ -328,12 +329,12 @@ def _get_cached_previous_context_image(
 
 
 def _build_previous_context_images(
-    image_files: List[Path],
+    image_files: list[Path],
     image_index: int,
     config: MangaTranslatorConfig,
-    context_cache: Optional[OrderedDict] = None,
-    context_cache_lock: Optional[threading.Lock] = None,
-) -> List[Dict[str, str]]:
+    context_cache: OrderedDict | None = None,
+    context_cache_lock: threading.Lock | None = None,
+) -> list[dict[str, str]]:
     if not getattr(config.translation, "send_full_page_context", False):
         return []
     if getattr(config.translation, "ocr_method", "LLM") != "LLM":
@@ -361,12 +362,12 @@ def _build_previous_context_images(
 
 
 def _build_previous_context_texts(
-    image_files: List[Path],
+    image_files: list[Path],
     image_index: int,
     config: MangaTranslatorConfig,
-    ocr_text_history: Optional[Dict[Path, List[str]]] = None,
-    ocr_text_history_lock: Optional[threading.Lock] = None,
-) -> List[List[str]]:
+    ocr_text_history: dict[Path, list[str]] | None = None,
+    ocr_text_history_lock: threading.Lock | None = None,
+) -> list[list[str]]:
     """Collect OCR transcripts from up to N already-processed prior pages.
 
     Parallel callers that require deterministic prior-page text context should
@@ -383,7 +384,7 @@ def _build_previous_context_texts(
     if not previous_paths:
         return []
 
-    previous_texts: List[List[str]] = []
+    previous_texts: list[list[str]] = []
     if ocr_text_history_lock is not None:
         with ocr_text_history_lock:
             for previous_path in previous_paths:
@@ -409,7 +410,7 @@ def _load_debug_font(size: int):
     for candidate in font_candidates:
         try:
             return ImageFont.truetype(candidate, size=size)
-        except Exception:
+        except OSError:
             continue
     return ImageFont.load_default()
 
@@ -447,8 +448,8 @@ def _draw_dashed_rectangle(draw, bbox, color, width=2, dash=12, gap=7):
 def _draw_centered_index(draw, bbox, value, font, color):
     """Draw the index at the visual center of the box."""
     x0, y0, x1, y1 = bbox
-    cx = int(round((x0 + x1) / 2))
-    cy = int(round((y0 + y1) / 2))
+    cx = round((x0 + x1) / 2)
+    cy = round((y0 + y1) / 2)
     label = str(value)
     try:
         draw.text((cx, cy), label, fill=color, font=font, anchor="mm")
@@ -529,18 +530,18 @@ def _write_component_order_debug_image(
     for item in sorted_items:
         if item.get("is_outside_text", False):
             continue
-        bbox = tuple(int(round(v)) for v in item.get("bbox", (0, 0, 0, 0)))
+        bbox = tuple(round(v) for v in item.get("bbox", (0, 0, 0, 0)))
         _apply_mask_debug_overlay(
             canvas, bubble_masks.get(bbox) if bubble_masks else None
         )
 
     for panel_index, panel_id in enumerate(panel_order, start=1):
-        panel_bbox = tuple(int(round(v)) for v in panels[panel_id])
+        panel_bbox = tuple(round(v) for v in panels[panel_id])
         draw.rectangle(panel_bbox, outline=panel_color, width=3)
         _draw_centered_index(draw, panel_bbox, panel_index, font, index_color)
 
     for item_index, item in enumerate(sorted_items, start=1):
-        bbox = tuple(int(round(v)) for v in item.get("bbox", (0, 0, 0, 0)))
+        bbox = tuple(round(v) for v in item.get("bbox", (0, 0, 0, 0)))
         if item.get("is_outside_text", False):
             draw.rectangle(bbox, outline=osb_color, width=2)
             draw_bbox = bbox
@@ -600,7 +601,7 @@ def _write_llm_crop_debug_images(
 
 
 def _resolve_pre_upscale_factor(
-    pre_cfg: Optional[PreprocessingConfig],
+    pre_cfg: PreprocessingConfig | None,
     verbose: bool = False,
 ) -> float:
     if pre_cfg is None or not pre_cfg.enabled:
@@ -618,7 +619,7 @@ def _apply_pre_upscale_if_needed(
     image: Image.Image,
     config: MangaTranslatorConfig,
     verbose: bool = False,
-) -> Tuple[Image.Image, float]:
+) -> tuple[Image.Image, float]:
     factor = _resolve_pre_upscale_factor(
         getattr(config, "preprocessing", None), verbose
     )
@@ -636,14 +637,14 @@ def _apply_pre_upscale_if_needed(
 
 
 def translate_and_render(
-    image_path: Union[str, Path],
+    image_path: str | Path,
     config: MangaTranslatorConfig,
-    output_path: Optional[Union[str, Path]] = None,
+    output_path: str | Path | None = None,
     cancellation_manager: Optional["CancellationManager"] = None,
-    previous_context_images: Optional[List[Dict[str, str]]] = None,
-    previous_context_texts: Optional[List[List[str]]] = None,
-    previous_context_texts_provider: Optional[Callable[[], List[List[str]]]] = None,
-    ocr_texts_out: Optional[List[str]] = None,
+    previous_context_images: list[dict[str, str]] | None = None,
+    previous_context_texts: list[list[str]] | None = None,
+    previous_context_texts_provider: Callable[[], list[list[str]]] | None = None,
+    ocr_texts_out: list[str] | None = None,
 ):
     """
     Main function to translate manga speech bubbles and render translations using a config object.
@@ -955,7 +956,7 @@ def translate_and_render(
         if cancellation_manager and cancellation_manager.is_cancelled():
             raise CancellationError("Process cancelled by user.")
 
-        processed_bubbles_info: List[Dict[str, Any]] = []
+        processed_bubbles_info: list[dict[str, Any]] = []
         pil_cleaned_image = pil_image_processed
         if not use_llm_inpaint_overlap:
             if bubble_data:
@@ -1039,9 +1040,9 @@ def translate_and_render(
 
             # Enrich bubble_data with refined cleaning masks
             if processed_bubbles_info:
-                _mask_lut: Dict[tuple, Any] = {}
+                _mask_lut: dict[tuple, Any] = {}
                 for _info in processed_bubbles_info:
-                    _bk = tuple(int(round(v)) for v in _info.get("bbox", ()))
+                    _bk = tuple(round(v) for v in _info.get("bbox", ()))
                     if len(_bk) != 4:
                         continue
                     _m = _info.get("mask")
@@ -1050,7 +1051,7 @@ def translate_and_render(
                     if _m is not None:
                         _mask_lut[_bk] = _m
                 for _b in bubble_data:
-                    _bk = tuple(int(round(v)) for v in _b.get("bbox", ()))
+                    _bk = tuple(round(v) for v in _b.get("bbox", ()))
                     if _bk in _mask_lut:
                         _b["sam_mask"] = _mask_lut[_bk]
 
@@ -1219,7 +1220,7 @@ def translate_and_render(
                     for bubble in sorted_bubble_data:
                         if bubble.get("is_outside_text", False):
                             continue
-                        bbox = tuple(int(round(v)) for v in bubble.get("bbox", ()))
+                        bbox = tuple(round(v) for v in bubble.get("bbox", ()))
                         if len(bbox) != 4:
                             continue
                         mask = bubble.get("sam_mask")
@@ -1227,7 +1228,7 @@ def translate_and_render(
                             bubble_debug_masks[bbox] = mask
 
                     for info in processed_bubbles_info:
-                        bbox = tuple(int(round(v)) for v in info.get("bbox", ()))
+                        bbox = tuple(round(v) for v in info.get("bbox", ()))
                         if len(bbox) != 4:
                             continue
                         mask = info.get("mask")
@@ -1277,7 +1278,7 @@ def translate_and_render(
                     if "image_b64" in bubble and "mime_type" in bubble
                 ]
                 translated_texts = []
-                current_ocr_texts: List[str] = []
+                current_ocr_texts: list[str] = []
                 _provider_tag = f"[{config.translation.provider}:"
 
                 def _run_deferred_inpaint_and_clean():
@@ -1286,7 +1287,7 @@ def translate_and_render(
                     if outside_work is not None:
                         page_image, osb_data = finish_outside_text_work(outside_work)
                     fallback_cv = pil_to_cv2(page_image)
-                    clean_info: List[Dict[str, Any]] = []
+                    clean_info: list[dict[str, Any]] = []
                     if bubble_data:
                         log_message("Cleaning speech bubbles...", verbose=verbose)
                         cleaned_cv, clean_info = _clean_speech_bubbles_for_page(
@@ -1302,8 +1303,8 @@ def translate_and_render(
                         cleaned_cv = fallback_cv
                     return page_image, osb_data, cleaned_cv, clean_info
 
-                def _run_llm_translation() -> Tuple[List[str], List[str]]:
-                    ocr_texts: List[str] = []
+                def _run_llm_translation() -> tuple[list[str], list[str]]:
+                    ocr_texts: list[str] = []
                     if previous_context_texts_provider is not None:
                         resolved_previous_texts = (
                             previous_context_texts_provider() or []
@@ -1557,12 +1558,7 @@ def translate_and_render(
                         is_outside_text = bubble.get("is_outside_text", False)
 
                         if (
-                            not text
-                            or text.startswith("API Error")
-                            or text.startswith("[Translation Error]")
-                            or text.startswith("[Translation Error:")
-                            or text.startswith(_provider_tag)
-                            or text.strip() in invalid_translation_values
+                            not text or text.startswith(("API Error", "[Translation Error]", "[Translation Error:", _provider_tag)) or text.strip() in invalid_translation_values
                         ):
                             entry_type = "outside text" if is_outside_text else "bubble"
                             log_message(
@@ -2030,7 +2026,7 @@ def _resolve_output_path(
     output_dir: Path,
     config: MangaTranslatorConfig,
     preserve_structure: bool,
-) -> Tuple[Path, str, str]:
+) -> tuple[Path, str, str]:
     """Compute output path, display name, and error key for a single image."""
     if preserve_structure:
         relative_path = img_path.relative_to(input_dir)
@@ -2066,28 +2062,26 @@ def _resolve_output_path(
 
 def _should_run_failed_retry(
     config: MangaTranslatorConfig,
-    failed_jobs: List[Dict[str, Any]],
+    failed_jobs: list[dict[str, Any]],
     cancellation_manager: Optional["CancellationManager"] = None,
 ) -> bool:
     if not getattr(config, "retry_failed_once", False):
         return False
     if not failed_jobs:
         return False
-    if cancellation_manager is not None and cancellation_manager.is_cancelled():
-        return False
-    return True
+    return not (cancellation_manager is not None and cancellation_manager.is_cancelled())
 
 
 def _retry_failed_batch_images(
-    failed_jobs: List[Dict[str, Any]],
-    results: Dict[str, Any],
+    failed_jobs: list[dict[str, Any]],
+    results: dict[str, Any],
     config: MangaTranslatorConfig,
     input_dir: Path,
     output_dir: Path,
     preserve_structure: bool = False,
-    progress_callback: Optional[Callable[[float, str], None]] = None,
+    progress_callback: Callable[[float, str], None] | None = None,
     cancellation_manager: Optional["CancellationManager"] = None,
-    source_path_map: Optional[Dict[str, str]] = None,
+    source_path_map: dict[str, str] | None = None,
 ) -> None:
     """Retry failed batch images once. Mutates *results* in place.
 
@@ -2213,15 +2207,15 @@ def _retry_failed_batch_images(
 
 
 async def _batch_translate_parallel(
-    image_files: List[Path],
+    image_files: list[Path],
     input_dir: Path,
     config: MangaTranslatorConfig,
     output_dir: Path,
     preserve_structure: bool,
-    progress_callback: Optional[Callable[[float, str], None]],
+    progress_callback: Callable[[float, str], None] | None,
     cancellation_manager: Optional["CancellationManager"],
-    source_path_map: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    source_path_map: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Process images in parallel using a semaphore to maintain target concurrency.
 
     The first image is processed sequentially to warm up all ML models (triggering
@@ -2239,7 +2233,7 @@ async def _batch_translate_parallel(
     }
     previous_context_cache = OrderedDict()
     previous_context_cache_lock = threading.Lock()
-    ocr_text_history: Dict[Path, List[str]] = {}
+    ocr_text_history: dict[Path, list[str]] = {}
     ocr_text_history_lock = threading.Lock()
     ocr_text_ready_events = [threading.Event() for _ in image_files]
     requested_text_context_count = int(
@@ -2292,7 +2286,7 @@ async def _batch_translate_parallel(
             ocr_text_history,
             ocr_text_history_lock,
         )
-        first_ocr_texts: List[str] = []
+        first_ocr_texts: list[str] = []
         translate_and_render(
             first_img,
             config,
@@ -2309,7 +2303,7 @@ async def _batch_translate_parallel(
     except CancellationError:
         raise
     except Exception as e:
-        log_message(f"Error processing {first_display}: {str(e)}", always_print=True)
+        log_message(f"Error processing {first_display}: {e!s}", always_print=True)
         source_path = resolve_source_path(first_img, source_path_map)
         results["error_count"] += 1
         results["errors"][first_key] = str(e)
@@ -2357,7 +2351,7 @@ async def _batch_translate_parallel(
             if cancellation_manager and cancellation_manager.is_cancelled():
                 raise CancellationError("Batch process cancelled by user.")
 
-    def _process_single(img_path: Path, index: int) -> Tuple[str, str]:
+    def _process_single(img_path: Path, index: int) -> tuple[str, str]:
         """Run translate_and_render for a single image. Returns (display_path, error_key)."""
         output_path, display_path, error_key = _resolve_output_path(
             img_path, input_dir, output_dir, config, preserve_structure
@@ -2374,7 +2368,7 @@ async def _batch_translate_parallel(
             previous_context_cache_lock,
         )
 
-        def previous_context_texts_provider() -> List[List[str]]:
+        def previous_context_texts_provider() -> list[list[str]]:
             _wait_for_required_previous_ocr(index)
             return _build_previous_context_texts(
                 image_files,
@@ -2384,7 +2378,7 @@ async def _batch_translate_parallel(
                 ocr_text_history_lock,
             )
 
-        captured_ocr_texts: List[str] = []
+        captured_ocr_texts: list[str] = []
         translate_and_render(
             img_path,
             config,
@@ -2432,7 +2426,7 @@ async def _batch_translate_parallel(
                         img_path, input_dir, output_dir, config, preserve_structure
                     )
                     log_message(
-                        f"Error processing {display_path}: {str(e)}",
+                        f"Error processing {display_path}: {e!s}",
                         always_print=True,
                     )
                     source_path = resolve_source_path(img_path, source_path_map)
@@ -2479,14 +2473,14 @@ async def _batch_translate_parallel(
 
 
 def batch_translate_images(
-    input_dir: Union[str, Path],
+    input_dir: str | Path,
     config: MangaTranslatorConfig,
-    output_dir: Optional[Union[str, Path]] = None,
-    progress_callback: Optional[Callable[[float, str], None]] = None,
+    output_dir: str | Path | None = None,
+    progress_callback: Callable[[float, str], None] | None = None,
     preserve_structure: bool = False,
     cancellation_manager: Optional["CancellationManager"] = None,
-    source_path_map: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    source_path_map: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """
     Process all images in a directory using a configuration object.
 
@@ -2587,10 +2581,10 @@ def batch_translate_images(
             "errors": {},
             "failed_image_paths": [],
         }
-        failed_jobs: List[Dict[str, Any]] = []
+        failed_jobs: list[dict[str, Any]] = []
         previous_context_cache = OrderedDict()
         previous_context_cache_lock = threading.Lock()
-        ocr_text_history: Dict[Path, List[str]] = {}
+        ocr_text_history: dict[Path, list[str]] = {}
         ocr_text_history_lock = threading.Lock()
         log_message(
             f"Starting batch processing: {total_images} images", always_print=True
@@ -2631,7 +2625,7 @@ def batch_translate_images(
                     ocr_text_history,
                     ocr_text_history_lock,
                 )
-                captured_ocr_texts: List[str] = []
+                captured_ocr_texts: list[str] = []
                 translate_and_render(
                     img_path,
                     config,
@@ -2662,7 +2656,7 @@ def batch_translate_images(
                 raise
             except Exception as e:
                 log_message(
-                    f"Error processing {display_path}: {str(e)}", always_print=True
+                    f"Error processing {display_path}: {e!s}", always_print=True
                 )
                 source_path = resolve_source_path(img_path, source_path_map)
                 results["error_count"] += 1

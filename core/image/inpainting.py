@@ -1,5 +1,4 @@
 import math
-from typing import Dict, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -78,7 +77,7 @@ def _encode_flux_prompt(pipeline, prompt: str, device: torch.device):
 
 def _flux_prompt_kwargs(
     prompt_embeds, pooled_prompt_embeds, include_pooled: bool = True
-) -> Dict:
+) -> dict:
     kwargs = {"prompt_embeds": prompt_embeds}
     if include_pooled and pooled_prompt_embeds is not None:
         kwargs["pooled_prompt_embeds"] = pooled_prompt_embeds
@@ -90,7 +89,7 @@ class FluxKontextInpainter:
 
     def __init__(
         self,
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
         huggingface_token: str = "",
         num_inference_steps: int = 8,
         residual_diff_threshold: float = 0.15,
@@ -639,9 +638,9 @@ class FluxKontextInpainter:
         mask_np: np.ndarray,
         seed: int = 1,
         verbose: bool = False,
-        ocr_params: Optional[Dict] = None,
+        ocr_params: dict | None = None,
         strict_mask_clipping: bool = False,
-        composite_clip_bbox: Optional[Tuple[int, int, int, int]] = None,
+        composite_clip_bbox: tuple[int, int, int, int] | None = None,
     ) -> Image.Image:
         """Inpaint a specific mask region in the image.
 
@@ -889,14 +888,14 @@ class FluxKontextInpainter:
                         torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
                         img.clamp_(0, 1)
                         generated_patch_pil = Image.fromarray(
-                            (
+                            
                                 img.mul(255)
                                 .round()
                                 .to(torch.uint8)
                                 .permute(1, 2, 0)
                                 .cpu()
                                 .numpy()
-                            )
+                            
                         )
                 else:
                     should_encode_prompt = self._prompt_embeds_cpu is None
@@ -930,14 +929,14 @@ class FluxKontextInpainter:
                         torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
                         img.clamp_(0, 1)
                         generated_patch_pil = Image.fromarray(
-                            (
+                            
                                 img.mul(255)
                                 .round()
                                 .to(torch.uint8)
                                 .permute(1, 2, 0)
                                 .cpu()
                                 .numpy()
-                            )
+                            
                         )
 
                     self.pipeline.transformer.to("cpu")
@@ -1005,7 +1004,7 @@ class FluxKleinInpainter:
     def __init__(
         self,
         variant: str = "4b",
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
         huggingface_token: str = "",
         num_inference_steps: int = 4,
         low_vram: bool = False,
@@ -1136,7 +1135,7 @@ class FluxKleinInpainter:
         y2: int,
         img_w: int,
         img_h: int,
-    ) -> Tuple[int, int, int, int]:
+    ) -> tuple[int, int, int, int]:
         target_w = min(self.MIN_RESOLUTION, img_w)
         target_h = min(self.MIN_RESOLUTION, img_h)
 
@@ -1166,7 +1165,7 @@ class FluxKleinInpainter:
 
     def _compute_luminance_stats(
         self, image_np: np.ndarray, mask_np: np.ndarray
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Compute mean and std of luminance (LAB L channel) for masked pixels.
 
         Args:
@@ -1259,7 +1258,7 @@ class FluxKleinInpainter:
         self,
         image_pil: Image.Image,
         verbose: bool = False,
-    ) -> Tuple[Image.Image, int, int]:
+    ) -> tuple[Image.Image, int, int]:
         """Prepare image for Klein inference.
 
         Optionally scales the image to approximately 1 megapixel while maintaining
@@ -1354,8 +1353,8 @@ class FluxKleinInpainter:
         seed: int = 1,
         verbose: bool = False,
         strict_mask_clipping: bool = False,
-        composite_clip_bbox: Optional[Tuple[int, int, int, int]] = None,
-        ocr_params: Optional[Dict] = None,
+        composite_clip_bbox: tuple[int, int, int, int] | None = None,
+        ocr_params: dict | None = None,
     ) -> Image.Image:
         """Inpaint a specific mask region in the image using Flux.2 Klein.
 

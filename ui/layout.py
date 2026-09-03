@@ -296,7 +296,7 @@ def create_layout(
 
         # --- Define UI Components ---
         with gr.Tabs():
-            with gr.TabItem("Translator"):
+            with gr.TabItem("Translator"):  # noqa: SIM117
                 with gr.Row():
                     with gr.Column(scale=1):
                         input_image = gr.Image(
@@ -363,7 +363,7 @@ def create_layout(
                                 "Cancel", variant="stop", visible=False
                             )
 
-            with gr.TabItem("Batch"):
+            with gr.TabItem("Batch"):  # noqa: SIM117
                 with gr.Row():
                     with gr.Column(scale=1):
                         input_files = gr.File(
@@ -450,7 +450,7 @@ def create_layout(
                             minimum=0,
                             maximum=10,
                             value=int(
-                                (
+                                
                                     saved_settings.get(
                                         "batch_previous_context_image_count", 0
                                     )
@@ -458,7 +458,7 @@ def create_layout(
                                         "send_full_page_context", True
                                     )
                                     else 0
-                                )
+                                
                             ),
                             step=1,
                             label="Previous Context Images",
@@ -955,11 +955,7 @@ def create_layout(
                             _initial_reasoning_effort_value = saved_settings.get(
                                 "reasoning_effort"
                             )
-                            if _initial_reasoning_effort_value is None:
-                                _initial_reasoning_effort_value = (
-                                    _initial_reasoning_effort_default
-                                )
-                            elif (
+                            if _initial_reasoning_effort_value is None or (
                                 _initial_reasoning_effort_choices
                                 and _initial_reasoning_effort_value
                                 not in _initial_reasoning_effort_choices
@@ -1003,9 +999,7 @@ def create_layout(
                                 config_initial_provider, config_initial_model_name
                             )
                             _initial_effort_value = saved_settings.get("effort")
-                            if _initial_effort_value is None:
-                                _initial_effort_value = _initial_effort_default
-                            elif (
+                            if _initial_effort_value is None or (
                                 _initial_effort_choices
                                 and _initial_effort_value not in _initial_effort_choices
                             ):
@@ -1031,9 +1025,7 @@ def create_layout(
                                 config_initial_provider, config_initial_model_name
                             )
                             _initial_verbosity_value = saved_settings.get("verbosity")
-                            if _initial_verbosity_value is None:
-                                _initial_verbosity_value = _initial_verbosity_default
-                            elif (
+                            if _initial_verbosity_value is None or (
                                 _initial_verbosity_choices
                                 and _initial_verbosity_value
                                 not in _initial_verbosity_choices
@@ -3211,10 +3203,7 @@ def create_layout(
                 max_steps = 12
                 default_steps = 4
 
-            if is_klein:
-                backend_value = flux_valid_backend(method, current_backend)
-                backend_visible = True
-            elif is_kontext:
+            if is_klein or is_kontext:
                 backend_value = flux_valid_backend(method, current_backend)
                 backend_visible = True
             else:

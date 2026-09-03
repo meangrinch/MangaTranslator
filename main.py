@@ -5,6 +5,7 @@ import os
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "24")
 
 import shutil
+import sys
 import tempfile
 import time
 import zipfile
@@ -1402,13 +1403,13 @@ def main():
                     f"Error: '{args.input}' is not a valid ZIP archive.",
                     always_print=True,
                 )
-                exit(1)
+                sys.exit(1)
             except Exception as e:
                 log_message(
-                    f"Error extracting ZIP archive: {str(e)}",
+                    f"Error extracting ZIP archive: {e!s}",
                     always_print=True,
                 )
-                exit(1)
+                sys.exit(1)
         elif input_path.is_file() and input_path.suffix.lower() == ".txt":
             from utils.path_list import read_image_paths_from_txt
 
@@ -1422,7 +1423,7 @@ def main():
                     f"Error: no existing image paths found in '{args.input}'.",
                     always_print=True,
                 )
-                exit(1)
+                sys.exit(1)
 
             path_list_temp_dir_obj = tempfile.TemporaryDirectory()
             temp_dir_path = Path(path_list_temp_dir_obj.name)
@@ -1446,7 +1447,7 @@ def main():
                     f"Error: could not stage any images from '{args.input}'.",
                     always_print=True,
                 )
-                exit(1)
+                sys.exit(1)
 
             log_message(
                 f"Prepared {len(source_path_map)} image(s) from path list",
@@ -1460,7 +1461,7 @@ def main():
                 "ZIP archive, or failed-paths .txt file.",
                 always_print=True,
             )
-            exit(1)
+            sys.exit(1)
 
         output_dir = Path(args.output) if args.output else None
 
@@ -1476,7 +1477,7 @@ def main():
                     f"Error: Specified --output '{output_dir}' is not a directory.",
                     always_print=True,
                 )
-                exit(1)
+                sys.exit(1)
 
         try:
             results = batch_translate_images(
@@ -1518,7 +1519,7 @@ def main():
             log_message(
                 f"Error: Input '{args.input}' is not a valid file.", always_print=True
             )
-            exit(1)
+            sys.exit(1)
 
         output_path_arg = args.output
         original_ext = input_path.suffix.lower()

@@ -1,5 +1,4 @@
 import gc
-from typing import Optional
 
 import torch
 
@@ -31,7 +30,7 @@ def get_best_device() -> torch.device:
     return torch.device("cpu")
 
 
-def get_best_dtype(device: Optional[torch.device] = None) -> torch.dtype:
+def get_best_dtype(device: torch.device | None = None) -> torch.dtype:
     """Return the optimal dtype for the given device.
 
     Args:
@@ -78,7 +77,7 @@ def get_best_dtype(device: Optional[torch.device] = None) -> torch.dtype:
     return torch.float32
 
 
-def empty_cache(device: Optional[torch.device] = None) -> None:
+def empty_cache(device: torch.device | None = None) -> None:
     """Clear GPU memory cache in a platform-aware manner.
 
     Args:
@@ -113,7 +112,7 @@ def empty_cache(device: Optional[torch.device] = None) -> None:
         torch.mps.empty_cache()
 
 
-def get_device_info(device: Optional[torch.device] = None) -> dict:
+def get_device_info(device: torch.device | None = None) -> dict:
     """Get memory and device information for any backend.
 
     Args:
@@ -188,13 +187,10 @@ def is_gpu_available() -> bool:
     if hasattr(torch, "xpu") and torch.xpu.is_available():
         return True
 
-    if torch.backends.mps.is_available():
-        return True
-
-    return False
+    return bool(torch.backends.mps.is_available())
 
 
-def synchronize(device: Optional[torch.device] = None) -> None:
+def synchronize(device: torch.device | None = None) -> None:
     """Synchronize the given device or all available GPU backends.
 
     Useful for accurate timing measurements and ensuring operations complete.

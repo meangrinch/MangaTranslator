@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -11,15 +11,15 @@ from utils.logging import log_message
 def call_xai_endpoint(
     api_key: str,
     model_name: str,
-    parts: List[Dict[str, Any]],
-    generation_config: Dict[str, Any],
-    system_prompt: Optional[str] = None,
+    parts: list[dict[str, Any]],
+    generation_config: dict[str, Any],
+    system_prompt: str | None = None,
     debug: bool = False,
     timeout: int = 3600,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """
     Calls the SpaceXAI Responses API endpoint with the provided data and handles retries.
 
@@ -131,12 +131,9 @@ def call_xai_endpoint(
         if reasoning_effort in ("low", "medium", "high", "xhigh"):
             payload["reasoning"] = {"effort": reasoning_effort}
     elif (
-        model_lower.startswith("grok-4.3")
-        or model_lower.startswith("grok-4.5")
-        or model_lower.startswith("grok-4.6")
-    ):
-        if reasoning_effort in ("none", "low", "medium", "high"):
-            payload["reasoning"] = {"effort": reasoning_effort}
+        model_lower.startswith(("grok-4.3", "grok-4.5", "grok-4.6"))
+    ) and reasoning_effort in ("none", "low", "medium", "high"):
+        payload["reasoning"] = {"effort": reasoning_effort}
 
     if enable_web_search:
         payload["tools"] = [{"type": "web_search"}]
@@ -192,7 +189,7 @@ def call_xai_endpoint(
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
-                    f"Error processing SpaceXAI API response: {str(e)}"
+                    f"Error processing SpaceXAI API response: {e!s}"
                 ) from e
 
         except requests.exceptions.HTTPError as e:
@@ -228,18 +225,18 @@ def call_xai_endpoint(
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
                     verbose=debug,
                 )
                 time.sleep(current_delay)
                 continue
             else:
                 log_message(
-                    f"SpaceXAI connection failed after {max_retries + 1} attempts: {str(e)}",
+                    f"SpaceXAI connection failed after {max_retries + 1} attempts: {e!s}",
                     always_print=True,
                 )
                 raise TranslationError(
-                    f"SpaceXAI API Connection Error after retries: {str(e)}"
+                    f"SpaceXAI API Connection Error after retries: {e!s}"
                 ) from e
 
     raise TranslationError(

@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union
+from typing import Any
 
 from core.config import MangaTranslatorConfig, RenderingConfig, TranslationConfig
 from utils.exceptions import ValidationError
 
-SETTING_CONSTRAINTS: Dict[str, Tuple[float, float]] = {
+SETTING_CONSTRAINTS: dict[str, tuple[float, float]] = {
     "confidence": (0.1, 1.0),
     "conjoined_confidence": (0.1, 1.0),
     "panel_confidence": (0.05, 1.0),
@@ -58,7 +58,7 @@ SETTING_CONSTRAINTS: Dict[str, Tuple[float, float]] = {
 }
 
 # Attribute paths for clamping config objects (MangaTranslatorConfig and children)
-_CONFIG_ATTR_PATHS: Dict[str, Tuple[Tuple[str, ...], ...]] = {
+_CONFIG_ATTR_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
     "confidence": (("detection", "confidence"),),
     "conjoined_confidence": (("detection", "conjoined_confidence"),),
     "panel_confidence": (("detection", "panel_confidence"),),
@@ -214,7 +214,7 @@ def validate_core_inputs(
     models_dir: Path,
     fonts_base_dir: Path,
     bubble_detector_model: str = "yolo_2",
-) -> Tuple[Path, Path]:
+) -> tuple[Path, Path]:
     """
     Validates core inputs required for translation, raising standard exceptions.
 
@@ -337,7 +337,7 @@ def validate_config(config: MangaTranslatorConfig) -> None:
         raise ValidationError("Nunchaku backend is only supported with Flux.1 Kontext.")
 
 
-def validate_zip_file(zip_path: Union[str, Path]) -> Path:
+def validate_zip_file(zip_path: str | Path) -> Path:
     """
     Validates that a ZIP file exists and has the correct extension.
 
@@ -361,7 +361,7 @@ def validate_zip_file(zip_path: Union[str, Path]) -> Path:
     return zip_file_path
 
 
-def validate_batch_input_path(input_path: Union[str, Path]) -> Path:
+def validate_batch_input_path(input_path: str | Path) -> Path:
     """
     Validates that a batch input path exists and is a directory, ZIP, or path-list .txt.
 

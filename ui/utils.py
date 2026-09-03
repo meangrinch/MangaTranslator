@@ -1,7 +1,7 @@
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import gradio as gr
 import requests
@@ -63,7 +63,7 @@ from utils.model_metadata import (
 from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_settings
 
 
-def get_available_providers(ocr_method: str) -> List[str]:
+def get_available_providers(ocr_method: str) -> list[str]:
     """Get list of available providers based on OCR method."""
     return list(PROVIDER_MODELS.keys())
 
@@ -74,10 +74,10 @@ SUCCESS_PREFIX = "✅ "
 # Global caches for API models (Session-based)
 OPENROUTER_MODEL_CACHE = {}
 COMPATIBLE_MODEL_CACHE = {"url": None, "models": None}
-OPENCODE_MODEL_CACHE: Dict[str, Any] = {"zen": None, "go": None}
+OPENCODE_MODEL_CACHE: dict[str, Any] = {"zen": None, "go": None}
 
 
-def get_available_font_packs(fonts_base_dir: Path) -> Tuple[List[str], Optional[str]]:
+def get_available_font_packs(fonts_base_dir: Path) -> tuple[list[str], str | None]:
     """Get list of available font packs (subdirectories) in the fonts directory"""
     if not fonts_base_dir.exists():
         return [], None
@@ -96,9 +96,7 @@ def is_valid_google_api_key(api_key: str) -> bool:
     """Return True for legacy traffic keys (AI...) or auth keys (AQ...)."""
     if api_key.startswith("AI") and len(api_key) == 39:
         return True
-    if api_key.startswith("AQ") and len(api_key) == 53:
-        return True
-    return False
+    return bool(api_key.startswith("AQ") and len(api_key) == 53)
 
 
 def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
@@ -174,7 +172,7 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     if provider == "Moonshot AI" and not api_key.startswith("sk-"):
         return False, "Invalid Moonshot AI API key format (should start with 'sk-')"
     if provider == "Xiaomi MiMo" and not (
-        (api_key.startswith("sk-") or api_key.startswith("tp-")) and len(api_key) >= 8
+        (api_key.startswith(("sk-", "tp-"))) and len(api_key) >= 8
     ):
         return (
             False,
@@ -196,10 +194,7 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
         )
     if provider == "OpenCode" and not (
         (
-            api_key.startswith("sk-")
-            or api_key.startswith("opencode-")
-            or api_key.startswith("zen-")
-            or api_key.startswith("go-")
+            api_key.startswith(("sk-", "opencode-", "zen-", "go-"))
         )
         and len(api_key) >= 10
     ):
@@ -258,7 +253,7 @@ def validate_image(image: Any) -> tuple[bool, str]:
     except FileNotFoundError:
         return False, f"Invalid image path: {image}"
     except Exception as e:
-        return False, f"Invalid image: {str(e)}"
+        return False, f"Invalid image: {e!s}"
 
 
 def validate_font_directory(font_dir: Path) -> tuple[bool, str]:
@@ -306,7 +301,7 @@ def update_font_dropdown(fonts_base_dir: Path):
             f"{SUCCESS_PREFIX}Found {len(font_packs)} font packs",
         )
     except Exception as e:
-        return gr.update(choices=[]), gr.update(choices=[]), f"{ERROR_PREFIX}{str(e)}"
+        return gr.update(choices=[]), gr.update(choices=[]), f"{ERROR_PREFIX}{e!s}"
 
 
 def refresh_models_and_fonts(fonts_base_dir: Path):
@@ -349,7 +344,7 @@ def refresh_models_and_fonts(fonts_base_dir: Path):
 
         return single_font_result, batch_font_result, osb_font_result
     except Exception as e:
-        gr.Error(f"Error refreshing resources: {str(e)}")
+        gr.Error(f"Error refreshing resources: {e!s}")
         font_packs, _ = get_available_font_packs(fonts_base_dir)
         return (
             gr.update(choices=font_packs),
@@ -358,12 +353,12 @@ def refresh_models_and_fonts(fonts_base_dir: Path):
         )
 
 
-def _is_moonshot_reasoning_model(model_name: Optional[str]) -> bool:
+def _is_moonshot_reasoning_model(model_name: str | None) -> bool:
     """Check if a Moonshot model is reasoning-capable."""
     return is_moonshot_reasoning_model(model_name)
 
 
-def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
+def is_reasoning_model(provider: str, model_name: str | None) -> bool:
     """Check if a model is reasoning-capable based on provider and model name."""
     if not model_name:
         return False
@@ -412,7 +407,7 @@ def is_reasoning_model(provider: str, model_name: Optional[str]) -> bool:
         return False
 
 
-def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
+def get_enable_web_search_label_and_info(provider: str) -> tuple[str, str]:
     """
     Returns the label and info text for the enable_web_search checkbox based on provider.
 
@@ -484,7 +479,7 @@ def get_enable_web_search_label_and_info(provider: str) -> Tuple[str, str]:
     return (label, info)
 
 
-def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) -> str:
+def get_reasoning_effort_label(provider: str, model_name: str | None = None) -> str:
     """
     Returns the label for the reasoning_effort dropdown based on provider/model.
 
@@ -535,7 +530,7 @@ def get_reasoning_effort_label(provider: str, model_name: Optional[str] = None) 
 
 
 def get_reasoning_effort_info_text(
-    provider: str, model_name: Optional[str] = None, choices: Optional[List[str]] = None
+    provider: str, model_name: str | None = None, choices: list[str] | None = None
 ) -> str:
     """Get provider-specific info text for reasoning effort dropdown."""
     if choices is None:
@@ -571,11 +566,7 @@ def get_reasoning_effort_info_text(
         if supports_qwencloud_reasoning_effort(model_name):
             return "Controls model's internal reasoning effort."
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
-    elif provider == "Meta Model":
-        return "Controls model's internal reasoning effort."
-    elif provider == "OpenCode":
-        return "Controls model's internal reasoning effort."
-    elif provider == "DeepSeek":
+    elif provider == "Meta Model" or provider == "OpenCode" or provider == "DeepSeek":
         return "Controls model's internal reasoning effort."
     elif provider == "Z.ai":
         if supports_zai_reasoning_effort(model_name):
@@ -636,7 +627,7 @@ def get_reasoning_effort_info_text(
         return base_text + "."
 
 
-def _is_openai_reasoning_model(model_name: Optional[str]) -> bool:
+def _is_openai_reasoning_model(model_name: str | None) -> bool:
     """Check if an OpenAI model is reasoning-capable.
 
     Delegates to the centralized helper in model_metadata.
@@ -644,14 +635,14 @@ def _is_openai_reasoning_model(model_name: Optional[str]) -> bool:
     return is_openai_reasoning_model(model_name)
 
 
-def _is_anthropic_reasoning_model(model_name: Optional[str]) -> bool:
+def _is_anthropic_reasoning_model(model_name: str | None) -> bool:
     """Check if an Anthropic model is reasoning-capable."""
     return is_anthropic_reasoning_model(model_name)
 
 
 def get_reasoning_effort_config(
-    provider: str, model_name: Optional[str]
-) -> Tuple[bool, List[str], Optional[str]]:
+    provider: str, model_name: str | None
+) -> tuple[bool, list[str], str | None]:
     """
     Get reasoning effort configuration for a provider/model combination.
 
@@ -845,8 +836,8 @@ def get_reasoning_effort_config(
 
 
 def get_effort_config(
-    provider: str, model_name: Optional[str]
-) -> Tuple[bool, List[str], Optional[str]]:
+    provider: str, model_name: str | None
+) -> tuple[bool, list[str], str | None]:
     """
     Get effort configuration for Claude Opus 4.5+ and Sonnet 4.6 models (Anthropic/OpenRouter/OpenAI-Compatible).
 
@@ -865,8 +856,8 @@ def get_effort_config(
 
 
 def get_verbosity_config(
-    provider: str, model_name: Optional[str]
-) -> Tuple[bool, List[str], Optional[str]]:
+    provider: str, model_name: str | None
+) -> tuple[bool, list[str], str | None]:
     """
     Get verbosity configuration for GPT-5 series models (OpenAI/OpenRouter/OpenAI-Compatible).
 
@@ -883,8 +874,8 @@ def get_verbosity_config(
 
 
 def get_sampling_interactivity_for_effort(
-    provider: str, model_name: Optional[str], reasoning_effort: Optional[str] = None
-) -> Tuple[bool, bool]:
+    provider: str, model_name: str | None, reasoning_effort: str | None = None
+) -> tuple[bool, bool]:
     """Whether temp/top_p sliders should be interactive given the current reasoning effort.
 
     For GPT-5 series (non-chat): only allowed when effort is 'none' or 'minimal'.
@@ -910,7 +901,7 @@ def get_sampling_interactivity_for_effort(
 
 
 def _model_disallows_all_sampling_params(
-    provider: str, model_name: Optional[str]
+    provider: str, model_name: str | None
 ) -> bool:
     """Models that reject temperature/top-k at the API (e.g. Claude Opus 4.7+, Gemini 3.6+ Flash, Gemini 3.5 Flash Lite)."""
     if provider == "Anthropic":
@@ -928,10 +919,10 @@ def _model_disallows_all_sampling_params(
 
 def get_sampling_slider_interactivity(
     provider: str,
-    model_name: Optional[str],
-    reasoning_effort: Optional[str] = None,
+    model_name: str | None,
+    reasoning_effort: str | None = None,
     use_custom_sampling: bool = True,
-) -> Tuple[bool, bool, bool]:
+) -> tuple[bool, bool, bool]:
     """Return (temp, top_p, top_k) slider interactivity for the current provider/model."""
     if not use_custom_sampling:
         return False, False, False
@@ -974,8 +965,8 @@ def get_sampling_slider_interactivity(
 
 def is_use_custom_sampling_visible(
     provider: str,
-    model_name: Optional[str],
-    reasoning_effort: Optional[str] = None,
+    model_name: str | None,
+    reasoning_effort: str | None = None,
 ) -> bool:
     """Show the toggle only when at least one sampling slider can be adjusted."""
     temp, top_p, top_k = get_sampling_slider_interactivity(
@@ -984,15 +975,15 @@ def is_use_custom_sampling_visible(
     return temp or top_p or top_k
 
 
-def get_temperature_max(provider: str, model_name: Optional[str]) -> float:
+def get_temperature_max(provider: str, model_name: str | None) -> float:
     if provider == "Anthropic" or is_anthropic_model_family(model_name):
         return 1.0
     return 2.0
 
 
 def get_media_resolution_config(
-    provider: str, model_name: Optional[str]
-) -> Tuple[bool, List[str], str]:
+    provider: str, model_name: str | None
+) -> tuple[bool, list[str], str]:
     """
     Get media resolution configuration for a provider/model combination.
 
@@ -1012,8 +1003,8 @@ def get_media_resolution_config(
 
 
 def get_image_detail_config(
-    provider: str, model_name: Optional[str]
-) -> Tuple[bool, List[str], str, str]:
+    provider: str, model_name: str | None
+) -> tuple[bool, list[str], str, str]:
     """Get image detail configuration for a provider/model combination."""
     if provider in ("OpenRouter", "OpenAI-Compatible"):
         if not is_openai_model_family(model_name):
@@ -1035,7 +1026,7 @@ def get_image_detail_config(
     return True, choices, "auto", info
 
 
-def is_code_execution_visible(provider: str, model_name: Optional[str]) -> bool:
+def is_code_execution_visible(provider: str, model_name: str | None) -> bool:
     """Check if code execution checkbox should be visible (Gemini 3 Flash on Google only)."""
     return provider == "Google" and is_gemini_3_flash_model(model_name)
 
@@ -1044,7 +1035,7 @@ def update_translation_ui(
     provider: str,
     ocr_method: str = "LLM",
     use_custom_sampling: bool = True,
-    opencode_tier: Optional[str] = None,
+    opencode_tier: str | None = None,
 ):
     """Updates API key/URL visibility, model dropdown, temp slider max, and top_k interactivity.
 
@@ -1308,7 +1299,7 @@ def update_translation_ui(
 
 def update_params_for_model(
     provider: str,
-    model_name: Optional[str],
+    model_name: str | None,
     current_temp: float,
     use_custom_sampling: bool = True,
 ):
@@ -1486,8 +1477,8 @@ def update_params_for_model(
 
 def switch_settings_view(
     selected_group_index: int,
-    setting_groups: List[gr.Group],
-    nav_buttons: List[gr.Button],
+    setting_groups: list[gr.Group],
+    nav_buttons: list[gr.Button],
 ):
     """Handles switching visibility of setting groups and styling nav buttons."""
     updates = []
@@ -1504,7 +1495,7 @@ def switch_settings_view(
 
 
 def fetch_and_update_openrouter_models(
-    ocr_method: str = "LLM", current_model: Optional[str] = None
+    ocr_method: str = "LLM", current_model: str | None = None
 ):
     """Fetches models from OpenRouter API and updates dropdown.
 
@@ -1586,8 +1577,8 @@ def fetch_and_update_openrouter_models(
 
 def fetch_and_update_compatible_models(
     url: str,
-    api_key: Optional[str],
-    current_model: Optional[str] = None,
+    api_key: str | None,
+    current_model: str | None = None,
     force_refresh: bool = False,
 ):
     """Fetches models from a generic OpenAI-Compatible endpoint and updates dropdown.
@@ -1720,8 +1711,8 @@ def fetch_and_update_compatible_models(
 
 def fetch_and_update_opencode_models(
     tier: str = "zen",
-    api_key: Optional[str] = None,
-    current_model: Optional[str] = None,
+    api_key: str | None = None,
+    current_model: str | None = None,
     force_refresh: bool = False,
     ocr_method: str = "LLM",
 ):
@@ -1809,9 +1800,9 @@ def fetch_and_update_opencode_models(
 def initial_dynamic_fetch(
     provider: str,
     url: str,
-    key: Optional[str],
-    opencode_tier: Optional[str] = None,
-    opencode_key: Optional[str] = None,
+    key: str | None,
+    opencode_tier: str | None = None,
+    opencode_key: str | None = None,
     ocr_method: str = "LLM",
 ):
     """Handle initial model fetching for dynamic providers on app load."""
@@ -1830,8 +1821,8 @@ def initial_dynamic_fetch(
 
 def format_thinking_status(
     provider: str,
-    model_name: Optional[str],
-    reasoning_effort: Optional[str],
+    model_name: str | None,
+    reasoning_effort: str | None,
 ) -> str:
     """
     Format the thinking status string for success messages.

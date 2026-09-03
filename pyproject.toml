@@ -29,6 +29,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 extend-select = ["I"]
+ignore = ["BLE001", "S110"]
 
 [tool.setuptools]
 py-modules = ["app", "main"]

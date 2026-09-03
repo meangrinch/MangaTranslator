@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from typing import Callable, List, Optional, Tuple
+from collections.abc import Callable
 
 import numpy as np
 
@@ -70,16 +70,7 @@ def is_rtl_script(text: str) -> bool:
             or 0x08A0 <= cp <= 0x08FF
             or 0xFB50 <= cp <= 0xFDFF
             or 0xFE70 <= cp <= 0xFEFF
-        ):
-            rtl_count += 1
-        # Hebrew (0590–05FF, FB1D–FB4F)
-        elif 0x0590 <= cp <= 0x05FF or 0xFB1D <= cp <= 0xFB4F:
-            rtl_count += 1
-        # Thaana (0780–07BF) — Maldivian RTL
-        elif 0x0780 <= cp <= 0x07BF:
-            rtl_count += 1
-        # NKo (07C0–07FA) — Mande RTL
-        elif 0x07C0 <= cp <= 0x07FA:
+        ) or 0x0590 <= cp <= 0x05FF or 0xFB1D <= cp <= 0xFB4F or 0x0780 <= cp <= 0x07BF or 0x07C0 <= cp <= 0x07FA:
             rtl_count += 1
         else:
             ltr_count += 1
@@ -196,7 +187,7 @@ def _contains_thai(text: str) -> bool:
     return any(_is_thai_character(ch) for ch in text)
 
 
-def _thai_word_tokenize(text: str) -> List[str]:
+def _thai_word_tokenize(text: str) -> list[str]:
     """Segment Thai text into words via PyThaiNLP (lazy import)."""
     from pythainlp.tokenize import word_tokenize
 
@@ -209,7 +200,7 @@ def strip_no_space_before_marker(token: str) -> str:
     return token
 
 
-def split_hangul_word_for_wrapping(token: str) -> Optional[List[str]]:
+def split_hangul_word_for_wrapping(token: str) -> list[str] | None:
     """
     Split a Hangul-containing word into breakable units without adding hyphens.
 
@@ -226,7 +217,7 @@ def split_hangul_word_for_wrapping(token: str) -> Optional[List[str]]:
     if not any(_is_hangul_character(ch) for ch in core_word):
         return None
 
-    units: List[str] = []
+    units: list[str] = []
     current_non_hangul = ""
     for ch in core_word:
         if _is_hangul_character(ch):
@@ -253,7 +244,7 @@ def split_hangul_word_for_wrapping(token: str) -> Optional[List[str]]:
     return [units[0]] + [f"{NO_SPACE_BEFORE_MARKER}{unit}" for unit in units[1:]]
 
 
-def split_thai_word_for_wrapping(token: str) -> Optional[List[str]]:
+def split_thai_word_for_wrapping(token: str) -> list[str] | None:
     """
     Split a Thai-containing word into TCC units without adding hyphens.
 
@@ -303,7 +294,7 @@ def is_cjk_character(char: str) -> bool:
     )
 
 
-def parse_styled_segments(text: str) -> List[Tuple[str, str]]:
+def parse_styled_segments(text: str) -> list[tuple[str, str]]:
     """
     Parses text with markdown-like style markers into segments.
 
@@ -366,7 +357,7 @@ def _is_detached_ellipsis(token: str) -> bool:
     return is_detached_trailing_punctuation(token) and token.startswith("..")
 
 
-def _append_breakable_token(token: str, tokens: List[str]) -> None:
+def _append_breakable_token(token: str, tokens: list[str]) -> None:
     """Append a word-level token, segmenting Thai runs with PyThaiNLP."""
     if not token:
         return
@@ -378,7 +369,7 @@ def _append_breakable_token(token: str, tokens: List[str]) -> None:
 
 def _split_with_cjk_awareness(
     text: str, detach_trailing_punctuation: bool = True
-) -> List[str]:
+) -> list[str]:
     """Split text into tokens. Each CJK char is a token; kinsoku rules apply.
 
     Hangul (Korean) is excluded from per-character splitting because Korean
@@ -388,7 +379,7 @@ def _split_with_cjk_awareness(
     Thai runs are dictionary-segmented via PyThaiNLP so line breaks fall on
     word boundaries without inserting spaces between Thai words.
     """
-    tokens: List[str] = []
+    tokens: list[str] = []
     current_token = ""
 
     for char in text:
@@ -442,7 +433,7 @@ def _split_with_cjk_awareness(
 
 def tokenize_styled_text(
     text: str, detach_trailing_punctuation: bool = True
-) -> List[Tuple[str, bool]]:
+) -> list[tuple[str, bool]]:
     """
     Tokenizes text into atomic units for wrapping where styled blocks are
     preserved as single, unbreakable tokens.
@@ -453,7 +444,7 @@ def tokenize_styled_text(
       while preserving style.
     - Plain text outside markers is split with CJK awareness into word/character tokens.
     """
-    tokens: List[Tuple[str, bool]] = []
+    tokens: list[tuple[str, bool]] = []
     last_end = 0
     for match in STYLE_PATTERN.finditer(text):
         start, end = match.span()
@@ -482,7 +473,7 @@ def try_hyphenate_word(
     word_str: str,
     min_word_length: int,
     width_test_func: Callable[[str], bool],
-) -> Optional[List[str]]:
+) -> list[str] | None:
     """
     Attempts to split a word into two parts with a hyphen such that each part passes the width test.
 
@@ -506,7 +497,7 @@ def try_hyphenate_word(
     if len(core_word) < min_word_length:
         return None
 
-    def _split_with_single_hyphen(base: str, idx: int) -> Tuple[str, str]:
+    def _split_with_single_hyphen(base: str, idx: int) -> tuple[str, str]:
         ch_before = base[idx - 1] if idx > 0 else ""
         ch_at = base[idx] if idx < len(base) else ""
         if ch_at == "-":
@@ -541,9 +532,9 @@ def try_hyphenate_word(
 
     # Try splitting at various positions
     mid = len(core_word) // 2
-    candidate_indices: List[int] = []
+    candidate_indices: list[int] = []
     max_d = max(mid, len(core_word) - mid)
-    for d in range(0, max_d):
+    for d in range(max_d):
         left_idx = mid - d
         right_idx = mid + d
         if 2 <= left_idx < len(core_word) - 2:
@@ -605,7 +596,7 @@ def _thai_short_line_start_cost(
     token: str,
     penalty: float,
     max_clusters: int = THAI_SHORT_LINE_START_MAX_CLUSTERS,
-    cluster_count_cache: Optional[dict] = None,
+    cluster_count_cache: dict | None = None,
 ) -> float:
     """Extra DP cost when a continuation line would start with a short Thai token.
 
@@ -663,7 +654,7 @@ def _needs_space_between(
 
 
 def _join_tokens_smart(
-    tokens: List[str], detach_trailing_punctuation: bool = True
+    tokens: list[str], detach_trailing_punctuation: bool = True
 ) -> str:
     """Join tokens with smart spacing (no space between adjacent CJK tokens)."""
     if not tokens:
@@ -690,7 +681,7 @@ def _join_tokens_smart(
 
 
 def find_optimal_breaks_dp(
-    tokens: List[str],
+    tokens: list[str],
     max_width: float,
     word_width_func: Callable[[str], float],
     space_width: float,
@@ -699,7 +690,7 @@ def find_optimal_breaks_dp(
     detach_trailing_punctuation: bool = True,
     thai_short_line_start_penalty: float = DEFAULT_THAI_SHORT_LINE_START_PENALTY,
     thai_short_line_start_max_clusters: int = THAI_SHORT_LINE_START_MAX_CLUSTERS,
-) -> Optional[List[str]]:
+) -> list[str] | None:
     """
     Pragmatic Knuth-Plass style DP to find globally optimal line breaks.
 
@@ -726,24 +717,22 @@ def find_optimal_breaks_dp(
             return []
 
         # Calculate widths for all tokens
-        token_w: List[float] = [word_width_func(t) for t in tokens]
+        token_w: list[float] = [word_width_func(t) for t in tokens]
         thai_cluster_cache: dict = {}
 
         N = len(tokens)
-        min_cost: List[float] = [float("inf")] * (N + 1)
-        path: List[int] = [0] * (N + 1)
+        min_cost: list[float] = [float("inf")] * (N + 1)
+        path: list[int] = [0] * (N + 1)
         min_cost[0] = 0.0
 
         for i in range(1, N + 1):
             line_width = 0.0
             for j in range(i - 1, -1, -1):
                 # Add space only if needed between this token and the previous one on the line
-                if j < i - 1:
-                    # Check if we need space between tokens[j] and tokens[j+1]
-                    if _needs_space_between(
-                        tokens[j], tokens[j + 1], detach_trailing_punctuation
-                    ):
-                        line_width += space_width
+                if j < i - 1 and _needs_space_between(
+                    tokens[j], tokens[j + 1], detach_trailing_punctuation
+                ):
+                    line_width += space_width
                 line_width += token_w[j]
 
                 if line_width > max_width:
@@ -781,7 +770,7 @@ def find_optimal_breaks_dp(
         if not np.isfinite(min_cost[N]):
             return None
 
-        lines: List[str] = []
+        lines: list[str] = []
         current_break = N
         while current_break > 0:
             prev_break = path[current_break]

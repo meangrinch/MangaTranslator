@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -19,16 +19,16 @@ def get_opencode_endpoint_url(tier: str = "zen") -> str:
 def call_opencode_endpoint(
     api_key: str,
     model_name: str,
-    parts: List[Dict[str, Any]],
-    generation_config: Dict[str, Any],
-    system_prompt: Optional[str] = None,
+    parts: list[dict[str, Any]],
+    generation_config: dict[str, Any],
+    system_prompt: str | None = None,
     tier: str = "zen",
     debug: bool = False,
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """Call the OpenCode Chat Completions API with the given prompt and image parts.
 
     Args:
@@ -70,11 +70,11 @@ def call_opencode_endpoint(
         "Content-Type": "application/json",
     }
 
-    messages: List[Dict[str, Any]] = []
+    messages: list[dict[str, Any]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
-    user_content: List[Dict[str, Any]] = []
+    user_content: list[dict[str, Any]] = []
     for img in image_parts:
         inline = img.get("inline_data", {})
         mime = inline.get("mime_type", "image/png")
@@ -90,7 +90,7 @@ def call_opencode_endpoint(
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "model": model_name,
         "messages": messages,
         "max_tokens": generation_config.get("max_tokens", 4096),
@@ -177,7 +177,7 @@ def call_opencode_endpoint(
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
-                    f"Error processing successful OpenCode ({tier_label}) API response: {str(e)}"
+                    f"Error processing successful OpenCode ({tier_label}) API response: {e!s}"
                 ) from e
 
         except requests.exceptions.HTTPError as e:
@@ -214,13 +214,13 @@ def call_opencode_endpoint(
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
                     verbose=debug,
                 )
                 time.sleep(current_delay)
                 continue
             raise TranslationError(
-                f"OpenCode ({tier_label}) API Connection Error after retries: {str(e)}"
+                f"OpenCode ({tier_label}) API Connection Error after retries: {e!s}"
             ) from e
 
     raise TranslationError(

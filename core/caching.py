@@ -1,7 +1,7 @@
 import hashlib
 import pickle
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -66,7 +66,7 @@ class UnifiedCache:
         combined_data = metadata + array.tobytes()
         return hashlib.sha256(combined_data).hexdigest()[:16]
 
-    def _hash_dict(self, data: Dict) -> str:
+    def _hash_dict(self, data: dict) -> str:
         """Compute hash of dictionary.
 
         Args:
@@ -96,7 +96,7 @@ class UnifiedCache:
         key_string = f"yolo_{image_hash}_{model_hash}_conf{confidence:.3f}"
         return hashlib.sha256(key_string.encode()).hexdigest()
 
-    def get_yolo_detection(self, cache_key: str) -> Optional[Any]:
+    def get_yolo_detection(self, cache_key: str) -> Any | None:
         """Get cached YOLO detection result.
 
         Args:
@@ -168,7 +168,7 @@ class UnifiedCache:
         )
         return hashlib.sha256(key_string.encode()).hexdigest()
 
-    def get_sam_masks(self, cache_key: str) -> Optional[Any]:
+    def get_sam_masks(self, cache_key: str) -> Any | None:
         """Get cached SAM masks.
 
         Args:
@@ -211,9 +211,9 @@ class UnifiedCache:
         images_b64: list,
         full_image_b64: str,
         config,
-        previous_context_images: Optional[List[Dict[str, str]]] = None,
-        previous_context_texts: Optional[List[List[str]]] = None,
-    ) -> Optional[str]:
+        previous_context_images: list[dict[str, str]] | None = None,
+        previous_context_texts: list[list[str]] | None = None,
+    ) -> str | None:
         """Compute cache key for LLM translation.
 
         Only returns a key if the config is deterministic.
@@ -293,8 +293,8 @@ class UnifiedCache:
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     def get_translation(
-        self, cache_key: Optional[str]
-    ) -> "tuple[Optional[list], Optional[list]]":
+        self, cache_key: str | None
+    ) -> "tuple[list | None, list | None]":
         """Get cached translation results.
 
         Args:
@@ -317,9 +317,9 @@ class UnifiedCache:
 
     def set_translation(
         self,
-        cache_key: Optional[str],
+        cache_key: str | None,
         translations: list,
-        ocr_texts: Optional[list] = None,
+        ocr_texts: list | None = None,
         verbose: bool = False,
     ) -> None:
         """Cache translation results.
@@ -341,8 +341,8 @@ class UnifiedCache:
         )
 
     def get_manga_ocr_cache_key(
-        self, images_b64: List[str], total_elements: int, prefix: str = "mocr_"
-    ) -> Optional[str]:
+        self, images_b64: list[str], total_elements: int, prefix: str = "mocr_"
+    ) -> str | None:
         """Compute cache key for local OCR results (manga-ocr or paddleocr-vl-1.6).
 
         Args:
@@ -358,7 +358,7 @@ class UnifiedCache:
         key_string = f"{prefix}{images_hash}_n{total_elements}"
         return hashlib.sha256(key_string.encode()).hexdigest()
 
-    def get_manga_ocr_result(self, cache_key: Optional[str]) -> Optional[list]:
+    def get_manga_ocr_result(self, cache_key: str | None) -> list | None:
         """Get cached manga-ocr results."""
         if cache_key is None:
             return None
@@ -366,7 +366,7 @@ class UnifiedCache:
             return self._manga_ocr_cache.get(cache_key)
 
     def set_manga_ocr_result(
-        self, cache_key: Optional[str], results: list, verbose: bool = False
+        self, cache_key: str | None, results: list, verbose: bool = False
     ) -> None:
         """Cache manga-ocr results (including failure markers)."""
         if cache_key is None:
@@ -435,7 +435,7 @@ class UnifiedCache:
         )
         return hashlib.sha256(key_string.encode()).hexdigest()
 
-    def get_upscaled_image(self, cache_key: str) -> Optional[Image.Image]:
+    def get_upscaled_image(self, cache_key: str) -> Image.Image | None:
         """Get cached upscaled image.
 
         Args:
@@ -473,7 +473,7 @@ class UnifiedCache:
         residual_diff_threshold: float,
         guidance_scale: float,
         prompt: str,
-        ocr_params: Optional[Dict] = None,
+        ocr_params: dict | None = None,
     ) -> str:
         """Compute cache key for Flux inpainting.
 
@@ -520,7 +520,7 @@ class UnifiedCache:
         """
         return seed != -1
 
-    def get_inpainted_image(self, cache_key: str) -> Optional[Image.Image]:
+    def get_inpainted_image(self, cache_key: str) -> Image.Image | None:
         """Get cached inpainted image.
 
         Args:

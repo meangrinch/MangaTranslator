@@ -2,7 +2,7 @@ import base64
 import json
 import re
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import cv2
 import numpy as np
@@ -81,7 +81,7 @@ TRANSLATION_PATTERN = re.compile(
 
 
 def _build_system_prompt_ocr(
-    input_language: Optional[str],
+    input_language: str | None,
     reading_direction: str,
 ) -> str:
     lang_label = f"{input_language} " if input_language else ""
@@ -115,7 +115,7 @@ Your sole purpose is to accurately transcribe the original text from a series of
 - The numbering must correspond to the input image order (1, 2, 3...).
 - The format must be `i: <transcribed {lang_label}text>` where `i` is the input image number.
 - Do not include section headers, explanations, internal thoughts, or any extra formatting anywhere in your response.
-"""  # noqa
+"""
 
 
 def _format_previous_context_prompt_note(
@@ -189,19 +189,19 @@ def _build_system_prompt_translation(
 - **Previous Page Context:** Earlier source-page images and transcripts are visual/narrative context only; do not transcribe, translate, number, or count them. Use them to maintain consistency:
   - **Proper Nouns:** Keep character names, place names, organizations, technique/skill/title names, honorifics, and stylized terms consistent with established usage.
   - **Character Voice:** Preserve each character's established voice, register, and pronoun choices.
-  - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior visuals and dialogue."""  # noqa
+  - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior visuals and dialogue."""
     elif previous_context_image_count > 0:
         previous_context_rule = """
 - **Previous Page Reference:** Earlier source pages are visual/narrative context only — do not transcribe, translate, number, or count them. Use them to maintain consistency:
   - **Proper Nouns:** Keep character names, place names, organizations, technique/skill/title names, honorifics, and stylized terms spelled exactly as they appeared previously.
   - **Character Voice:** Preserve each character's established voice, register, and pronoun choices.
-  - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior context."""  # noqa
+  - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior context."""
     elif previous_context_text_count > 0:
         previous_context_rule = """
 - **Previous Page Transcripts:** Earlier source-page transcribed text is provided as narrative context only — do not translate, number, or count it. Use it to maintain consistency:
   - **Proper Nouns:** Keep character names, place names, organizations, technique/skill/title names, honorifics, and stylized terms aligned with their established usage.
   - **Character Voice:** Preserve each character's established voice, register, and pronoun choices.
-  - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior dialogue."""  # noqa
+  - **Referents:** Disambiguate callbacks, ongoing beats, or unclear references using prior dialogue."""
 
     core_rules = f"""
 ## CORE RULES
@@ -218,7 +218,7 @@ def _build_system_prompt_translation(
   - **Audible SFX:** Translate physical sounds (Giongo) as standard onomatopoeia.
   - **Mimetic FX:** Translate atmospheric text (Gitaigo) or silent actions as descriptive verbs or adjectives. Do not add a period at the end.
 {edge_cases}{previous_context_rule}
-"""  # noqa
+"""
 
     shared_components = f"""
 ## ROLE
@@ -234,7 +234,7 @@ You must use the following markdown-style markers to convey emphasis:
 - `***bold-italic***`: Used for extremely loud sounds or dialogue that also meets the criteria for italics (e.g., shouting over a radio).
 
 {core_rules}
-"""  # noqa
+"""
 
     if mode == "one-step":
         output_schema = f"""
@@ -252,7 +252,7 @@ You must use the following markdown-style markers to convey emphasis:
 - The numbering must correspond to the input order (1, 2, 3...).
 - The format must be `i: <translated {output_language} text>` where `i` is the input text number.
 - Do not include section headers, explanations, internal thoughts, or any extra formatting anywhere in your response.
-"""  # noqa
+"""
     else:
         raise ValueError(
             f"Invalid mode '{mode}' specified for translation system prompt."
@@ -277,9 +277,9 @@ def _is_reasoning_model_anthropic(model_name: str) -> bool:
 
 
 def _add_media_resolution_to_part(
-    part: Dict[str, Any],
+    part: dict[str, Any],
     media_resolution_ui: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Add media_resolution to an inline_data part.
 
@@ -313,8 +313,8 @@ def _build_generation_config(
     model_name: str,
     config: TranslationConfig,
     debug: bool = False,
-    prompt_cache_key: Optional[str] = None,
-) -> Dict[str, Any]:
+    prompt_cache_key: str | None = None,
+) -> dict[str, Any]:
     """
     Build provider-specific generation config dictionary.
 
@@ -522,9 +522,8 @@ def _build_generation_config(
             elif anthropic_flags.get("is_claude_effort_max") and not omit_thinking:
                 if reasoning_effort == "auto":
                     generation_config["thinking_type"] = "adaptive"
-            elif not omit_thinking:
-                if reasoning_effort != "none":
-                    generation_config["thinking_type"] = "enabled"
+            elif not omit_thinking and reasoning_effort != "none":
+                generation_config["thinking_type"] = "enabled"
         if anthropic_flags and config.effort:
             generation_config["effort"] = config.effort
         return generation_config
@@ -790,16 +789,13 @@ def _build_generation_config(
                     "auto" if (is_claude_46 or is_claude_adaptive_default) else "none"
                 )
                 generation_config["reasoning_effort"] = reasoning_effort
-            elif is_gpt5_1:
+            elif is_gpt5_1 or config.reasoning_effort and config.reasoning_effort != "none":
                 generation_config["reasoning_effort"] = config.reasoning_effort
-            elif config.reasoning_effort and config.reasoning_effort != "none":
-                generation_config["reasoning_effort"] = config.reasoning_effort
-        elif is_google_model:
-            if config.reasoning_effort:
-                effort = config.reasoning_effort
-                if is_gemini_37_flash_model(model_name) and effort == "minimal":
-                    effort = "high"
-                generation_config["reasoning_effort"] = effort
+        elif is_google_model and config.reasoning_effort:
+            effort = config.reasoning_effort
+            if is_gemini_37_flash_model(model_name) and effort == "minimal":
+                effort = "high"
+            generation_config["reasoning_effort"] = effort
 
         if anthropic_flags and config.effort:
             generation_config["effort"] = config.effort
@@ -854,9 +850,8 @@ def _build_generation_config(
             is_openai_reasoning
             or is_anthropic_reasoning
             or is_openai_compatible_reasoning_model(model_name)
-        ):
-            if config.reasoning_effort:
-                generation_config["reasoning_effort"] = config.reasoning_effort
+        ) and config.reasoning_effort:
+            generation_config["reasoning_effort"] = config.reasoning_effort
 
         if anthropic_flags and config.effort:
             generation_config["effort"] = config.effort
@@ -876,12 +871,12 @@ def _build_generation_config(
 
 def _call_llm_endpoint(
     config: TranslationConfig,
-    parts: List[Dict[str, Any]],
+    parts: list[dict[str, Any]],
     prompt_text: str,
     debug: bool = False,
-    system_prompt: Optional[str] = None,
-    prompt_cache_key: Optional[str] = None,
-) -> Optional[str]:
+    system_prompt: str | None = None,
+    prompt_cache_key: str | None = None,
+) -> str | None:
     """Internal helper to dispatch API calls based on provider."""
     provider = config.provider
     model_name = config.model_name
@@ -1116,16 +1111,16 @@ def _call_llm_endpoint(
                 f"Unknown translation provider specified: {provider}"
             )
 
-    except (ValueError, RuntimeError):
+    except (ValueError, RuntimeError):  # noqa: TRY203
         raise
 
 
 def _parse_llm_response_unified(
-    response_text: Optional[str],
+    response_text: str | None,
     total_elements: int,
     provider: str,
     debug: bool = False,
-) -> List[str]:
+) -> list[str]:
     """Parse LLM response with a single numbered list."""
     if response_text is None:
         log_message(f"API call failed: {provider} returned None", always_print=True)
@@ -1173,15 +1168,15 @@ def _parse_llm_response_unified(
 
     except Exception as e:
         log_message(
-            f"Failed to parse {provider} unified response: {str(e)}",
+            f"Failed to parse {provider} unified response: {e!s}",
             always_print=True,
         )
         return [f"[{provider}: Parse error]"] * total_elements
 
 
 def _prepare_images_for_ocr(
-    images_b64: List[str], verbose: bool = False
-) -> List[Optional[Image.Image]]:
+    images_b64: list[str], verbose: bool = False
+) -> list[Image.Image | None]:
     """Prepare base64-encoded images for OCR by decoding and converting to RGB.
 
     Args:
@@ -1209,8 +1204,8 @@ def _prepare_images_for_ocr(
 
 
 def _format_ocr_results(
-    extracted_texts: List[str],
-    bubble_metadata: List[Dict[str, Any]],
+    extracted_texts: list[str],
+    bubble_metadata: list[dict[str, Any]],
 ) -> None:
     """Format and log OCR results.
 
@@ -1236,7 +1231,7 @@ def _format_ocr_results(
         )
 
 
-def _check_ocr_failure(texts: List[str], provider: Optional[str] = None) -> bool:
+def _check_ocr_failure(texts: list[str], provider: str | None = None) -> bool:
     """Check if all OCR results indicate failure.
 
     Args:
@@ -1259,7 +1254,7 @@ def _check_ocr_failure(texts: List[str], provider: Optional[str] = None) -> bool
 
 
 def _format_previous_context_texts(
-    previous_context_texts: Optional[List[List[str]]],
+    previous_context_texts: list[list[str]] | None,
 ) -> str:
     """Format previous-page OCR transcripts as a labeled context block.
 
@@ -1315,7 +1310,7 @@ def _format_special_instructions(config: TranslationConfig) -> str:
 
 def _build_rosetta_instruction(
     output_language: str,
-    special_instructions: Optional[str] = None,
+    special_instructions: str | None = None,
 ) -> str:
     """Build instruction prompt for YanoljaNEXT Rosetta translation models.
 
@@ -1347,7 +1342,7 @@ def _build_rosetta_instruction(
     return instruction
 
 
-def _build_rosetta_source_prompt(extracted_texts: List[str]) -> str:
+def _build_rosetta_source_prompt(extracted_texts: list[str]) -> str:
     """Format OCR texts as JSON for Rosetta models.
 
     Returns a JSON object with string keys "1", "2", etc.
@@ -1357,11 +1352,11 @@ def _build_rosetta_source_prompt(extracted_texts: List[str]) -> str:
 
 
 def _parse_rosetta_response(
-    response_text: Optional[str],
+    response_text: str | None,
     total_elements: int,
     provider: str,
     debug: bool = False,
-) -> List[str]:
+) -> list[str]:
     """Parse JSON response from a Rosetta (or Hy-MT2) model.
 
     Falls back to _parse_llm_response_unified if JSON parsing fails.
@@ -1409,8 +1404,8 @@ def _parse_rosetta_response(
 
 def _build_hy_mt2_prompt(
     output_language: str,
-    extracted_texts: List[str],
-    special_instructions: Optional[str] = None,
+    extracted_texts: list[str],
+    special_instructions: str | None = None,
 ) -> str:
     """Build user-only prompt for Hy-MT2 (no system prompt per model card).
 
@@ -1454,10 +1449,10 @@ def _build_hy_mt2_prompt(
 
 
 def _perform_manga_ocr(
-    images_b64: List[str],
-    bubble_metadata: List[Dict[str, Any]],
+    images_b64: list[str],
+    bubble_metadata: list[dict[str, Any]],
     debug: bool = False,
-) -> List[str]:
+) -> list[str]:
     """Perform OCR using manga-ocr model.
 
     Args:
@@ -1520,10 +1515,10 @@ def _perform_manga_ocr(
 
 
 def _perform_paddle_ocr_vl(
-    images_b64: List[str],
-    bubble_metadata: List[Dict[str, Any]],
+    images_b64: list[str],
+    bubble_metadata: list[dict[str, Any]],
     debug: bool = False,
-) -> List[str]:
+) -> list[str]:
     """Perform OCR using PaddleOCR-VL-1.6 model.
 
     Args:
@@ -1592,15 +1587,15 @@ def _perform_paddle_ocr_vl(
 
 def _perform_llm_ocr(
     config: TranslationConfig,
-    images_b64: List[str],
-    mime_types: List[str],
+    images_b64: list[str],
+    mime_types: list[str],
     ocr_prompt: str,
     provider: str,
-    input_language: Optional[str],
+    input_language: str | None,
     reading_direction: str,
     debug: bool = False,
-    prompt_cache_key: Optional[str] = None,
-) -> List[str]:
+    prompt_cache_key: str | None = None,
+) -> list[str]:
     """Perform OCR using vision LLM.
 
     Args:
@@ -1659,16 +1654,16 @@ def _perform_llm_ocr(
 
 def call_translation_api_batch(
     config: TranslationConfig,
-    images_b64: List[str],
+    images_b64: list[str],
     full_image_b64: str,
-    mime_types: List[str],
+    mime_types: list[str],
     full_image_mime_type: str,
-    bubble_metadata: List[Dict[str, Any]],
-    previous_context_images: Optional[List[Dict[str, str]]] = None,
-    previous_context_texts: Optional[List[List[str]]] = None,
-    ocr_texts_output: Optional[List[str]] = None,
+    bubble_metadata: list[dict[str, Any]],
+    previous_context_images: list[dict[str, str]] | None = None,
+    previous_context_texts: list[list[str]] | None = None,
+    ocr_texts_output: list[str] | None = None,
     debug: bool = False,
-) -> List[str]:
+) -> list[str]:
     """
     Generates prompts and calls the appropriate LLM API endpoint based on the provider and mode
     specified in the configuration, translating text from speech bubbles and outside-bubble text.
@@ -1712,7 +1707,7 @@ def call_translation_api_batch(
     previous_context_image_count = len(previous_context_images)
     # Filter out empty pages (no usable OCR) and trim to configured cap so the
     # request order matches the prompt order regardless of upstream history gaps.
-    cleaned_previous_texts: List[List[str]] = []
+    cleaned_previous_texts: list[list[str]] = []
     configured_text_count = int(getattr(config, "previous_context_text_count", 0) or 0)
     if previous_context_texts and configured_text_count > 0:
         for page_texts in previous_context_texts:
@@ -1819,7 +1814,7 @@ You have been provided with {total_elements} individual text images from a manga
 
 ## TASK
 Apply your OCR transcription rules to each image provided.{special_instructions_section}
-"""  # noqa
+"""
 
             log_message("Starting OCR step", verbose=debug)
 
@@ -1895,7 +1890,7 @@ You have been provided with a list of {total_elements} transcribed text segments
 ## TASK
 Apply your translation and styling rules to the text in the `## INPUT DATA` section. 
 The target language is {output_language}. Use the appropriate translation approach for each text type.{special_instructions_section}
-"""  # noqa
+"""
 
             translation_parts = []
             if (
@@ -2048,7 +2043,7 @@ You have been provided with {total_elements} individual text images from a manga
 For each image, you must perform two steps:
 1.  **Transcribe:** Extract the original text exactly as it appears.
 2.  **Translate:** Translate the text you just transcribed into {output_language}, applying your translation and styling rules.{special_instructions_section}
-"""  # noqa
+"""
 
             one_step_system = _build_system_prompt_translation(
                 output_language,
@@ -2103,7 +2098,7 @@ For each image, you must perform two steps:
 
 
 def prepare_bubble_images_for_translation(
-    bubble_data: List[Dict[str, Any]],
+    bubble_data: list[dict[str, Any]],
     original_cv_image: np.ndarray,
     upscale_model: Any,
     device: Any,
@@ -2112,7 +2107,7 @@ def prepare_bubble_images_for_translation(
     upscale_method: str = "model_lite",
     whiteout_conjoined_bubbles: bool = True,
     verbose: bool = False,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Prepare bubble images for translation by cropping, upscaling, color matching, and encoding.
 
@@ -2141,7 +2136,7 @@ def prepare_bubble_images_for_translation(
 
     mask_lookup = {}
     for b in bubble_data:
-        b_bbox = tuple(int(round(v)) for v in b["bbox"])
+        b_bbox = tuple(round(v) for v in b["bbox"])
         mask_lookup[b_bbox] = b.get("sam_mask")
 
     if upscale_method == "model":
@@ -2196,7 +2191,7 @@ def prepare_bubble_images_for_translation(
             )
 
             for nb in neighbor_bboxes:
-                nb_tuple = tuple(int(round(v)) for v in nb)
+                nb_tuple = tuple(round(v) for v in nb)
                 neighbor_mask = mask_lookup.get(nb_tuple)
 
                 if neighbor_mask is not None:

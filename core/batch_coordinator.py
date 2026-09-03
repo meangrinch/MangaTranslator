@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple, TypeVar
+from typing import TypeVar
 
 import numpy as np
 from PIL import Image
@@ -12,7 +13,7 @@ from utils.exceptions import CancellationError
 
 T = TypeVar("T")
 R = TypeVar("R")
-BBox = Tuple[int, int, int, int]
+BBox = tuple[int, int, int, int]
 
 
 class BatchRequestCoordinator:
@@ -55,7 +56,7 @@ class BatchRequestCoordinator:
         with self.slot():
             return fn(*args, **kwargs)
 
-    def map_ordered(self, jobs: Sequence[Callable[[], R]]) -> List[R]:
+    def map_ordered(self, jobs: Sequence[Callable[[], R]]) -> list[R]:
         """Run jobs under the shared budget and return results in input order."""
         if not jobs:
             return []
@@ -63,7 +64,7 @@ class BatchRequestCoordinator:
             return [self.run(jobs[0])]
 
         max_workers = min(len(jobs), self.max_requests)
-        results: List[Optional[R]] = [None] * len(jobs)
+        results: list[R | None] = [None] * len(jobs)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
                 (index, executor.submit(self.run, job))
@@ -86,12 +87,12 @@ def bboxes_overlap(first: BBox, second: BBox) -> bool:
 
 def expanded_mask_bbox(
     mask: np.ndarray,
-    image_size: Tuple[int, int],
+    image_size: tuple[int, int],
     padding_ratio: float = 0.5,
     max_padding: int = 160,
     min_padding: int = 64,
     extra_padding: int = 16,
-) -> Optional[BBox]:
+) -> BBox | None:
     """Return a conservative bbox for Flux context and compositing."""
     mask_np = np.asarray(mask)
     if mask_np.ndim == 3:
@@ -120,12 +121,12 @@ def expanded_mask_bbox(
 
 def partition_non_overlapping_waves(
     items: Iterable[T],
-    get_bbox: Callable[[T], Optional[BBox]],
-) -> List[List[T]]:
+    get_bbox: Callable[[T], BBox | None],
+) -> list[list[T]]:
     """Partition items into ordered waves with no overlapping bboxes per wave."""
-    waves: List[List[T]] = []
-    current_wave: List[T] = []
-    current_bboxes: List[BBox] = []
+    waves: list[list[T]] = []
+    current_wave: list[T] = []
+    current_bboxes: list[BBox] = []
 
     for item in items:
         bbox = get_bbox(item)

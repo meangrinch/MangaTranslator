@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -12,15 +12,15 @@ from utils.model_metadata import is_zai_vision_model
 def call_zai_endpoint(
     api_key: str,
     model_name: str,
-    parts: List[Dict[str, Any]],
-    generation_config: Dict[str, Any],
-    system_prompt: Optional[str] = None,
+    parts: list[dict[str, Any]],
+    generation_config: dict[str, Any],
+    system_prompt: str | None = None,
     debug: bool = False,
     timeout: int = 120,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """
     Calls the Z.ai API endpoint with the provided data and handles retries.
 
@@ -169,7 +169,7 @@ def call_zai_endpoint(
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
                 raise TranslationError(
-                    f"Error processing Z.ai API response: {str(e)}"
+                    f"Error processing Z.ai API response: {e!s}"
                 ) from e
 
         except requests.exceptions.HTTPError as e:
@@ -201,18 +201,18 @@ def call_zai_endpoint(
         except requests.exceptions.RequestException as e:
             if attempt < max_retries:
                 log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {str(e)}",
+                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
                     verbose=debug,
                 )
                 time.sleep(current_delay)
                 continue
             else:
                 log_message(
-                    f"Z.ai connection failed after {max_retries + 1} attempts: {str(e)}",
+                    f"Z.ai connection failed after {max_retries + 1} attempts: {e!s}",
                     always_print=True,
                 )
                 raise TranslationError(
-                    f"Z.ai API Connection Error after retries: {str(e)}"
+                    f"Z.ai API Connection Error after retries: {e!s}"
                 ) from e
 
     raise TranslationError(

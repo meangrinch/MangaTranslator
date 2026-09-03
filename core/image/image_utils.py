@@ -3,7 +3,6 @@ import io
 import os
 import tempfile
 from pathlib import Path
-from typing import Tuple
 
 import cv2
 import numpy as np
@@ -172,7 +171,7 @@ def save_image_with_compression(
 
 def calculate_centroid_expansion_box(
     cleaned_mask: np.ndarray, padding_pixels: float = 4.0, verbose: bool = False
-) -> Tuple[Tuple[int, int, int, int], Tuple[float, float]]:
+) -> tuple[tuple[int, int, int, int], tuple[float, float]]:
     """
     Calculates a guaranteed safe rendering box within a speech bubble to ensure text
     never touches the boundaries. It uses distance transforms to establish a safe zone
@@ -236,7 +235,7 @@ def calculate_centroid_expansion_box(
         # Check if centroid is in a constricted region (dual/conjoined bubbles)
         _, max_val, _, max_loc = cv2.minMaxLoc(distance_map)
 
-        cx_int, cy_int = int(round(centroid_x)), int(round(centroid_y))
+        cx_int, cy_int = round(centroid_x), round(centroid_y)
         mask_h, mask_w = safe_area_mask.shape
 
         cx_int = max(0, min(cx_int, mask_w - 1))
@@ -255,7 +254,7 @@ def calculate_centroid_expansion_box(
         centroid = (centroid_x, centroid_y)
 
         # Ray-cast from centroid to find maximum safe dimensions
-        cx, cy = int(round(centroid_x)), int(round(centroid_y))
+        cx, cy = round(centroid_x), round(centroid_y)
         mask_h, mask_w = safe_area_mask.shape
 
         # Verify centroid is within safe area, adjust if needed
@@ -312,8 +311,8 @@ def calculate_centroid_expansion_box(
         box_x_float = centroid_x - max_safe_width / 2.0
         box_y_float = centroid_y - max_safe_height / 2.0
 
-        box_x = int(round(box_x_float))
-        box_y = int(round(box_y_float))
+        box_x = round(box_x_float)
+        box_y = round(box_y_float)
 
         guaranteed_box = (box_x, box_y, max_safe_width, max_safe_height)
 
@@ -557,8 +556,8 @@ def resize_to_max_side(
     if current_max == max_side:
         return image
     scale = max_side / current_max
-    new_width = max(1, int(round(width * scale)))
-    new_height = max(1, int(round(height * scale)))
+    new_width = max(1, round(width * scale))
+    new_height = max(1, round(height * scale))
     log_message(
         f"Resizing to max-side {max_side}: {width}x{height} -> {new_width}x{new_height}",
         verbose=verbose,
@@ -586,8 +585,8 @@ def resize_to_min_side(
     if current_min == min_side:
         return image
     scale = min_side / current_min
-    new_width = max(1, int(round(width * scale)))
-    new_height = max(1, int(round(height * scale)))
+    new_width = max(1, round(width * scale))
+    new_height = max(1, round(height * scale))
     log_message(
         f"Resizing to min-side {min_side}: {width}x{height} -> {new_width}x{new_height}",
         verbose=verbose,

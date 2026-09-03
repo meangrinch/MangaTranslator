@@ -1,13 +1,12 @@
-from typing import Optional, Tuple
 
 
-def _normalize_scale(scale: Optional[float]) -> float:
+def _normalize_scale(scale: float | None) -> float:
     if scale is None or scale <= 0:
         return 1.0
     return float(scale)
 
 
-def _clamp(value: float, minimum: Optional[float], maximum: Optional[float]) -> float:
+def _clamp(value: float, minimum: float | None, maximum: float | None) -> float:
     if minimum is not None:
         value = max(minimum, value)
     if maximum is not None:
@@ -17,10 +16,10 @@ def _clamp(value: float, minimum: Optional[float], maximum: Optional[float]) -> 
 
 def scale_scalar(
     value: float,
-    scale: Optional[float],
+    scale: float | None,
     *,
-    minimum: Optional[float] = None,
-    maximum: Optional[float] = None,
+    minimum: float | None = None,
+    maximum: float | None = None,
 ) -> float:
     """
     Scale an arbitrary scalar (float) value by the processing scale.
@@ -32,25 +31,25 @@ def scale_scalar(
 
 def scale_length(
     value: float,
-    scale: Optional[float],
+    scale: float | None,
     *,
-    minimum: Optional[float] = 1.0,
-    maximum: Optional[float] = None,
+    minimum: float | None = 1.0,
+    maximum: float | None = None,
 ) -> int:
     """
     Scale a pixel length and return an int with rounding and clamping.
     """
     scaled = scale_scalar(value, scale, minimum=minimum, maximum=maximum)
     # Round to nearest integer for pixel units
-    return max(1, int(round(scaled)))
+    return max(1, round(scaled))
 
 
 def scale_area(
     value: float,
-    scale: Optional[float],
+    scale: float | None,
     *,
-    minimum: Optional[float] = 1.0,
-    maximum: Optional[float] = None,
+    minimum: float | None = 1.0,
+    maximum: float | None = None,
 ) -> int:
     """
     Scale an area-like value (square pixels). Uses scale^2.
@@ -58,16 +57,16 @@ def scale_area(
     effective_scale = _normalize_scale(scale)
     scaled = value * (effective_scale * effective_scale)
     scaled = _clamp(scaled, minimum, maximum)
-    return max(1, int(round(scaled)))
+    return max(1, round(scaled))
 
 
 def scale_kernel(
-    kernel: Tuple[int, int],
-    scale: Optional[float],
+    kernel: tuple[int, int],
+    scale: float | None,
     *,
     minimum: int = 1,
     maximum: int = 63,
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """
     Scale a 2D kernel size while ensuring odd dimensions (required for many morphology ops).
     """
@@ -81,7 +80,7 @@ def scale_kernel(
             minimum=float(minimum),
             maximum=float(maximum),
         )
-        dim_int = max(minimum, int(round(dimension)))
+        dim_int = max(minimum, round(dimension))
         # Ensure result stays within bounds
         dim_int = min(maximum, dim_int)
         if dim_int % 2 == 0:
@@ -98,7 +97,7 @@ def scale_kernel(
 
 def scale_font_size(
     value: float,
-    scale: Optional[float],
+    scale: float | None,
     *,
     minimum: int = 4,
     maximum: int = 256,

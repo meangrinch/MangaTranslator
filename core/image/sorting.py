@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any
 
 
 def sort_panels_by_reading_order(panels, reading_direction="rtl"):
@@ -213,7 +213,7 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
         cy = (y1 + y2) / 2.0
         return x1, y1, x2, y2, w, h, cx, cy
 
-    def _spatial_sort(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _spatial_sort(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Robust spatial sort for bubbles (vertical columns + horizontal rows)."""
         if not items:
             return []

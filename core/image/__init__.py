@@ -26,17 +26,17 @@ from .inpainting import FluxKontextInpainter
 from .ocr_detection import OutsideTextDetector
 
 __all__ = [
-    "clean_speech_bubbles",
-    "detect_speech_bubbles",
+    "FluxKontextInpainter",
+    "OutsideTextDetector",
     "calculate_centroid_expansion_box",
+    "clean_speech_bubbles",
     "convert_image_to_target_mode",
     "cv2_to_pil",
+    "detect_speech_bubbles",
     "pil_to_cv2",
     "process_bubble_image_cached",
     "resize_to_max_side",
     "save_image_with_compression",
     "upscale_image",
     "upscale_image_to_dimension",
-    "FluxKontextInpainter",
-    "OutsideTextDetector",
 ]

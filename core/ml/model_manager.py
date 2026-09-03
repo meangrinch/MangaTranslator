@@ -6,7 +6,6 @@ import time
 import urllib.request
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 import torch
 from huggingface_hub import hf_hub_download, snapshot_download
@@ -487,7 +486,7 @@ class ModelManager:
         repo_id: str,
         filename: str,
         target: Path,
-        token: Optional[str] = None,
+        token: str | None = None,
         verbose: bool = False,
     ) -> Path:
         """Download file from Hugging Face if it doesn't exist.
@@ -536,8 +535,8 @@ class ModelManager:
         self,
         repo_id: str,
         target_dir: Path,
-        token: Optional[str] = None,
-        revision: Optional[str] = None,
+        token: str | None = None,
+        revision: str | None = None,
         verbose: bool = False,
     ) -> Path:
         """Download entire repository from Hugging Face if it doesn't exist.
@@ -557,12 +556,10 @@ class ModelManager:
         bin_file = target_dir / "pytorch_model.bin"
 
         is_downloaded = False
-        if target_dir.exists():
-            if safetensors_file.exists():
-                is_downloaded = True
-            elif bin_file.exists():
-                if revision is None:
-                    is_downloaded = True
+        if target_dir.exists() and (
+            safetensors_file.exists() or (bin_file.exists() and revision is None)
+        ):
+            is_downloaded = True
 
         if is_downloaded:
             return target_dir
@@ -643,7 +640,7 @@ class ModelManager:
 
                 state_dict = {}
                 with safe_open(path, framework="pt", device=str(self.device)) as f:
-                    for key in f.keys():
+                    for key in f.keys():  # noqa: SIM118
                         state_dict[key] = f.get_tensor(key)
             else:
                 state_dict = torch.load(
@@ -686,7 +683,7 @@ class ModelManager:
 
                 state_dict = {}
                 with safe_open(path, framework="pt", device=str(self.device)) as f:
-                    for key in f.keys():
+                    for key in f.keys():  # noqa: SIM118
                         state_dict[key] = f.get_tensor(key)
             else:
                 state_dict = torch.load(
@@ -700,7 +697,7 @@ class ModelManager:
             log_message("Upscale lite model loaded.", verbose=verbose)
             return model
 
-    def _resolve_speech_bubble_model_type(self, model_path: Optional[str]) -> ModelType:
+    def _resolve_speech_bubble_model_type(self, model_path: str | None) -> ModelType:
         """Determine which speech bubble model type a path corresponds to."""
         if model_path is None:
             return ModelType.YOLO_SPEECH_BUBBLE
@@ -710,7 +707,7 @@ class ModelManager:
         return ModelType.YOLO_SPEECH_BUBBLE
 
     def load_yolo_speech_bubble(
-        self, model_path: Optional[str] = None, verbose: bool = False
+        self, model_path: str | None = None, verbose: bool = False
     ):
         """Load YOLO model for speech bubble detection.
 
@@ -778,7 +775,7 @@ class ModelManager:
             log_message("RT-DETR conjoined bubble model loaded.", verbose=verbose)
             return adapter
 
-    def load_yolo_osbtext(self, token: Optional[str] = None, verbose: bool = False):
+    def load_yolo_osbtext(self, token: str | None = None, verbose: bool = False):
         """Load YOLO model for outside text detection.
 
         Args:
@@ -1030,7 +1027,7 @@ class ModelManager:
             log_message("SAM 2.1 model loaded.", verbose=verbose)
             return self.models[ModelType.SAM2]
 
-    def load_sam3(self, token: Optional[str] = None, verbose: bool = False):
+    def load_sam3(self, token: str | None = None, verbose: bool = False):
         """Load SAM 3 Tracker (PVS) model and processor.
 
         SAM 3 requires a HuggingFace token with access to the gated facebook/sam3 repo.

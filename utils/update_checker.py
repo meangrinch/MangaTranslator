@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from typing import Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -10,7 +9,7 @@ from packaging.version import Version
 API_URL = "https://api.github.com/repos/{repo}/releases/latest"
 
 
-def get_latest_release_tag(repo: str, timeout: float = 3.0) -> Optional[str]:
+def get_latest_release_tag(repo: str, timeout: float = 3.0) -> str | None:
     """Return the latest stable release tag from GitHub or None on failure.
 
     Uses the releases/latest endpoint which excludes drafts and prereleases.
@@ -45,7 +44,7 @@ def check_for_update(
     current_version: str,
     repo: str = "meangrinch/MangaTranslator",
     timeout: float = 3.0,
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """Check GitHub for a newer stable release.
 
     Returns (True, latest_tag) if newer exists, otherwise (False, None).

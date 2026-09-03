@@ -3,7 +3,7 @@ import os
 import random
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import cv2
 import numpy as np
@@ -50,7 +50,7 @@ def _normalize_mask(mask: np.ndarray) -> np.ndarray:
 
 def _resample_inpainted_bubble_color(
     pil_working: Image.Image,
-    bubble_info: Dict[str, Any],
+    bubble_info: dict[str, Any],
     mask_bool: np.ndarray,
 ) -> None:
     cv_after = cv2.cvtColor(np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR)
@@ -62,7 +62,7 @@ def _resample_inpainted_bubble_color(
 
 def _inpaint_colored_bubbles_with_coordinator(
     pil_working: Image.Image,
-    colored_bubbles: List[Dict[str, Any]],
+    colored_bubbles: list[dict[str, Any]],
     inpainter: Any,
     base_seed: int,
     verbose: bool,
@@ -96,9 +96,9 @@ def _inpaint_colored_bubbles_with_coordinator(
     for wave in waves:
         base_image = pil_working
 
-        def make_job(candidate):
+        def make_job(candidate, base_img=base_image):
             def job():
-                image_for_job = base_image.copy()
+                image_for_job = base_img.copy()
                 try:
                     result_image = inpainter.inpaint_mask(
                         image_for_job,
@@ -164,7 +164,7 @@ def _build_adaptive_shrink_mask(
     JUNCTION_MIN_SHRINK is applied.  Without this, the distance-transform
     shrink pinches off narrow junction passages and leaves remnant text.
     """
-    adjacency_margin = max(1, int(round(JUNCTION_ADJACENCY_MARGIN * processing_scale)))
+    adjacency_margin = max(1, round(JUNCTION_ADJACENCY_MARGIN * processing_scale))
     junction_min_shrink = max(1.0, JUNCTION_MIN_SHRINK * processing_scale)
 
     dist_map = cv2.distanceTransform(
@@ -222,9 +222,9 @@ def process_single_bubble(
     constraint_erosion_kernel=None,
     min_contour_area: float = MIN_CONTOUR_AREA,
     classify_colored: bool = False,
-    neighbor_bboxes: Optional[list] = None,
+    neighbor_bboxes: list | None = None,
     processing_scale: float = 1.0,
-    image_bgr: Optional[np.ndarray] = None,
+    image_bgr: np.ndarray | None = None,
 ):
     """
     Process a single speech bubble mask to extract text regions and determine fill color.
@@ -522,7 +522,7 @@ def process_single_bubble(
 
 
 def clean_speech_bubbles(
-    image_input: Union[str, Path, Image.Image],
+    image_input: str | Path | Image.Image,
     model_path,
     confidence=0.6,
     pre_computed_detections=None,
@@ -549,7 +549,7 @@ def clean_speech_bubbles(
     flux_luminance_correction: bool = True,
     flux_upscale_small_crops: bool = True,
     bubble_detector_model: str = "yolo_2",
-    request_coordinator: Optional[Any] = None,
+    request_coordinator: Any | None = None,
 ):
     """
     Clean speech bubbles using YOLO/SAM masks and optional Flux inpainting for colored bubbles.
@@ -650,9 +650,9 @@ def clean_speech_bubbles(
             final_mask = None
             fill_color_bgr = None
             is_colored_bubble = False
-            sample_color_bgr: Optional[tuple[int, int, int]] = None
-            text_bbox: Optional[tuple[int, int, int, int]] = None
-            text_color_bgr: Optional[tuple[int, int, int]] = None
+            sample_color_bgr: tuple[int, int, int] | None = None
+            text_bbox: tuple[int, int, int, int] | None = None
+            text_color_bgr: tuple[int, int, int] | None = None
             base_mask = None
             is_sam_mask = False
 
@@ -1042,10 +1042,10 @@ def clean_speech_bubbles(
             f"Cleaned {len(processed_bubbles)} speech bubbles", always_print=True
         )
         return cleaned_image, processed_bubbles
-    except IOError as e:
-        raise ImageProcessingError(f"Error loading image {image_input}: {str(e)}")
+    except OSError as e:
+        raise ImageProcessingError(f"Error loading image {image_input}: {e!s}")
     except Exception as e:
-        raise CleaningError(f"Error cleaning speech bubbles: {str(e)}")
+        raise CleaningError(f"Error cleaning speech bubbles: {e!s}")
 
 
 def retry_cleaning_with_otsu(
@@ -1056,7 +1056,7 @@ def retry_cleaning_with_otsu(
     processing_scale: float = 1.0,
     verbose: bool = False,
     classify_colored: bool = False,
-) -> Optional[dict]:
+) -> dict | None:
     """
     Retry cleaning for a single bubble using Otsu thresholding.
 
