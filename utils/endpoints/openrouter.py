@@ -55,7 +55,10 @@ def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
 
     # Check if supported_parameters contains "include_reasoning"
     supported_parameters = meta.get("supported_parameters", [])
-    return bool(isinstance(supported_parameters, list) and "include_reasoning" in supported_parameters)
+    return bool(
+        isinstance(supported_parameters, list)
+        and "include_reasoning" in supported_parameters
+    )
 
 
 def call_openrouter_endpoint(

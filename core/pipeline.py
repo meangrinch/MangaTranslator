@@ -1558,7 +1558,16 @@ def translate_and_render(
                         is_outside_text = bubble.get("is_outside_text", False)
 
                         if (
-                            not text or text.startswith(("API Error", "[Translation Error]", "[Translation Error:", _provider_tag)) or text.strip() in invalid_translation_values
+                            not text
+                            or text.startswith(
+                                (
+                                    "API Error",
+                                    "[Translation Error]",
+                                    "[Translation Error:",
+                                    _provider_tag,
+                                )
+                            )
+                            or text.strip() in invalid_translation_values
                         ):
                             entry_type = "outside text" if is_outside_text else "bubble"
                             log_message(
@@ -2069,7 +2078,9 @@ def _should_run_failed_retry(
         return False
     if not failed_jobs:
         return False
-    return not (cancellation_manager is not None and cancellation_manager.is_cancelled())
+    return not (
+        cancellation_manager is not None and cancellation_manager.is_cancelled()
+    )
 
 
 def _retry_failed_batch_images(

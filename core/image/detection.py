@@ -1178,9 +1178,7 @@ def _build_segmentation_detections(
         group_bboxes = []
         for b in group_boxes:
             bx0, by0, bx1, by1 = b.tolist() if hasattr(b, "tolist") else b
-            group_bboxes.append(
-                (round(bx0), round(by0), round(bx1), round(by1))
-            )
+            group_bboxes.append((round(bx0), round(by0), round(bx1), round(by1)))
 
         for local_idx, s_idx in enumerate(s_indices):
             source, orig_idx = secondary_sources[s_idx]
@@ -1231,9 +1229,7 @@ def _build_segmentation_detections(
         group_bboxes = []
         for b in group_boxes:
             bx0, by0, bx1, by1 = b.tolist() if hasattr(b, "tolist") else b
-            group_bboxes.append(
-                (round(bx0), round(by0), round(bx1), round(by1))
-            )
+            group_bboxes.append((round(bx0), round(by0), round(bx1), round(by1)))
 
         for local_idx, p_idx in enumerate(member_indices):
             source, orig_idx = primary_sources[p_idx]

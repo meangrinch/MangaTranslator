@@ -888,14 +888,12 @@ class FluxKontextInpainter:
                         torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
                         img.clamp_(0, 1)
                         generated_patch_pil = Image.fromarray(
-                            
-                                img.mul(255)
-                                .round()
-                                .to(torch.uint8)
-                                .permute(1, 2, 0)
-                                .cpu()
-                                .numpy()
-                            
+                            img.mul(255)
+                            .round()
+                            .to(torch.uint8)
+                            .permute(1, 2, 0)
+                            .cpu()
+                            .numpy()
                         )
                 else:
                     should_encode_prompt = self._prompt_embeds_cpu is None
@@ -929,14 +927,12 @@ class FluxKontextInpainter:
                         torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
                         img.clamp_(0, 1)
                         generated_patch_pil = Image.fromarray(
-                            
-                                img.mul(255)
-                                .round()
-                                .to(torch.uint8)
-                                .permute(1, 2, 0)
-                                .cpu()
-                                .numpy()
-                            
+                            img.mul(255)
+                            .round()
+                            .to(torch.uint8)
+                            .permute(1, 2, 0)
+                            .cpu()
+                            .numpy()
                         )
 
                     self.pipeline.transformer.to("cpu")

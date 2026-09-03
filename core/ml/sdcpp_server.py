@@ -786,9 +786,7 @@ class SDCppServerManager:
             )
             return server
 
-    def _stop_server_record(
-        self, server: dict | None, verbose: bool = False
-    ) -> None:
+    def _stop_server_record(self, server: dict | None, verbose: bool = False) -> None:
         if not server:
             return
         process = server.get("process")

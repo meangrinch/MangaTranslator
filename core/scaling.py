@@ -1,5 +1,3 @@
-
-
 def _normalize_scale(scale: float | None) -> float:
     if scale is None or scale <= 0:
         return 1.0

@@ -472,9 +472,7 @@ def process_batch_logic(
         return results
 
     except (FontError, RenderingError) as e:
-        raise LogicError(
-            f"Text rendering failed during batch processing: {e!s}"
-        ) from e
+        raise LogicError(f"Text rendering failed during batch processing: {e!s}") from e
     except CleaningError as e:
         raise LogicError(
             f"Bubble cleaning failed during batch processing: {e!s}"
