@@ -450,15 +450,11 @@ def create_layout(
                             minimum=0,
                             maximum=10,
                             value=int(
-                                
-                                    saved_settings.get(
-                                        "batch_previous_context_image_count", 0
-                                    )
-                                    if saved_settings.get(
-                                        "send_full_page_context", True
-                                    )
-                                    else 0
-                                
+                                saved_settings.get(
+                                    "batch_previous_context_image_count", 0
+                                )
+                                if saved_settings.get("send_full_page_context", True)
+                                else 0
                             ),
                             step=1,
                             label="Previous Context Images",
@@ -1848,11 +1844,12 @@ def create_layout(
                                         "Klein: 4 is recommended. "
                                         "Kontext: 6-15 is recommended."
                                     ),
+                                    visible=_backend_visible,
                                     interactive=saved_settings.get(
                                         "outside_text_inpainting_method",
                                         "flux_klein_4b",
                                     )
-                                    != "opencv",
+                                    not in ("opencv", "none"),
                                 )
                                 _is_klein_for_lum = saved_settings.get(
                                     "outside_text_inpainting_method",
@@ -1930,6 +1927,7 @@ def create_layout(
                                     label="Seed",
                                     info="Seed for reproducible inpainting (-1 = random)",
                                     precision=0,
+                                    visible=_backend_visible,
                                     interactive=saved_settings.get(
                                         "outside_text_inpainting_method",
                                         "flux_klein_4b",
@@ -1945,6 +1943,7 @@ def create_layout(
                                         "Use Flux for bubble cleaning when the interior is not pure white/black "
                                         "(e.g., colored/grayscale)."
                                     ),
+                                    visible=_backend_visible,
                                     interactive=saved_settings.get(
                                         "outside_text_inpainting_method",
                                         "flux_klein_4b",
@@ -3259,6 +3258,7 @@ def create_layout(
                 ),
                 text_encoder_quant_value,
                 gr.update(
+                    visible=(not is_no_flux),
                     interactive=(not is_no_flux),
                     maximum=max_steps,
                     value=default_steps,
@@ -3270,8 +3270,14 @@ def create_layout(
                     visible=residual_interactive,
                     interactive=residual_interactive,
                 ),
-                gr.update(interactive=(not is_no_flux)),
-                gr.update(interactive=(not is_no_flux)),
+                gr.update(
+                    visible=(not is_no_flux),
+                    interactive=(not is_no_flux),
+                ),
+                gr.update(
+                    visible=(not is_no_flux),
+                    interactive=(not is_no_flux),
+                ),
             )
 
         outside_text_inpainting_method.change(
