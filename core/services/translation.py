@@ -1316,7 +1316,7 @@ def _format_special_instructions(config: TranslationConfig) -> str:
     if config.special_instructions and config.special_instructions.strip():
         return f"""
 
-## SPECIAL INSTRUCTIONS
+## CUSTOM USER INSTRUCTIONS
 {config.special_instructions.strip()}
 """
     return ""
