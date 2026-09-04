@@ -52,7 +52,7 @@ from utils.model_metadata import (
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
-    is_gpt56_virtual_pro,
+    is_gpt6_astra,
     is_hy_mt2_model,
     is_meta_reasoning_model,
     is_mimo_reasoning_model,
@@ -60,6 +60,7 @@ from utils.model_metadata import (
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
     is_openai_reasoning_model,
+    is_openai_virtual_pro,
     is_qwencloud_reasoning_model,
     is_rosetta_model,
     is_xai_reasoning_model,
@@ -69,6 +70,7 @@ from utils.model_metadata import (
     supports_meta_reasoning_effort,
     supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
+    supports_openai_verbosity,
     supports_qwencloud_reasoning_effort,
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
@@ -470,16 +472,23 @@ def _build_generation_config(
             gen = get_gpt5_generation(model_name)
             reasoning_effort = config.reasoning_effort or "high"
             effort = reasoning_effort
-            if effort == "max" and not supports_gpt5_max_effort(model_name):
-                effort = "xhigh" if supports_gpt5_xhigh_effort(model_name) else "high"
-            if effort == "xhigh" and not supports_gpt5_xhigh_effort(model_name):
-                effort = "high"
-            none_capable = gen is not None and gen != "5"
-            if none_capable or effort != "none":
+            if is_gpt6_astra(model_name):
+                if effort in ("none", "minimal"):
+                    effort = "low"
                 generation_config["reasoning_effort"] = effort
-            if is_gpt56_virtual_pro(model_name):
+            else:
+                if effort == "max" and not supports_gpt5_max_effort(model_name):
+                    effort = (
+                        "xhigh" if supports_gpt5_xhigh_effort(model_name) else "high"
+                    )
+                if effort == "xhigh" and not supports_gpt5_xhigh_effort(model_name):
+                    effort = "high"
+                none_capable = gen is not None and gen != "5"
+                if none_capable or effort != "none":
+                    generation_config["reasoning_effort"] = effort
+            if is_openai_virtual_pro(model_name):
                 generation_config["reasoning_mode"] = "pro"
-        if is_gpt5_series(model_name) and not is_gpt5_chat_variant(model_name):
+        if supports_openai_verbosity(model_name):
             generation_config["verbosity"] = config.verbosity or "low"
         return generation_config
 
@@ -741,6 +750,7 @@ def _build_generation_config(
 
         is_openai_reasoning = is_openai_model and is_openai_reasoning_model(model_name)
         is_gpt5_model = is_openai_model and is_gpt5_series(model_name)
+        is_gpt6_model = is_openai_model and is_gpt6_astra(model_name)
         is_gpt5_1 = is_openai_model and "gpt-5.1" in model_lower
         is_gpt5 = is_openai_model and "gpt-5" in model_lower and not is_gpt5_1
         is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
@@ -761,6 +771,9 @@ def _build_generation_config(
             "is_gpt5_1": is_gpt5_1,
             "is_gpt5": is_gpt5,
             "is_gpt5_model": is_gpt5_model,
+            "is_gpt6_astra": is_gpt6_model,
+            "supports_verbosity": is_openai_model
+            and supports_openai_verbosity(model_name),
             **anthropic_flags,
         }
 
@@ -778,6 +791,11 @@ def _build_generation_config(
                     "auto" if (is_claude_46 or is_claude_adaptive_default) else "none"
                 )
                 generation_config["reasoning_effort"] = reasoning_effort
+            elif is_gpt6_model:
+                effort = config.reasoning_effort or "high"
+                if effort in ("none", "minimal"):
+                    effort = "low"
+                generation_config["reasoning_effort"] = effort
             elif (
                 is_gpt5_1
                 or config.reasoning_effort
@@ -796,8 +814,7 @@ def _build_generation_config(
         if anthropic_flags and config.effort:
             generation_config["effort"] = config.effort
 
-        # GPT-5 series verbosity
-        if is_gpt5_model and not is_gpt5_chat_variant(model_name):
+        if is_openai_model and supports_openai_verbosity(model_name):
             generation_config["verbosity"] = config.verbosity or "low"
 
         return generation_config
@@ -808,6 +825,7 @@ def _build_generation_config(
         is_azure = is_azure_url(config.openai_compatible_url)
 
         is_openai_reasoning = is_openai_model and _is_openai_reasoning_meta(model_name)
+        is_gpt6_model = is_openai_model and is_gpt6_astra(model_name)
         is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
         anthropic_flags = anthropic_model_flags(model_name)
 
@@ -839,6 +857,9 @@ def _build_generation_config(
             "is_anthropic_reasoning": is_anthropic_reasoning,
             "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
             "is_gpt5_model": is_openai_model and is_gpt5_series(model_name),
+            "is_gpt6_astra": is_gpt6_model,
+            "supports_verbosity": is_openai_model
+            and supports_openai_verbosity(model_name),
             **anthropic_flags,
         }
 
@@ -847,16 +868,15 @@ def _build_generation_config(
             or is_anthropic_reasoning
             or is_openai_compatible_reasoning_model(model_name)
         ) and config.reasoning_effort:
-            generation_config["reasoning_effort"] = config.reasoning_effort
+            effort = config.reasoning_effort
+            if is_gpt6_model and effort in ("none", "minimal"):
+                effort = "low"
+            generation_config["reasoning_effort"] = effort
 
         if anthropic_flags and config.effort:
             generation_config["effort"] = config.effort
 
-        if (
-            is_openai_model
-            and is_gpt5_series(model_name)
-            and not is_gpt5_chat_variant(model_name)
-        ):
+        if is_openai_model and supports_openai_verbosity(model_name):
             generation_config["verbosity"] = config.verbosity or "low"
 
         return generation_config

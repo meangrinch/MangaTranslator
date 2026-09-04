@@ -31,6 +31,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "gemma-4-26b-a4b-it",
     ],
     "OpenAI": [
+        "gpt-6-astra",
         "gpt-5.6-sol",
         "gpt-5.6-terra",
         "gpt-5.6-luna",
@@ -49,6 +50,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "gpt-4o-2024-11-20",
         "gpt-4o-2024-08-06",
         "gpt-4o-mini-2024-07-18",
+        "gpt-6-astra-pro",
         "gpt-5.6-sol-pro",
         "gpt-5.6-terra-pro",
         "gpt-5.6-luna-pro",

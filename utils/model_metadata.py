@@ -269,13 +269,35 @@ def is_gpt56_virtual_pro(model_name: str | None) -> bool:
     return get_gpt5_generation(model_name) == "5.6" and is_gpt5_pro(model_name)
 
 
+def is_gpt6_astra(model_name: str | None) -> bool:
+    """Check if a model is GPT-6 Astra."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "gpt-6-astra" in lm
+
+
+def is_gpt6_astra_pro(model_name: str | None) -> bool:
+    """GPT-6 Astra pro is not a separate API slug; UI uses *-pro entries mapped to reasoning.mode."""
+    if not model_name:
+        return False
+    return is_gpt6_astra(model_name) and model_name.lower().endswith("-pro")
+
+
+def is_openai_virtual_pro(model_name: str | None) -> bool:
+    """Whether an OpenAI model uses a virtual -pro UI entry mapped to reasoning.mode=pro."""
+    if not model_name:
+        return False
+    return is_gpt56_virtual_pro(model_name) or is_gpt6_astra_pro(model_name)
+
+
 def resolve_openai_api_model_name(model_name: str | None) -> str | None:
     """Map UI model names to the slug sent to the OpenAI API.
 
-    Virtual GPT-5.6 pro entries (e.g. gpt-5.6-sol-pro) strip the trailing -pro suffix.
-    Historical pro slugs (gpt-5.5-pro-..., o3-pro-...) are left unchanged.
+    Virtual GPT-5.6 pro and GPT-6 Astra pro entries (e.g. gpt-5.6-sol-pro, gpt-6-astra-pro)
+    strip the trailing -pro suffix. Historical pro slugs (gpt-5.5-pro-..., o3-pro-...) are left unchanged.
     """
-    if not model_name or not is_gpt56_virtual_pro(model_name):
+    if not model_name or not is_openai_virtual_pro(model_name):
         return model_name
     if model_name.lower().endswith("-pro"):
         return model_name[: -len("-pro")]
@@ -284,26 +306,42 @@ def resolve_openai_api_model_name(model_name: str | None) -> str | None:
 
 def supports_openai_original_image_detail(model_name: str | None) -> bool:
     """Whether an OpenAI model supports image detail='original'."""
-    if not is_gpt5_series(model_name):
-        return False
+    if is_gpt6_astra(model_name):
+        return True
 
-    lm = (model_name or "").lower()
-    if any(token in lm for token in ("mini", "nano", "chat")):
-        return False
+    if is_gpt5_series(model_name):
+        lm = (model_name or "").lower()
+        if any(token in lm for token in ("mini", "nano", "chat")):
+            return False
 
-    parts = _parse_gpt5_gen_parts(get_gpt5_generation(model_name))
-    if parts is None or parts == (5, 0):
-        return False
+        parts = _parse_gpt5_gen_parts(get_gpt5_generation(model_name))
+        if parts is None or parts == (5, 0):
+            return False
 
-    return parts >= (5, 4)
+        return parts >= (5, 4)
+
+    return False
+
+
+def supports_openai_verbosity(model_name: str | None) -> bool:
+    """Whether an OpenAI model supports the text.verbosity parameter (GPT-5 series, GPT-6 Astra)."""
+    if not model_name or is_gpt5_chat_variant(model_name):
+        return False
+    return is_gpt5_series(model_name) or is_gpt6_astra(model_name)
 
 
 def is_openai_reasoning_model(model_name: str | None) -> bool:
-    """Check if an OpenAI model is reasoning-capable (GPT-5 series, o3)."""
+    """Check if an OpenAI model is reasoning-capable (GPT-5 series, GPT-6 Astra, o3)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return lm.startswith(("gpt-5", "o3")) or "/gpt-5" in lm or "/o3" in lm
+    return (
+        lm.startswith(("gpt-5", "gpt-6", "o3"))
+        or "/gpt-5" in lm
+        or "/gpt-6" in lm
+        or "/o3" in lm
+        or is_gpt6_astra(model_name)
+    )
 
 
 def is_azure_url(url: str | None) -> bool:

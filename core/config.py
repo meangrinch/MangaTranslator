@@ -74,7 +74,7 @@ class TranslationConfig:
         None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)
     )
     verbosity: str | None = (
-        None  # GPT-5 series only: controls response verbosity (high/medium/low)
+        None  # GPT-5 and GPT-6 series: controls response verbosity (high/medium/low)
     )
     send_full_page_context: bool = True
     whiteout_conjoined_bubbles: bool = True

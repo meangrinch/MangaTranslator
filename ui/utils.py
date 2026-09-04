@@ -37,6 +37,7 @@ from utils.model_metadata import (
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
+    is_gpt6_astra,
     is_gpt56_virtual_pro,
     is_hy_mt2_model,
     is_meta_reasoning_model,
@@ -56,6 +57,7 @@ from utils.model_metadata import (
     supports_meta_reasoning_effort,
     supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
+    supports_openai_verbosity,
     supports_qwencloud_reasoning_effort,
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
@@ -683,6 +685,9 @@ def get_reasoning_effort_config(
         if "chat" in lm:
             return False, [], None
 
+        if is_gpt6_astra(model_name):
+            return True, ["max", "xhigh", "high", "medium", "low"], "high"
+
         gen = get_gpt5_generation(model_name)
 
         if "-pro" in lm:
@@ -782,6 +787,8 @@ def get_reasoning_effort_config(
         if is_mimo_reasoning_model(model_name):
             return True, ["auto", "none"], "auto"
         if is_openai_reasoning_model(model_name):
+            if is_gpt6_astra(model_name):
+                return True, ["max", "xhigh", "high", "medium", "low"], "high"
             return True, ["high", "medium", "low", "none"], "high"
         if is_xai_reasoning_model(model_name):
             return True, ["high", "medium", "low", "none"], "high"
@@ -829,6 +836,8 @@ def get_reasoning_effort_config(
         if is_openai_model_family(model_name) and _is_openai_reasoning_model(
             model_name
         ):
+            if is_gpt6_astra(model_name):
+                return True, ["max", "xhigh", "high", "medium", "low"], "high"
             return True, ["high", "medium", "low", "none"], "high"
         if is_openai_compatible_reasoning_model(model_name):
             return True, ["high", "medium", "low", "none"], "high"
@@ -861,7 +870,7 @@ def get_verbosity_config(
     provider: str, model_name: str | None
 ) -> tuple[bool, list[str], str | None]:
     """
-    Get verbosity configuration for GPT-5 series models (OpenAI/OpenRouter/OpenAI-Compatible).
+    Get verbosity configuration for GPT-5 and GPT-6 series models (OpenAI/OpenRouter/OpenAI-Compatible).
 
     Returns:
         Tuple of (visible, choices, default_value)
@@ -869,7 +878,7 @@ def get_verbosity_config(
     if provider not in ("OpenAI", "OpenRouter", "OpenAI-Compatible"):
         return False, [], None
 
-    if is_gpt5_series(model_name) and not is_gpt5_chat_variant(model_name):
+    if supports_openai_verbosity(model_name):
         return True, ["high", "medium", "low"], "low"
 
     return False, [], None
@@ -881,7 +890,7 @@ def get_sampling_interactivity_for_effort(
     """Whether temp/top_p sliders should be interactive given the current reasoning effort.
 
     For GPT-5 series (non-chat): only allowed when effort is 'none' or 'minimal'.
-    For other OpenAI reasoning models (o3): never allowed.
+    For other OpenAI reasoning models (o3, GPT-6): never allowed.
     For DeepSeek reasoning models: only allowed when effort is 'none'.
     Returns (temp_interactive, top_p_interactive).
     """

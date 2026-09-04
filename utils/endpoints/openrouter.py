@@ -190,11 +190,13 @@ def call_openrouter_endpoint(
     claude_effort = metadata.get("is_claude_effort", False)
     effort = generation_config.get("effort")
 
-    is_gpt5_model = metadata.get("is_gpt5_model", False)
+    supports_verbosity = metadata.get("supports_verbosity", False) or metadata.get(
+        "is_gpt5_model", False
+    )
 
     if effort and claude_effort:
         payload["verbosity"] = effort
-    elif is_gpt5_model and generation_config.get("verbosity"):
+    elif supports_verbosity and generation_config.get("verbosity"):
         payload["verbosity"] = generation_config["verbosity"]
 
     reasoning_config = {}

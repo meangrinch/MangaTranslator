@@ -1034,7 +1034,7 @@ def create_layout(
                                 choices=_initial_verbosity_choices,
                                 label="Verbosity",
                                 value=_initial_verbosity_value,
-                                info="Controls response verbosity. GPT-5 series only.",
+                                info="Controls response verbosity. GPT-5 and GPT-6 series.",
                                 visible=_initial_verbosity_visible,
                                 elem_id="verbosity_dropdown",
                             )

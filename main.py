@@ -389,7 +389,7 @@ def main():
         default="low",
         choices=["high", "medium", "low"],
         help=(
-            "GPT-5 series only: Controls response verbosity. "
+            "GPT-5 and GPT-6 series: Controls response verbosity. "
             "Separate from 'max_tokens' and 'reasoning_effort'."
         ),
     )

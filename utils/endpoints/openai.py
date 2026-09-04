@@ -9,6 +9,8 @@ from utils.logging import log_message
 from utils.model_metadata import (
     get_gpt5_generation,
     is_gpt5_series,
+    is_gpt6_astra,
+    is_openai_reasoning_model,
     resolve_openai_api_model_name,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
@@ -102,37 +104,42 @@ def call_openai_endpoint(
         lower_model = (model_name or "").lower()
         is_chat_variant = "chat" in lower_model
         is_gpt5 = is_gpt5_series(model_name)
+        is_gpt6 = is_gpt6_astra(model_name)
         gen = get_gpt5_generation(model_name)
-        is_reasoning_capable = is_gpt5 or lower_model.startswith("o3")
+        is_reasoning_capable = is_openai_reasoning_model(model_name)
         reasoning_mode = generation_config.get("reasoning_mode")
 
         if is_reasoning_capable and not is_chat_variant:
             effort = generation_config.get("reasoning_effort")
             reasoning_payload: dict[str, Any] = {}
             if effort:
-                none_capable = gen is not None and gen != "5"
-
-                if none_capable and effort == "none":
-                    reasoning_payload["effort"] = "none"
-                elif effort != "none":
-                    effort_to_send = effort
-                    if effort_to_send == "max" and not supports_gpt5_max_effort(
-                        model_name
-                    ):
-                        effort_to_send = (
-                            "xhigh"
-                            if supports_gpt5_xhigh_effort(model_name)
-                            else "high"
-                        )
-                    if effort_to_send == "xhigh" and not supports_gpt5_xhigh_effort(
-                        model_name
-                    ):
-                        effort_to_send = "high"
-                    if none_capable and effort_to_send == "minimal":
-                        effort_to_send = "none"
-                    elif effort_to_send == "minimal" and not is_gpt5:
-                        effort_to_send = "low"
+                if is_gpt6:
+                    effort_to_send = "low" if effort in ("none", "minimal") else effort
                     reasoning_payload["effort"] = effort_to_send
+                else:
+                    none_capable = gen is not None and gen != "5"
+
+                    if none_capable and effort == "none":
+                        reasoning_payload["effort"] = "none"
+                    elif effort != "none":
+                        effort_to_send = effort
+                        if effort_to_send == "max" and not supports_gpt5_max_effort(
+                            model_name
+                        ):
+                            effort_to_send = (
+                                "xhigh"
+                                if supports_gpt5_xhigh_effort(model_name)
+                                else "high"
+                            )
+                        if effort_to_send == "xhigh" and not supports_gpt5_xhigh_effort(
+                            model_name
+                        ):
+                            effort_to_send = "high"
+                        if none_capable and effort_to_send == "minimal":
+                            effort_to_send = "none"
+                        elif effort_to_send == "minimal" and not is_gpt5:
+                            effort_to_send = "low"
+                        reasoning_payload["effort"] = effort_to_send
 
             if reasoning_mode == "pro":
                 reasoning_payload["mode"] = "pro"
@@ -140,10 +147,11 @@ def call_openai_endpoint(
             if reasoning_payload:
                 payload["reasoning"] = reasoning_payload
 
-        if is_gpt5 and not is_chat_variant:
+        if (is_gpt5 or is_gpt6) and not is_chat_variant:
             verbosity = generation_config.get("verbosity", "low")
             payload["text"] = {"verbosity": verbosity}
 
+        if is_gpt5 and not is_chat_variant:
             # temp/top_p only allowed when effort is "none" (gpt-5.1+) or "minimal" (base gpt-5)
             current_effort = payload.get("reasoning", {}).get("effort")
             allow_sampling = (
@@ -154,7 +162,7 @@ def call_openai_endpoint(
                 payload.pop("top_p", None)
 
         elif is_reasoning_capable and not is_chat_variant:
-            # Non-GPT-5 reasoning models (o3) don't support temp/top_p
+            # Non-GPT-5 reasoning models (o3, GPT-6) don't support temp/top_p
             payload.pop("temperature", None)
             payload.pop("top_p", None)
     except Exception:

@@ -7,7 +7,10 @@ import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
-from utils.model_metadata import is_azure_url, is_gemini_no_sampling_model
+from utils.model_metadata import (
+    is_azure_url,
+    is_gemini_no_sampling_model,
+)
 
 
 def build_openai_compatible_url(base_url: str, model_name: str | None = None) -> str:
@@ -205,7 +208,10 @@ def call_openai_compatible_endpoint(
     elif reasoning_effort and reasoning_effort != "none":
         payload["reasoning_effort"] = reasoning_effort
 
-    if metadata.get("is_gpt5_model", False) and generation_config.get("verbosity"):
+    supports_verbosity = metadata.get("supports_verbosity", False) or metadata.get(
+        "is_gpt5_model", False
+    )
+    if supports_verbosity and generation_config.get("verbosity"):
         payload["verbosity"] = generation_config["verbosity"]
 
     claude_effort = metadata.get("is_claude_effort", False)
