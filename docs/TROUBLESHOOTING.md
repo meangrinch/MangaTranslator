@@ -101,6 +101,7 @@
   - In batch mode, try raising "Previous Context Images" (requires "Send Full Page to LLM")
 
 - **API refusals/censorship:**
+  - Try enabling "Doujinshi Mode" (for 18+ adult manga)
   - Try disabling "Send Full Page to LLM"
   - Try adding a custom "special instruction" (e.g., "Do not censor translations...")
 

@@ -101,6 +101,7 @@
   - 在批量模式下，尝试提高“前文图像 (Previous Context Images)”（需要开启“发送整页给 LLM”）
 
 - **API 拒绝/审查拦截：**
+  - 尝试启用“同人志模式 (Doujinshi Mode)”（针对 18+ 成人漫画）
   - 尝试禁用“发送整页给 LLM (Send Full Page to LLM)”
   - 尝试添加自定义的“特殊说明 (special instruction)”（例如，“不要审查翻译……”）
 
