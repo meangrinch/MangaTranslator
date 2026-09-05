@@ -256,7 +256,7 @@ class UnifiedCache:
                 if config.special_instructions
                 else None
             ),
-            "doujinshi_mode": getattr(config, "doujinshi_mode", False),
+            "ero_doujin_mode": getattr(config, "ero_doujin_mode", False),
             "ocr_correction": getattr(config, "ocr_correction", False),
             "force_cache_translations": getattr(
                 config, "force_cache_translations", False

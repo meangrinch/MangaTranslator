@@ -329,11 +329,13 @@ def create_layout(
                                 value=saved_settings.get("output_language", "English"),
                                 allow_custom_value=True,
                             )
-                            doujinshi_mode = gr.Checkbox(
-                                label="Doujinshi Mode",
-                                value=bool(saved_settings.get("doujinshi_mode", False)),
-                                info="Optimize translation for 18+ adult manga. Uses more tokens, but may reduce refusals.",
-                                elem_id="translator_doujinshi_mode",
+                            ero_doujin_mode = gr.Checkbox(
+                                label="Ero-doujin Mode",
+                                value=bool(
+                                    saved_settings.get("ero_doujin_mode", False)
+                                ),
+                                info="Optimize translation for 18+ content. Uses more tokens, but may reduce refusals.",
+                                elem_id="translator_ero_doujin_mode",
                             )
                         special_instructions = gr.Textbox(
                             label="Special Instructions",
@@ -413,13 +415,13 @@ def create_layout(
                                 ),
                                 allow_custom_value=True,
                             )
-                            batch_doujinshi_mode = gr.Checkbox(
-                                label="Doujinshi Mode",
+                            batch_ero_doujin_mode = gr.Checkbox(
+                                label="Ero-doujin Mode",
                                 value=bool(
-                                    saved_settings.get("batch_doujinshi_mode", False)
+                                    saved_settings.get("batch_ero_doujin_mode", False)
                                 ),
-                                info="Optimize translation for 18+ adult manga. Uses more tokens, but may reduce refusals.",
-                                elem_id="batch_doujinshi_mode",
+                                info="Optimize translation for 18+ content. Uses more tokens, but may reduce refusals.",
+                                elem_id="batch_ero_doujin_mode",
                             )
                         batch_special_instructions = gr.Textbox(
                             label="Special Instructions",
@@ -2416,8 +2418,8 @@ def create_layout(
             vertical_font_size_mult,
             special_instructions,
             batch_special_instructions,
-            doujinshi_mode,
-            batch_doujinshi_mode,
+            ero_doujin_mode,
+            batch_ero_doujin_mode,
             hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
@@ -2559,8 +2561,8 @@ def create_layout(
             hyphenation_min_word_length,
             special_instructions,
             batch_special_instructions,
-            doujinshi_mode,
-            batch_doujinshi_mode,
+            ero_doujin_mode,
+            batch_ero_doujin_mode,
             outside_text_enabled,
             outside_text_seed,
             outside_text_inpainting_method,
@@ -2746,8 +2748,8 @@ def create_layout(
             batch_font_dropdown,
             special_instructions,
             batch_special_instructions,
-            doujinshi_mode,
-            batch_doujinshi_mode,
+            ero_doujin_mode,
+            batch_ero_doujin_mode,
             batch_parallel_requests,
             batch_parallel_within_pages,
             overlap_llm_with_inpaint,
@@ -2888,8 +2890,8 @@ def create_layout(
             batch_font_dropdown,
             special_instructions,
             batch_special_instructions,
-            doujinshi_mode,
-            batch_doujinshi_mode,
+            ero_doujin_mode,
+            batch_ero_doujin_mode,
             batch_parallel_requests,
             batch_parallel_within_pages,
             overlap_llm_with_inpaint,

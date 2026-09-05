@@ -94,7 +94,7 @@ class TranslationConfig:
     previous_context_text_count: int = 0
     osb_min_side_pixels: int = 128
     special_instructions: str | None = None
-    doujinshi_mode: bool = False
+    ero_doujin_mode: bool = False
     ocr_correction: bool = False
     force_cache_translations: bool = False
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"

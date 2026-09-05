@@ -84,7 +84,7 @@ class UITranslationLLMSettings:
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
     special_instructions: str | None = None
-    doujinshi_mode: bool = False
+    ero_doujin_mode: bool = False
     ocr_correction: bool = False
     force_cache_translations: bool = False
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"
@@ -236,7 +236,7 @@ class UIConfigState:
     batch_output_language: str = "English"
     batch_font_pack: str | None = None
     batch_special_instructions: str | None = None
-    batch_doujinshi_mode: bool = False
+    batch_ero_doujin_mode: bool = False
     batch_parallel_requests: int = 1
     batch_parallel_within_pages: bool = False
     batch_overlap_llm_with_inpaint: bool = False
@@ -290,7 +290,7 @@ class UIConfigState:
             "context_image_max_side_pixels": self.llm_settings.context_image_max_side_pixels,
             "osb_min_side_pixels": self.llm_settings.osb_min_side_pixels,
             "special_instructions": self.llm_settings.special_instructions or "",
-            "doujinshi_mode": self.llm_settings.doujinshi_mode,
+            "ero_doujin_mode": self.llm_settings.ero_doujin_mode,
             "ocr_correction": self.llm_settings.ocr_correction,
             "force_cache_translations": self.llm_settings.force_cache_translations,
             "overlap_llm_with_inpaint": self.general.overlap_llm_with_inpaint,
@@ -385,7 +385,7 @@ class UIConfigState:
             "batch_output_language": self.batch_output_language,
             "batch_font_pack": self.batch_font_pack,
             "batch_special_instructions": self.batch_special_instructions or "",
-            "batch_doujinshi_mode": self.batch_doujinshi_mode,
+            "batch_ero_doujin_mode": self.batch_ero_doujin_mode,
             "batch_parallel_requests": self.batch_parallel_requests,
             "batch_parallel_within_pages": self.batch_parallel_within_pages,
             "batch_overlap_llm_with_inpaint": self.batch_overlap_llm_with_inpaint,
@@ -627,8 +627,8 @@ class UIConfigState:
                 ),
                 osb_min_side_pixels=data.get("osb_min_side_pixels", 128),
                 special_instructions=data.get("special_instructions") or None,
-                doujinshi_mode=bool(
-                    data.get("doujinshi_mode", defaults.get("doujinshi_mode", False))
+                ero_doujin_mode=bool(
+                    data.get("ero_doujin_mode", defaults.get("ero_doujin_mode", False))
                 ),
                 ocr_correction=bool(
                     data.get("ocr_correction", defaults.get("ocr_correction", False))
@@ -758,10 +758,10 @@ class UIConfigState:
             ),
             batch_font_pack=data.get("batch_font_pack"),
             batch_special_instructions=data.get("batch_special_instructions") or None,
-            batch_doujinshi_mode=bool(
+            batch_ero_doujin_mode=bool(
                 data.get(
-                    "batch_doujinshi_mode",
-                    defaults.get("batch_doujinshi_mode", False),
+                    "batch_ero_doujin_mode",
+                    defaults.get("batch_ero_doujin_mode", False),
                 )
             ),
             batch_parallel_requests=int(data.get("batch_parallel_requests", 1)),
@@ -870,10 +870,10 @@ def map_ui_to_backend_config(
         ),
         osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
         special_instructions=ui_state.llm_settings.special_instructions,
-        doujinshi_mode=(
-            ui_state.batch_doujinshi_mode
+        ero_doujin_mode=(
+            ui_state.batch_ero_doujin_mode
             if is_batch
-            else ui_state.llm_settings.doujinshi_mode
+            else ui_state.llm_settings.ero_doujin_mode
         ),
         ocr_correction=ui_state.llm_settings.ocr_correction,
         force_cache_translations=ui_state.llm_settings.force_cache_translations,
