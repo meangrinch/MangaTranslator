@@ -95,6 +95,7 @@ class TranslationConfig:
     osb_min_side_pixels: int = 128
     special_instructions: str | None = None
     doujinshi_mode: bool = False
+    ocr_correction: bool = False
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"
     request_coordinator: Any | None = None
 

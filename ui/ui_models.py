@@ -85,6 +85,7 @@ class UITranslationLLMSettings:
     osb_min_side_pixels: int = 128
     special_instructions: str | None = None
     doujinshi_mode: bool = False
+    ocr_correction: bool = False
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"
 
 
@@ -289,6 +290,7 @@ class UIConfigState:
             "osb_min_side_pixels": self.llm_settings.osb_min_side_pixels,
             "special_instructions": self.llm_settings.special_instructions or "",
             "doujinshi_mode": self.llm_settings.doujinshi_mode,
+            "ocr_correction": self.llm_settings.ocr_correction,
             "overlap_llm_with_inpaint": self.general.overlap_llm_with_inpaint,
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
@@ -626,6 +628,9 @@ class UIConfigState:
                 doujinshi_mode=bool(
                     data.get("doujinshi_mode", defaults.get("doujinshi_mode", False))
                 ),
+                ocr_correction=bool(
+                    data.get("ocr_correction", defaults.get("ocr_correction", False))
+                ),
             ),
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
@@ -862,6 +867,7 @@ def map_ui_to_backend_config(
             if is_batch
             else ui_state.llm_settings.doujinshi_mode
         ),
+        ocr_correction=ui_state.llm_settings.ocr_correction,
         reasoning_effort=ui_state.general.reasoning_effort,
         effort=ui_state.general.effort,
         verbosity=ui_state.general.verbosity,

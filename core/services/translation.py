@@ -180,6 +180,7 @@ def _build_system_prompt_translation(
     mode: str,
     full_page_context: bool = False,
     doujinshi_mode: bool = False,
+    ocr_correction: bool = False,
 ) -> str:
     input_type = "transcribed text lines" if mode == "two-step" else "cropped images"
     visual_ref_note = (
@@ -237,6 +238,15 @@ Example format:
 - **Vocalizations & Moans:** Accurately translate and phonetically preserve all non-lexical vocalizations, moans, pants, gasps, and stutters (e.g., "aaah...", "mmph...", "h-haah...") matching the phonetic intensity, pauses, and cadence of the source text.
 """
 
+    ocr_correction_section = ""
+    if mode == "two-step" and ocr_correction:
+        ocr_correction_section = """
+## OCR ERROR CORRECTION & CONTEXTUAL REPAIR
+- **Contextual OCR Repair:** Transcriptions from the OCR phase may contain misrecognized characters, dropped kana/kanji, or typos leading to nonsensical phrases or broken syntax. Infer the intended original text using dialogue context, narrative continuity, character speech patterns, and full-page visual context (if available).
+- **Translate Intended Meaning:** Translate what was clearly intended by context rather than translating OCR artifacts literally. Do not alter or invent dialogue for clean, unambiguous transcriptions.
+- **OCR Failures:** If an entry is explicitly marked `[OCR FAILED]`, preserve `[OCR FAILED]`.
+"""
+
     return f"""
 ## ROLE
 You are a professional comic, manga, and manhwa localization editor translating dialogue, narration, and sound effects into natural, idiomatic {output_language}.
@@ -272,6 +282,7 @@ Apply the following markdown tags to indicate dialogue delivery and audio type:
   - Ambiguous pronouns or call-backs are correctly resolved using prior visuals and dialogue.
 {edge_cases}
 {doujinshi_section}
+{ocr_correction_section}
 {output_schema.strip()}
 """
 
@@ -1994,6 +2005,7 @@ The target language is {output_language}. Use the appropriate translation approa
                         config.send_full_page_context and bool(full_image_b64)
                     ),
                     doujinshi_mode=getattr(config, "doujinshi_mode", False),
+                    ocr_correction=getattr(config, "ocr_correction", False),
                 )
             translation_response_text = _call_llm_endpoint(
                 config,

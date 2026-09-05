@@ -132,6 +132,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         config_reading_direction,
         config_translation_mode,
         ocr_method_val,
+        ocr_correction_val,
         input_language,
         output_language,
         font_dropdown,
@@ -360,6 +361,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             osb_min_side_pixels=osb_min_side_pixels_val,
             special_instructions=final_special_instructions,
             doujinshi_mode=bool(final_doujinshi_mode),
+            ocr_correction=bool(ocr_correction_val),
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_font_size,
@@ -587,6 +589,15 @@ def _format_single_success_message(
         ]
     )
 
+    if (
+        not backend_config.cleaning_only
+        and not backend_config.upscaling_only
+        and backend_config.translation.translation_mode == "two-step"
+    ):
+        msg_parts.append(
+            f"• OCR Correction: {'On' if backend_config.translation.ocr_correction else 'Off'}\n"
+        )
+
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(
             f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
@@ -749,6 +760,15 @@ def _format_batch_success_message(
             f"• Translation Mode: {backend_config.translation.translation_mode}\n",
         ]
     )
+
+    if (
+        not backend_config.cleaning_only
+        and not backend_config.upscaling_only
+        and backend_config.translation.translation_mode == "two-step"
+    ):
+        msg_parts.append(
+            f"• OCR Correction: {'On' if backend_config.translation.ocr_correction else 'Off'}\n"
+        )
 
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(
@@ -1092,6 +1112,7 @@ def handle_save_config_click(*args: Any) -> str:
         max_tokens,
         trans_mode,
         ocr_method_val,
+        ocr_correction_val,
         max_fs,
         min_fs,
         ls,
@@ -1308,6 +1329,7 @@ def handle_save_config_click(*args: Any) -> str:
             osb_min_side_pixels=osb_min_side_pixels_val,
             special_instructions=special_instructions_val,
             doujinshi_mode=bool(doujinshi_mode_val),
+            ocr_correction=bool(ocr_correction_val),
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_fs,
@@ -1600,6 +1622,10 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         gr.update(value=max_tokens_val),
         gr.update(value=default_ui_state.llm_settings.translation_mode),
         gr.update(value=default_ui_state.llm_settings.ocr_method),
+        gr.update(
+            value=default_ui_state.llm_settings.ocr_correction,
+            visible=(default_ui_state.llm_settings.translation_mode == "two-step"),
+        ),
         default_ui_state.rendering.max_font_size,
         default_ui_state.rendering.min_font_size,
         default_ui_state.rendering.line_spacing_mult,
@@ -2551,13 +2577,17 @@ def handle_ocr_method_change(
 
 
 def handle_translation_mode_change(translation_mode: str, current_ocr_method: str):
-    """Handles changes in translation mode to enable/disable OCR method selection."""
+    """Handles changes in translation mode to enable/disable OCR method and correction selection."""
     import gradio as gr
 
+    is_two_step = translation_mode == "two-step"
     if translation_mode == "one-step":
         if current_ocr_method in ("manga-ocr", "paddleocr-vl-1.6"):
-            return gr.update(value="LLM", interactive=False)
+            ocr_update = gr.update(value="LLM", interactive=False)
         else:
-            return gr.update(interactive=False)
+            ocr_update = gr.update(interactive=False)
     else:
-        return gr.update(interactive=True)
+        ocr_update = gr.update(interactive=True)
+
+    ocr_correction_update = gr.update(visible=is_two_step)
+    return ocr_update, ocr_correction_update

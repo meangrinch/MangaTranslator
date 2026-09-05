@@ -752,6 +752,28 @@ def create_layout(
                                 )
                                 != "one-step",
                             )
+                            ocr_correction = gr.Checkbox(
+                                label="OCR Correction",
+                                value=bool(
+                                    saved_settings.get(
+                                        "ocr_correction",
+                                        settings_manager.DEFAULT_SETTINGS.get(
+                                            "ocr_correction", False
+                                        ),
+                                    )
+                                ),
+                                info=(
+                                    "Instruct the LLM to contextually correct poor OCR during translation."
+                                ),
+                                elem_id="config_ocr_correction",
+                                visible=saved_settings.get(
+                                    "translation_mode",
+                                    settings_manager.DEFAULT_SETTINGS[
+                                        "translation_mode"
+                                    ],
+                                )
+                                == "two-step",
+                            )
 
                             gr.Markdown("### LLM Settings")
                             available_providers = utils.get_available_providers(
@@ -2336,6 +2358,7 @@ def create_layout(
             max_tokens,
             config_translation_mode,
             ocr_method_radio,
+            ocr_correction,
             max_font_size,
             min_font_size,
             line_spacing_mult,
@@ -2474,6 +2497,7 @@ def create_layout(
             max_tokens,
             config_translation_mode,
             ocr_method_radio,
+            ocr_correction,
             max_font_size,
             min_font_size,
             line_spacing_mult,
@@ -2614,6 +2638,7 @@ def create_layout(
             config_reading_direction,
             config_translation_mode,
             ocr_method_radio,
+            ocr_correction,
             input_language,
             output_language,
             font_dropdown,
@@ -2754,6 +2779,7 @@ def create_layout(
             config_reading_direction,
             config_translation_mode,
             ocr_method_radio,
+            ocr_correction,
             input_language,
             output_language,
             font_dropdown,
@@ -3489,11 +3515,11 @@ def create_layout(
             queue=False,
         )
 
-        # Translation mode change handler - disable OCR selection when one-step
+        # Translation mode change handler - toggle OCR selection and correction when one-step vs two-step
         config_translation_mode.change(
             fn=callbacks.handle_translation_mode_change,
             inputs=[config_translation_mode, ocr_method_radio],
-            outputs=ocr_method_radio,
+            outputs=[ocr_method_radio, ocr_correction],
             queue=False,
         )
 

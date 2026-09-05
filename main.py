@@ -632,6 +632,11 @@ def main():
         help="Optimize translation for 18+ adult manga. Uses more tokens, but may reduce refusals.",
     )
     parser.add_argument(
+        "--ocr-correction",
+        action="store_true",
+        help="When using two-step translation mode, instruct the LLM to contextually correct poor OCR during translation.",
+    )
+    parser.add_argument(
         "--no-full-page-context",
         dest="send_full_page_context",
         action="store_false",
@@ -1297,6 +1302,7 @@ def main():
             osb_min_side_pixels=args.osb_min_side_pixels,
             special_instructions=args.special_instructions,
             doujinshi_mode=args.doujinshi_mode,
+            ocr_correction=args.ocr_correction,
             ocr_method=args.ocr_method,
         ),
         rendering=RenderingConfig(
