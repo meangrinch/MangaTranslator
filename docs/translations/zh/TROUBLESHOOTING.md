@@ -90,6 +90,7 @@
 
 - **翻译质量较差：**
   - 对于能力较弱的 LLM，尝试使用“两步 (two-step)”翻译模式
+  - 在“两步 (two-step)”模式下，尝试启用“OCR 校正 (OCR Correction)”，根据上下文修复较差的 OCR 识别文本
   - 尝试禁用“发送整页给 LLM (Send Full Page to LLM)”
   - 尝试使用本地 OCR 方法，特别是对于能力较弱 of LLM：
     - "manga-ocr": 仅限日语源文本
@@ -110,6 +111,7 @@
   - 降低“媒体分辨率 (Media Resolution)”（如果使用 Gemini 或 SpaceXAI 模型）
   - 降低“图像细节 (Image Detail)”（如果使用 OpenAI 模型）
   - 使用 "manga-ocr/paddleocr-vl-1.6" OCR 方法（其效果可能不及更强的多模态模型）
+  - 启用“强制缓存翻译 (Force Cache Translations)”，以便在非确定性采样下重复运行时复用已缓存的翻译
 
 - **部分文件批量翻译失败：**
   - 翻译失败的图像路径将保存到输出目录下的 `failed_paths.txt` 中。您可以将此文件上传到 WebUI 的 ZIP 归档上传框中，或在命令行中将其作为 `--input` 参数传入，以仅重试失败的文件。

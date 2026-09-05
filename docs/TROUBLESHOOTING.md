@@ -90,6 +90,7 @@
 
 - **Poor translations:**
   - Try "two-step" translation mode for less-capable LLMs
+  - In "two-step" mode, try enabling "OCR Correction" to contextually repair poor OCR transcripts
   - Try disabling "Send Full Page to LLM"
   - Try using a local OCR method, particularly for less-capable LLMs:
     - "manga-ocr": Japanese sources only
@@ -110,6 +111,7 @@
   - Lower "Media Resolution" (if using Gemini or SpaceXAI models)
   - Lower "Image Detail" (if using OpenAI models)
   - Use "manga-ocr/paddleocr-vl-1.6" OCR method (may perform worse than more-capable VLMs)
+  - Enable "Force Cache Translations" to reuse cached translations on repeat runs when using non-deterministic sampling
 
 - **Batch translation failed for some files:**
   - Failed images have their paths saved to `failed_paths.txt` in the output directory. You can upload this file to the ZIP archive upload area in the web UI, or pass it via `--input` in the CLI to retry only the failed files.
