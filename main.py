@@ -627,6 +627,11 @@ def main():
         help="Optional special instructions for the LLM (formatting, context, character names, etc.)",
     )
     parser.add_argument(
+        "--doujinshi-mode",
+        action="store_true",
+        help="Optimize translation for 18+ adult manga. Uses more tokens, but may reduce refusals.",
+    )
+    parser.add_argument(
         "--no-full-page-context",
         dest="send_full_page_context",
         action="store_false",
@@ -1291,6 +1296,7 @@ def main():
             ),
             osb_min_side_pixels=args.osb_min_side_pixels,
             special_instructions=args.special_instructions,
+            doujinshi_mode=args.doujinshi_mode,
             ocr_method=args.ocr_method,
         ),
         rendering=RenderingConfig(

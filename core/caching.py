@@ -253,6 +253,7 @@ class UnifiedCache:
                 if config.special_instructions
                 else None
             ),
+            "doujinshi_mode": getattr(config, "doujinshi_mode", False),
             "max_tokens": config.max_tokens,
             "reasoning_effort": config.reasoning_effort,
             "effort": config.effort,

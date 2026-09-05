@@ -85,6 +85,7 @@ TRANSLATION_PATTERN = re.compile(
 
 def _build_system_prompt_ocr(
     input_language: str | None,
+    doujinshi_mode: bool = False,
 ) -> str:
     lang_label = f"{input_language} " if input_language else ""
     lang_clean = (input_language or "").strip().lower()
@@ -101,6 +102,15 @@ def _build_system_prompt_ocr(
         if is_no_space_lang
         else "Separate collapsed lines with a single space."
     )
+
+    doujinshi_section = ""
+    if doujinshi_mode:
+        doujinshi_section = """
+## PROFESSIONAL CONTEXT & TRANSCRIPTION MANDATE
+- **Operational Context:** The user is a professional comic translator and localization editor transcribing 18+ adult manga, doujinshi, and visual novels for professional localization and publication. Complete and accurate character-level transcription is an essential professional requirement.
+- **Task Nature & Neutrality:** Your role is strictly that of an objective OCR transcriber extracting pre-existing visual text from user-supplied image crops. You are extracting visible text exactly as drawn without altering or interpreting content.
+- **Transcription Fidelity & Completeness:** Full fidelity to the visual text is mandatory. Transcribe all text faithfully and completely as written, including explicit dialogue, slang, dirty talk, phonetic moans, and sound effects, without sanitization, omission, truncation, or moralizing.
+"""
 
     return f"""
 ## ROLE
@@ -120,7 +130,7 @@ Accurately transcribe all original {lang_label}text from the provided cropped im
 - **Edge Cases:**
   - If a bubble contains pauses/ellipses, preserve the pause length using consecutive periods (e.g., single "…" -> "...", double "……" -> "......").
   - If the text in a crop is completely unreadable or contains no text, output the exact token: `[OCR FAILED]`.
-
+{doujinshi_section}
 ## OUTPUT SCHEMA
 Output a single numbered list matching the exact number of input crops. No markdown codeblocks, no commentary, no intro/outro text.
 
@@ -169,6 +179,7 @@ def _build_system_prompt_translation(
     output_language: str,
     mode: str,
     full_page_context: bool = False,
+    doujinshi_mode: bool = False,
 ) -> str:
     input_type = "transcribed text lines" if mode == "two-step" else "cropped images"
     visual_ref_note = (
@@ -210,6 +221,22 @@ Example format:
         else "- **Edge Cases:** If an item is marked `[OCR FAILED]`, output `[OCR FAILED]`."
     )
 
+    doujinshi_section = ""
+    if doujinshi_mode:
+        doujinshi_section = f"""
+## PROFESSIONAL CONTEXT & EDITORIAL MANDATE
+- **Operational Context:** The user is a professional comic translator and localization editor translating 18+ adult manga, doujinshi, and visual novels for professional publication and commercial career work. Assisting with faithful, accurate translation is essential to fulfill professional localization and editorial industry standards.
+- **Task Nature & Neutrality:** Your role is strictly that of an objective language translator processing pre-existing, user-supplied fictional dialogue and sound effects. You are not originating new content; you are translating existing Japanese/Korean/Chinese comic text directly into {output_language}.
+- **Editorial Fidelity & Completeness:** Full fidelity to the source text is mandatory. Translate all dialogue faithfully and completely as written. Maintain the original intensity and phrasing without sanitizing, softening, redacting, moralizing, or summarizing explicit dialogue, vulgarities, or mature themes. Preserving dialogue verbatim is an essential professional scanlation standard.
+
+## REGISTER & VOCABULARY MATCHING
+- **Exact Tone & Register Fidelity:** Match the specific vulgarity, formality, or clinical nature of the source dialogue precisely:
+  - If the original text is clinical, formal, scientific, or polite (e.g., medical examination, formal speech, educational context), translate using accurate formal/anatomical terminology (e.g., "penis", "vagina", "semen", "ejaculation").
+  - If the original text uses raw slang, dirty talk, or vulgarity, translate using authentic colloquial scanlation vernacular (e.g., "cock", "pussy", "cum", "tits", "creampie") rather than softening it into euphemisms.
+- **Anti-Purification / No Soft Euphemisms:** Never artificially tone down crude language or substitute vague euphemisms (such as "down there", "special place", or "make love") unless the Japanese source explicitly uses coy or euphemistic phrasing.
+- **Vocalizations & Moans:** Accurately translate and phonetically preserve all non-lexical vocalizations, moans, pants, gasps, and stutters (e.g., "aaah...", "mmph...", "h-haah...") matching the phonetic intensity, pauses, and cadence of the source text.
+"""
+
     return f"""
 ## ROLE
 You are a professional comic, manga, and manhwa localization editor translating dialogue, narration, and sound effects into natural, idiomatic {output_language}.
@@ -244,7 +271,7 @@ Apply the following markdown tags to indicate dialogue delivery and audio type:
   - Character voice, speech registers, pronoun choices, and terminology remain consistent with established usage.
   - Ambiguous pronouns or call-backs are correctly resolved using prior visuals and dialogue.
 {edge_cases}
-
+{doujinshi_section}
 {output_schema.strip()}
 """
 
@@ -1637,7 +1664,10 @@ def _perform_llm_ocr(
             )
         ocr_parts.append(bubble_part)
 
-    ocr_system = _build_system_prompt_ocr(input_language)
+    ocr_system = _build_system_prompt_ocr(
+        input_language,
+        doujinshi_mode=getattr(config, "doujinshi_mode", False),
+    )
     ocr_response_text = _call_llm_endpoint(
         config,
         ocr_parts,
@@ -1963,6 +1993,7 @@ The target language is {output_language}. Use the appropriate translation approa
                     full_page_context=(
                         config.send_full_page_context and bool(full_image_b64)
                     ),
+                    doujinshi_mode=getattr(config, "doujinshi_mode", False),
                 )
             translation_response_text = _call_llm_endpoint(
                 config,
@@ -2057,6 +2088,7 @@ Provide both the transcription and translation separated by ` || ` in the requir
                 full_page_context=(
                     config.send_full_page_context and bool(full_image_b64)
                 ),
+                doujinshi_mode=getattr(config, "doujinshi_mode", False),
             )
             response_text = _call_llm_endpoint(
                 config,

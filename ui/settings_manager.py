@@ -244,6 +244,7 @@ DEFAULT_SETTINGS = {
     "send_full_page_context": True,
     "whiteout_conjoined_bubbles": True,
     "special_instructions": "",
+    "doujinshi_mode": False,
     "overlap_llm_with_inpaint": False,
     "upscale_method": "model_lite",  # "model", "model_lite", "lanczos", or "none"
     "bubble_min_side_pixels": 128,
@@ -296,6 +297,7 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_output_language": "English",
     "batch_font_pack": None,
     "batch_special_instructions": "",
+    "batch_doujinshi_mode": False,
     "batch_parallel_requests": 1,
     "batch_parallel_within_pages": False,
     "batch_overlap_llm_with_inpaint": False,
@@ -351,6 +353,8 @@ CANONICAL_CONFIG_KEY_ORDER: list[str] = [
     "image_detail",
     "special_instructions",
     "batch_special_instructions",
+    "doujinshi_mode",
+    "batch_doujinshi_mode",
     "overlap_llm_with_inpaint",
     "batch_overlap_llm_with_inpaint",
     # Rendering

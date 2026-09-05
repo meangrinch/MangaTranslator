@@ -84,6 +84,7 @@ class UITranslationLLMSettings:
     context_image_max_side_pixels: int = 1024
     osb_min_side_pixels: int = 128
     special_instructions: str | None = None
+    doujinshi_mode: bool = False
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"
 
 
@@ -233,6 +234,7 @@ class UIConfigState:
     batch_output_language: str = "English"
     batch_font_pack: str | None = None
     batch_special_instructions: str | None = None
+    batch_doujinshi_mode: bool = False
     batch_parallel_requests: int = 1
     batch_parallel_within_pages: bool = False
     batch_overlap_llm_with_inpaint: bool = False
@@ -286,6 +288,7 @@ class UIConfigState:
             "context_image_max_side_pixels": self.llm_settings.context_image_max_side_pixels,
             "osb_min_side_pixels": self.llm_settings.osb_min_side_pixels,
             "special_instructions": self.llm_settings.special_instructions or "",
+            "doujinshi_mode": self.llm_settings.doujinshi_mode,
             "overlap_llm_with_inpaint": self.general.overlap_llm_with_inpaint,
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
@@ -378,6 +381,7 @@ class UIConfigState:
             "batch_output_language": self.batch_output_language,
             "batch_font_pack": self.batch_font_pack,
             "batch_special_instructions": self.batch_special_instructions or "",
+            "batch_doujinshi_mode": self.batch_doujinshi_mode,
             "batch_parallel_requests": self.batch_parallel_requests,
             "batch_parallel_within_pages": self.batch_parallel_within_pages,
             "batch_overlap_llm_with_inpaint": self.batch_overlap_llm_with_inpaint,
@@ -619,6 +623,9 @@ class UIConfigState:
                 ),
                 osb_min_side_pixels=data.get("osb_min_side_pixels", 128),
                 special_instructions=data.get("special_instructions") or None,
+                doujinshi_mode=bool(
+                    data.get("doujinshi_mode", defaults.get("doujinshi_mode", False))
+                ),
             ),
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
@@ -738,6 +745,12 @@ class UIConfigState:
             ),
             batch_font_pack=data.get("batch_font_pack"),
             batch_special_instructions=data.get("batch_special_instructions") or None,
+            batch_doujinshi_mode=bool(
+                data.get(
+                    "batch_doujinshi_mode",
+                    defaults.get("batch_doujinshi_mode", False),
+                )
+            ),
             batch_parallel_requests=int(data.get("batch_parallel_requests", 1)),
             batch_parallel_within_pages=bool(
                 data.get("batch_parallel_within_pages", False)
@@ -844,6 +857,11 @@ def map_ui_to_backend_config(
         ),
         osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
         special_instructions=ui_state.llm_settings.special_instructions,
+        doujinshi_mode=(
+            ui_state.batch_doujinshi_mode
+            if is_batch
+            else ui_state.llm_settings.doujinshi_mode
+        ),
         reasoning_effort=ui_state.general.reasoning_effort,
         effort=ui_state.general.effort,
         verbosity=ui_state.general.verbosity,
