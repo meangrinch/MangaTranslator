@@ -133,6 +133,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         config_translation_mode,
         ocr_method_val,
         ocr_correction_val,
+        force_cache_translations_val,
         input_language,
         output_language,
         font_dropdown,
@@ -362,6 +363,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             special_instructions=final_special_instructions,
             doujinshi_mode=bool(final_doujinshi_mode),
             ocr_correction=bool(ocr_correction_val),
+            force_cache_translations=bool(force_cache_translations_val),
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_font_size,
@@ -600,6 +602,9 @@ def _format_single_success_message(
 
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
         msg_parts.append(
+            f"• Force Cache Translations: {'On' if backend_config.translation.force_cache_translations else 'Off'}\n"
+        )
+        msg_parts.append(
             f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
         )
         previous_context_count = backend_config.translation.previous_context_image_count
@@ -771,6 +776,9 @@ def _format_batch_success_message(
         )
 
     if not backend_config.cleaning_only and not backend_config.upscaling_only:
+        msg_parts.append(
+            f"• Force Cache Translations: {'On' if backend_config.translation.force_cache_translations else 'Off'}\n"
+        )
         msg_parts.append(
             f"• Full-Page Context: {'On' if backend_config.translation.send_full_page_context else 'Off'}\n"
         )
@@ -1113,6 +1121,7 @@ def handle_save_config_click(*args: Any) -> str:
         trans_mode,
         ocr_method_val,
         ocr_correction_val,
+        force_cache_translations_val,
         max_fs,
         min_fs,
         ls,
@@ -1330,6 +1339,7 @@ def handle_save_config_click(*args: Any) -> str:
             special_instructions=special_instructions_val,
             doujinshi_mode=bool(doujinshi_mode_val),
             ocr_correction=bool(ocr_correction_val),
+            force_cache_translations=bool(force_cache_translations_val),
         ),
         rendering=UIRenderingSettings(
             max_font_size=max_fs,
@@ -1625,6 +1635,9 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         gr.update(
             value=default_ui_state.llm_settings.ocr_correction,
             visible=(default_ui_state.llm_settings.translation_mode == "two-step"),
+        ),
+        gr.update(
+            value=default_ui_state.llm_settings.force_cache_translations,
         ),
         default_ui_state.rendering.max_font_size,
         default_ui_state.rendering.min_font_size,

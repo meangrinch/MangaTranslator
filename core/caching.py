@@ -216,7 +216,7 @@ class UnifiedCache:
     ) -> str | None:
         """Compute cache key for LLM translation.
 
-        Only returns a key if the config is deterministic.
+        Returns a key if force_cache_translations is enabled or the config is deterministic.
 
         Args:
             images_b64: List of base64 encoded bubble images
@@ -226,9 +226,12 @@ class UnifiedCache:
             previous_context_texts: Previous page OCR transcripts (oldest-to-newest)
 
         Returns:
-            str: Cache key, or None if not deterministic
+            str: Cache key, or None if caching is not enabled/deterministic
         """
-        if not self._is_deterministic(config):
+        if not (
+            getattr(config, "force_cache_translations", False)
+            or self._is_deterministic(config)
+        ):
             return None
 
         images_hash = hashlib.sha256("".join(images_b64).encode()).hexdigest()[:16]
@@ -255,6 +258,9 @@ class UnifiedCache:
             ),
             "doujinshi_mode": getattr(config, "doujinshi_mode", False),
             "ocr_correction": getattr(config, "ocr_correction", False),
+            "force_cache_translations": getattr(
+                config, "force_cache_translations", False
+            ),
             "max_tokens": config.max_tokens,
             "reasoning_effort": config.reasoning_effort,
             "effort": config.effort,

@@ -774,6 +774,21 @@ def create_layout(
                                 )
                                 == "two-step",
                             )
+                            force_cache_translations = gr.Checkbox(
+                                label="Force Cache Translations",
+                                value=bool(
+                                    saved_settings.get(
+                                        "force_cache_translations",
+                                        settings_manager.DEFAULT_SETTINGS.get(
+                                            "force_cache_translations", False
+                                        ),
+                                    )
+                                ),
+                                info=(
+                                    "Explicitly save and reuse translations from cache, even for non-deterministic sampling."
+                                ),
+                                elem_id="config_force_cache_translations",
+                            )
 
                             gr.Markdown("### LLM Settings")
                             available_providers = utils.get_available_providers(
@@ -2359,6 +2374,7 @@ def create_layout(
             config_translation_mode,
             ocr_method_radio,
             ocr_correction,
+            force_cache_translations,
             max_font_size,
             min_font_size,
             line_spacing_mult,
@@ -2498,6 +2514,7 @@ def create_layout(
             config_translation_mode,
             ocr_method_radio,
             ocr_correction,
+            force_cache_translations,
             max_font_size,
             min_font_size,
             line_spacing_mult,
@@ -2639,6 +2656,7 @@ def create_layout(
             config_translation_mode,
             ocr_method_radio,
             ocr_correction,
+            force_cache_translations,
             input_language,
             output_language,
             font_dropdown,
@@ -2780,6 +2798,7 @@ def create_layout(
             config_translation_mode,
             ocr_method_radio,
             ocr_correction,
+            force_cache_translations,
             input_language,
             output_language,
             font_dropdown,

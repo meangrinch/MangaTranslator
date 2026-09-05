@@ -96,6 +96,7 @@ class TranslationConfig:
     special_instructions: str | None = None
     doujinshi_mode: bool = False
     ocr_correction: bool = False
+    force_cache_translations: bool = False
     ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"
     request_coordinator: Any | None = None
 

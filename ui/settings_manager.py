@@ -246,6 +246,7 @@ DEFAULT_SETTINGS = {
     "special_instructions": "",
     "doujinshi_mode": False,
     "ocr_correction": False,
+    "force_cache_translations": False,
     "overlap_llm_with_inpaint": False,
     "upscale_method": "model_lite",  # "model", "model_lite", "lanczos", or "none"
     "bubble_min_side_pixels": 128,
@@ -357,6 +358,7 @@ CANONICAL_CONFIG_KEY_ORDER: list[str] = [
     "doujinshi_mode",
     "batch_doujinshi_mode",
     "ocr_correction",
+    "force_cache_translations",
     "overlap_llm_with_inpaint",
     "batch_overlap_llm_with_inpaint",
     # Rendering
