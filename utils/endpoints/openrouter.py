@@ -88,7 +88,7 @@ def call_openrouter_endpoint(
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
         base_delay (float): Initial delay for retries in seconds.
-        enable_web_search (bool): Enable web search for up-to-date information (Gemini models via :online suffix).
+        enable_web_search (bool): Enable web search for up-to-date information using native provider engine.
 
     Returns:
         Optional[str]: The raw text content from the API response if successful,
@@ -150,8 +150,9 @@ def call_openrouter_endpoint(
         "max_tokens": generation_config.get("max_tokens", 4096),
     }
 
-    if enable_web_search and not model_name.endswith(":online"):
-        payload["model"] = f"{model_name}:online"
+    if enable_web_search:
+        payload["model"] = payload["model"].removesuffix(":online")
+        payload["plugins"] = [{"id": "web", "engine": "native"}]
 
     is_openai_model = metadata.get("is_openai_model", False)
     is_anthropic_model = metadata.get("is_anthropic_model", False)
