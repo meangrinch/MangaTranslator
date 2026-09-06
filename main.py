@@ -627,7 +627,7 @@ def main():
         help="Optional special instructions for the LLM (formatting, context, character names, etc.)",
     )
     parser.add_argument(
-        "--ero-doujin-mode",
+        "--ero-doujinshi-mode",
         action="store_true",
         help="Optimize translation for 18+ content. Uses more tokens, but may reduce refusals.",
     )
@@ -1306,7 +1306,7 @@ def main():
             ),
             osb_min_side_pixels=args.osb_min_side_pixels,
             special_instructions=args.special_instructions,
-            ero_doujin_mode=args.ero_doujin_mode,
+            ero_doujinshi_mode=args.ero_doujinshi_mode,
             ocr_correction=args.ocr_correction,
             force_cache_translations=args.force_cache_translations,
             ocr_method=args.ocr_method,

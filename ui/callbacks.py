@@ -223,8 +223,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_font_dropdown,
         special_instructions_val,
         batch_special_instructions_val,
-        ero_doujin_mode_val,
-        batch_ero_doujin_mode_val,
+        ero_doujinshi_mode_val,
+        batch_ero_doujinshi_mode_val,
         batch_parallel_requests_val,
         batch_parallel_within_pages_val,
         overlap_llm_with_inpaint_val,
@@ -243,8 +243,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
     final_overlap_llm_with_inpaint = (
         batch_overlap_llm_with_inpaint_val if is_batch else overlap_llm_with_inpaint_val
     )
-    final_ero_doujin_mode = (
-        batch_ero_doujin_mode_val if is_batch else ero_doujin_mode_val
+    final_ero_doujinshi_mode = (
+        batch_ero_doujinshi_mode_val if is_batch else ero_doujinshi_mode_val
     )
 
     return UIConfigState(
@@ -363,7 +363,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             context_image_max_side_pixels=context_image_max_side_pixels_val,
             osb_min_side_pixels=osb_min_side_pixels_val,
             special_instructions=final_special_instructions,
-            ero_doujin_mode=bool(final_ero_doujin_mode),
+            ero_doujinshi_mode=bool(final_ero_doujinshi_mode),
             ocr_correction=bool(ocr_correction_val),
             force_cache_translations=bool(force_cache_translations_val),
         ),
@@ -417,7 +417,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_input_language=batch_input_language,
         batch_output_language=batch_output_language,
         batch_font_pack=batch_font_dropdown,
-        batch_ero_doujin_mode=bool(batch_ero_doujin_mode_val),
+        batch_ero_doujinshi_mode=bool(batch_ero_doujinshi_mode_val),
         batch_parallel_requests=int(batch_parallel_requests_val),
         batch_parallel_within_pages=bool(batch_parallel_within_pages_val),
         batch_retry_failed_once=bool(batch_retry_failed_once_val),
@@ -1165,8 +1165,8 @@ def handle_save_config_click(*args: Any) -> str:
         vertical_font_size_mult_val,
         special_instructions_val,
         batch_special_instructions_val,
-        ero_doujin_mode_val,
-        batch_ero_doujin_mode_val,
+        ero_doujinshi_mode_val,
+        batch_ero_doujinshi_mode_val,
         hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
@@ -1339,7 +1339,7 @@ def handle_save_config_click(*args: Any) -> str:
             context_image_max_side_pixels=context_image_max_side_pixels_val,
             osb_min_side_pixels=osb_min_side_pixels_val,
             special_instructions=special_instructions_val,
-            ero_doujin_mode=bool(ero_doujin_mode_val),
+            ero_doujinshi_mode=bool(ero_doujinshi_mode_val),
             ocr_correction=bool(ocr_correction_val),
             force_cache_translations=bool(force_cache_translations_val),
         ),
@@ -1394,7 +1394,7 @@ def handle_save_config_click(*args: Any) -> str:
         batch_output_language=b_out_lang,
         batch_font_pack=b_font,
         batch_special_instructions=batch_special_instructions_val,
-        batch_ero_doujin_mode=bool(batch_ero_doujin_mode_val),
+        batch_ero_doujinshi_mode=bool(batch_ero_doujinshi_mode_val),
         batch_parallel_requests=int(batch_parallel_requests_val),
         batch_parallel_within_pages=bool(batch_parallel_within_pages_val),
         batch_overlap_llm_with_inpaint=bool(batch_overlap_llm_with_inpaint_val),
@@ -1714,8 +1714,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         ),
         default_ui_state.llm_settings.special_instructions or "",
         default_ui_state.batch_special_instructions or "",
-        default_ui_state.llm_settings.ero_doujin_mode,
-        default_ui_state.batch_ero_doujin_mode,
+        default_ui_state.llm_settings.ero_doujinshi_mode,
+        default_ui_state.batch_ero_doujinshi_mode,
         default_ui_state.outside_text.enabled,
         default_ui_state.outside_text.seed,
         gr.update(value=default_ui_state.outside_text.inpainting_method),

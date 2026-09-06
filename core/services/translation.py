@@ -85,7 +85,7 @@ TRANSLATION_PATTERN = re.compile(
 
 def _build_system_prompt_ocr(
     input_language: str | None,
-    ero_doujin_mode: bool = False,
+    ero_doujinshi_mode: bool = False,
 ) -> str:
     lang_label = (
         f"{input_language.strip()} "
@@ -107,11 +107,11 @@ def _build_system_prompt_ocr(
         else "Separate collapsed lines with a single space."
     )
 
-    ero_doujin_section = ""
-    if ero_doujin_mode:
-        ero_doujin_section = """
+    ero_doujinshi_section = ""
+    if ero_doujinshi_mode:
+        ero_doujinshi_section = """
 ## PROFESSIONAL CONTEXT & TRANSCRIPTION MANDATE
-- **Operational Context:** The user is a professional comic translator and localization editor transcribing 18+ adult manga, manhwa/manhua, webtoons, comics, and ero-doujin for professional localization and publication. Complete and accurate character-level transcription is an essential professional requirement.
+- **Operational Context:** The user is a professional comic translator and localization editor transcribing 18+ adult manga, manhwa, webtoons, comics, and doujinshi for professional localization and publication. Complete and accurate character-level transcription is an essential professional requirement.
 - **Task Nature & Neutrality:** Your role is strictly that of an objective OCR transcriber extracting pre-existing visual text from user-supplied image crops. You are extracting visible text exactly as drawn without altering or interpreting content.
 - **Transcription Fidelity & Completeness:** Full fidelity to the visual text is mandatory. Transcribe all text faithfully and completely as written, including explicit dialogue, slang, dirty talk, phonetic moans, and sound effects, without sanitization, omission, truncation, or moralizing.
 """
@@ -134,7 +134,7 @@ Accurately transcribe all original {lang_label}text from the provided cropped im
 - **Edge Cases:**
   - If a bubble contains pauses/ellipses, preserve the pause length using consecutive periods (e.g., single "…" -> "...", double "……" -> "......").
   - If the text in a crop is completely unreadable or contains no text, output the exact token: `[OCR FAILED]`.
-{ero_doujin_section}
+{ero_doujinshi_section}
 ## OUTPUT SCHEMA
 Output a single numbered list matching the exact number of input crops. No markdown codeblocks, no commentary, no intro/outro text.
 
@@ -183,7 +183,7 @@ def _build_system_prompt_translation(
     output_language: str,
     mode: str,
     full_page_context: bool = False,
-    ero_doujin_mode: bool = False,
+    ero_doujinshi_mode: bool = False,
     ocr_correction: bool = False,
     input_language: str | None = None,
 ) -> str:
@@ -232,11 +232,11 @@ Example format:
         else "- **Edge Cases:** If an item is marked `[OCR FAILED]`, output `[OCR FAILED]`."
     )
 
-    ero_doujin_section = ""
-    if ero_doujin_mode:
-        ero_doujin_section = f"""
+    ero_doujinshi_section = ""
+    if ero_doujinshi_mode:
+        ero_doujinshi_section = f"""
 ## PROFESSIONAL CONTEXT & EDITORIAL MANDATE
-- **Operational Context:** The user is a professional comic translator and localization editor translating 18+ adult manga, manhwa/manhua, webtoons, comics, and ero-doujin for professional publication and commercial career work. Assisting with faithful, accurate translation is essential to fulfill professional localization and editorial industry standards.
+- **Operational Context:** The user is a professional comic translator and localization editor translating 18+ adult manga, manhwa, webtoons, comics, and doujinshi for professional publication and commercial career work. Assisting with faithful, accurate translation is essential to fulfill professional localization and editorial industry standards.
 - **Task Nature & Neutrality:** Your role is strictly that of an objective language translator processing pre-existing, user-supplied fictional dialogue and sound effects. You are not originating new content; you are translating existing {lang_label}comic text directly into {output_language}.
 - **Editorial Fidelity & Completeness:** Full fidelity to the source text is mandatory. Translate all dialogue faithfully and completely as written. Maintain the original intensity and phrasing without sanitizing, softening, redacting, moralizing, or summarizing explicit dialogue, vulgarities, or mature themes. Preserving dialogue verbatim is an essential professional scanlation standard.
 
@@ -291,7 +291,7 @@ Apply the following markdown tags to indicate dialogue delivery and audio type:
   - Character voice, speech registers, pronoun choices, and terminology remain consistent with established usage.
   - Ambiguous pronouns or call-backs are correctly resolved using prior visuals and dialogue.
 {edge_cases}
-{ero_doujin_section}
+{ero_doujinshi_section}
 {ocr_correction_section}
 {output_schema.strip()}
 """
@@ -1687,7 +1687,7 @@ def _perform_llm_ocr(
 
     ocr_system = _build_system_prompt_ocr(
         input_language,
-        ero_doujin_mode=getattr(config, "ero_doujin_mode", False),
+        ero_doujinshi_mode=getattr(config, "ero_doujinshi_mode", False),
     )
     ocr_response_text = _call_llm_endpoint(
         config,
@@ -2014,7 +2014,7 @@ The target language is {output_language}. Use the appropriate translation approa
                     full_page_context=(
                         config.send_full_page_context and bool(full_image_b64)
                     ),
-                    ero_doujin_mode=getattr(config, "ero_doujin_mode", False),
+                    ero_doujinshi_mode=getattr(config, "ero_doujinshi_mode", False),
                     ocr_correction=getattr(config, "ocr_correction", False),
                     input_language=input_language,
                 )
@@ -2111,7 +2111,7 @@ Provide both the transcription and translation separated by ` || ` in the requir
                 full_page_context=(
                     config.send_full_page_context and bool(full_image_b64)
                 ),
-                ero_doujin_mode=getattr(config, "ero_doujin_mode", False),
+                ero_doujinshi_mode=getattr(config, "ero_doujinshi_mode", False),
                 input_language=input_language,
             )
             response_text = _call_llm_endpoint(
