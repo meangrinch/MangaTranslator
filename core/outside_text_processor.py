@@ -1177,76 +1177,6 @@ def finish_outside_text_work(
                                     border_pixels = crop_np[local_mask]
 
                                 if border_pixels is not None and border_pixels.size > 0:
-                                    # Calculate text color using LAB contrast thresholding
-                                    bg_rgb = np.median(border_pixels, axis=0).astype(
-                                        np.uint8
-                                    )
-                                    bg_lab = cv2.cvtColor(
-                                        np.uint8([[bg_rgb]]), cv2.COLOR_RGB2LAB
-                                    )[0][0]
-
-                                    crop_rgb = np.array(
-                                        pil_image.crop((rx0, ry0, rx1, ry1)).convert(
-                                            "RGB"
-                                        )
-                                    )
-                                    crop_lab = cv2.cvtColor(
-                                        crop_rgb, cv2.COLOR_RGB2LAB
-                                    ).astype(np.float32)
-                                    dist_map = np.linalg.norm(
-                                        crop_lab - bg_lab.astype(np.float32), axis=2
-                                    )
-
-                                    robust_max_dist = np.percentile(dist_map, 95)
-                                    CONTRAST_THRESHOLD = max(30, robust_max_dist * 0.6)
-                                    contrast_mask = (
-                                        dist_map > CONTRAST_THRESHOLD
-                                    ).astype(np.uint8) * 255
-
-                                    kernel_3 = np.ones((3, 3), np.uint8)
-                                    contrast_mask = cv2.morphologyEx(
-                                        contrast_mask, cv2.MORPH_CLOSE, kernel_3
-                                    )
-                                    contrast_mask = cv2.erode(
-                                        contrast_mask,
-                                        np.ones((2, 2), np.uint8),
-                                        iterations=1,
-                                    )
-
-                                    contours, _ = cv2.findContours(
-                                        contrast_mask,
-                                        cv2.RETR_EXTERNAL,
-                                        cv2.CHAIN_APPROX_SIMPLE,
-                                    )
-                                    clean_mask = np.zeros_like(contrast_mask)
-                                    MIN_COMPONENT_AREA = 4
-                                    for cnt in contours:
-                                        if cv2.contourArea(cnt) >= MIN_COMPONENT_AREA:
-                                            cv2.drawContours(
-                                                clean_mask, [cnt], -1, 255, cv2.FILLED
-                                            )
-
-                                    text_pixels_rgb = crop_rgb[clean_mask == 255]
-                                    if len(text_pixels_rgb) >= 10:
-                                        text_color_rgb = tuple(
-                                            np.median(text_pixels_rgb, axis=0).astype(
-                                                int
-                                            )
-                                        )
-                                        hsv = cv2.cvtColor(
-                                            np.uint8([[text_color_rgb]]),
-                                            cv2.COLOR_RGB2HSV,
-                                        )[0][0]
-                                        if hsv[1] < 25:
-                                            text_color_rgb = (
-                                                (0, 0, 0)
-                                                if hsv[2] < 128
-                                                else (255, 255, 255)
-                                            )
-                                        extracted_text_colors[composite_clip_bbox] = (
-                                            text_color_rgb
-                                        )
-
                                     bg_rgb_med = np.median(
                                         border_pixels, axis=0
                                     ).astype(int)
@@ -1282,6 +1212,251 @@ def finish_outside_text_work(
 
                                     if is_border_solid or fallback_fill_color is None:
                                         fallback_fill_color = detected_color
+
+                                    ref_bg_rgb = np.array(
+                                        detected_color
+                                        if is_border_solid
+                                        else (
+                                            fallback_fill_color
+                                            if fallback_fill_color is not None
+                                            else (0, 0, 0)
+                                        ),
+                                        dtype=np.uint8,
+                                    )
+                                    bg_lab = cv2.cvtColor(
+                                        np.uint8([[ref_bg_rgb]]), cv2.COLOR_RGB2LAB
+                                    )[0][0]
+
+                                    crop_rgb = np.array(
+                                        pil_image.crop((rx0, ry0, rx1, ry1)).convert(
+                                            "RGB"
+                                        )
+                                    )
+                                    crop_gray = cv2.cvtColor(
+                                        crop_rgb, cv2.COLOR_RGB2GRAY
+                                    )
+
+                                    # 1. Detect outlined monochrome text (black text + white outline or white text + dark outline)
+                                    detected_text_color = None
+
+                                    # Dark glyph components (candidate black text core)
+                                    ink_mask = (crop_gray < 50).astype(np.uint8) * 255
+                                    num_labels, labels, stats, _ = (
+                                        cv2.connectedComponentsWithStats(ink_mask)
+                                    )
+                                    dark_glyph_comps = []
+                                    total_dark_glyph_area = 0
+
+                                    for l in range(1, num_labels):
+                                        area = stats[l, cv2.CC_STAT_AREA]
+                                        if area < 10:
+                                            continue
+                                        comp = (labels == l).astype(np.uint8) * 255
+                                        e2 = cv2.erode(comp, np.ones((2, 2), np.uint8))
+                                        if np.count_nonzero(e2) == 0:
+                                            continue
+
+                                        dilated = cv2.dilate(
+                                            comp, np.ones((5, 5), np.uint8)
+                                        )
+                                        boundary = cv2.bitwise_and(
+                                            dilated, cv2.bitwise_not(comp)
+                                        )
+                                        b_pixels = crop_gray[boundary == 255]
+                                        if len(b_pixels) == 0:
+                                            continue
+
+                                        bright_ratio = np.count_nonzero(
+                                            b_pixels > 150
+                                        ) / len(b_pixels)
+                                        if bright_ratio >= 0.40:
+                                            dark_glyph_comps.append(
+                                                {
+                                                    "area": area,
+                                                    "bright_ratio": bright_ratio,
+                                                }
+                                            )
+                                            total_dark_glyph_area += area
+
+                                    # White glyph components (candidate white text core)
+                                    white_mask = (crop_gray > 200).astype(
+                                        np.uint8
+                                    ) * 255
+                                    num_w, labels_w, stats_w, _ = (
+                                        cv2.connectedComponentsWithStats(white_mask)
+                                    )
+                                    white_glyph_comps = []
+                                    total_white_glyph_area = 0
+
+                                    for l in range(1, num_w):
+                                        area = stats_w[l, cv2.CC_STAT_AREA]
+                                        if area < 10:
+                                            continue
+                                        comp = (labels_w == l).astype(np.uint8) * 255
+                                        e2 = cv2.erode(comp, np.ones((2, 2), np.uint8))
+                                        e2_area = np.count_nonzero(e2)
+                                        if e2_area == 0 or (e2_area / area) < 0.05:
+                                            continue
+
+                                        dilated = cv2.dilate(
+                                            comp, np.ones((5, 5), np.uint8)
+                                        )
+                                        boundary = cv2.bitwise_and(
+                                            dilated, cv2.bitwise_not(comp)
+                                        )
+                                        b_pixels = crop_gray[boundary == 255]
+                                        if len(b_pixels) == 0:
+                                            continue
+
+                                        dark_ratio = np.count_nonzero(
+                                            b_pixels < 90
+                                        ) / len(b_pixels)
+                                        if dark_ratio >= 0.40:
+                                            white_glyph_comps.append(
+                                                {
+                                                    "area": area,
+                                                    "dark_ratio": dark_ratio,
+                                                }
+                                            )
+                                            total_white_glyph_area += area
+
+                                    has_dark_outlines = (
+                                        len(dark_glyph_comps) >= 2
+                                        or (
+                                            len(dark_glyph_comps) == 1
+                                            and total_dark_glyph_area >= 30
+                                        )
+                                        or total_dark_glyph_area >= 50
+                                    )
+                                    has_white_outlines = (
+                                        len(white_glyph_comps) >= 2
+                                        or (
+                                            len(white_glyph_comps) == 1
+                                            and total_white_glyph_area >= 30
+                                        )
+                                        or total_white_glyph_area >= 50
+                                    )
+
+                                    if has_dark_outlines and not has_white_outlines:
+                                        detected_text_color = (0, 0, 0)
+                                    elif has_white_outlines and not has_dark_outlines:
+                                        detected_text_color = (255, 255, 255)
+                                    elif has_dark_outlines and has_white_outlines:
+                                        avg_dark_ratio = float(
+                                            np.mean(
+                                                [
+                                                    c["bright_ratio"]
+                                                    for c in dark_glyph_comps
+                                                ]
+                                            )
+                                        )
+                                        avg_white_ratio = float(
+                                            np.mean(
+                                                [
+                                                    c["dark_ratio"]
+                                                    for c in white_glyph_comps
+                                                ]
+                                            )
+                                        )
+                                        if (
+                                            len(dark_glyph_comps)
+                                            > len(white_glyph_comps)
+                                            and avg_dark_ratio >= avg_white_ratio * 0.8
+                                        ):
+                                            detected_text_color = (0, 0, 0)
+                                        elif (
+                                            len(white_glyph_comps)
+                                            > len(dark_glyph_comps)
+                                            and avg_white_ratio >= avg_dark_ratio * 0.8
+                                        ):
+                                            detected_text_color = (255, 255, 255)
+                                        elif avg_dark_ratio > avg_white_ratio:
+                                            detected_text_color = (0, 0, 0)
+                                        else:
+                                            detected_text_color = (255, 255, 255)
+
+                                    # 3. Detect chromatic text via LAB contrast against background
+                                    if detected_text_color is None:
+                                        crop_lab = cv2.cvtColor(
+                                            crop_rgb, cv2.COLOR_RGB2LAB
+                                        ).astype(np.float32)
+                                        dist_map = np.linalg.norm(
+                                            crop_lab - bg_lab.astype(np.float32), axis=2
+                                        )
+
+                                        robust_max_dist = np.percentile(dist_map, 95)
+                                        CONTRAST_THRESHOLD = max(
+                                            30, robust_max_dist * 0.6
+                                        )
+                                        contrast_mask = (
+                                            dist_map > CONTRAST_THRESHOLD
+                                        ).astype(np.uint8) * 255
+
+                                        kernel_3 = np.ones((3, 3), np.uint8)
+                                        contrast_mask = cv2.morphologyEx(
+                                            contrast_mask, cv2.MORPH_CLOSE, kernel_3
+                                        )
+                                        contrast_mask = cv2.erode(
+                                            contrast_mask,
+                                            np.ones((2, 2), np.uint8),
+                                            iterations=1,
+                                        )
+
+                                        contours, _ = cv2.findContours(
+                                            contrast_mask,
+                                            cv2.RETR_EXTERNAL,
+                                            cv2.CHAIN_APPROX_SIMPLE,
+                                        )
+                                        clean_mask = np.zeros_like(contrast_mask)
+                                        MIN_COMPONENT_AREA = 4
+                                        for cnt in contours:
+                                            if (
+                                                cv2.contourArea(cnt)
+                                                >= MIN_COMPONENT_AREA
+                                            ):
+                                                cv2.drawContours(
+                                                    clean_mask,
+                                                    [cnt],
+                                                    -1,
+                                                    255,
+                                                    cv2.FILLED,
+                                                )
+
+                                        text_pixels_rgb = crop_rgb[clean_mask == 255]
+                                        if len(text_pixels_rgb) >= 10:
+                                            sampled_rgb = tuple(
+                                                np.median(
+                                                    text_pixels_rgb, axis=0
+                                                ).astype(int)
+                                            )
+                                            hsv = cv2.cvtColor(
+                                                np.uint8([[sampled_rgb]]),
+                                                cv2.COLOR_RGB2HSV,
+                                            )[0][0]
+                                            if hsv[1] >= 25:
+                                                detected_text_color = sampled_rgb
+
+                                    # 4. Fallback for non-outlined monochrome text: contrast against fill
+                                    if detected_text_color is None:
+                                        fill_for_contrast = (
+                                            fallback_fill_color
+                                            if fallback_fill_color is not None
+                                            else (0, 0, 0)
+                                        )
+                                        fill_lum = (
+                                            0.299 * fill_for_contrast[0]
+                                            + 0.587 * fill_for_contrast[1]
+                                            + 0.114 * fill_for_contrast[2]
+                                        )
+                                        detected_text_color = (
+                                            (0, 0, 0)
+                                            if fill_lum >= 128
+                                            else (255, 255, 255)
+                                        )
+
+                                    extracted_text_colors[composite_clip_bbox] = (
+                                        detected_text_color
+                                    )
 
                                     force_fill = inpainting_method == "opencv"
 
