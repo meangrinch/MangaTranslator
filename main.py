@@ -802,10 +802,10 @@ def main():
         help="Enable standard ligatures for OSB text (e.g., fi, fl)",
     )
     parser.add_argument(
-        "--osb-outline-width",
+        "--osb-outline-ratio",
         type=float,
-        default=3.0,
-        help="Outline width for OSB text (0-10px)",
+        default=0.1,
+        help="Outline width for OSB text as fraction of font size (0-0.3)",
     )
     parser.add_argument(
         "--osb-line-spacing",
@@ -1387,7 +1387,7 @@ def main():
             osb_max_font_size=args.osb_max_font_size,
             osb_min_font_size=args.osb_min_font_size,
             osb_use_ligatures=args.osb_use_ligatures,
-            osb_outline_width=args.osb_outline_width,
+            osb_outline_ratio=args.osb_outline_ratio,
             osb_line_spacing=args.osb_line_spacing,
             osb_padding_pixels=args.osb_padding_pixels,
             osb_auto_vertical_text=args.osb_auto_vertical_text,

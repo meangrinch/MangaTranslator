@@ -50,7 +50,7 @@ SETTING_CONSTRAINTS: dict[str, tuple[float, float]] = {
     "outside_text_osb_padding_pixels": (2, 12),
     "outside_text_osb_vertical_line_spacing_mult": (0.5, 2.0),
     "outside_text_osb_vertical_font_size_mult": (0.1, 3.0),
-    "outside_text_osb_outline_width": (0.0, 10.0),
+    "outside_text_osb_outline_ratio": (0.0, 0.3),
     "jpeg_quality": (1, 100),
     "png_compression": (0, 6),
     "image_upscale_factor": (1.0, 8.0),
@@ -133,7 +133,7 @@ _CONFIG_ATTR_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
     "outside_text_osb_vertical_font_size_mult": (
         ("outside_text", "osb_vertical_font_size_mult"),
     ),
-    "outside_text_osb_outline_width": (("outside_text", "osb_outline_width"),),
+    "outside_text_osb_outline_ratio": (("outside_text", "osb_outline_ratio"),),
     "jpeg_quality": (("output", "jpeg_quality"),),
     "png_compression": (("output", "png_compression"),),
     "image_upscale_factor": (

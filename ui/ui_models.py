@@ -156,7 +156,7 @@ class UIOutsideTextSettings:
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
     osb_use_ligatures: bool = False
-    osb_outline_width: float = 3.0
+    osb_outline_ratio: float = 0.1
     osb_line_spacing: float = 1.0
     osb_padding_pixels: float = 4.0
     osb_auto_vertical_text: bool = False
@@ -339,7 +339,7 @@ class UIConfigState:
             "outside_text_osb_max_font_size": self.outside_text.osb_max_font_size,
             "outside_text_osb_min_font_size": self.outside_text.osb_min_font_size,
             "outside_text_osb_use_ligatures": self.outside_text.osb_use_ligatures,
-            "outside_text_osb_outline_width": self.outside_text.osb_outline_width,
+            "outside_text_osb_outline_ratio": self.outside_text.osb_outline_ratio,
             "outside_text_osb_line_spacing": self.outside_text.osb_line_spacing,
             "outside_text_osb_padding_pixels": self.outside_text.osb_padding_pixels,
             "outside_text_osb_auto_vertical_text": self.outside_text.osb_auto_vertical_text,
@@ -530,7 +530,7 @@ class UIConfigState:
                 osb_max_font_size=data.get("outside_text_osb_max_font_size", 64),
                 osb_min_font_size=data.get("outside_text_osb_min_font_size", 10),
                 osb_use_ligatures=data.get("outside_text_osb_use_ligatures", False),
-                osb_outline_width=data.get("outside_text_osb_outline_width", 3.0),
+                osb_outline_ratio=data.get("outside_text_osb_outline_ratio", 0.1),
                 osb_line_spacing=data.get("outside_text_osb_line_spacing", 1.0),
                 osb_padding_pixels=data.get("outside_text_osb_padding_pixels", 4.0),
                 osb_auto_vertical_text=data.get(
@@ -966,7 +966,7 @@ def map_ui_to_backend_config(
         osb_max_font_size=ui_state.outside_text.osb_max_font_size,
         osb_min_font_size=ui_state.outside_text.osb_min_font_size,
         osb_use_ligatures=ui_state.outside_text.osb_use_ligatures,
-        osb_outline_width=ui_state.outside_text.osb_outline_width,
+        osb_outline_ratio=ui_state.outside_text.osb_outline_ratio,
         osb_line_spacing=ui_state.outside_text.osb_line_spacing,
         osb_padding_pixels=ui_state.outside_text.osb_padding_pixels,
         osb_auto_vertical_text=ui_state.outside_text.osb_auto_vertical_text,

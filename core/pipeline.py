@@ -1030,12 +1030,7 @@ def translate_and_render(
                 minimum=osb_min_font,
                 maximum=640,
             )
-            osb_outline_width = scale_scalar(
-                config.outside_text.osb_outline_width,
-                processing_scale,
-                minimum=0.0,
-                maximum=24.0,
-            )
+            osb_outline_ratio = config.outside_text.osb_outline_ratio
             # Prepare images for Translation
             log_message("Preparing bubble images...", verbose=verbose)
 
@@ -1381,7 +1376,7 @@ def translate_and_render(
                             osb_max_font=osb_max_font,
                             padding_pixels=padding_pixels,
                             osb_padding_pixels=osb_padding_pixels,
-                            osb_outline_width=osb_outline_width,
+                            osb_outline_ratio=osb_outline_ratio,
                             verbose=verbose,
                         )
                     elif use_llm_inpaint_overlap:
@@ -1724,8 +1719,8 @@ def translate_and_render(
                                 if is_outside_text
                                 else padding_pixels
                             ),
-                            outline_width=(
-                                osb_outline_width if is_outside_text else 0.0
+                            outline_ratio=(
+                                osb_outline_ratio if is_outside_text else 0.0
                             ),
                             supersampling_factor=config.rendering.supersampling_factor,
                             detach_trailing_punctuation=(

@@ -2074,15 +2074,15 @@ def create_layout(
                                         "(must be supported by the font)."
                                     ),
                                 )
-                                outside_text_osb_outline_width = gr.Slider(
+                                outside_text_osb_outline_ratio = gr.Slider(
                                     0,
-                                    10,
+                                    0.3,
                                     value=saved_settings.get(
-                                        "outside_text_osb_outline_width", 3.0
+                                        "outside_text_osb_outline_ratio", 0.1
                                     ),
-                                    step=0.5,
-                                    label="Outline Width (px)",
-                                    info="Width of text outline for OSB text.",
+                                    step=0.01,
+                                    label="Outline Ratio",
+                                    info="Outline width for OSB text as fraction of font size.",
                                 )
 
                                 gr.Markdown("### Text Layout")
@@ -2500,7 +2500,7 @@ def create_layout(
             outside_text_osb_max_font_size,
             outside_text_osb_min_font_size,
             outside_text_osb_use_ligatures,
-            outside_text_osb_outline_width,
+            outside_text_osb_outline_ratio,
             outside_text_osb_line_spacing,
             outside_text_osb_padding_pixels,
             outside_text_osb_auto_vertical_text,
@@ -2645,7 +2645,7 @@ def create_layout(
             outside_text_osb_max_font_size,
             outside_text_osb_min_font_size,
             outside_text_osb_use_ligatures,
-            outside_text_osb_outline_width,
+            outside_text_osb_outline_ratio,
             outside_text_osb_line_spacing,
             outside_text_osb_padding_pixels,
             outside_text_osb_auto_vertical_text,
@@ -2783,7 +2783,7 @@ def create_layout(
             outside_text_osb_max_font_size,
             outside_text_osb_min_font_size,
             outside_text_osb_use_ligatures,
-            outside_text_osb_outline_width,
+            outside_text_osb_outline_ratio,
             outside_text_osb_line_spacing,
             outside_text_osb_padding_pixels,
             outside_text_osb_auto_vertical_text,
@@ -2929,7 +2929,7 @@ def create_layout(
             outside_text_osb_max_font_size,
             outside_text_osb_min_font_size,
             outside_text_osb_use_ligatures,
-            outside_text_osb_outline_width,
+            outside_text_osb_outline_ratio,
             outside_text_osb_line_spacing,
             outside_text_osb_padding_pixels,
             outside_text_osb_auto_vertical_text,

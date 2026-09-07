@@ -1,3 +1,4 @@
+import math
 import os
 import threading
 
@@ -14,6 +15,24 @@ from utils.logging import log_message
 _typeface_cache = LRUCache(max_size=50)
 _hb_face_cache = LRUCache(max_size=50)
 _font_cache_lock = threading.RLock()
+
+OUTLINE_MIN_PX = 1.0
+OUTLINE_MAX_PX = 6.0
+OUTLINE_REF_PX = 36.0
+
+
+def resolve_outline_width(
+    font_size: float,
+    outline_ratio: float,
+    min_px: float = OUTLINE_MIN_PX,
+    max_px: float = OUTLINE_MAX_PX,
+) -> float:
+    if outline_ratio <= 0 or font_size <= 0:
+        return 0.0
+    # Sub-linear growth so small glyphs keep readable weight while large
+    # ones stay bounded; equals ratio * size at OUTLINE_REF_PX.
+    effective = outline_ratio * math.sqrt(font_size * OUTLINE_REF_PX)
+    return max(min_px, min(effective, max_px))
 
 
 def load_font_resources(

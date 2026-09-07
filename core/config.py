@@ -117,7 +117,7 @@ class RenderingConfig:
     hyphenation_min_word_length: int = 8
     badness_exponent: float = 3.0
     padding_pixels: float = 4.0
-    outline_width: float = 0.0
+    outline_ratio: float = 0.0
     supersampling_factor: int = 4
     detach_trailing_punctuation: bool = True
     auto_vertical_text: bool = False
@@ -157,7 +157,7 @@ class OutsideTextConfig:
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
     osb_use_ligatures: bool = False
-    osb_outline_width: float = 3.0
+    osb_outline_ratio: float = 0.1
     osb_line_spacing: float = 1.0
     osb_padding_pixels: float = 4.0
     osb_auto_vertical_text: bool = False

@@ -18,7 +18,7 @@ def generate_test_placeholders(
     osb_max_font: int,
     padding_pixels: float | None = None,
     osb_padding_pixels: float | None = None,
-    osb_outline_width: float = 0.0,
+    osb_outline_ratio: float = 0.0,
     verbose: bool = False,
 ) -> list[str]:
     """
@@ -101,7 +101,7 @@ def generate_test_placeholders(
             padding_pixels=padding_pixels_osb
             if is_outside_text
             else padding_pixels_bubble,
-            outline_width=(osb_outline_width if is_outside_text else 0.0),
+            outline_ratio=(osb_outline_ratio if is_outside_text else 0.0),
             supersampling_factor=1,  # No supersampling for probe
             auto_vertical_text=(
                 config.outside_text.osb_auto_vertical_text

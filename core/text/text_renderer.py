@@ -8,6 +8,7 @@ from core.text.drawing_engine import (
     draw_layout,
     load_font_resources,
     pil_to_skia_surface,
+    resolve_outline_width,
     skia_surface_to_pil,
 )
 from core.text.font_manager import (
@@ -469,6 +470,9 @@ def render_text_skia(
             raise RenderingError(f"Scaled surface preparation failed: {e}") from e
 
         # Render text at high resolution
+        base_outline = resolve_outline_width(
+            layout_data["font_size"], config.outline_ratio
+        )
         success = draw_layout(
             scaled_surface,
             scaled_layout_data,
@@ -490,7 +494,7 @@ def render_text_skia(
             text_color,
             config.use_subpixel_rendering,
             config.font_hinting,
-            config.outline_width * factor,  # Scale outline width too
+            base_outline * factor,
             verbose,
             pre_translate_x=(
                 float(scaled_target_center_x)
@@ -543,6 +547,9 @@ def render_text_skia(
             raise RenderingError(f"Surface preparation failed: {e}") from e
 
         # Delegate rotation/translate to drawing_engine so Skia state is consistent
+        outline_px = resolve_outline_width(
+            layout_data["font_size"], config.outline_ratio
+        )
         success = draw_layout(
             surface,
             layout_data,
@@ -556,7 +563,7 @@ def render_text_skia(
             text_color,
             config.use_subpixel_rendering,
             config.font_hinting,
-            config.outline_width,
+            outline_px,
             verbose,
             pre_translate_x=(
                 float(target_center_x)
