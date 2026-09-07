@@ -1,0 +1,29 @@
+name: Bug Report
+description: Something isn't working correctly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please include the full, unedited logs and the original image (if applicable).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Full logs
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: image
+    attributes:
+      label: Problematic image (if applicable)
+      description: Drag and drop the original source image here.
