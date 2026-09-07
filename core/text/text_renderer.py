@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import skia
 from PIL import Image
@@ -393,10 +395,20 @@ def render_text_skia(
         # Crop the bbox region from the original image
         # Ensure bbox coordinates are within image bounds
         img_width, img_height = pil_image.size
-        crop_x1 = max(0, x1)
-        crop_y1 = max(0, y1)
-        crop_x2 = min(img_width, x2)
-        crop_y2 = min(img_height, y2)
+        tilt_margin = 0
+        if rotation_deg and abs(rotation_deg) > 0.01:
+            tilt_margin = (
+                math.ceil(
+                    max(bubble_width, bubble_height)
+                    * math.sin(math.radians(abs(rotation_deg)))
+                    / 2
+                )
+                + OSB_TILT_SUPERSAMPLE_MARGIN
+            )
+        crop_x1 = max(0, x1 - tilt_margin)
+        crop_y1 = max(0, y1 - tilt_margin)
+        crop_x2 = min(img_width, x2 + tilt_margin)
+        crop_y2 = min(img_height, y2 + tilt_margin)
 
         cropped_region = pil_image.crop((crop_x1, crop_y1, crop_x2, crop_y2))
         crop_width = crop_x2 - crop_x1
