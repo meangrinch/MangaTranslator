@@ -64,6 +64,9 @@
   - 提高“窄长型放大乘数 (Narrow/Tall Expansion Multiplier)”（例如 2.0）和/或调整对应的阈值
   - 提高“微型放大乘数 (Tiny Expansion Multiplier)”（例如 2.0）和/或调整对应的阈值
 
+- **气泡外文本倾斜（旋转）效果不佳或需要禁用：**
+  - 取消勾选“匹配原始文本倾斜 (Match Original Text Tilt)”
+
 ### 检测与擦除 (Detection/Cleaning)
 
 - **未擦除干净的文本残留（气泡边缘附近）：**

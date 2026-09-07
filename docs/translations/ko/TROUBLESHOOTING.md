@@ -64,6 +64,9 @@
   - "좁고 긴 영역 확장 배율 (Narrow/Tall Expansion Multiplier)" 및/또는 해당 임계값을 높이세요 (예: 2.0).
   - "소형 영역 확장 배율 (Tiny Expansion Multiplier)" 및/또는 해당 임계값을 높이세요 (예: 2.0).
 
+- **말풍선 외부 텍스트의 기울기(회전)가 어색하거나 비활성화하려는 경우:**
+  - "원본 텍스트 기울기 맞춤 (Match Original Text Tilt)" 옵션을 끄세요
+
 ### 감지 및 클리닝 (Detection/Cleaning)
 
 - **말풍선 가장자리 근처에 지워지지 않은 텍스트 잔해가 남음:**

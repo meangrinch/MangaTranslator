@@ -1,5 +1,6 @@
 import base64
 import gc
+import math
 import os
 import random
 import re
@@ -22,6 +23,10 @@ from core.config import MangaTranslatorConfig
 from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
 from core.image.inpainting import FluxKleinInpainter, FluxKontextInpainter
 from core.image.ocr_detection import OutsideTextDetector, extract_text_with_manga_ocr
+from core.image.tilt_detection import (
+    compute_effective_tilt_angle,
+    detect_crop_tilt_angle,
+)
 from core.ml.model_manager import get_model_manager
 from utils.logging import log_message
 
@@ -147,6 +152,25 @@ def _build_outside_text_data(
                     needs_text_bg = True
                     break
 
+        angle_deg, tilt_conf, obb_dims, tilt_axis = (
+            0.0,
+            0.0,
+            (float(w), float(h)),
+            "none",
+        )
+        osb_tilt_estimation_side_pixels = 256
+        if config.outside_text.osb_follow_tilt and original_cv_image is not None:
+            rx1, ry1, rx2, ry2 = raw_bbox_tuple
+            raw_crop_cv = original_cv_image[ry1:ry2, rx1:rx2]
+            if raw_crop_cv.size > 0:
+                angle_deg, tilt_conf, obb_dims, tilt_axis = detect_crop_tilt_angle(
+                    crop_cv=raw_crop_cv,
+                    is_dark_text=original_text_colors.get(raw_bbox_tuple, True),
+                    max_side=osb_tilt_estimation_side_pixels,
+                    deadband_deg=config.outside_text.osb_min_tilt_deg,
+                    max_tilt_deg=config.outside_text.osb_max_tilt_deg,
+                )
+
         try:
             is_success, buffer = cv2.imencode(cv2_ext, outside_text_image_cv)
             if is_success:
@@ -164,6 +188,10 @@ def _build_outside_text_data(
                         "aspect_ratio": aspect_ratio,
                         "needs_text_background": needs_text_bg,
                         "original_crop_pil": original_crop_pil,
+                        "tilt_deg": angle_deg,
+                        "tilt_conf": tilt_conf,
+                        "tilt_axis": tilt_axis,
+                        "oriented_dimensions": obb_dims,
                     }
                 )
         except Exception as e:
@@ -635,6 +663,103 @@ def prepare_outside_text_work(
         return None
 
 
+def _build_osb_simple_fill_mask(
+    img_w: int,
+    img_h: int,
+    mask_indices: list[int],
+    outside_text_results: list,
+    outside_text_data: list[dict[str, Any]],
+    config: MangaTranslatorConfig,
+    fallback_bounds: tuple[int | None, int | None, int | None, int | None]
+    | None = None,
+    total_bubble_mask: np.ndarray | None = None,
+) -> np.ndarray | None:
+    """Build a 2D boolean mask for solid-fill inpainting, respecting detected OSB text tilt."""
+    rect_mask = np.zeros((img_h, img_w), dtype=bool)
+    has_drawn = False
+
+    if mask_indices and outside_text_results:
+        for idx in mask_indices:
+            if idx >= len(outside_text_results):
+                continue
+            coords = outside_text_results[idx][0]
+            if (
+                isinstance(coords, (list, tuple))
+                and len(coords) == 1
+                and isinstance(coords[0], (list, tuple))
+            ):
+                coords = coords[0]
+            bx0 = max(0, int(coords[0]))
+            by0 = max(0, int(coords[1]))
+            bx1 = min(img_w, int(coords[2]))
+            by1 = min(img_h, int(coords[3]))
+            if bx1 <= bx0 or by1 <= by0:
+                continue
+
+            rot_deg = 0.0
+            if idx < len(outside_text_data):
+                item = outside_text_data[idx]
+                rot_deg = compute_effective_tilt_angle(
+                    tilt_deg=item.get("tilt_deg", 0.0),
+                    tilt_conf=item.get("tilt_conf", 0.0),
+                    follow_tilt=config.outside_text.osb_follow_tilt,
+                    confidence_threshold=config.outside_text.osb_tilt_confidence_threshold,
+                    min_tilt_deg=config.outside_text.osb_min_tilt_deg,
+                    max_tilt_deg=config.outside_text.osb_max_tilt_deg,
+                )
+
+            if abs(rot_deg) > 0.01:
+                bcx = (bx0 + bx1) / 2.0
+                bcy = (by0 + by1) / 2.0
+                bw = float(bx1 - bx0)
+                bh = float(by1 - by0)
+                shrink = max(0.70, math.cos(math.radians(rot_deg)))
+                hw = (bw * shrink) / 2.0
+                hh = (bh * shrink) / 2.0
+                rad = math.radians(rot_deg)
+                cos_t = math.cos(rad)
+                sin_t = math.sin(rad)
+
+                corners = np.array(
+                    [
+                        [bcx - hw * cos_t + hh * sin_t, bcy - hw * sin_t - hh * cos_t],
+                        [bcx + hw * cos_t + hh * sin_t, bcy + hw * sin_t - hh * cos_t],
+                        [bcx + hw * cos_t - hh * sin_t, bcy + hw * sin_t + hh * cos_t],
+                        [bcx - hw * cos_t - hh * sin_t, bcy - hw * sin_t + hh * cos_t],
+                    ],
+                    dtype=np.int32,
+                )
+
+                mask_uint8 = np.zeros((img_h, img_w), dtype=np.uint8)
+                cv2.fillPoly(mask_uint8, [corners], 255)
+                rect_mask |= mask_uint8 > 0
+                has_drawn = True
+            else:
+                rect_mask[by0:by1, bx0:bx1] = True
+                has_drawn = True
+
+    elif fallback_bounds:
+        b_ox0, b_oy0, b_ox1, b_oy1 = fallback_bounds
+        if (
+            b_ox0 is not None
+            and b_oy0 is not None
+            and b_ox1 is not None
+            and b_oy1 is not None
+            and b_ox1 > b_ox0
+            and b_oy1 > b_oy0
+        ):
+            rect_mask[b_oy0:b_oy1, b_ox0:b_ox1] = True
+            has_drawn = True
+
+    if not has_drawn:
+        return None
+
+    if total_bubble_mask is not None:
+        rect_mask = np.logical_and(rect_mask, np.logical_not(total_bubble_mask))
+
+    return rect_mask if np.any(rect_mask) else None
+
+
 def finish_outside_text_work(
     work: OutsideTextWork,
 ) -> tuple[Image.Image, list[dict[str, Any]]]:
@@ -784,62 +909,24 @@ def finish_outside_text_work(
                     candidate_mask = candidate["mask"]
                     candidate_original_bbox = candidate["original_bbox_dict"]
                     c_ox0, c_oy0, c_ox1, c_oy1 = candidate["original_bounds"]
-
                     mask_indices = candidate_group.get("mask_indices", [])
-                    if mask_indices and outside_text_results:
-                        p_x0 = max(
-                            0,
-                            int(
-                                min(
-                                    [
-                                        outside_text_results[idx][0][0]
-                                        for idx in mask_indices
-                                    ]
-                                )
-                            ),
-                        )
-                        p_y0 = max(
-                            0,
-                            int(
-                                min(
-                                    [
-                                        outside_text_results[idx][0][1]
-                                        for idx in mask_indices
-                                    ]
-                                )
-                            ),
-                        )
-                        p_x1 = min(
-                            img_w,
-                            int(
-                                max(
-                                    [
-                                        outside_text_results[idx][0][2]
-                                        for idx in mask_indices
-                                    ]
-                                )
-                            ),
-                        )
-                        p_y1 = min(
-                            img_h,
-                            int(
-                                max(
-                                    [
-                                        outside_text_results[idx][0][3]
-                                        for idx in mask_indices
-                                    ]
-                                )
-                            ),
-                        )
-                    elif (
-                        candidate_original_bbox
-                        and c_ox1 is not None
-                        and c_ox0 is not None
-                        and c_oy1 is not None
-                        and c_oy0 is not None
-                    ):
-                        p_x0, p_y0, p_x1, p_y1 = c_ox0, c_oy0, c_ox1, c_oy1
-                    else:
+
+                    rect_mask = _build_osb_simple_fill_mask(
+                        img_w=img_w,
+                        img_h=img_h,
+                        mask_indices=mask_indices,
+                        outside_text_results=outside_text_results,
+                        outside_text_data=outside_text_data,
+                        config=config,
+                        fallback_bounds=(
+                            (c_ox0, c_oy0, c_ox1, c_oy1)
+                            if candidate_original_bbox
+                            else None
+                        ),
+                        total_bubble_mask=total_bubble_mask,
+                    )
+
+                    if rect_mask is None:
                         mask_pil = Image.fromarray(
                             (candidate_mask * 255).astype(np.uint8), mode="L"
                         )
@@ -847,22 +934,18 @@ def finish_outside_text_work(
                         new_img.paste(patch, (0, 0), mask=mask_pil)
                         return new_img
 
-                    if p_x1 > p_x0 and p_y1 > p_y0:
-                        rect_mask = np.zeros((img_h, img_w), dtype=bool)
-                        rect_mask[p_y0:p_y1, p_x0:p_x1] = True
-                        rect_mask = np.logical_and(
-                            rect_mask, np.logical_not(total_bubble_mask)
+                    ys, xs = np.where(rect_mask)
+                    if len(xs) > 0 and len(ys) > 0:
+                        min_x, max_x = int(np.min(xs)), int(np.max(xs)) + 1
+                        min_y, max_y = int(np.min(ys)), int(np.max(ys)) + 1
+                        region_mask = rect_mask[min_y:max_y, min_x:max_x]
+                        mask_pil = Image.fromarray(
+                            (region_mask * 255).astype(np.uint8), mode="L"
                         )
-
-                        region_mask = rect_mask[p_y0:p_y1, p_x0:p_x1]
-                        if np.any(region_mask):
-                            mask_pil = Image.fromarray(
-                                (region_mask * 255).astype(np.uint8), mode="L"
-                            )
-                            patch = Image.new(
-                                "RGB", (p_x1 - p_x0, p_y1 - p_y0), color_to_use
-                            )
-                            new_img.paste(patch, (p_x0, p_y0), mask=mask_pil)
+                        patch = Image.new(
+                            "RGB", (max_x - min_x, max_y - min_y), color_to_use
+                        )
+                        new_img.paste(patch, (min_x, min_y), mask=mask_pil)
 
                     return new_img
 
@@ -1360,62 +1443,22 @@ def finish_outside_text_work(
                         comb_mask=combined_mask,
                     ):
                         new_img = new_img_src.copy()
-
                         mask_indices = grp.get("mask_indices", [])
-                        if mask_indices and outside_text_results:
-                            p_x0 = max(
-                                0,
-                                int(
-                                    min(
-                                        [
-                                            outside_text_results[idx][0][0]
-                                            for idx in mask_indices
-                                        ]
-                                    )
-                                ),
-                            )
-                            p_y0 = max(
-                                0,
-                                int(
-                                    min(
-                                        [
-                                            outside_text_results[idx][0][1]
-                                            for idx in mask_indices
-                                        ]
-                                    )
-                                ),
-                            )
-                            p_x1 = min(
-                                img_w,
-                                int(
-                                    max(
-                                        [
-                                            outside_text_results[idx][0][2]
-                                            for idx in mask_indices
-                                        ]
-                                    )
-                                ),
-                            )
-                            p_y1 = min(
-                                img_h,
-                                int(
-                                    max(
-                                        [
-                                            outside_text_results[idx][0][3]
-                                            for idx in mask_indices
-                                        ]
-                                    )
-                                ),
-                            )
-                        elif (
-                            orig_dict
-                            and b_ox1 is not None
-                            and b_ox0 is not None
-                            and b_oy1 is not None
-                            and b_oy0 is not None
-                        ):
-                            p_x0, p_y0, p_x1, p_y1 = b_ox0, b_oy0, b_ox1, b_oy1
-                        else:
+
+                        rect_mask = _build_osb_simple_fill_mask(
+                            img_w=img_w,
+                            img_h=img_h,
+                            mask_indices=mask_indices,
+                            outside_text_results=outside_text_results,
+                            outside_text_data=outside_text_data,
+                            config=config,
+                            fallback_bounds=(
+                                (b_ox0, b_oy0, b_ox1, b_oy1) if orig_dict else None
+                            ),
+                            total_bubble_mask=total_bubble_mask,
+                        )
+
+                        if rect_mask is None:
                             # Full mask fill fallback
                             mask_pil = Image.fromarray(
                                 (comb_mask * 255).astype(np.uint8), mode="L"
@@ -1424,23 +1467,18 @@ def finish_outside_text_work(
                             new_img.paste(patch, (0, 0), mask=mask_pil)
                             return new_img
 
-                        if p_x1 > p_x0 and p_y1 > p_y0:
-                            # Create a solid rectangle mask for the expanded bounds, but exclude speech bubbles
-                            rect_mask = np.zeros((img_h, img_w), dtype=bool)
-                            rect_mask[p_y0:p_y1, p_x0:p_x1] = True
-                            rect_mask = np.logical_and(
-                                rect_mask, np.logical_not(total_bubble_mask)
+                        ys, xs = np.where(rect_mask)
+                        if len(xs) > 0 and len(ys) > 0:
+                            min_x, max_x = int(np.min(xs)), int(np.max(xs)) + 1
+                            min_y, max_y = int(np.min(ys)), int(np.max(ys)) + 1
+                            region_mask = rect_mask[min_y:max_y, min_x:max_x]
+                            mask_pil = Image.fromarray(
+                                (region_mask * 255).astype(np.uint8), mode="L"
                             )
-
-                            region_mask = rect_mask[p_y0:p_y1, p_x0:p_x1]
-                            if np.any(region_mask):
-                                mask_pil = Image.fromarray(
-                                    (region_mask * 255).astype(np.uint8), mode="L"
-                                )
-                                patch = Image.new(
-                                    "RGB", (p_x1 - p_x0, p_y1 - p_y0), color_to_use
-                                )
-                                new_img.paste(patch, (p_x0, p_y0), mask=mask_pil)
+                            patch = Image.new(
+                                "RGB", (max_x - min_x, max_y - min_y), color_to_use
+                            )
+                            new_img.paste(patch, (min_x, min_y), mask=mask_pil)
 
                         return new_img
 

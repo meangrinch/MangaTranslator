@@ -214,6 +214,10 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_osb_render_expansion_tiny_multiplier_val,
         outside_text_osb_render_expansion_area_threshold_percent_val,
         outside_text_text_box_proximity_ratio_val,
+        outside_text_osb_follow_tilt_val,
+        outside_text_osb_max_tilt_deg_val,
+        outside_text_osb_min_tilt_deg_val,
+        outside_text_osb_tilt_confidence_threshold_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
         image_upscale_model_val,
@@ -328,6 +332,12 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             )
             / 100.0,
             text_box_proximity_ratio=float(outside_text_text_box_proximity_ratio_val),
+            osb_follow_tilt=bool(outside_text_osb_follow_tilt_val),
+            osb_max_tilt_deg=float(outside_text_osb_max_tilt_deg_val),
+            osb_min_tilt_deg=float(outside_text_osb_min_tilt_deg_val),
+            osb_tilt_confidence_threshold=float(
+                outside_text_osb_tilt_confidence_threshold_val
+            ),
         ),
         provider_settings=UITranslationProviderSettings(
             provider=provider_selector,
@@ -1211,6 +1221,10 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_osb_render_expansion_tiny_multiplier_val,
         outside_text_osb_render_expansion_area_threshold_percent_val,
         outside_text_text_box_proximity_ratio_val,
+        outside_text_osb_follow_tilt_val,
+        outside_text_osb_max_tilt_deg_val,
+        outside_text_osb_min_tilt_deg_val,
+        outside_text_osb_tilt_confidence_threshold_val,
         image_upscale_mode_val,
         image_upscale_factor_val,
         image_upscale_model_val,
@@ -1304,6 +1318,12 @@ def handle_save_config_click(*args: Any) -> str:
             )
             / 100.0,
             text_box_proximity_ratio=float(outside_text_text_box_proximity_ratio_val),
+            osb_follow_tilt=bool(outside_text_osb_follow_tilt_val),
+            osb_max_tilt_deg=float(outside_text_osb_max_tilt_deg_val),
+            osb_min_tilt_deg=float(outside_text_osb_min_tilt_deg_val),
+            osb_tilt_confidence_threshold=float(
+                outside_text_osb_tilt_confidence_threshold_val
+            ),
         ),
         provider_settings=UITranslationProviderSettings(
             provider=prov,
@@ -1775,6 +1795,19 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         default_ui_state.outside_text.osb_render_expansion_tiny_multiplier,
         default_ui_state.outside_text.osb_render_expansion_area_ratio_threshold * 100.0,
         default_ui_state.outside_text.text_box_proximity_ratio,
+        gr.update(value=default_ui_state.outside_text.osb_follow_tilt),
+        gr.update(
+            value=default_ui_state.outside_text.osb_max_tilt_deg,
+            visible=default_ui_state.outside_text.osb_follow_tilt,
+        ),
+        gr.update(
+            value=default_ui_state.outside_text.osb_min_tilt_deg,
+            visible=default_ui_state.outside_text.osb_follow_tilt,
+        ),
+        gr.update(
+            value=default_ui_state.outside_text.osb_tilt_confidence_threshold,
+            visible=default_ui_state.outside_text.osb_follow_tilt,
+        ),
         gr.update(value=default_ui_state.output.image_upscale_mode),
         gr.update(
             value=default_ui_state.output.image_upscale_factor,

@@ -64,6 +64,9 @@
   - Raise "Narrow/Tall Expansion Multiplier" (e.g., 2.0) and/or adjust the corresponding threshold
   - Raise "Tiny Expansion Multiplier" (e.g., 2.0) and/or adjust the corresponding threshold
 
+- **Outside-bubble text tilt/rotation looks incorrect or is unwanted:**
+  - Disable "Match Original Text Tilt"
+
 ### Detection/Cleaning
 
 - **Uncleaned text remaining (near edges of bubbles):**

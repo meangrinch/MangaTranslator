@@ -43,6 +43,7 @@ from .image.image_utils import (
     upscale_image_to_dimension,
 )
 from .image.sorting import sort_bubbles_by_reading_order, sort_panels_by_reading_order
+from .image.tilt_detection import compute_effective_tilt_angle
 from .ml.model_manager import get_model_manager
 from .outside_text_processor import (
     finish_outside_text_work,
@@ -1626,6 +1627,24 @@ def translate_and_render(
                             rotation_deg = 0.0
                             vertical_stack = False
 
+                            if config.outside_text.osb_follow_tilt:
+                                rotation_deg = compute_effective_tilt_angle(
+                                    tilt_deg=float(bubble.get("tilt_deg", 0.0) or 0.0),
+                                    tilt_conf=float(
+                                        bubble.get("tilt_conf", 0.0) or 0.0
+                                    ),
+                                    follow_tilt=config.outside_text.osb_follow_tilt,
+                                    confidence_threshold=config.outside_text.osb_tilt_confidence_threshold,
+                                    min_tilt_deg=config.outside_text.osb_min_tilt_deg,
+                                    max_tilt_deg=config.outside_text.osb_max_tilt_deg,
+                                )
+                                if abs(rotation_deg) > 0.01:
+                                    conf = float(bubble.get("tilt_conf", 0.0) or 0.0)
+                                    log_message(
+                                        f"OSB tilt applied: {rotation_deg:.1f} deg (conf: {conf:.2f}, axis: {bubble.get('tilt_axis', 'none')})",
+                                        verbose=verbose,
+                                    )
+
                             text_bg_rgb = None
                             if bubble.get("needs_text_background"):
                                 if text_color_rgb:
@@ -1730,6 +1749,17 @@ def translate_and_render(
                         )
                         success = False
                         if is_outside_text:
+                            osb_layout_dims = None
+                            if abs(rotation_deg) > 0.01:
+                                shrink = max(0.70, math.cos(math.radians(rotation_deg)))
+                                avail_w = max(
+                                    1.0, (bbox[2] - bbox[0]) - 2 * osb_padding_pixels
+                                )
+                                avail_h = max(
+                                    1.0, (bbox[3] - bbox[1]) - 2 * osb_padding_pixels
+                                )
+                                osb_layout_dims = (avail_w * shrink, avail_h * shrink)
+
                             try:
                                 rendered_image = render_text_skia(
                                     pil_image=pil_cleaned_image,
@@ -1747,22 +1777,88 @@ def translate_and_render(
                                     raise_on_safe_error=False,
                                     text_background_color=text_bg_rgb,
                                     fallback_padding_pixels=osb_padding_pixels,
+                                    layout_dimensions=osb_layout_dims,
                                 )
                                 success = True
                             except Exception as e:
                                 log_message(
                                     f"Text rendering failed: {e}", verbose=verbose
                                 )
-                                rendered_image = pil_cleaned_image
                                 success = False
 
-                                # Absolute last-chance fallback: force vertical stacking before giving up
-                                if not vertical_stack:
-                                    # Fallback uses neutral rotation since we no longer track orientation
-                                    forced_stack_rotation = 0.0
+                                # Tier 1: If rotated, try opposite orientation while preserving tilt rotation
+                                if abs(rotation_deg) > 0.01:
+                                    alt_vertical = not vertical_stack
+                                    log_message(
+                                        f"Retrying OSB render with opposite orientation at {rotation_deg:.1f} deg (vertical_stack={alt_vertical})",
+                                        verbose=verbose,
+                                    )
+                                    try:
+                                        rendered_image = render_text_skia(
+                                            pil_image=pil_cleaned_image,
+                                            text=text,
+                                            bbox=bbox,
+                                            font_dir=font_dir,
+                                            cleaned_mask=cleaned_mask,
+                                            bubble_color_bgr=bubble_color_bgr,
+                                            config=render_config,
+                                            verbose=verbose,
+                                            bubble_id=str(i + 1),
+                                            rotation_deg=rotation_deg,
+                                            vertical_stack=alt_vertical,
+                                            text_color_rgb=text_color_rgb,
+                                            raise_on_safe_error=False,
+                                            text_background_color=text_bg_rgb,
+                                            fallback_padding_pixels=osb_padding_pixels,
+                                            layout_dimensions=osb_layout_dims,
+                                        )
+                                        success = True
+                                    except Exception as e_rot_alt:
+                                        log_message(
+                                            f"Rotated opposite orientation retry failed: {e_rot_alt}",
+                                            verbose=verbose,
+                                        )
+                                        success = False
+
+                                # Tier 2: Retry upright at 0.0 deg with initial vertical_stack
+                                if not success and abs(rotation_deg) > 0.01:
+                                    log_message(
+                                        f"Retrying OSB render upright at 0.0 deg (vertical_stack={vertical_stack})",
+                                        verbose=verbose,
+                                    )
+                                    try:
+                                        rendered_image = render_text_skia(
+                                            pil_image=pil_cleaned_image,
+                                            text=text,
+                                            bbox=bbox,
+                                            font_dir=font_dir,
+                                            cleaned_mask=cleaned_mask,
+                                            bubble_color_bgr=bubble_color_bgr,
+                                            config=render_config,
+                                            verbose=verbose,
+                                            bubble_id=str(i + 1),
+                                            rotation_deg=0.0,
+                                            vertical_stack=vertical_stack,
+                                            text_color_rgb=text_color_rgb,
+                                            raise_on_safe_error=False,
+                                            text_background_color=text_bg_rgb,
+                                            fallback_padding_pixels=osb_padding_pixels,
+                                            layout_dimensions=None,
+                                        )
+                                        success = True
+                                    except Exception as e_upright:
+                                        log_message(
+                                            f"Upright retry failed: {e_upright}",
+                                            verbose=verbose,
+                                        )
+                                        success = False
+
+                                # Tier 3: Try opposite layout orientation upright at 0.0 deg
+                                if not success:
+                                    alt_vertical = not vertical_stack
                                     try:
                                         log_message(
-                                            "OSB render failed, retrying with vertical-stack fallback",
+                                            f"OSB render failed, retrying with opposite orientation (vertical_stack={alt_vertical})",
                                             verbose=verbose,
                                         )
                                         rendered_image = render_text_skia(
@@ -1775,40 +1871,28 @@ def translate_and_render(
                                             config=render_config,
                                             verbose=verbose,
                                             bubble_id=str(i + 1),
-                                            rotation_deg=forced_stack_rotation,
-                                            vertical_stack=True,
+                                            rotation_deg=0.0,
+                                            vertical_stack=alt_vertical,
                                             text_color_rgb=text_color_rgb,
                                             raise_on_safe_error=False,
                                             text_background_color=text_bg_rgb,
                                             fallback_padding_pixels=osb_padding_pixels,
+                                            layout_dimensions=None,
                                         )
                                         log_message(
-                                            "Vertical-stack fallback succeeded",
+                                            "Orientation fallback succeeded",
                                             verbose=verbose,
                                         )
                                         success = True
-                                    except Exception as e2:
+                                    except Exception as e_alt:
                                         log_message(
-                                            f"Vertical-stack fallback failed: {e2}",
+                                            f"Orientation fallback failed: {e_alt}",
                                             verbose=verbose,
                                         )
-                                        # Restore original OSB patch if available
-                                        if "original_crop_pil" in bubble:
-                                            log_message(
-                                                f"Restoring original OSB patch for {bbox}",
-                                                verbose=verbose,
-                                                always_print=True,
-                                            )
-                                            rendered_image = pil_cleaned_image.copy()
-                                            original_patch = bubble["original_crop_pil"]
-                                            rendered_image.paste(
-                                                original_patch, (bbox[0], bbox[1])
-                                            )
-                                            success = True
-                                        else:
-                                            rendered_image = pil_cleaned_image
-                                            success = False
-                                else:
+                                        success = False
+
+                                # Tier 3: Restore original OSB patch if available
+                                if not success:
                                     if "original_crop_pil" in bubble:
                                         log_message(
                                             f"Restoring original OSB patch for {bbox}",

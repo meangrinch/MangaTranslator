@@ -2007,6 +2007,179 @@ def create_layout(
                                 )
 
                                 gr.Markdown("### Font Rendering")
+                                outside_text_osb_font_pack = gr.Dropdown(
+                                    value=saved_osb_font_pack,
+                                    choices=[""] + font_choices,
+                                    label="Text Font",
+                                    info="Font for rendering OSB text translations (leave empty to use main font)",
+                                )
+                                outside_text_osb_max_font_size = gr.Slider(
+                                    5,
+                                    96,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_max_font_size", 64
+                                    ),
+                                    step=1,
+                                    label="Max Font Size (px)",
+                                    info="The largest font size the renderer will attempt to use for OSB text.",
+                                )
+                                outside_text_osb_min_font_size = gr.Slider(
+                                    5,
+                                    96,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_min_font_size", 10
+                                    ),
+                                    step=1,
+                                    label="Min Font Size (px)",
+                                    info="The smallest font size the renderer will attempt to use for OSB text.",
+                                )
+                                outside_text_osb_line_spacing = gr.Slider(
+                                    0.5,
+                                    2.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_line_spacing", 1.0
+                                    ),
+                                    step=0.05,
+                                    label="Line Spacing Multiplier",
+                                    info="Adjusts the vertical space between lines of text (1.0 = standard).",
+                                )
+                                outside_text_osb_use_subpixel_rendering = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_use_subpixel_rendering", True
+                                    ),
+                                    label="Use Subpixel Rendering",
+                                    info=(
+                                        "Improves text clarity on RGB-based displays. "
+                                        "Disable if using a PenTile-based display (i.e., an OLED screen)"
+                                    ),
+                                )
+                                outside_text_osb_font_hinting = gr.Radio(
+                                    choices=["none", "slight", "normal", "full"],
+                                    value=saved_settings.get(
+                                        "outside_text_osb_font_hinting", "none"
+                                    ),
+                                    label="Font Hinting",
+                                    info=(
+                                        "Adjusts glyph outlines to fit pixel grid. 'None' is often best for "
+                                        "high-res displays."
+                                    ),
+                                )
+                                outside_text_osb_use_ligatures = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_use_ligatures", False
+                                    ),
+                                    label="Use Standard Ligatures (e.g., fi, fl)",
+                                    info=(
+                                        "Enables common letter combinations to be rendered as single glyphs "
+                                        "(must be supported by the font)."
+                                    ),
+                                )
+                                outside_text_osb_outline_width = gr.Slider(
+                                    0,
+                                    10,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_outline_width", 3.0
+                                    ),
+                                    step=0.5,
+                                    label="Outline Width (px)",
+                                    info="Width of text outline for OSB text.",
+                                )
+
+                                gr.Markdown("### Text Layout")
+                                outside_text_osb_auto_vertical_text = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_auto_vertical_text", False
+                                    ),
+                                    label="Auto Vertical OSB Text",
+                                    info="Stack short translated OSB text vertically when it improves readability.",
+                                )
+                                outside_text_osb_vertical_line_spacing_mult = gr.Slider(
+                                    0.5,
+                                    2.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_vertical_line_spacing_mult",
+                                        1.0,
+                                    ),
+                                    step=0.05,
+                                    label="OSB Vertical Line Spacing Multiplier",
+                                    info="Adjusts vertical space between lines for vertical OSB text.",
+                                    visible=saved_settings.get(
+                                        "outside_text_osb_auto_vertical_text", False
+                                    ),
+                                )
+                                outside_text_osb_vertical_font_size_mult = gr.Slider(
+                                    0.1,
+                                    3.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_vertical_font_size_mult", 1.0
+                                    ),
+                                    step=0.05,
+                                    label="OSB Vertical Font Size Multiplier",
+                                    info="Multiplier for font size when OSB text is stacked vertically.",
+                                    visible=saved_settings.get(
+                                        "outside_text_osb_auto_vertical_text", False
+                                    ),
+                                )
+                                outside_text_osb_follow_tilt = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_follow_tilt", True
+                                    ),
+                                    label="Match Original Text Tilt",
+                                    info="Render outside-bubble text rotated to match the detected tilt angle of the original text.",
+                                )
+                                outside_text_osb_max_tilt_deg = gr.Slider(
+                                    5.0,
+                                    45.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_max_tilt_deg", 20.0
+                                    ),
+                                    step=1.0,
+                                    label="Max Tilt Angle (deg)",
+                                    info="Maximum angle clamp for rotated outside text.",
+                                    visible=saved_settings.get(
+                                        "outside_text_osb_follow_tilt", True
+                                    ),
+                                )
+                                outside_text_osb_min_tilt_deg = gr.Slider(
+                                    0.0,
+                                    10.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_min_tilt_deg", 3.0
+                                    ),
+                                    step=0.5,
+                                    label="Min Tilt Deadband (deg)",
+                                    info="Angles below this threshold snap to 0.0° (upright).",
+                                    visible=saved_settings.get(
+                                        "outside_text_osb_follow_tilt", True
+                                    ),
+                                )
+                                outside_text_osb_tilt_confidence_threshold = gr.Slider(
+                                    0.1,
+                                    1.0,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_tilt_confidence_threshold",
+                                        0.5,
+                                    ),
+                                    step=0.05,
+                                    label="Tilt Confidence Threshold",
+                                    info="Minimum confidence score required to apply rotation to rendered text.",
+                                    visible=saved_settings.get(
+                                        "outside_text_osb_follow_tilt", True
+                                    ),
+                                )
+                                outside_text_osb_padding_pixels = gr.Slider(
+                                    2,
+                                    12,
+                                    value=saved_settings.get(
+                                        "outside_text_osb_padding_pixels", 4.0
+                                    ),
+                                    step=1,
+                                    label="Padding Pixels",
+                                    info=(
+                                        "Padding between text and the edge of the OSB region. "
+                                        "Increase for more space between text and region boundaries."
+                                    ),
+                                )
                                 outside_text_osb_render_expansion_narrow_multiplier = gr.Slider(
                                     1.0,
                                     3.0,
@@ -2063,130 +2236,6 @@ def create_layout(
                                         "Classifies a box as tiny when its area is below this "
                                         "percentage of the full image area."
                                     ),
-                                )
-                                outside_text_osb_font_pack = gr.Dropdown(
-                                    value=saved_osb_font_pack,
-                                    choices=[""] + font_choices,
-                                    label="Text Font",
-                                    info="Font for rendering OSB text translations (leave empty to use main font)",
-                                )
-                                outside_text_osb_max_font_size = gr.Slider(
-                                    5,
-                                    96,
-                                    value=saved_settings.get(
-                                        "outside_text_osb_max_font_size", 64
-                                    ),
-                                    step=1,
-                                    label="Max Font Size (px)",
-                                    info="The largest font size the renderer will attempt to use for OSB text.",
-                                )
-                                outside_text_osb_min_font_size = gr.Slider(
-                                    5,
-                                    96,
-                                    value=saved_settings.get(
-                                        "outside_text_osb_min_font_size", 10
-                                    ),
-                                    step=1,
-                                    label="Min Font Size (px)",
-                                    info="The smallest font size the renderer will attempt to use for OSB text.",
-                                )
-                                outside_text_osb_line_spacing = gr.Slider(
-                                    0.5,
-                                    2.0,
-                                    value=saved_settings.get(
-                                        "outside_text_osb_line_spacing", 1.0
-                                    ),
-                                    step=0.05,
-                                    label="Line Spacing Multiplier",
-                                    info="Adjusts the vertical space between lines of text (1.0 = standard).",
-                                )
-                                outside_text_osb_padding_pixels = gr.Slider(
-                                    2,
-                                    12,
-                                    value=saved_settings.get(
-                                        "outside_text_osb_padding_pixels", 4.0
-                                    ),
-                                    step=1,
-                                    label="Padding Pixels",
-                                    info=(
-                                        "Padding between text and the edge of the OSB region. "
-                                        "Increase for more space between text and region boundaries."
-                                    ),
-                                )
-                                outside_text_osb_auto_vertical_text = gr.Checkbox(
-                                    value=saved_settings.get(
-                                        "outside_text_osb_auto_vertical_text", False
-                                    ),
-                                    label="Auto Vertical OSB Text",
-                                    info="Stack short translated OSB text vertically when it improves readability.",
-                                )
-                                outside_text_osb_vertical_line_spacing_mult = gr.Slider(
-                                    0.5,
-                                    2.0,
-                                    value=saved_settings.get(
-                                        "outside_text_osb_vertical_line_spacing_mult",
-                                        1.0,
-                                    ),
-                                    step=0.05,
-                                    label="OSB Vertical Line Spacing Multiplier",
-                                    info="Adjusts vertical space between lines for vertical OSB text.",
-                                    visible=saved_settings.get(
-                                        "outside_text_osb_auto_vertical_text", False
-                                    ),
-                                )
-                                outside_text_osb_vertical_font_size_mult = gr.Slider(
-                                    0.1,
-                                    3.0,
-                                    value=saved_settings.get(
-                                        "outside_text_osb_vertical_font_size_mult", 1.0
-                                    ),
-                                    step=0.05,
-                                    label="OSB Vertical Font Size Multiplier",
-                                    info="Multiplier for font size when OSB text is stacked vertically.",
-                                    visible=saved_settings.get(
-                                        "outside_text_osb_auto_vertical_text", False
-                                    ),
-                                )
-                                outside_text_osb_use_subpixel_rendering = gr.Checkbox(
-                                    value=saved_settings.get(
-                                        "outside_text_osb_use_subpixel_rendering", True
-                                    ),
-                                    label="Use Subpixel Rendering",
-                                    info=(
-                                        "Improves text clarity on RGB-based displays. "
-                                        "Disable if using a PenTile-based display (i.e., an OLED screen)"
-                                    ),
-                                )
-                                outside_text_osb_font_hinting = gr.Radio(
-                                    choices=["none", "slight", "normal", "full"],
-                                    value=saved_settings.get(
-                                        "outside_text_osb_font_hinting", "none"
-                                    ),
-                                    label="Font Hinting",
-                                    info=(
-                                        "Adjusts glyph outlines to fit pixel grid. 'None' is often best for "
-                                        "high-res displays."
-                                    ),
-                                )
-                                outside_text_osb_use_ligatures = gr.Checkbox(
-                                    value=saved_settings.get(
-                                        "outside_text_osb_use_ligatures", False
-                                    ),
-                                    label="Use Standard Ligatures (e.g., fi, fl)",
-                                    info=(
-                                        "Enables common letter combinations to be rendered as single glyphs "
-                                        "(must be supported by the font)."
-                                    ),
-                                )
-                                outside_text_osb_outline_width = gr.Slider(
-                                    0,
-                                    10,
-                                    value=saved_settings.get(
-                                        "outside_text_osb_outline_width", 3.0
-                                    ),
-                                    step=0.5,
-                                    label="Outline Width (px)",
-                                    info="Width of text outline for OSB text.",
                                 )
                         setting_groups.append(group_outside_text)
 
@@ -2466,6 +2515,10 @@ def create_layout(
             outside_text_osb_render_expansion_tiny_multiplier,
             outside_text_osb_render_expansion_area_threshold_percent,
             outside_text_text_box_proximity_ratio,
+            outside_text_osb_follow_tilt,
+            outside_text_osb_max_tilt_deg,
+            outside_text_osb_min_tilt_deg,
+            outside_text_osb_tilt_confidence_threshold,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -2607,6 +2660,10 @@ def create_layout(
             outside_text_osb_render_expansion_tiny_multiplier,
             outside_text_osb_render_expansion_area_threshold_percent,
             outside_text_text_box_proximity_ratio,
+            outside_text_osb_follow_tilt,
+            outside_text_osb_max_tilt_deg,
+            outside_text_osb_min_tilt_deg,
+            outside_text_osb_tilt_confidence_threshold,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -2741,6 +2798,10 @@ def create_layout(
             outside_text_osb_render_expansion_tiny_multiplier,
             outside_text_osb_render_expansion_area_threshold_percent,
             outside_text_text_box_proximity_ratio,
+            outside_text_osb_follow_tilt,
+            outside_text_osb_max_tilt_deg,
+            outside_text_osb_min_tilt_deg,
+            outside_text_osb_tilt_confidence_threshold,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -2883,6 +2944,10 @@ def create_layout(
             outside_text_osb_render_expansion_tiny_multiplier,
             outside_text_osb_render_expansion_area_threshold_percent,
             outside_text_text_box_proximity_ratio,
+            outside_text_osb_follow_tilt,
+            outside_text_osb_max_tilt_deg,
+            outside_text_osb_min_tilt_deg,
+            outside_text_osb_tilt_confidence_threshold,
             image_upscale_mode,
             image_upscale_factor,
             image_upscale_model,
@@ -3231,6 +3296,21 @@ def create_layout(
             outputs=[
                 outside_text_osb_vertical_line_spacing_mult,
                 outside_text_osb_vertical_font_size_mult,
+            ],
+            queue=False,
+        )
+
+        outside_text_osb_follow_tilt.change(
+            fn=lambda x: (
+                gr.update(visible=x),
+                gr.update(visible=x),
+                gr.update(visible=x),
+            ),
+            inputs=outside_text_osb_follow_tilt,
+            outputs=[
+                outside_text_osb_max_tilt_deg,
+                outside_text_osb_min_tilt_deg,
+                outside_text_osb_tilt_confidence_threshold,
             ],
             queue=False,
         )

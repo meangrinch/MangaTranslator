@@ -171,6 +171,10 @@ class UIOutsideTextSettings:
     osb_render_expansion_aspect_ratio_threshold: float = 0.4
     osb_render_expansion_area_ratio_threshold: float = 0.005
     text_box_proximity_ratio: float = 0.02
+    osb_follow_tilt: bool = True
+    osb_max_tilt_deg: float = 20.0
+    osb_min_tilt_deg: float = 3.0
+    osb_tilt_confidence_threshold: float = 0.5
 
     def __post_init__(self) -> None:
         self.flux_backend = flux_valid_backend(
@@ -358,6 +362,12 @@ class UIConfigState:
                 self.outside_text.osb_render_expansion_area_ratio_threshold
             ),
             "outside_text_text_box_proximity_ratio": self.outside_text.text_box_proximity_ratio,
+            "outside_text_osb_follow_tilt": self.outside_text.osb_follow_tilt,
+            "outside_text_osb_max_tilt_deg": self.outside_text.osb_max_tilt_deg,
+            "outside_text_osb_min_tilt_deg": self.outside_text.osb_min_tilt_deg,
+            "outside_text_osb_tilt_confidence_threshold": (
+                self.outside_text.osb_tilt_confidence_threshold
+            ),
             "output_format": self.output.output_format,
             "jpeg_quality": self.output.jpeg_quality,
             "png_compression": self.output.png_compression,
@@ -563,6 +573,12 @@ class UIConfigState:
                 ),
                 text_box_proximity_ratio=data.get(
                     "outside_text_text_box_proximity_ratio", 0.02
+                ),
+                osb_follow_tilt=data.get("outside_text_osb_follow_tilt", True),
+                osb_max_tilt_deg=data.get("outside_text_osb_max_tilt_deg", 20.0),
+                osb_min_tilt_deg=data.get("outside_text_osb_min_tilt_deg", 3.0),
+                osb_tilt_confidence_threshold=data.get(
+                    "outside_text_osb_tilt_confidence_threshold", 0.5
                 ),
             ),
             provider_settings=UITranslationProviderSettings(
@@ -965,6 +981,10 @@ def map_ui_to_backend_config(
         osb_render_expansion_aspect_ratio_threshold=ui_state.outside_text.osb_render_expansion_aspect_ratio_threshold,
         osb_render_expansion_area_ratio_threshold=ui_state.outside_text.osb_render_expansion_area_ratio_threshold,
         text_box_proximity_ratio=ui_state.outside_text.text_box_proximity_ratio,
+        osb_follow_tilt=ui_state.outside_text.osb_follow_tilt,
+        osb_max_tilt_deg=ui_state.outside_text.osb_max_tilt_deg,
+        osb_min_tilt_deg=ui_state.outside_text.osb_min_tilt_deg,
+        osb_tilt_confidence_threshold=ui_state.outside_text.osb_tilt_confidence_threshold,
     )
 
     preprocessing_cfg = PreprocessingConfig(

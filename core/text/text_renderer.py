@@ -1,4 +1,3 @@
-
 import numpy as np
 import skia
 from PIL import Image
@@ -28,6 +27,7 @@ AUTO_VERTICAL_MAX_CHARS = 12
 AUTO_VERTICAL_MAX_WORDS = 1
 AUTO_VERTICAL_MAX_HORIZONTAL_FILL = 0.45
 AUTO_VERTICAL_MIN_FILL_GAIN = 0.20
+OSB_TILT_SUPERSAMPLE_MARGIN = 8
 
 
 def _plain_text_for_layout_policy(text: str) -> str:
@@ -95,6 +95,8 @@ def render_text_skia(
     text_background_color: tuple[int, int, int] | None = None,
     layout_only: bool = False,
     fallback_padding_pixels: float | None = None,
+    layout_dimensions: tuple[float, float] | None = None,
+    oriented_dimensions: tuple[float, float] | None = None,
 ) -> Image.Image:
     """
     Fits and renders text within a bounding box using Skia and HarfBuzz.
@@ -188,7 +190,9 @@ def render_text_skia(
                 "Safe area calculation failed, falling back to padded bbox method",
                 verbose=verbose,
             )
-        if fallback_padding_pixels is not None:
+        if layout_dimensions is not None:
+            max_render_width, max_render_height = layout_dimensions
+        elif fallback_padding_pixels is not None:
             max_render_width = bubble_width - 2 * fallback_padding_pixels
             max_render_height = bubble_height - 2 * fallback_padding_pixels
         else:

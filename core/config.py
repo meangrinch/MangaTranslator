@@ -174,6 +174,10 @@ class OutsideTextConfig:
     text_box_proximity_ratio: float = 0.02  # 2% of image dimension
     flux_guidance_scale: float = 2.5
     flux_prompt: str = "Remove all text."
+    osb_follow_tilt: bool = True  # Enable rotation-matching text rendering for OSB
+    osb_max_tilt_deg: float = 20.0
+    osb_min_tilt_deg: float = 3.0
+    osb_tilt_confidence_threshold: float = 0.5
 
 
 @dataclass

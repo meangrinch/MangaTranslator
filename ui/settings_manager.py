@@ -292,6 +292,10 @@ DEFAULT_SETTINGS = {
     "outside_text_osb_use_subpixel_rendering": True,
     "outside_text_osb_font_hinting": "none",
     "outside_text_text_box_proximity_ratio": 0.02,
+    "outside_text_osb_follow_tilt": True,
+    "outside_text_osb_max_tilt_deg": 20.0,
+    "outside_text_osb_min_tilt_deg": 3.0,
+    "outside_text_osb_tilt_confidence_threshold": 0.5,
 }
 
 DEFAULT_BATCH_SETTINGS = {
@@ -432,6 +436,10 @@ CANONICAL_CONFIG_KEY_ORDER: list[str] = [
     "outside_text_osb_vertical_font_size_mult",
     "outside_text_osb_use_subpixel_rendering",
     "outside_text_osb_font_hinting",
+    "outside_text_osb_follow_tilt",
+    "outside_text_osb_max_tilt_deg",
+    "outside_text_osb_min_tilt_deg",
+    "outside_text_osb_tilt_confidence_threshold",
     # Output
     "output_format",
     "jpeg_quality",

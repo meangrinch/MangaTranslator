@@ -940,6 +940,31 @@ def main():
         ),
     )
     parser.add_argument(
+        "--osb-no-follow-tilt",
+        dest="osb_follow_tilt",
+        action="store_false",
+        help="Disable rotation-matching text rendering for outside speech bubble text",
+    )
+    parser.set_defaults(osb_follow_tilt=True)
+    parser.add_argument(
+        "--osb-max-tilt-deg",
+        type=float,
+        default=20.0,
+        help="Maximum tilt angle clamp for OSB text rendering (0.0-45.0 degrees)",
+    )
+    parser.add_argument(
+        "--osb-min-tilt-deg",
+        type=float,
+        default=3.0,
+        help="Deadband threshold below which OSB tilt snaps to 0.0 degrees",
+    )
+    parser.add_argument(
+        "--osb-tilt-confidence-threshold",
+        type=float,
+        default=0.5,
+        help="Minimum confidence required to apply OSB tilt rotation (0.0-1.0)",
+    )
+    parser.add_argument(
         "--bubble-min-side-pixels",
         type=int,
         default=128,
@@ -1381,6 +1406,10 @@ def main():
                 args.osb_render_expansion_area_threshold
             ),
             text_box_proximity_ratio=args.osb_text_box_proximity_ratio,
+            osb_follow_tilt=args.osb_follow_tilt,
+            osb_max_tilt_deg=args.osb_max_tilt_deg,
+            osb_min_tilt_deg=args.osb_min_tilt_deg,
+            osb_tilt_confidence_threshold=args.osb_tilt_confidence_threshold,
         ),
         preprocessing=PreprocessingConfig(
             enabled=args.image_upscale_mode == "initial",
