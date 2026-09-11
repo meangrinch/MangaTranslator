@@ -258,9 +258,6 @@ class UnifiedCache:
             ),
             "ero_doujinshi_mode": getattr(config, "ero_doujinshi_mode", False),
             "ocr_correction": getattr(config, "ocr_correction", False),
-            "force_cache_translations": getattr(
-                config, "force_cache_translations", False
-            ),
             "max_tokens": config.max_tokens,
             "reasoning_effort": config.reasoning_effort,
             "effort": config.effort,

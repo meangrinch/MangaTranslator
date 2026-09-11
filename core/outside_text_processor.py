@@ -85,10 +85,18 @@ def _build_outside_text_data(
         x1, y1, x2, y2 = [int(c) for c in bbox_coords]
         bbox_tuple = (x1, y1, x2, y2)
         raw_bbox_tuple = tuple(int(c) for c in raw_coords)
+        rx1, ry1, rx2, ry2 = raw_bbox_tuple
 
-        outside_text_image_cv = original_cv_image[y1:y2, x1:x2].copy()
+        rx1 = max(0, min(original_cv_image.shape[1], rx1))
+        ry1 = max(0, min(original_cv_image.shape[0], ry1))
+        rx2 = max(0, min(original_cv_image.shape[1], rx2))
+        ry2 = max(0, min(original_cv_image.shape[0], ry2))
+        if rx2 > rx1 and ry2 > ry1:
+            outside_text_image_cv = original_cv_image[ry1:ry2, rx1:rx2].copy()
+        else:
+            outside_text_image_cv = original_cv_image[y1:y2, x1:x2].copy()
         outside_text_image_pil = cv2_to_pil(outside_text_image_cv)
-        original_crop_pil = outside_text_image_pil.copy()
+        original_crop_pil = cv2_to_pil(original_cv_image[y1:y2, x1:x2].copy())
 
         osb_upscale_method = (
             "none" if config.test_mode else config.translation.upscale_method

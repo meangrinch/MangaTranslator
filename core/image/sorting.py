@@ -226,7 +226,8 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
 
         enriched = []
         for item in items:
-            x1, y1, x2, y2, w, h, cx, cy = _get_features(item["bbox"])
+            sort_bbox = item.get("original_bbox") or item["bbox"]
+            x1, y1, x2, y2, w, h, cx, cy = _get_features(sort_bbox)
             enriched.append(
                 {
                     "item": item,
@@ -333,7 +334,8 @@ def sort_bubbles_by_reading_order(detections, reading_direction="rtl", panels=No
     unassigned = []
 
     for detection in detections:
-        bx1, by1, bx2, by2 = detection["bbox"]
+        sort_bbox = detection.get("original_bbox") or detection["bbox"]
+        bx1, by1, bx2, by2 = sort_bbox
         bcx, bcy = (bx1 + bx2) / 2.0, (by1 + by2) / 2.0
         assigned = False
 
