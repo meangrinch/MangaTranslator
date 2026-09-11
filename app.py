@@ -59,7 +59,7 @@ def main():
     from core._version import __version__
     from core.device import get_best_device
     from ui import layout
-    from utils.update_checker import check_for_update
+    from utils.update_checker import check_and_display_changelog, check_for_update
 
     sys.excepthook = lambda exc_type, exc_value, exc_traceback: custom_except_hook(
         gr, exc_type, exc_value, exc_traceback
@@ -99,6 +99,7 @@ def main():
     print(f"Using device: {device_info_str.upper()}")
     print(f"PyTorch version: {torch.__version__}")
     print(f"MangaTranslator version: v{__version__}")
+    check_and_display_changelog(__version__)
 
     def _update_notice():
         available, latest = check_for_update(

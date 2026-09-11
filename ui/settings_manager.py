@@ -460,6 +460,8 @@ CANONICAL_CONFIG_KEY_ORDER: list[str] = [
     "batch_retry_failed_once",
     "batch_previous_context_image_count",
     "batch_previous_context_text_count",
+    # Metadata
+    "last_seen_version",
 ]
 
 
@@ -539,6 +541,11 @@ def save_config(incoming_settings: dict[str, Any]):
                 changed_setting_keys.append(key)
 
         config_to_write = clamp_settings(config_to_write)
+
+        if "last_seen_version" in current_config_on_disk:
+            config_to_write["last_seen_version"] = current_config_on_disk[
+                "last_seen_version"
+            ]
 
         os.makedirs(CONFIG_FILE.parent, exist_ok=True)
 
@@ -733,6 +740,7 @@ def reset_to_defaults() -> dict[str, Any]:
             "openrouter_api_key",
             "openai_compatible_api_key",
             "outside_text_huggingface_token",
+            "last_seen_version",
         ]
         for key in preserved_keys:
             if key in current_saved:
