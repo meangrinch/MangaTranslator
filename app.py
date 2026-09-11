@@ -10,14 +10,18 @@ from threading import Thread
 
 
 def custom_except_hook(gr, exc_type, exc_value, exc_traceback):
+    from utils.logging import log_message
+
     if issubclass(exc_type, gr.Error):
-        print(f"Gradio-handled Error: {exc_value}")
+        log_message(f"Gradio-handled Error: {exc_value}", always_print=True)
     else:
         import traceback
 
-        print("--- Uncaught Exception ---")
-        traceback.print_exception(exc_type, exc_value, exc_traceback)
-        print("--------------------------")
+        log_message("--- Uncaught Exception ---", always_print=True)
+        tb_lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        for line in "".join(tb_lines).splitlines():
+            log_message(line, always_print=True)
+        log_message("--------------------------", always_print=True)
 
 
 def _get_pytorch_version_tuple(version_str):
@@ -52,6 +56,9 @@ def main():
         "--cpu", action="store_true", help="Force CPU usage even if CUDA is available"
     )
     args = parser.parse_args()
+    from utils.logging import init_file_logging, log_message
+
+    init_file_logging()
 
     import gradio as gr
     import torch
@@ -96,9 +103,9 @@ def main():
             device_info_str = "XPU (Unknown GPU Name)"
     elif target_device.type == "mps":
         device_info_str = "MPS (Apple Silicon)"
-    print(f"Using device: {device_info_str.upper()}")
-    print(f"PyTorch version: {torch.__version__}")
-    print(f"MangaTranslator version: v{__version__}")
+    log_message(f"Using device: {device_info_str.upper()}", always_print=True)
+    log_message(f"PyTorch version: {torch.__version__}", always_print=True)
+    log_message(f"MangaTranslator version: v{__version__}", always_print=True)
     check_and_display_changelog(__version__)
 
     def _update_notice():
@@ -106,7 +113,7 @@ def main():
             __version__, repo="meangrinch/MangaTranslator", timeout=3.0
         )
         if available and latest:
-            print(f"UPDATE AVAILABLE: v{latest.lstrip('v')}")
+            log_message(f"UPDATE AVAILABLE: v{latest.lstrip('v')}", always_print=True)
 
     Thread(target=_update_notice, daemon=True).start()
 

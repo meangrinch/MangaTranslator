@@ -7,6 +7,8 @@ from urllib.request import Request, urlopen
 
 from packaging.version import Version
 
+from utils.logging import log_message
+
 API_URL = "https://api.github.com/repos/{repo}/releases/latest"
 RELEASE_TAG_URL = "https://api.github.com/repos/{repo}/releases/tags/{tag}"
 
@@ -134,7 +136,10 @@ def check_and_display_changelog(
     if is_update_available(last_version, norm_current):
         tag = f"v{norm_current}"
         notes = get_release_notes(tag, repo=repo, timeout=timeout)
-        print(f"\n{format_release_notes(norm_current, notes, repo=repo)}\n")
+        log_message(
+            f"\n{format_release_notes(norm_current, notes, repo=repo)}\n",
+            always_print=True,
+        )
         set_last_seen_version(norm_current, config_file)
         return True
 

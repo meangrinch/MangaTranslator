@@ -376,11 +376,10 @@ def check_fit(
             if single_line_height <= 0:
                 single_line_height = font_size * 1.2 * line_spacing_mult
         except Exception as e:
-            if verbose:
-                log_message(
-                    f"Font metrics unavailable at size {font_size}: {e}",
-                    verbose=verbose,
-                )
+            log_message(
+                f"Font metrics unavailable at size {font_size}: {e}",
+                verbose=verbose,
+            )
             single_line_height = font_size * 1.2 * line_spacing_mult
 
         if vertical_stack:
@@ -460,11 +459,7 @@ def check_fit(
                         def wrap_part(part: str, m: str = marker) -> str:
                             no_space_before = part.startswith(NO_SPACE_BEFORE_MARKER)
                             clean_part = strip_no_space_before_marker(part)
-                            wrapped = (
-                                f"{m}{clean_part}{m}"
-                                if m
-                                else clean_part
-                            )
+                            wrapped = f"{m}{clean_part}{m}" if m else clean_part
                             if no_space_before:
                                 return f"{NO_SPACE_BEFORE_MARKER}{wrapped}"
                             return wrapped
@@ -577,19 +572,17 @@ def check_fit(
             len(wrapped_lines_text) - 1
         ) * single_line_height
 
-        if verbose:
-            log_message(
-                f"Size {font_size}: {current_max_line_width:.0f}x{total_block_height:.0f} "
-                f"(max {max_render_width:.0f}x{max_render_height:.0f})",
-                verbose=verbose,
-            )
+        log_message(
+            f"Size {font_size}: {current_max_line_width:.0f}x{total_block_height:.0f} "
+            f"(max {max_render_width:.0f}x{max_render_height:.0f})",
+            verbose=verbose,
+        )
 
         if (
             current_max_line_width <= max_render_width
             and total_block_height <= max_render_height
         ):
-            if verbose:
-                log_message(f"Size {font_size} fits", verbose=verbose)
+            log_message(f"Size {font_size} fits", verbose=verbose)
             return {
                 "lines": lines_data_at_size,
                 "metrics": metrics,
@@ -601,8 +594,7 @@ def check_fit(
         return None
 
     except Exception as e:
-        if verbose:
-            log_message(f"Fit check failed at size {font_size}: {e}", verbose=verbose)
+        log_message(f"Fit check failed at size {font_size}: {e}", verbose=verbose)
         return None
 
 
@@ -788,11 +780,10 @@ def find_optimal_layout(
                     succeeded_at_current_size = True
                     break
                 else:
-                    if verbose:
-                        log_message(
-                            f"Collision at size {mid} width {current_width_attempt:.0f}, squeezing...",
-                            verbose=verbose,
-                        )
+                    log_message(
+                        f"Collision at size {mid} width {current_width_attempt:.0f}, squeezing...",
+                        verbose=verbose,
+                    )
                     current_width_attempt *= 0.90
                     continue
             else:

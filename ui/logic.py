@@ -325,8 +325,11 @@ def process_batch_logic(
     def _batch_progress_callback(value, desc="Processing..."):
         if gradio_progress is not None:
             gradio_progress(value, desc=desc)
-        elif config.verbose:
-            log_message(f"Progress: {desc} [{value * 100:.1f}%]", verbose=True)
+        else:
+            log_message(
+                f"Progress: {desc} [{value * 100:.1f}%]",
+                verbose=config.verbose,
+            )
         if cancellation_manager and cancellation_manager.is_cancelled():
             raise CancellationError("Batch process cancelled by user.")
 

@@ -996,6 +996,9 @@ def main():
     )
 
     args = parser.parse_args()
+    from utils.logging import init_file_logging
+
+    init_file_logging()
 
     if args.osb_flux_backend == "nunchaku" and args.osb_inpainting_method in (
         "flux_klein_9b",
