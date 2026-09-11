@@ -406,7 +406,7 @@ def upscale_image_to_dimension(
     cache_key = cache.get_upscale_dimension_cache_key(image, target, mode, model_type)
     cached_result = cache.get_upscaled_image(cache_key)
     if cached_result is not None:
-        log_message("  - Using cached upscaled image", verbose=verbose)
+        log_message("  - Using cached upscaled image", always_print=True)
         return cached_result
 
     current_image = image
@@ -517,7 +517,7 @@ def upscale_image(
     cache_key = cache.get_upscale_cache_key(image, factor, model_type)
     cached_upscale = cache.get_upscaled_image(cache_key)
     if cached_upscale is not None:
-        log_message("  - Using cached upscaled image", verbose=verbose)
+        log_message("  - Using cached upscaled image", always_print=True)
         return cached_upscale
 
     model_manager = get_model_manager()
@@ -709,7 +709,7 @@ def process_bubble_image_cached(
     )
     cached_result = cache.get_upscaled_image(cache_key)
     if cached_result is not None:
-        log_message("  - Using cached bubble processing result", verbose=verbose)
+        log_message("  - Using cached bubble processing result", always_print=True)
         return cached_result
 
     upscaled_bubble = upscale_image_to_dimension(

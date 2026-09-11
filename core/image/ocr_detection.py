@@ -292,7 +292,9 @@ class OutsideTextDetector:
             cached_sb = self.cache.get_yolo_detection(sb_cache_key)
 
             if cached_sb is not None:
-                log_message("Using cached Speech Bubble detections", verbose=verbose)
+                log_message(
+                    "  - Using cached speech bubble detections", always_print=True
+                )
                 yolo_results, yolo_boxes = cached_sb
             else:
                 yolo_model = self.manager.load_yolo_speech_bubble(yolo_model_path)
@@ -417,7 +419,10 @@ class OutsideTextDetector:
                 cached_osbtext = self.cache.get_yolo_detection(osbtext_cache_key)
 
                 if cached_osbtext is not None:
-                    log_message("Using cached OSBText detections", verbose=verbose)
+                    log_message(
+                        "  - Using cached OSB text detections",
+                        always_print=True,
+                    )
                     osbtext_results, osbtext_boxes, osbtext_confs = cached_osbtext
                 else:
                     osbtext_model = self.manager.load_yolo_osbtext(token=self.hf_token)

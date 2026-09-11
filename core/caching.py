@@ -626,7 +626,7 @@ class UnifiedCache:
                 self._inpaint_cache.cache.clear()
                 self._current_image_hash = image_hash
             else:
-                log_message("Same image detected - reusing caches", verbose=verbose)
+                log_message("Same image detected - reusing caches", always_print=True)
 
     def get_cache_stats(self) -> dict:
         """Get statistics about cache sizes.

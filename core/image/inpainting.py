@@ -825,7 +825,7 @@ class FluxKontextInpainter:
             )
             cached_patch = self.cache.get_inpainted_image(cache_key)
             if cached_patch is not None:
-                log_message("  - Using cached inpainting patch", verbose=verbose)
+                log_message("  - Using cached inpainting patch", always_print=True)
 
         patch_pil = cached_patch
 
@@ -1503,7 +1503,7 @@ class FluxKleinInpainter:
             )
             cached_patch = self.cache.get_inpainted_image(cache_key)
             if cached_patch is not None:
-                log_message("  - Using cached inpainting patch", verbose=verbose)
+                log_message("  - Using cached inpainting patch", always_print=True)
 
         mask_float = mask_crop_np.astype(np.float32)
         if blur_radius > 0:

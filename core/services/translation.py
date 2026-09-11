@@ -1533,7 +1533,7 @@ def _perform_manga_ocr(
     cached_ocr = cache.get_manga_ocr_result(cache_key)
     if cached_ocr is not None:
         if len(cached_ocr) == total_elements:
-            log_message("Using cached manga-ocr results", verbose=debug)
+            log_message("  - Using cached manga-ocr results", always_print=True)
             return cached_ocr
         log_message("Discarding manga-ocr cache due to length mismatch", verbose=debug)
 
@@ -1601,7 +1601,7 @@ def _perform_paddle_ocr_vl(
     cached_ocr = cache.get_manga_ocr_result(cache_key)
     if cached_ocr is not None:
         if len(cached_ocr) == total_elements:
-            log_message("Using cached PaddleOCR-VL-1.6 results", verbose=debug)
+            log_message("  - Using cached PaddleOCR-VL-1.6 results", always_print=True)
             return cached_ocr
         log_message(
             "Discarding PaddleOCR-VL-1.6 cache due to length mismatch", verbose=debug
@@ -1821,7 +1821,7 @@ def call_translation_api_batch(
     )
     cached_translation, cached_ocr_texts = cache.get_translation(cache_key)
     if cached_translation is not None:
-        log_message("  - Using cached translation", verbose=debug)
+        log_message("  - Using cached translation", always_print=True)
         if ocr_texts_output is not None and cached_ocr_texts is not None:
             ocr_texts_output.extend(cached_ocr_texts)
         return cached_translation

@@ -1326,7 +1326,7 @@ def detect_speech_bubbles(
     cached_yolo = cache.get_yolo_detection(yolo_cache_key)
 
     if cached_yolo is not None:
-        log_message("Using cached YOLO detections", verbose=verbose)
+        log_message("  - Using cached YOLO detections", always_print=True)
         primary_results, primary_boxes = cached_yolo
     else:
         primary_imgsz = 1600 if bubble_detector_model == "yolo_2" else 640
@@ -1648,7 +1648,7 @@ def detect_speech_bubbles(
         cached_sam = cache.get_sam_masks(sam_cache_key)
 
         if cached_sam is not None:
-            log_message("Using cached SAM masks", verbose=verbose)
+            log_message("  - Using cached SAM masks", always_print=True)
             detections = cached_sam
             return detections, text_free_boxes
 
