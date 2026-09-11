@@ -376,7 +376,8 @@ def is_deepseek_reasoning_model(model_name: str | None) -> bool:
     """Check if a DeepSeek model is reasoning-capable."""
     if not model_name:
         return False
-    return "deepseek-v4" in model_name.lower()
+    lm = model_name.lower()
+    return "deepseek-v4" in lm or "deepseek-flash" in lm
 
 
 def is_zai_reasoning_model(model_name: str | None) -> bool:
@@ -408,7 +409,7 @@ def is_deepseek_vision_model(model_name: str | None) -> bool:
     if not model_name:
         return False
     lm = model_name.lower()
-    return "deepseek" in lm and "vision" in lm
+    return ("deepseek" in lm and "vision" in lm) or "deepseek-flash" in lm
 
 
 def is_xai_reasoning_model(model_name: str | None) -> bool:

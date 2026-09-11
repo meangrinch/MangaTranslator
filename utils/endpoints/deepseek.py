@@ -22,11 +22,11 @@ def call_deepseek_endpoint(
 ) -> str | None:
     """
     Calls the DeepSeek Responses API endpoint with the provided data and handles retries.
-    Supports text and multimodal images (e.g., deepseek-v4-flash-vision-exp).
+    Supports text and multimodal images (e.g., deepseek-flash).
 
     Args:
         api_key (str): DeepSeek API key.
-        model_name (str): DeepSeek model to use (e.g., deepseek-v4-flash, deepseek-v4-flash-vision-exp, deepseek-v4-pro).
+        model_name (str): DeepSeek model to use (e.g., deepseek-flash, deepseek-v4-pro).
         parts (List[Dict[str, Any]]): List of content parts (text and optional images).
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, max_tokens/max_output_tokens,
             thinking, reasoning_effort).

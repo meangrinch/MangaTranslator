@@ -1095,7 +1095,7 @@ def main():
         api_key = args.deepseek_api_key or os.environ.get("DEEPSEEK_API_KEY")
         api_key_arg_name = "--deepseek-api-key"
         api_key_env_var = "DEEPSEEK_API_KEY"
-        default_model = "deepseek-v4-flash"
+        default_model = "deepseek-flash"
     elif provider == "Z.ai":
         api_key = args.zai_api_key or os.environ.get("ZAI_API_KEY")
         api_key_arg_name = "--zai-api-key"

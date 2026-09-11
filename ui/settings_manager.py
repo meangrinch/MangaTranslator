@@ -89,9 +89,8 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "muse-spark-1.1",
     ],
     "DeepSeek": [
-        "deepseek-v4-flash-vision-exp",
+        "deepseek-flash",
         "deepseek-v4-pro",
-        "deepseek-v4-flash",
     ],
     "Z.ai": [
         "glm-5.3-flash",
