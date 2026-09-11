@@ -1,14 +1,30 @@
-[English](README.md) | [简体中文](docs/translations/zh/README.md) | [한국어](docs/translations/ko/README.md) | [日本語](docs/translations/ja/README.md)
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="docs/translations/zh/README.md">简体中文</a> |
+  <a href="docs/translations/ko/README.md">한국어</a> |
+  <a href="docs/translations/ja/README.md">日本語</a>
+</p>
 
-## MangaTranslator
+<h1 align="center"><b>MangaTranslator</b></h1>
 
-Gradio-based web application for automating the translation of manga/comic page images using AI. Targets speech bubbles and text outside of speech bubbles. Supports 60 languages and custom font pack usage.
+<p align="center">
+  <img src="https://img.shields.io/github/v/release/meangrinch/MangaTranslator?label=Release&labelColor=181717&color=0877d2" />
+  <img src="https://img.shields.io/github/downloads/meangrinch/MangaTranslator/total?label=Downloads&labelColor=181717&color=0877d2" />
+  <img src="https://img.shields.io/github/license/meangrinch/MangaTranslator?labelColor=181717&color=2ea44f" />
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&labelColor=181717" />
+</p>
 
-<div align="left">
+<div align="center">
+An end-to-end pipeline for translating manga, manhwas, and comics using AI. Detects speech bubbles and outside-bubble text, removes original text with diffusion inpainting, and typesets translations across 60+ languages using LLMs and custom fonts.
+</div>
+
+<br/>
+
+<div align="center">
   <table>
     <tr>
-      <th style="text-align: left">Original</th>
-      <th style="text-align: left">Translated (w/ a single click)</th>
+      <th style="text-align: center">Original</th>
+      <th style="text-align: center">Translated (One-Click)</th>
     </tr>
     <tr>
       <td><img src="docs/images/example_original.jpg" width="400" /></td>
@@ -17,237 +33,94 @@ Gradio-based web application for automating the translation of manga/comic page 
   </table>
 </div>
 
-## Table of Contents
+---
 
-- [Features](#features)
-- [Requirements](#requirements)
-- [Install](#install)
-- [Post-Install Setup](#post-install-setup)
-- [Run](#run)
-- [Documentation](#documentation)
-- [Updating](#updating)
-- [License & Credits](#license--credits)
+## Quick Setup
+
+### 1. Download
+
+- **Portable Package (Recommended):** Download the portable build from [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable).
+  - *Windows:* No requirements.
+  - *Linux / macOS:* Requires Python 3.10+ and Git.
+- **From Source:**
+  ```bash
+  git clone https://github.com/meangrinch/MangaTranslator.git
+  cd MangaTranslator
+  python -m venv venv
+  # Activate: .\venv\Scripts\activate (Windows) or source venv/bin/activate (Linux/macOS)
+  pip install -r requirements.txt
+  ```
+
+### 2. Configure
+
+- **Provider:** In the Web UI, navigate to Config → Translation to select your LLM provider (e.g., Google, OpenAI, Anthropic, DeepSeek...) and enter your API key, or use a local OpenAI-compatible endpoint (e.g., llama.cpp). Save to config to persist API keys/settings across sessions.
+- **Outside-Bubble Text (Optional):** Navigate to Config → OSB Text and set a Hugging Face token with access to [deepghs/AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo).
+- **Environment Variables:** Alternatively, you can configure credentials in your environment (e.g., `GEMINI_API_KEY`, `HF_TOKEN`) for both Web UI and CLI usage.
+
+*For additional information, see [Configuration](docs/CONFIGURATION.md).*
+
+### 3. Translate
+
+- **Web UI:** Upload images to the Translator/Batch tab and click Translate.
+- **CLI:**
+  ```bash
+  python main.py --input "path/to/page.jpg" --input-language "Japanese" --output-language "English" --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> --osb-enable --osb-font-dir "fonts/Comicka" --osb-hf-token <...>
+  ```
+*For additional examples, see [CLI](docs/CLI.md).*
+
+---
 
 ## Features
 
-- **Detection**: Speech bubble detection & segmentation (YOLO, SAM 2.1/3)
-- **Cleaning**: Inpaint speech bubbles and OSB text (FLUX.2 Klein, FLUX.1 Kontext, or OpenCV)
-- **Translation**: LLM-powered OCR & translation (60 languages)
-- **Rendering**: Custom text rendering engine with alignment and custom font packs
-- **Upscaling**: Text region and full page artwork upscaling (2x-AnimeSharpV4)
-- **Processing**: Single/batch processing with directory preservation and ZIP support
+- **Detection**: Speech bubble and outside-bubble text detection (YOLO, SAM 2.1/3)
+- **Cleaning**: Inpaint speech bubbles and background text (FLUX.2 Klein, FLUX.1 Kontext, or OpenCV)
+- **Translation**: OCR and translation supporting 60+ languages (cloud API or local LLM)
+- **Rendering**: Custom text rendering with alignment, word wrap, and custom font packs
+- **Upscaling**: Text region and full-page artwork upscaling (2x-AnimeSharpV4)
+- **Processing**: Single image, folder, and ZIP archive batch processing (with directory preservation)
 - **Configuration**: Flexible controls to adapt to diverse page layouts and fine-tune output quality
 - **Interfaces**: Web UI (Gradio) and CLI
-- **Automation**: One-click translation; no intervention required
+- **Automation**: One-click translation; no manual intervention required
 
-## Requirements
-
-- Python 3.10+
-- PyTorch (CPU, CUDA, ROCm, XPU, MPS)
-- Font pack with `.ttf`/`.otf` files; included with portable package
-- LLM for Japanese source text; VLM for other languages (API or local)
-
-## Install
-
-### Portable Package (Recommended)
-
-Download the standalone zip from the releases page: [Portable Build](https://github.com/meangrinch/MangaTranslator/releases/tag/portable)
-
-**Requirements:**
-
-- **Windows:** Bundled Python/Git included; no additional requirements
-- **Linux/macOS:** Python 3.10+ and Git must be installed on your system
-
-> [!TIP]
-> In the event that you need to transfer to a fresh portable package:
->
-> - You can safely move the `fonts`, `models`, and `output` directories to the new portable package
-> - You might be able to move the `runtime` directory over, assuming the same setup configuration is wanted
-
-### Manual install
-
-1. Clone and enter the repo
-
-```bash
-git clone https://github.com/meangrinch/MangaTranslator.git
-cd MangaTranslator
-```
-
-2. Create and activate a virtual environment (recommended)
-
-```bash
-python -m venv venv
-# Windows PowerShell/CMD
-.\venv\Scripts\activate
-# Linux/macOS
-source venv/bin/activate
-```
-
-3. Install PyTorch (see: [PyTorch Install](https://pytorch.org/get-started/locally/))
-
-```bash
-# Example (CUDA 13.0)
-pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
-# Example (ROCm 7.1)
-pip install torch==2.11.0+rocm7.1 torchvision==0.26.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
-# Example (XPU)
-pip install torch==2.11.0+xpu torchvision==0.26.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
-# Example (MPS/CPU)
-pip install torch==2.11.0 torchvision==0.26.0
-```
-
-4. Install Nunchaku (optional, for FLUX.1 Kontext via Nunchaku backend)
-
-- Nunchaku wheels are not on PyPI. Install directly from the v1.3.0dev20260213 GitHub release URL, matching your OS and Python version. CUDA only, and requires a 2000-series card or newer.
-
-```bash
-# Example (Windows, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
-pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-win_amd64.whl
-
-# Example (Linux, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
-pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-linux_x86_64.whl
-```
-
-> [!NOTE]
-> Nunchaku is not necessary for the use of Flux models via the sd.cpp/SDNQ backends.
-
-5. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-## Post-Install Setup
-
-### Models
-
-- The application will automatically download and use all required models
-
-### Fonts
-
-- Put font packs as subfolders in `fonts/` with `.otf`/`.ttf` files
-- Prefer filenames that include `italic`/`bold` or both so variants are detected
-- Example structure:
-
-```text
-fonts/
-├─ CC Wild Words/
-│  ├─ CCWildWords-Regular.otf
-│  ├─ CCWildWords-Italic.otf
-│  ├─ CCWildWords-Bold.otf
-│  └─ CCWildWords-BoldItalic.otf
-└─ Komika Hand/
-   ├─ KOMIKA-HAND.ttf
-   └─ KOMIKA-HANDBOLD.ttf
-```
-
-### LLM setup
-
-- Providers: Google, OpenAI, Anthropic, SpaceXAI, Meta Model, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, QwenCloud, OpenCode, OpenRouter, OpenAI-Compatible
-- Web UI: configure provider/model/key in the Config tab (stored locally)
-- CLI: pass keys/URLs as flags or via env vars
-- Env vars: `GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `META_MODEL_API_KEY` / `META_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `QWENCLOUD_API_KEY` / `QWEN_API_KEY`, `OPENCODE_API_KEY` / `OPENCODE_ZEN_API_KEY` / `OPENCODE_GO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
-- OpenAI-Compatible provider supports local endpoints (e.g., `http://localhost:8080/v1`), and Azure OpenAI endpoints (e.g., `https://<resource>.openai.azure.com`)
-
-> [!NOTE]
-> The following models are automatically detected when used via the OpenAI-Compatible provider and receive optimized prompting. They are text-only and require two-step translation + local OCR. The `special_instructions` field maps to their corresponding glossary/terminology (one entry per line, e.g., `term -> translation`).
->
-> - **YanoljaNEXT-Rosetta** (e.g., `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`)
-> - **Hy-MT2** (e.g., `tencent/Hy-MT2-7B`). Also pre-fills the model's recommended sampling parameters
-
-### OSB text setup (optional)
-
-If you want to use the OSB text pipeline, you need a Hugging Face token with access to the following repositories:
-
-- `deepghs/AnimeText_yolo`
-
-#### Steps to create a token:
-
-1. Sign in or create a Hugging Face account
-2. Visit and accept the terms on:
-   - [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo)
-   - [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev) (optional, if using FLUX.1 Kontext via Nunchaku backend)
-   - [SAM 3](https://huggingface.co/facebook/sam3) (optional, if using SAM 3)
-3. Create a new access token in your Hugging Face settings with read access to gated repos ("Read access to contents of public gated repos")
-4. Add the token to the app:
-   - Web UI: set `hf_token` in Config
-   - Env var (alternative): set `HF_TOKEN`
-5. Save config to preserve the token across sessions
-
-## Run
-
-### Web UI (Gradio)
-
-- **Portable package:**
-  - Run `start-webui.bat` (Windows) or `./start-webui.sh` (Linux/macOS), located in `MangaTranslator/`
-- **Manual install:**
-  - Run `python app.py --open-browser`
-
-Run `python app.py --help` for launch options.
-First launch can take ~1–2 minutes.
-
-Once launched, configure your LLM provider in the Config tab, then upload images and click Translate.
-
-### CLI
-
-Examples:
-
-```bash
-# Single image, Japanese → English, Google provider, OSB text pipeline, custom OSB text font
-python main.py --input <image_path> \
-  --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> \
-  --osb-enable --osb-font-dir "fonts/Comicka"
-
-# Batch folder, Japanese → Chinese (Simplified), OpenAI-Compatible provider (llama.cpp), OSB text pipeline, custom OSB text font
-python main.py --input <folder_path> --batch \
-  --font-dir "fonts/Noto Sans SC" --output-language "Chinese (Simplified)" \
-  --provider OpenAI-Compatible --openai-compatible-url http://localhost:8080/v1 \
-  --output ./output --osb-enable --osb-font-dir "fonts/Noto Sans SC"
-
-# Cleaning-only mode (no translation)
-python main.py --input <image_path> --cleaning-only
-
-# Upscaling-only mode (no translation)
-python main.py --input <image_path> --upscaling-only --image-upscale-mode final --image-upscale-factor 2.0
-
-# Full options
-python main.py --help
-```
+---
 
 ## Documentation
 
 - [Hardware Requirements](docs/HARDWARE_REQUIREMENTS.md)
-- [Recommended Fonts](docs/FONTS.md)
+- [Installation](docs/INSTALLATION.md)
+- [Configuration](docs/CONFIGURATION.md)
+- [CLI](docs/CLI.md)
+- [Fonts](docs/FONTS.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 
-## Updating
+---
 
-### Portable Package
+## Support the Project
 
-- Run `update.bat` (Windows) or `./update.sh` (Linux/macOS) from the portable package root
+MangaTranslator is open-source and free. If it saves you time or enhances your reading experience, consider supporting its development!
 
-### Manual Install
+<p align="center">
+  <a href="https://ko-fi.com/grinnch" target="_blank">
+    <img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" alt="Support on Ko-fi" height="38"/>
+  </a>
+</p>
 
-From the repo root:
+---
 
-```bash
-git pull
-pip install -r requirements.txt  # Or activate venv first if present
-```
-
-## License & credits
+## License & Credits
 
 - License: Apache-2.0 (see [LICENSE](LICENSE))
 - Author: [grinnch](https://github.com/meangrinch)
+
 <details>
-<summary><b>ML Models & Libraries</b></summary>
+<summary><b>ML Models and Libraries</b></summary>
 
 - YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Manga109 Speech Bubble Detector: [huyvux3005](https://huggingface.co/huyvux3005/manga109-segmentation-bubble)
 - Comic Text and Bubble Detector RT-DETR-v2: [ogkalu](https://huggingface.co/ogkalu/comic-text-and-bubble-detector)
 - Manga109 YOLO: [deepghs](https://huggingface.co/deepghs/manga109_yolo)
 - AnimeText YOLO: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
-- SAM 2.1: Segment Anything in Images and Videos: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
+- SAM 2.1: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
 - SAM 3: [Meta AI](https://huggingface.co/facebook/sam3)
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)
 - PaddleOCR-VL-1.6: [PaddlePaddle](https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6)

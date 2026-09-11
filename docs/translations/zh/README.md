@@ -1,14 +1,30 @@
-[English](../../../README.md) | [简体中文](README.md) | [한국어](../ko/README.md) | [日本語](../ja/README.md)
+<p align="center">
+  <a href="../../../README.md">English</a> |
+  <a href="README.md">简体中文</a> |
+  <a href="../ko/README.md">한국어</a> |
+  <a href="../ja/README.md">日本語</a>
+</p>
 
-## MangaTranslator
+<h1 align="center"><b>MangaTranslator</b></h1>
 
-基于 Gradio 的 Web 应用程序，用于使用 AI 自动翻译漫画/动漫页面图像。针对对话框（气泡框）和对话框外的文本。支持 60 种语言，并支持自定义字体包。
+<p align="center">
+  <img src="https://img.shields.io/github/v/release/meangrinch/MangaTranslator?label=Release&labelColor=181717&color=0877d2" />
+  <img src="https://img.shields.io/github/downloads/meangrinch/MangaTranslator/total?label=Downloads&labelColor=181717&color=0877d2" />
+  <img src="https://img.shields.io/github/license/meangrinch/MangaTranslator?labelColor=181717&color=2ea44f" />
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&labelColor=181717" />
+</p>
 
-<div align="left">
+<div align="center">
+用于使用 AI 自动翻译漫画、条漫 (Manhwa) 和美漫的端到端工具。自动检测对话框与框外文本，利用扩散模型进行图像修复以擦除原文，并通过大语言模型 (LLM) 和自定义字体包实现 60 多种语言的自动排版翻译。
+</div>
+
+<br/>
+
+<div align="center">
   <table>
     <tr>
-      <th style="text-align: left">原文</th>
-      <th style="text-align: left">翻译后（一键完成）</th>
+      <th style="text-align: center">原文</th>
+      <th style="text-align: center">翻译后（一键完成）</th>
     </tr>
     <tr>
       <td><img src="../../images/example_original.jpg" width="400" /></td>
@@ -17,238 +33,94 @@
   </table>
 </div>
 
-## 目录
+---
 
-- [功能特点](#功能特点)
-- [运行要求](#运行要求)
-- [安装](#安装)
-- [安装后设置](#安装后设置)
-- [运行](#运行)
-- [文档](#文档)
-- [更新](#更新)
-- [许可证和鸣谢](#许可证和鸣谢)
+## 快速上手
+
+### 1. 下载
+
+- **便携版（推荐）：** 从 [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable) 下载便携版构建。
+  - *Windows：* 无需额外系统要求。
+  - *Linux / macOS：* 需要系统安装 Python 3.10+ 和 Git。
+- **源码安装：**
+  ```bash
+  git clone https://github.com/meangrinch/MangaTranslator.git
+  cd MangaTranslator
+  python -m venv venv
+  # 激活虚拟环境：.\venv\Scripts\activate (Windows) 或 source venv/bin/activate (Linux/macOS)
+  pip install -r requirements.txt
+  ```
+
+### 2. 配置
+
+- **服务商设置：** 在 Web UI 中，前往 Config → Translation 选择大语言模型服务商（例如 Google、OpenAI、Anthropic、DeepSeek 等）并输入 API 密钥，或使用本地 OpenAI 兼容端点（例如 llama.cpp）。保存配置以跨会话保留设置。
+- **对话框外文本（可选）：** 前往 Config → OSB Text 并设置具有 [deepghs/AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo) 访问权限的 Hugging Face 令牌。
+- **环境变量：** 或者，可以在系统环境中配置凭据（例如 `GEMINI_API_KEY`、`HF_TOKEN`），同时适用于 Web UI 和命令行。
+
+*更多信息请参阅 [配置](CONFIGURATION.md)。*
+
+### 3. 翻译
+
+- **Web UI：** 将图像上传到 Translator/Batch 选项卡，然后点击 Translate。
+- **CLI：**
+  ```bash
+  python main.py --input "path/to/page.jpg" --input-language "Japanese" --output-language "English" --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> --osb-enable --osb-font-dir "fonts/Comicka" --osb-hf-token <...>
+  ```
+*更多示例请参阅 [CLI](CLI.md)。*
+
+---
 
 ## 功能特点
 
-- **检测**：对话框（气泡框）检测与分割（YOLO、SAM 2.1/3）
-- **擦除**：擦除对话框和对话框外 (OSB) 的文本（FLUX.2 Klein、FLUX.1 Kontext 或 OpenCV）
-- **翻译**：基于大语言模型 (LLM) 的 OCR 与翻译（支持 60 种语言）
-- **渲染**：支持排版对齐和自定义字体包的自定义文本渲染引擎
+- **检测**：对话框与对话框外文本检测（YOLO、SAM 2.1/3）
+- **擦除**：对话框与背景文本的重绘擦除（FLUX.2 Klein、FLUX.1 Kontext 或 OpenCV）
+- **翻译**：支持 60 多种语言的 OCR 与翻译（云端 API 或本地 LLM）
+- **渲染**：支持对齐、自动换行和自定义字体包的文本渲染引擎
 - **超分辨率**：文本区域与整页原画超分辨率放大（2x-AnimeSharpV4）
-- **处理**：支持目录结构保留与 ZIP 压缩包的单张/批量处理
+- **处理**：支持目录结构保留的单图、文件夹和 ZIP 批量处理
 - **配置**：灵活的配置选项，可适应多样的页面布局并精细调整输出质量
 - **界面**：Web UI (Gradio) 和命令行界面 (CLI)
 - **自动化**：一键翻译，无需人工干预
 
-## 运行要求
-
-- Python 3.10+
-- PyTorch (支持 CPU、CUDA、ROCm、XPU、MPS)
-- 包含 `.ttf`/`.otf` 文件的字体包；便携版已包含
-- 日文原文需使用大语言模型（LLM）；其他语言需使用多模态模型（VLM）（支持 API 或本地部署）
-
-## 安装
-
-### 便携版（推荐）
-
-从 Releases 页面下载独立压缩包：[Portable Build (便携版构建)](https://github.com/meangrinch/MangaTranslator/releases/tag/portable)
-
-**系统要求：**
-
-- **Windows：** 已捆绑 Python/Git；无其他额外系统要求
-- **Linux/macOS：** 系统中必须安装有 Python 3.10+ 和 Git
-
-> [!TIP]
-> 如果您需要迁移到新的便携版：
->
-> - 您可以安全地将 `fonts`、`models` 和 `output` 目录移动到新的便携版中
-> - 在设置配置相同的情况下，您也可以直接迁移 `runtime` 目录
-
-### 手动安装
-
-1. 克隆并进入仓库
-
-```bash
-git clone https://github.com/meangrinch/MangaTranslator.git
-cd MangaTranslator
-```
-
-2. 创建并激活虚拟环境（推荐）
-
-```bash
-python -m venv venv
-# Windows PowerShell/CMD
-.\venv\Scripts\activate
-# Linux/macOS
-source venv/bin/activate
-```
-
-3. 安装 PyTorch（请参阅：[PyTorch 安装指南](https://pytorch.org/get-started/locally/)）
-
-```bash
-# 示例 (CUDA 13.0)
-pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
-# 示例 (ROCm 7.1)
-pip install torch==2.11.0+rocm7.1 torchvision==0.26.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
-# 示例 (XPU)
-pip install torch==2.11.0+xpu torchvision==0.26.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
-# 示例 (MPS/CPU)
-pip install torch==2.11.0 torchvision==0.26.0
-```
-
-4. 安装 Nunchaku（可选，用于通过 Nunchaku 后端运行 FLUX.1 Kontext）
-
-- Nunchaku 的 wheel 包未发布在 PyPI 上。请直接从 v1.3.0dev20260213 GitHub release URL 安装适配您系统和 Python 版本的包。仅支持 CUDA，且需要 2000 系列及以上的显卡。
-
-```bash
-# 示例 (Windows, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
-pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-win_amd64.whl
-
-# 示例 (Linux, Python 3.13, PyTorch 2.11.0, CUDA 13.0)
-pip install https://github.com/nunchaku-ai/nunchaku/releases/download/v1.3.0dev20260213/nunchaku-1.3.0.dev20260213+cu13.0torch2.11-cp313-cp313-linux_x86_64.whl
-```
-
-> [!NOTE]
-> 通过 sd.cpp/SDNQ 后端使用 Flux 模型时，不需要安装 Nunchaku。
-
-5. 安装依赖项
-
-```bash
-pip install -r requirements.txt
-```
-
-## 安装后设置
-
-### 模型 (Models)
-
-- 应用程序将自动下载并使用所有必需的模型
-
-### 字体 (Fonts)
-
-- 将字体包作为子文件夹存放在 `fonts/` 目录下，其中应包含 `.otf`/`.ttf` 文件
-- 字体文件名中最好包含 `italic`（斜体）/`bold`（粗体）或两者兼有，以便程序自动检测字形变体
-- 示例目录结构：
-
-```text
-fonts/
-├─ CC Wild Words/
-│  ├─ CCWildWords-Regular.otf
-│  ├─ CCWildWords-Italic.otf
-│  ├─ CCWildWords-Bold.otf
-│  └─ CCWildWords-BoldItalic.otf
-└─ Komika Hand/
-   ├─ KOMIKA-HAND.ttf
-   └─ KOMIKA-HANDBOLD.ttf
-```
-
-### 大语言模型设置 (LLM Setup)
-
-- 服务商支持：Google, OpenAI, Anthropic, SpaceXAI, Meta Model, DeepSeek, Z.ai, Moonshot AI, Xiaomi MiMo, QwenCloud, OpenCode, OpenRouter, OpenAI-Compatible (OpenAI兼容)
-- Web UI：在 Config (配置) 选项卡中配置服务商、模型和 API 密钥（将保存在本地）
-- CLI：通过命令行参数或环境变量传递密钥/URL
-- 环境变量：`GOOGLE_API_KEY` / `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SPACEXAI_API_KEY` / `XAI_API_KEY`, `META_MODEL_API_KEY` / `META_API_KEY`, `DEEPSEEK_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MIMO_API_KEY`, `QWENCLOUD_API_KEY` / `QWEN_API_KEY`, `OPENCODE_API_KEY` / `OPENCODE_ZEN_API_KEY` / `OPENCODE_GO_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`
-- OpenAI-Compatible (OpenAI兼容) 服务商支持本地端点（例如 `http://localhost:8080/v1`）和 Azure OpenAI 端点（例如 `https://<resource>.openai.azure.com`）
-
-> [!NOTE]
-> 当通过 OpenAI 兼容服务商使用以下模型时，程序会自动检测并使用优化的提示词。这些是纯文本模型，需要启用两步翻译模式和本地 OCR 模型。`special_instructions` (特殊说明) 字段将被映射为对应的词汇表/术语表（每行一个条目，例如 `term -> translation`）。
->
-> - **YanoljaNEXT-Rosetta** (例如 `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`)
-> - **Hy-MT2** (例如 `tencent/Hy-MT2-7B`)。同时也会自动填充该模型的推荐采样参数。
-
-### 对话框外 (OSB) 文本设置（可选）
-
-如果您希望使用对话框外（气泡外）文本擦除与重绘管线，您需要拥有一个对以下 Hugging Face 仓库具有访问权限的 Token：
-
-- `deepghs/AnimeText_yolo`
-
-#### 创建 Token 的步骤：
-
-1. 登录或创建一个 Hugging Face 账号
-2. 访问并接受以下仓库的许可协议：
-   - [AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo)
-   - [FLUX.1 Kontext (dev)](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)（可选，如果通过 Nunchaku 后端使用 FLUX.1 Kontext）
-   - [SAM 3](https://huggingface.co/facebook/sam3)（可选，如果使用 SAM 3）
-3. 在 Hugging Face 设置中创建一个新的 Access Token，并赋予对受门控仓库的只读权限（"Read access to contents of public gated repos"）
-4. 将 Token 添加到应用程序中：
-   - Web UI：在 Config 中设置 `hf_token`
-   - 环境变量（替代方案）：设置 `HF_TOKEN`
-5. 保存配置以在以后的会话中保留 Token
-
-## 运行
-
-### Web UI (Gradio)
-
-- **便携版：**
-  - 在 `MangaTranslator/` 目录下运行 `start-webui.bat`（Windows）或 `./start-webui.sh`（Linux/macOS）
-- **手动安装：**
-  - 运行 `python app.py --open-browser`
-
-运行 `python app.py --help` 查看启动选项。
-首次启动可能需要大约 1–2 分钟。
-
-启动后，在 Config 选项卡中配置您的大语言模型服务商，然后上传图片并点击 Translate。
-
-### CLI (命令行界面)
-
-使用示例：
-
-```bash
-# 单张图片，日译英，Google 服务商，对话框外文本管线，自定义对话框外文本字体
-python main.py --input <图片路径> \
-  --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> \
-  --osb-enable --osb-font-dir "fonts/Comicka"
-
-# 批量文件夹，日译简体中文，OpenAI 兼容服务商 (llama.cpp)，对话框外文本管线，自定义对话框外文本字体
-python main.py --input <文件夹路径> --batch \
-  --font-dir "fonts/Noto Sans SC" --output-language "Chinese (Simplified)" \
-  --provider OpenAI-Compatible --openai-compatible-url http://localhost:8080/v1 \
-  --output ./output --osb-enable --osb-font-dir "fonts/Noto Sans SC"
-
-# 仅擦除模式（不进行翻译）
-python main.py --input <图片路径> --cleaning-only
-
-# 仅超分辨率模式（不进行翻译）
-python main.py --input <图片路径> --upscaling-only --image-upscale-mode final --image-upscale-factor 2.0
-
-# 查看全部选项
-python main.py --help
-```
+---
 
 ## 文档
 
-- [硬件运行要求](HARDWARE_REQUIREMENTS.md)
-- [推荐字体](FONTS.md)
-- [常见问题与故障排除](TROUBLESHOOTING.md)
+- [硬件要求](HARDWARE_REQUIREMENTS.md)
+- [安装](INSTALLATION.md)
+- [配置](CONFIGURATION.md)
+- [CLI](CLI.md)
+- [字体](FONTS.md)
+- [故障排除](TROUBLESHOOTING.md)
 
-## 更新
+---
 
-### 便携版
+## 支持项目
 
-- 在便携版根目录下运行 `update.bat`（Windows）或 `./update.sh`（Linux/macOS）
+MangaTranslator 是免费且开源的。如果它为您节省了时间或改善了阅读体验，欢迎考虑支持它的开发！
 
-### 手动安装
+<p align="center">
+  <a href="https://ko-fi.com/grinnch" target="_blank">
+    <img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" alt="Support on Ko-fi" height="38"/>
+  </a>
+</p>
 
-在仓库根目录下运行：
-
-```bash
-git pull
-pip install -r requirements.txt  # 如果有虚拟环境，请先激活虚拟环境
-```
+---
 
 ## 许可证和鸣谢
 
-- 许可证：Apache-2.0 (见 [LICENSE](../../../LICENSE))
+- 许可证：Apache-2.0（参见 [LICENSE](../../../LICENSE)）
 - 作者：[grinnch](https://github.com/meangrinch)
 
 <details>
-<summary><b>机器学习模型与库</b></summary>
+<summary><b>ML 模型与相关开源库</b></summary>
 
-- YOLOv8m 对话框检测器: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
-- Manga109 对话框检测器: [huyvux3005](https://huggingface.co/huyvux3005/manga109-segmentation-bubble)
-- Comic 文本与气泡检测 RT-DETR-v2: [ogkalu](https://huggingface.co/ogkalu/comic-text-and-bubble-detector)
+- YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
+- Manga109 Speech Bubble Detector: [huyvux3005](https://huggingface.co/huyvux3005/manga109-segmentation-bubble)
+- Comic Text and Bubble Detector RT-DETR-v2: [ogkalu](https://huggingface.co/ogkalu/comic-text-and-bubble-detector)
 - Manga109 YOLO: [deepghs](https://huggingface.co/deepghs/manga109_yolo)
 - AnimeText YOLO: [deepghs](https://huggingface.co/deepghs/AnimeText_yolo)
-- SAM 2.1: Segment Anything in Images and Videos: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
+- SAM 2.1: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
 - SAM 3: [Meta AI](https://huggingface.co/facebook/sam3)
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)
 - PaddleOCR-VL-1.6: [PaddlePaddle](https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6)
