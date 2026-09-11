@@ -40,16 +40,19 @@ AIを活用してマンガ、Webtoon（Manhwa）、アメコミなどの翻訳�
 ### 1. ダウンロード
 
 - **ポータブルパッケージ（推奨）：** [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable) からポータブルビルドをダウンロードします。
-  - *Windows：* 事前準備は不要です。
-  - *Linux / macOS：* Python 3.10以上およびGitが必要です。
+  - Windows： 事前準備は不要です。
+  - Linux / macOS： Python 3.10以上およびGitが必要です。
 - **ソースからインストール：**
   ```bash
   git clone https://github.com/meangrinch/MangaTranslator.git
   cd MangaTranslator
   python -m venv venv
-  # 仮想環境の有効化：.\venv\Scripts\activate (Windows) または source venv/bin/activate (Linux/macOS)
+  .\venv\Scripts\activate # または source venv/bin/activate (Linux/macOS)
+  pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130 # または pip install torch==2.11.0 torchvision==0.26.0 (macOS)
   pip install -r requirements.txt
   ```
+
+*詳細については [インストール](INSTALLATION.md) を参照してください。*
 
 ### 2. 設定
 

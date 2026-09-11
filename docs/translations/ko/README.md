@@ -40,16 +40,19 @@ AI를 사용하여 만화, 웹툰(Manhwa), 코믹스를 번역하는 엔드투�
 ### 1. 다운로드
 
 - **포터블 패키지 (권장):** [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable)에서 포터블 빌드를 다운로드합니다.
-  - *Windows:* 추가 요구 사항 없음.
-  - *Linux / macOS:* Python 3.10+ 및 Git 설치 필요.
+  - Windows: 추가 요구 사항 없음.
+  - Linux / macOS: Python 3.10+ 및 Git 설치 필요.
 - **소스 코드 설치:**
   ```bash
   git clone https://github.com/meangrinch/MangaTranslator.git
   cd MangaTranslator
   python -m venv venv
-  # 가상 환경 활성화: .\venv\Scripts\activate (Windows) 또는 source venv/bin/activate (Linux/macOS)
+  .\venv\Scripts\activate # 또는 source venv/bin/activate (Linux/macOS)
+  pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130 # 또는 pip install torch==2.11.0 torchvision==0.26.0 (macOS)
   pip install -r requirements.txt
   ```
+
+*자세한 내용은 [설치](INSTALLATION.md)를 참조하세요.*
 
 ### 2. 설정
 

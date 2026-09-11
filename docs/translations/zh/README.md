@@ -40,16 +40,19 @@
 ### 1. 下载
 
 - **便携版（推荐）：** 从 [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable) 下载便携版构建。
-  - *Windows：* 无需额外系统要求。
-  - *Linux / macOS：* 需要系统安装 Python 3.10+ 和 Git。
+  - Windows： 无需额外系统要求。
+  - Linux / macOS： 需要系统安装 Python 3.10+ 和 Git。
 - **源码安装：**
   ```bash
   git clone https://github.com/meangrinch/MangaTranslator.git
   cd MangaTranslator
   python -m venv venv
-  # 激活虚拟环境：.\venv\Scripts\activate (Windows) 或 source venv/bin/activate (Linux/macOS)
+  .\venv\Scripts\activate # 或 source venv/bin/activate (Linux/macOS)
+  pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130 # 或 pip install torch==2.11.0 torchvision==0.26.0 (macOS)
   pip install -r requirements.txt
   ```
+
+*更多信息请参阅 [安装](INSTALLATION.md)。*
 
 ### 2. 配置
 
