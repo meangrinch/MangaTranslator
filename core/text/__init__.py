@@ -17,8 +17,11 @@ from .drawing_engine import (
 )
 from .font_manager import (
     LRUCache,
+    auto_map_variable_fonts,
     find_font_variants,
     get_font_features,
+    get_variable_font_style_info,
+    inspect_variable_font,
     load_font_data,
 )
 from .layout_engine import find_optimal_layout, shape_line
@@ -34,11 +37,14 @@ from .text_renderer import render_text_skia
 
 __all__ = [
     "LRUCache",
+    "auto_map_variable_fonts",
     "draw_layout",
     "find_font_variants",
     "find_optimal_breaks_dp",
     "find_optimal_layout",
     "get_font_features",
+    "get_variable_font_style_info",
+    "inspect_variable_font",
     "is_cjk_character",
     "is_rtl_script",
     "load_font_data",

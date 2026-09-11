@@ -6,7 +6,11 @@ import skia
 import uharfbuzz as hb
 from PIL import Image
 
-from core.text.font_manager import LRUCache, load_font_data
+from core.text.font_manager import (
+    LRUCache,
+    get_variable_font_style_info,
+    load_font_data,
+)
 from core.text.layout_engine import shape_line
 from core.text.text_processing import is_rtl_script, parse_styled_segments
 from utils.exceptions import FontError, RenderingError
@@ -37,12 +41,15 @@ def resolve_outline_width(
 
 def load_font_resources(
     font_path: str,
+    style: str = "regular",
 ) -> tuple[bytes, skia.Typeface, hb.Face]:
     """
     Loads font data, Skia Typeface, and HarfBuzz Face, using LRU caching.
+    Supports variable font styles and instances.
 
     Args:
         font_path: Path to the font file
+        style: Font style variant ("regular", "bold", "italic", "bold_italic")
 
     Returns:
         Tuple of (font_data, skia_typeface, harfbuzz_face)
@@ -51,13 +58,20 @@ def load_font_resources(
         FontError: If font data cannot be loaded or Skia/HarfBuzz resources fail to load
     """
     font_data = load_font_data(font_path)
+    cache_key = f"{font_path}::{style}"
 
     with _font_cache_lock:
-        typeface = _typeface_cache.get(font_path)
+        typeface = _typeface_cache.get(cache_key)
+        hb_face = _hb_face_cache.get(cache_key)
+        if typeface is not None and hb_face is not None:
+            return font_data, typeface, hb_face
+
+        var_info = get_variable_font_style_info(font_path, style)
+
         if typeface is None:
             skia_data = skia.Data.MakeWithoutCopy(font_data)
-            typeface = skia.Typeface.MakeFromData(skia_data)
-            if typeface is None:
+            base_typeface = skia.Typeface.MakeFromData(skia_data)
+            if base_typeface is None:
                 log_message(
                     f"Skia typeface load failed: {os.path.basename(font_path)}",
                     always_print=True,
@@ -65,21 +79,50 @@ def load_font_resources(
                 raise FontError(
                     f"Failed to create Skia typeface from font: {font_path}"
                 )
-            _typeface_cache.put(font_path, typeface)
 
-        hb_face = _hb_face_cache.get(font_path)
+            if var_info and var_info.get("coords"):
+                try:
+                    coords = skia.FontArguments.VariationPosition.Coordinates()
+                    for tag_str, val in var_info["coords"].items():
+                        tag_int = int.from_bytes(tag_str.encode("ascii"), "big")
+                        coords.append(
+                            skia.FontArguments.VariationPosition.Coordinate(
+                                tag_int, float(val)
+                            )
+                        )
+                    args = skia.FontArguments()
+                    args.setVariationDesignPosition(
+                        skia.FontArguments.VariationPosition(coords)
+                    )
+                    cloned_tf = base_typeface.makeClone(args)
+                    typeface = cloned_tf if cloned_tf is not None else base_typeface
+                except Exception as e:
+                    log_message(
+                        f"Failed to apply variation coordinates for {style} on {os.path.basename(font_path)}: {e}",
+                        always_print=True,
+                    )
+                    typeface = base_typeface
+            else:
+                typeface = base_typeface
+
+            _typeface_cache.put(cache_key, typeface)
+
         if hb_face is None:
             try:
-                hb_face = hb.Face(font_data)
-                _hb_face_cache.put(font_path, hb_face)
+                hb_idx = 0
+                if var_info and var_info.get("instance_index"):
+                    hb_idx = var_info["instance_index"] << 16
+
+                hb_face = hb.Face(font_data, hb_idx)
+                _hb_face_cache.put(cache_key, hb_face)
             except Exception as e:
                 log_message(
                     f"HarfBuzz face load failed: {os.path.basename(font_path)}: {e}",
                     always_print=True,
                 )
                 # Clean up Skia cache if HarfBuzz fails to avoid inconsistent state
-                if font_path in _typeface_cache:
-                    del _typeface_cache[font_path]
+                if cache_key in _typeface_cache:
+                    del _typeface_cache[cache_key]
                 raise FontError(
                     f"Failed to create HarfBuzz face from font: {font_path}"
                 ) from e

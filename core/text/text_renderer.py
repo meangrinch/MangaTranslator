@@ -248,7 +248,9 @@ def render_text_skia(
     for style_key in ["italic", "bold", "bold_italic"]:
         style_path = font_variants.get(style_key)
         if style_path:
-            _, _typeface, _hb_face = load_font_resources(str(style_path))
+            _, _typeface, _hb_face = load_font_resources(
+                str(style_path), style=style_key
+            )
             if _hb_face:
                 preload_hb_faces[style_key] = _hb_face
 
@@ -344,7 +346,7 @@ def render_text_skia(
             font_path = font_variants.get(style)
             if font_path:
                 log_message(f"Loading {style}: {font_path.name}", verbose=verbose)
-                _, typeface, hb_face = load_font_resources(str(font_path))
+                _, typeface, hb_face = load_font_resources(str(font_path), style=style)
                 if typeface and hb_face:
                     loaded_typefaces[style] = typeface
                     loaded_hb_faces[style] = hb_face

@@ -173,7 +173,11 @@ def sanitize_text_for_font(text: str, font_path: str, verbose: bool = False) -> 
     for char in text:
         codepoint = ord(char)
 
-        if char in STYLE_MARKER_CHARS or char in WHITESPACE_CHARS or codepoint in supported_codepoints:
+        if (
+            char in STYLE_MARKER_CHARS
+            or char in WHITESPACE_CHARS
+            or codepoint in supported_codepoints
+        ):
             sanitized_chars.append(char)
         else:
             removed_chars.append(char)
@@ -225,9 +229,223 @@ def _validate_font_file(font_file: Path, verbose: bool = False) -> bool:
         return False
 
 
-def find_font_variants(
-    font_dir: str, verbose: bool = False
-) -> dict[str, Path | None]:
+_var_font_info_cache: dict[str, dict | None] = {}
+_var_font_style_cache: dict[str, dict | None] = {}
+
+
+def inspect_variable_font(font_path: Path | str) -> dict | None:
+    """
+    Inspects a font file to determine if it is a variable font (contains an 'fvar' table).
+    Returns axis definitions and named instances, or None if it is a static font or invalid.
+    """
+    path_str = str(Path(font_path).resolve())
+    if path_str in _var_font_info_cache:
+        return _var_font_info_cache[path_str]
+
+    try:
+        tt = TTFont(path_str, fontNumber=0, lazy=True)
+        if "fvar" not in tt:
+            _var_font_info_cache[path_str] = None
+            return None
+
+        fvar = tt["fvar"]
+        axes = {
+            axis.axisTag: (axis.minValue, axis.defaultValue, axis.maxValue)
+            for axis in fvar.axes
+        }
+
+        instances = []
+        name_table = tt.get("name")
+        for i, inst in enumerate(fvar.instances):
+            name_str = ""
+            if name_table:
+                record = name_table.getName(
+                    inst.subfamilyNameID, 3, 1
+                ) or name_table.getName(inst.subfamilyNameID, 1, 0)
+                if record:
+                    name_str = record.toStr()
+            instances.append(
+                {
+                    "index": i + 1,  # 1-based index for HarfBuzz
+                    "name": name_str,
+                    "coords": dict(inst.coordinates),
+                }
+            )
+
+        info = {
+            "path": Path(path_str),
+            "axes": axes,
+            "instances": instances,
+        }
+        _var_font_info_cache[path_str] = info
+        return info
+    except Exception as e:
+        log_message(f"Variable font check failed for {os.path.basename(path_str)}: {e}")
+        _var_font_info_cache[path_str] = None
+        return None
+
+
+def resolve_variable_font_style(
+    vf_info: dict, target_weight: float = 400.0, target_italic: bool = False
+) -> dict:
+    """
+    Finds the best named instance or coordinates in a variable font for a target weight and italic state.
+    """
+    best_inst = None
+    min_dist = float("inf")
+
+    for inst in vf_info["instances"]:
+        coords = inst["coords"]
+        w = coords.get("wght", 400.0)
+        if "ital" in coords:
+            if target_italic and coords["ital"] < 0.5:
+                continue
+            if not target_italic and coords["ital"] > 0.5:
+                continue
+        if "slnt" in coords:
+            if target_italic and coords["slnt"] >= 0:
+                continue
+            if not target_italic and coords["slnt"] < 0:
+                continue
+
+        dist = abs(w - target_weight)
+        if dist < min_dist:
+            min_dist = dist
+            best_inst = inst
+
+    if best_inst:
+        return {
+            "instance_index": best_inst["index"],
+            "coords": dict(best_inst["coords"]),
+        }
+
+    coords = {}
+    if "wght" in vf_info["axes"]:
+        min_w, _def_w, max_w = vf_info["axes"]["wght"]
+        coords["wght"] = max(min_w, min(max_w, target_weight))
+    if target_italic:
+        if "ital" in vf_info["axes"]:
+            coords["ital"] = 1.0
+        elif "slnt" in vf_info["axes"]:
+            coords["slnt"] = vf_info["axes"]["slnt"][0]
+
+    return {
+        "instance_index": None,
+        "coords": coords,
+    }
+
+
+def get_variable_font_style_info(
+    font_path: Path | str, style: str = "regular"
+) -> dict | None:
+    """
+    Returns the variable font style parameters (instance_index and coords) for a given font file and style.
+    Returns None if the font is static.
+    """
+    path_str = str(Path(font_path).resolve())
+    cache_key = f"{path_str}::{style}"
+    if cache_key in _var_font_style_cache:
+        return _var_font_style_cache[cache_key]
+
+    vf_info = inspect_variable_font(path_str)
+    if not vf_info:
+        _var_font_style_cache[cache_key] = None
+        return None
+
+    target_weight = 700.0 if "bold" in style else 400.0
+    target_italic = "italic" in style
+
+    stem_lower = Path(path_str).stem.lower()
+    is_italic_file = "italic" in stem_lower or "oblique" in stem_lower
+
+    style_info = resolve_variable_font_style(
+        vf_info, target_weight, target_italic=target_italic or is_italic_file
+    )
+    _var_font_style_cache[cache_key] = style_info
+    return style_info
+
+
+def auto_map_variable_fonts(
+    font_files: list[Path], verbose: bool = False
+) -> dict[str, Path | None] | None:
+    """
+    Auto-maps styles (regular, bold, italic, bold_italic) from variable font files.
+    Returns mapping if variable fonts are found, or None if no variable fonts exist.
+    """
+    var_fonts = []
+    for f in font_files:
+        info = inspect_variable_font(f)
+        if info:
+            var_fonts.append(info)
+
+    if not var_fonts:
+        return None
+
+    roman_font = None
+    italic_font = None
+
+    for vf in var_fonts:
+        stem = vf["path"].stem.lower()
+        is_italic = "italic" in stem or "oblique" in stem
+        if is_italic:
+            if not italic_font:
+                italic_font = vf
+        else:
+            if not roman_font:
+                roman_font = vf
+
+    if not roman_font and var_fonts:
+        roman_font = var_fonts[0]
+
+    variants: dict[str, Path | None] = {
+        "regular": None,
+        "italic": None,
+        "bold": None,
+        "bold_italic": None,
+    }
+
+    if roman_font:
+        variants["regular"] = roman_font["path"]
+        get_variable_font_style_info(roman_font["path"], "regular")
+
+        has_bold_axis = (
+            "wght" in roman_font["axes"] and roman_font["axes"]["wght"][2] >= 600
+        )
+        has_bold_instance = any(
+            inst["coords"].get("wght", 0) >= 600 for inst in roman_font["instances"]
+        )
+        if has_bold_axis or has_bold_instance:
+            variants["bold"] = roman_font["path"]
+            get_variable_font_style_info(roman_font["path"], "bold")
+
+    if italic_font:
+        variants["italic"] = italic_font["path"]
+        get_variable_font_style_info(italic_font["path"], "italic")
+        has_bold_italic_axis = (
+            "wght" in italic_font["axes"] and italic_font["axes"]["wght"][2] >= 600
+        )
+        has_bold_italic_instance = any(
+            inst["coords"].get("wght", 0) >= 600 for inst in italic_font["instances"]
+        )
+        if has_bold_italic_axis or has_bold_italic_instance:
+            variants["bold_italic"] = italic_font["path"]
+            get_variable_font_style_info(italic_font["path"], "bold_italic")
+    elif roman_font and ("ital" in roman_font["axes"] or "slnt" in roman_font["axes"]):
+        variants["italic"] = roman_font["path"]
+        get_variable_font_style_info(roman_font["path"], "italic")
+        if variants["bold"]:
+            variants["bold_italic"] = roman_font["path"]
+            get_variable_font_style_info(roman_font["path"], "bold_italic")
+
+    found_styles = [f"{s}: {p.name}" for s, p in variants.items() if p]
+    log_message(
+        f"Auto-mapped variable font variants: {', '.join(found_styles)}",
+        verbose=verbose,
+    )
+    return variants
+
+
+def find_font_variants(font_dir: str, verbose: bool = False) -> dict[str, Path | None]:
     """
     Finds regular, italic, bold, and bold-italic font variants (.ttf, .otf)
     in a directory based on filename keywords. Caches results per directory.
@@ -276,6 +494,30 @@ def find_font_variants(
         )
         _font_variants_cache[resolved_dir] = font_variants
         return font_variants
+
+    # Check for variable fonts and auto-map if present
+    var_variants = auto_map_variable_fonts(font_files, verbose=verbose)
+    if var_variants and var_variants.get("regular"):
+        # Check if any missing variants can be provided by static files
+        for style in ["italic", "bold", "bold_italic"]:
+            if var_variants[style] is None:
+                for font_file in font_files:
+                    if not _validate_font_file(font_file, verbose=verbose):
+                        continue
+                    stem_lower = font_file.stem.lower()
+                    is_bold = any(kw in stem_lower for kw in FONT_KEYWORDS["bold"])
+                    is_italic = any(kw in stem_lower for kw in FONT_KEYWORDS["italic"])
+                    if style == "bold" and is_bold and not is_italic:
+                        var_variants["bold"] = font_file
+                        break
+                    elif style == "italic" and is_italic and not is_bold:
+                        var_variants["italic"] = font_file
+                        break
+                    elif style == "bold_italic" and is_bold and is_italic:
+                        var_variants["bold_italic"] = font_file
+                        break
+        _font_variants_cache[resolved_dir] = var_variants
+        return var_variants
 
     # Sort by name length (desc) to prioritize more specific names like "BoldItalic" over "Bold"
     font_files.sort(key=lambda x: len(x.name), reverse=True)
@@ -339,7 +581,12 @@ def find_font_variants(
         is_bold = any(kw in stem_lower for kw in FONT_KEYWORDS["bold"])
         is_italic = any(kw in stem_lower for kw in FONT_KEYWORDS["italic"])
         assigned = False
-        if is_regular and not is_bold and not is_italic and not font_variants["regular"]:
+        if (
+            is_regular
+            and not is_bold
+            and not is_italic
+            and not font_variants["regular"]
+        ):
             font_variants["regular"] = font_file
             assigned = True
             log_message(f"Found regular: {font_file.name}", verbose=verbose)
