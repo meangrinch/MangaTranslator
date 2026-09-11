@@ -157,10 +157,10 @@ class OutsideTextConfig:
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
     osb_use_ligatures: bool = False
-    osb_outline_ratio: float = 0.1
+    osb_outline_ratio: float = 0.15
     osb_line_spacing: float = 1.0
     osb_padding_pixels: float = 4.0
-    osb_auto_vertical_text: bool = False
+    osb_auto_vertical_text: bool = True
     osb_vertical_line_spacing_mult: float = 1.0
     osb_vertical_font_size_mult: float = 1.0
     osb_use_subpixel_rendering: bool = False

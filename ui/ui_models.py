@@ -156,10 +156,10 @@ class UIOutsideTextSettings:
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
     osb_use_ligatures: bool = False
-    osb_outline_ratio: float = 0.1
+    osb_outline_ratio: float = 0.15
     osb_line_spacing: float = 1.0
     osb_padding_pixels: float = 4.0
-    osb_auto_vertical_text: bool = False
+    osb_auto_vertical_text: bool = True
     osb_vertical_line_spacing_mult: float = 1.0
     osb_vertical_font_size_mult: float = 1.0
     osb_use_subpixel_rendering: bool = True
@@ -530,12 +530,12 @@ class UIConfigState:
                 osb_max_font_size=data.get("outside_text_osb_max_font_size", 64),
                 osb_min_font_size=data.get("outside_text_osb_min_font_size", 10),
                 osb_use_ligatures=data.get("outside_text_osb_use_ligatures", False),
-                osb_outline_ratio=data.get("outside_text_osb_outline_ratio", 0.1),
+                osb_outline_ratio=data.get("outside_text_osb_outline_ratio", 0.15),
                 osb_line_spacing=data.get("outside_text_osb_line_spacing", 1.0),
                 osb_padding_pixels=data.get("outside_text_osb_padding_pixels", 4.0),
                 osb_auto_vertical_text=data.get(
                     "outside_text_osb_auto_vertical_text",
-                    defaults.get("outside_text_osb_auto_vertical_text", False),
+                    defaults.get("outside_text_osb_auto_vertical_text", True),
                 ),
                 osb_vertical_line_spacing_mult=data.get(
                     "outside_text_osb_vertical_line_spacing_mult", 1.0

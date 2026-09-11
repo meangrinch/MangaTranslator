@@ -2078,7 +2078,7 @@ def create_layout(
                                     0,
                                     0.3,
                                     value=saved_settings.get(
-                                        "outside_text_osb_outline_ratio", 0.1
+                                        "outside_text_osb_outline_ratio", 0.15
                                     ),
                                     step=0.01,
                                     label="Outline Ratio",
@@ -2088,7 +2088,7 @@ def create_layout(
                                 gr.Markdown("### Text Layout")
                                 outside_text_osb_auto_vertical_text = gr.Checkbox(
                                     value=saved_settings.get(
-                                        "outside_text_osb_auto_vertical_text", False
+                                        "outside_text_osb_auto_vertical_text", True
                                     ),
                                     label="Auto Vertical OSB Text",
                                     info="Stack short translated OSB text vertically when it improves readability.",
@@ -2104,7 +2104,7 @@ def create_layout(
                                     label="OSB Vertical Line Spacing Multiplier",
                                     info="Adjusts vertical space between lines for vertical OSB text.",
                                     visible=saved_settings.get(
-                                        "outside_text_osb_auto_vertical_text", False
+                                        "outside_text_osb_auto_vertical_text", True
                                     ),
                                 )
                                 outside_text_osb_vertical_font_size_mult = gr.Slider(
@@ -2117,7 +2117,7 @@ def create_layout(
                                     label="OSB Vertical Font Size Multiplier",
                                     info="Multiplier for font size when OSB text is stacked vertically.",
                                     visible=saved_settings.get(
-                                        "outside_text_osb_auto_vertical_text", False
+                                        "outside_text_osb_auto_vertical_text", True
                                     ),
                                 )
                                 outside_text_osb_follow_tilt = gr.Checkbox(

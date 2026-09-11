@@ -804,7 +804,7 @@ def main():
     parser.add_argument(
         "--osb-outline-ratio",
         type=float,
-        default=0.1,
+        default=0.15,
         help="Outline width for OSB text as fraction of font size (0-0.3)",
     )
     parser.add_argument(
@@ -834,10 +834,12 @@ def main():
         "Increase for more space between text and region boundaries.",
     )
     parser.add_argument(
-        "--osb-auto-vertical-text",
-        action="store_true",
-        help="Automatically stack short translated OSB text vertically when it improves layout",
+        "--osb-no-auto-vertical-text",
+        dest="osb_auto_vertical_text",
+        action="store_false",
+        help="Disable automatically stacking short translated OSB text vertically",
     )
+    parser.set_defaults(osb_auto_vertical_text=True)
     parser.add_argument(
         "--osb-vertical-line-spacing-mult",
         type=float,
