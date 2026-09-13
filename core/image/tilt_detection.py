@@ -156,6 +156,7 @@ def detect_crop_tilt_angle(
     )
     crop_area = float(w * h)
     filtered_mask = np.zeros_like(winning_mask)
+    kept_comp_indices: list[int] = []
 
     for i in range(1, num_labels):
         area = stats[i, cv2.CC_STAT_AREA]
@@ -197,6 +198,7 @@ def detect_crop_tilt_angle(
         if aspect > 20.0 and thickness < 2.5:
             continue
 
+        kept_comp_indices.append(i)
         filtered_mask[labels == i] = 255
 
     valid_pixels = np.count_nonzero(filtered_mask)
@@ -362,7 +364,7 @@ def detect_crop_tilt_angle(
     # Method A: Centroid Regression
     valid_comp = [
         i
-        for i in range(1, num_labels)
+        for i in kept_comp_indices
         if stats[i, cv2.CC_STAT_AREA] >= max(8, int(crop_area * 0.0005))
     ]
     theta_a = None
