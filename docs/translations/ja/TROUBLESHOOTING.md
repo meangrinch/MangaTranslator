@@ -127,13 +127,13 @@
   - `hf_token` が設定されていることを確認してください（セットアップ/セットアップ後の設定を参照）。
 
 - **VRAM 不足 / CUDA エラー:**
-  - 「低 VRAM モード（Low VRAM Mode）」を有効にしてください（SDNQ のみ）。
   - より低い Flux/text_encoder 量子化を選択してください（sd.cpp のみ）。
   - 「Klein クロップ領域を ~1MP にアップスケール（Upscale Klein Crops to ~1MP）」を無効にしてください。
   - Flux.2 Klein 4B（最も小さいモデル）に切り替えてください。
   - OpenCV を使用してください（VRAM 不要）。
 
 - **Flux OSB インペイントが遅い:**
+  - 十分な VRAM がある場合は「低 VRAM モード（Low VRAM Mode）」を無効にしてください（SDNQ のみ）。
   - 「Flux 領域のグループ化（Group Flux Regions）」を有効にして、1回の Flux パスで複数の OSB マスクをインペイントします（品質が低下する場合があります）。
   - 「Klein クロップ領域を ~1MP にアップスケール（Upscale Klein Crops to ~1MP）」を無効にしてください（品質が低下する場合があります）。
   - 別のモデル/バックエンドに切り替えてみてください。

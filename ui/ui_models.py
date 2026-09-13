@@ -139,7 +139,7 @@ class UIOutsideTextSettings:
         "flux_klein_4b"  # flux_klein_9b, flux_klein_4b, flux_kontext, opencv, none
     )
     flux_backend: str = "sdnq"  # "sdcpp", "sdnq", "nunchaku" (Kontext only)
-    flux_low_vram: bool = False  # Use CPU offload for SDNQ
+    flux_low_vram: bool = True  # Use CPU offload for SDNQ
     flux_sdcpp_cache_mode: str = "none"
     flux_sdcpp_diffusion_quant: str = "Q4_K_M"
     flux_sdcpp_text_encoder_quant: str = "Q4_K_XL"
@@ -493,7 +493,7 @@ class UIConfigState:
                     "outside_text_flux_backend",
                     defaults.get("outside_text_flux_backend", "sdnq"),
                 ),
-                flux_low_vram=data.get("outside_text_flux_low_vram", False),
+                flux_low_vram=data.get("outside_text_flux_low_vram", True),
                 flux_sdcpp_cache_mode=data.get(
                     "outside_text_flux_sdcpp_cache_mode",
                     defaults.get("outside_text_flux_sdcpp_cache_mode", "none"),

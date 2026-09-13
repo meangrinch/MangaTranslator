@@ -701,10 +701,12 @@ def main():
         ),
     )
     parser.add_argument(
-        "--osb-flux-low-vram",
-        action="store_true",
-        help="Enable CPU offload for Flux SDNQ models (reduces VRAM usage)",
+        "--osb-no-flux-low-vram",
+        dest="osb_flux_low_vram",
+        action="store_false",
+        help="Disable CPU offload for Flux SDNQ models. Faster but uses more VRAM.)",
     )
+    parser.set_defaults(osb_flux_low_vram=True)
     parser.add_argument(
         "--osb-flux-sdcpp-cache-mode",
         type=str,

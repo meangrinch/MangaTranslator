@@ -1788,7 +1788,7 @@ def create_layout(
                                 ) and _initial_backend == "sdcpp"
                                 outside_text_flux_low_vram = gr.Checkbox(
                                     value=saved_settings.get(
-                                        "outside_text_flux_low_vram", False
+                                        "outside_text_flux_low_vram", True
                                     ),
                                     label="Low VRAM Mode",
                                     info="Sequential CPU offload for SDNQ.",

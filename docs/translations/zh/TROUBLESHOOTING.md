@@ -128,13 +128,13 @@
   - 确保已设置 `hf_token`（参见 安装/安装后设置）
 
 - **显存不足 (Out of VRAM) / CUDA 错误：**
-  - 启用“低显存模式 (Low VRAM Mode)”（仅限 SDNQ）
   - 选择较低的 Flux/文本编码器量化版本（仅限 sd.cpp）
   - 禁用“将 Klein 裁剪块放大到约 100万像素 (Upscale Klein Crops to ~1MP)”
   - 切换至 Flux.2 Klein 4B（最小的模型）
   - 使用 OpenCV（不需要显存）
 
 - **Flux OSB 重绘速度过慢：**
+  - 如果显存充足，请禁用“低显存模式 (Low VRAM Mode)”（仅限 SDNQ）
   - 启用“合并 Flux 区域 (Group Flux Regions)”以在单次 Flux 运行中重绘多个 OSB 掩码（代价是会降低质量）
   - 禁用“将 Klein 裁剪块放大到约 100万像素 (Upscale Klein Crops to ~1MP)”（代价是会降低质量）
   - 尝试切换到其他模型/后端

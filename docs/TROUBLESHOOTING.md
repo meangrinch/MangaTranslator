@@ -128,13 +128,13 @@
   - Ensure hf_token is set (see Installation/Post-Install Setup)
 
 - **Out of VRAM / CUDA errors:**
-  - Enable "Low VRAM Mode" (SDNQ only)
   - Select a lower Flux/text_encoder quant (sd.cpp only)
   - Disable "Upscale Klein Crops to ~1MP"
   - Switch to Flux.2 Klein 4B (smallest model)
   - Use OpenCV (no VRAM required)
 
 - **Slow Flux OSB inpainting:**
+  - Disable "Low VRAM Mode" if you have sufficient VRAM (SDNQ only)
   - Enable "Group Flux Regions" to inpaint multiple OSB masks in one Flux pass (at the cost of quality)
   - Disable "Upscale Klein Crops to ~1MP" (at the cost of quality)
   - Try switching to a different model/backend

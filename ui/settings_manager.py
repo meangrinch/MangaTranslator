@@ -257,7 +257,7 @@ DEFAULT_SETTINGS = {
     "outside_text_huggingface_token": "",
     "outside_text_inpainting_method": "flux_klein_4b",
     "outside_text_flux_backend": "sdnq",
-    "outside_text_flux_low_vram": False,
+    "outside_text_flux_low_vram": True,
     "outside_text_flux_sdcpp_cache_mode": "none",
     "outside_text_flux_sdcpp_diffusion_quant": "Q4_K_M",
     "outside_text_flux_sdcpp_text_encoder_quant": "Q4_K_XL",
