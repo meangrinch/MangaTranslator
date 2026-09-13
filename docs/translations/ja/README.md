@@ -69,7 +69,11 @@ AIを活用してマンガ、Webtoon（Manhwa）、アメコミなどの翻訳�
   ```bash
   python main.py --input "path/to/page.jpg" --input-language "Japanese" --output-language "English" --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> --osb-enable --osb-font-dir "fonts/Comicka" --osb-hf-token <...>
   ```
+
 *その他の使用例については [CLI](CLI.md) を参照してください。*
+
+> [!TIP]
+> Web UIの Config → Other 画面で `Cleaning-only Mode` を有効にするか、CLIで `--cleaning-only` を指定することで、翻訳を行わずにテキストの消去のみを行うことができます（手動写植・編集用など）。
 
 ---
 

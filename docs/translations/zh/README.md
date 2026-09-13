@@ -69,7 +69,11 @@
   ```bash
   python main.py --input "path/to/page.jpg" --input-language "Japanese" --output-language "English" --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> --osb-enable --osb-font-dir "fonts/Comicka" --osb-hf-token <...>
   ```
+
 *更多示例请参阅 [CLI](CLI.md)。*
+
+> [!TIP]
+> 可以在 Web UI 中前往 Config → Other 启用 `Cleaning-only Mode`，或在 CLI 中传入 `--cleaning-only`，以仅去除文本而不进行翻译（例如用于手动修图/嵌字）。
 
 ---
 

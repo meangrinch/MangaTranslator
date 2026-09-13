@@ -69,7 +69,11 @@ An end-to-end pipeline for translating manga, manhwas, and comics using AI. Dete
   ```bash
   python main.py --input "path/to/page.jpg" --input-language "Japanese" --output-language "English" --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> --osb-enable --osb-font-dir "fonts/Comicka" --osb-hf-token <...>
   ```
+
 *For additional examples, see [CLI](docs/CLI.md).*
+
+> [!TIP]
+> You can enable `Cleaning-only Mode` by navigating to Config -> Other in the Web UI, or pass `--cleaning-only` in the CLI, to remove text without translating (e.g., for manual scanlation).
 
 ---
 

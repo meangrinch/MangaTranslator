@@ -69,7 +69,11 @@ AI를 사용하여 만화, 웹툰(Manhwa), 코믹스를 번역하는 엔드투�
   ```bash
   python main.py --input "path/to/page.jpg" --input-language "Japanese" --output-language "English" --font-dir "fonts/Komika Hand" --provider Google --google-api-key <...> --osb-enable --osb-font-dir "fonts/Comicka" --osb-hf-token <...>
   ```
+
 *추가 예시는 [CLI](CLI.md)를 참조하세요.*
+
+> [!TIP]
+> Web UI의 Config → Other 탭에서 `Cleaning-only Mode`를 활성화하거나 CLI에서 `--cleaning-only`를 전달하여 번역 없이 텍스트만 제거할 수 있습니다 (예: 수동 식자/스캔레이션 작업용).
 
 ---
 
