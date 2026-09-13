@@ -293,21 +293,33 @@ def detect_crop_tilt_angle(
             # Parallel columns disagree -> fail-safe 0.0
             return 0.0, 0.0, oriented_dims, "vertical"
 
-        # Projection-profile optimization for vertical text deskewing
-        # In Skia: negative angle rotates counter-clockwise (bottom to the right).
-        # In OpenCV: positive angle rotates counter-clockwise, so passing theta deskews text at Skia angle theta.
-        scores = []
-        base_conc = 0.0
-        c_0 = np.sum(filtered_mask > 0, axis=0).astype(np.float64)
-        if np.sum(c_0) > 0:
-            base_conc = np.sum(c_0**2) / (np.sum(c_0) ** 2)
+        # Prevent boundary clipping from falsely spiking column concentration on narrow crops
+        diag = int(np.ceil(np.hypot(w, h)))
+        pad_x = (diag - w) // 2
+        pad_y = (diag - h) // 2
+        padded_mask = cv2.copyMakeBorder(
+            filtered_mask,
+            pad_y,
+            diag - h - pad_y,
+            pad_x,
+            diag - w - pad_x,
+            cv2.BORDER_CONSTANT,
+            value=0,
+        )
 
+        scores = []
+        c_0 = np.sum(padded_mask > 0, axis=0).astype(np.float64)
+        base_total = np.sum(c_0)
+        base_conc = (np.sum(c_0**2) / (base_total**2)) if base_total > 0 else 0.0
+
+        # Positive OpenCV rotation deskews Skia counter-clockwise tilt
+        rot_center = (pad_x + w / 2.0, pad_y + h / 2.0)
         for s_deg in range(-int(max_tilt_deg), int(max_tilt_deg) + 1):
-            m = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), float(s_deg), 1.0)
-            rot = cv2.warpAffine(filtered_mask, m, (w, h), flags=cv2.INTER_NEAREST)
+            m = cv2.getRotationMatrix2D(rot_center, float(s_deg), 1.0)
+            rot = cv2.warpAffine(padded_mask, m, (diag, diag), flags=cv2.INTER_NEAREST)
             col_counts = np.sum(rot > 0, axis=0).astype(np.float64)
             total = np.sum(col_counts)
-            if total <= 0:
+            if total < 0.85 * base_total or total <= 0:
                 continue
             conc = np.sum(col_counts**2) / (total**2)
             scores.append((float(s_deg), conc))
