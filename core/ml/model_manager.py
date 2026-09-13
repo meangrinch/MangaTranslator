@@ -54,6 +54,31 @@ class ModelType(Enum):
     FLUX_KONTEXT_SDCPP_VAE = "flux_kontext_sdcpp_vae"
 
 
+def _can_use_sdnq_quantized_matmul(
+    device: torch.device | str | None, triton_available: bool
+) -> bool:
+    """Determine whether SDNQ's Triton INT8 quantized matmul can run safely on the device.
+
+    Triton INT8 scaled matmul kernels in SDNQ require Ampere (sm_80) or newer
+    on NVIDIA GPUs. Older architectures like Turing (T4, sm_75) fail during Triton
+    kernel compilation or execution.
+    """
+    if not triton_available:
+        return False
+    if device is None:
+        device = get_best_device()
+    dev = torch.device(device) if isinstance(device, str) else device
+    if dev.type == "cuda" and torch.cuda.is_available():
+        try:
+            major, _ = torch.cuda.get_device_capability(dev)
+            return major >= 8
+        except Exception:
+            return False
+    return bool(
+        dev.type == "xpu" and hasattr(torch, "xpu") and torch.xpu.is_available()
+    )
+
+
 class ModelManager:
     """Singleton model manager for MangaTranslator."""
 
@@ -1231,19 +1256,27 @@ class ModelManager:
                     cache_dir=str(self.flux_cache_dir),
                 )
 
-                # Enable INT8 MatMul for GPU acceleration (AMD, Intel ARC, NVIDIA)
-                has_gpu = torch.cuda.is_available() or (
-                    hasattr(torch, "xpu") and torch.xpu.is_available()
+                # Enable INT8 MatMul for GPU acceleration (requires Ampere+ sm_80+ on NVIDIA)
+                can_quant_mm = _can_use_sdnq_quantized_matmul(
+                    self.device, triton_is_available
                 )
-                if triton_is_available and has_gpu:
+                if can_quant_mm:
                     log_message(
                         "Applying SDNQ INT8 MatMul optimization...", verbose=verbose
                     )
+                if hasattr(pipeline.transformer, "quantization_config"):
                     pipeline.transformer = apply_sdnq_options_to_model(
-                        pipeline.transformer, use_quantized_matmul=True
+                        pipeline.transformer,
+                        dtype=self.dtype,
+                        use_quantized_matmul=can_quant_mm,
                     )
+                if hasattr(pipeline, "text_encoder_2") and hasattr(
+                    pipeline.text_encoder_2, "quantization_config"
+                ):
                     pipeline.text_encoder_2 = apply_sdnq_options_to_model(
-                        pipeline.text_encoder_2, use_quantized_matmul=True
+                        pipeline.text_encoder_2,
+                        dtype=self.dtype,
+                        use_quantized_matmul=can_quant_mm,
                     )
 
                 if low_vram:
@@ -1320,19 +1353,27 @@ class ModelManager:
                     cache_dir=str(self.flux_cache_dir),
                 )
 
-                # Enable INT8 MatMul for GPU acceleration (AMD, Intel ARC, NVIDIA)
-                has_gpu = torch.cuda.is_available() or (
-                    hasattr(torch, "xpu") and torch.xpu.is_available()
+                # Enable INT8 MatMul for GPU acceleration (requires Ampere+ sm_80+ on NVIDIA)
+                can_quant_mm = _can_use_sdnq_quantized_matmul(
+                    self.device, triton_is_available
                 )
-                if triton_is_available and has_gpu:
+                if can_quant_mm:
                     log_message(
                         "Applying SDNQ INT8 MatMul optimization...", verbose=verbose
                     )
+                if hasattr(pipeline.transformer, "quantization_config"):
                     pipeline.transformer = apply_sdnq_options_to_model(
-                        pipeline.transformer, use_quantized_matmul=True
+                        pipeline.transformer,
+                        dtype=self.dtype,
+                        use_quantized_matmul=can_quant_mm,
                     )
+                if hasattr(pipeline, "text_encoder") and hasattr(
+                    pipeline.text_encoder, "quantization_config"
+                ):
                     pipeline.text_encoder = apply_sdnq_options_to_model(
-                        pipeline.text_encoder, use_quantized_matmul=True
+                        pipeline.text_encoder,
+                        dtype=self.dtype,
+                        use_quantized_matmul=can_quant_mm,
                     )
 
                 if low_vram:
