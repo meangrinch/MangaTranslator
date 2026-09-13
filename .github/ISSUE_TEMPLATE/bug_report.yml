@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please attach the unedited `mangatranslator.log` and source image (if applicable).
+        Please attach the unedited `mangatranslator.log`, problematic images, and source images (if applicable).
 
   - type: textarea
     id: description
@@ -17,11 +17,11 @@ body:
   - type: textarea
     id: log_file
     attributes:
-      label: Log file (if applicable)
+      label: Log file
       description: Drag and drop mangatranslator.log (or mangatranslator.prev.log if restarted) from the root directory here.
 
   - type: textarea
     id: image
     attributes:
-      label: Problematic image (if applicable)
-      description: Drag and drop the original source image here.
+      label: Problematic and source images
+      description: Drag and drop the problematic and original source images here.
