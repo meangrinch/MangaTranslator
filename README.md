@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/icon.png" width="96" alt="MangaTranslator Logo" />
+  <img src="assets/icon.png" width="128" alt="MangaTranslator Logo" />
 </p>
 
 <h1 align="center"><b>MangaTranslator</b></h1>
