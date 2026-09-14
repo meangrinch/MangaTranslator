@@ -1,3 +1,29 @@
+/* --- APP HEADER --- */
+.mangatranslator-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+    margin-bottom: 12px;
+}
+
+.mangatranslator-logo {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+    flex-shrink: 0;
+}
+
+.mangatranslator-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1;
+    color: var(--body-text-color);
+}
+
 /* --- SETTINGS LAYOUT --- */
 #settings-tab-container {
     padding-top: 15px;

@@ -5,6 +5,10 @@
   <a href="docs/translations/ja/README.md">日本語</a>
 </p>
 
+<p align="center">
+  <img src="assets/icon.png" width="96" alt="MangaTranslator Logo" />
+</p>
+
 <h1 align="center"><b>MangaTranslator</b></h1>
 
 <p align="center">
@@ -79,15 +83,15 @@ An end-to-end pipeline for translating manga, manhwas, and comics using AI. Dete
 
 ## Features
 
+- **Automation**: One-click translation; no manual intervention required
+- **Interfaces**: Web UI (Gradio) and CLI
+- **Processing**: Single image, folder, and ZIP archive batch processing (with directory preservation)
 - **Detection**: Speech bubble and outside-bubble text detection (YOLO, SAM 2.1/3)
 - **Cleaning**: Inpaint speech bubbles and background text (FLUX.2 Klein, FLUX.1 Kontext, or OpenCV)
 - **Translation**: OCR and translation supporting 60+ languages (cloud API or local LLM)
 - **Rendering**: Custom text rendering with alignment, word wrap, and custom font packs
 - **Upscaling**: Text region and full-page artwork upscaling (2x-AnimeSharpV4)
-- **Processing**: Single image, folder, and ZIP archive batch processing (with directory preservation)
 - **Configuration**: Flexible controls to adapt to diverse page layouts and fine-tune output quality
-- **Interfaces**: Web UI (Gradio) and CLI
-- **Automation**: One-click translation; no manual intervention required
 
 ---
 

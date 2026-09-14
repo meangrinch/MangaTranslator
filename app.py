@@ -124,7 +124,13 @@ def main():
     )
 
     app.queue()
-    app.launch(inbrowser=args.open_browser, server_port=args.port, show_error=True)
+    favicon = str(layout.APP_ICON_PATH) if layout.APP_ICON_PATH.is_file() else None
+    app.launch(
+        inbrowser=args.open_browser,
+        server_port=args.port,
+        show_error=True,
+        favicon_path=favicon,
+    )
 
 
 if __name__ == "__main__":

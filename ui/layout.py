@@ -1,8 +1,11 @@
+import base64
 import functools
+import io
 from pathlib import Path
 from typing import Any
 
 import gradio as gr
+from PIL import Image
 
 from core.text.text_processing import text_layout_control_interactivity
 from utils.model_metadata import (
@@ -123,7 +126,6 @@ PADDLE_OCR_VL_LANGUAGES = [
 ]
 
 js_credits = """
-function() {
     const footer = document.querySelector('footer');
     if (footer) {
         // Check if credits already exist
@@ -147,7 +149,6 @@ function() {
 
         footer.parentNode.insertBefore(newContent, footer);
     }
-}
 """
 
 js_status_fade = """
@@ -227,6 +228,62 @@ js_reset_status_height = """
 """
 
 
+APP_ICON_PATH = Path(__file__).resolve().parent.parent / "assets" / "icon.png"
+
+
+def _get_icon_data_uri(path: Path, size: int | None = None) -> str:
+    if not path.is_file():
+        return ""
+    if size:
+        img = Image.open(path)
+        img = img.resize((size, size), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        raw = buf.getvalue()
+    else:
+        raw = path.read_bytes()
+    return f"data:image/png;base64,{base64.b64encode(raw).decode('utf-8')}"
+
+
+def _get_app_header_html() -> str:
+    data_uri = _get_icon_data_uri(APP_ICON_PATH, size=128)
+    icon_img = (
+        f'<img src="{data_uri}" alt="MangaTranslator Icon" class="mangatranslator-logo" />'
+        if data_uri
+        else ""
+    )
+    return (
+        f'<div class="mangatranslator-header">{icon_img}'
+        f'<h1 class="mangatranslator-title">MangaTranslator</h1></div>'
+    )
+
+
+def _build_init_js() -> str:
+    favicon_uri = _get_icon_data_uri(APP_ICON_PATH, size=64)
+    favicon_snippet = ""
+    if favicon_uri:
+        favicon_snippet = f"""
+    const faviconUri = "{favicon_uri}";
+    ['icon', 'shortcut icon'].forEach(rel => {{
+        const existing = document.querySelector(`link[rel='${{rel}}']`);
+        if (existing) {{
+            existing.remove();
+        }}
+        const link = document.createElement('link');
+        link.rel = rel;
+        link.type = 'image/png';
+        link.href = faviconUri;
+        document.head.appendChild(link);
+    }});
+"""
+    return f"""
+function() {{
+{favicon_snippet}
+{js_credits}
+}}
+"""
+
+
 def create_layout(
     models_dir: Path, fonts_base_dir: Path, target_device: Any
 ) -> gr.Blocks:
@@ -235,9 +292,9 @@ def create_layout(
     css_path = Path(__file__).with_name("style.css")
 
     with gr.Blocks(
-        title="MangaTranslator", js=js_credits, css_paths=str(css_path)
+        title="MangaTranslator", js=_build_init_js(), css_paths=str(css_path)
     ) as app:
-        gr.Markdown("# MangaTranslator")
+        gr.HTML(_get_app_header_html(), padding=False)
 
         font_choices, initial_default_font = utils.get_available_font_packs(
             fonts_base_dir
