@@ -19,7 +19,7 @@
 </p>
 
 <div align="center">
-An end-to-end pipeline for translating manga, manhwas, and comics using AI. Detects speech bubbles and outside-bubble text, removes original text with diffusion inpainting, and typesets translations across 60+ languages using LLMs and custom fonts.
+User-friendly app for automating the translation of manga, manhwas, and comics using ML models. Targets both speech bubbles and outside-bubble text, restores background art with diffusion-based inpainting, and typesets translations across 60+ languages using LLMs and custom fonts.
 </div>
 
 <br/>
