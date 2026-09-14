@@ -5,7 +5,10 @@
   <a href="README.md">日本語</a>
 </p>
 
-<h1 align="center"><b>MangaTranslator</b></h1>
+<h1 align="center">
+  <img src="../../../assets/icon.png" width="128" alt="MangaTranslator Logo" /><br/>
+  MangaTranslator
+</h1>
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/meangrinch/MangaTranslator?label=Release&labelColor=181717&color=0877d2" />
@@ -15,7 +18,7 @@
 </p>
 
 <div align="center">
-AIを活用してマンガ、Webtoon（Manhwa）、アメコミなどの翻訳を行うエンドツーエンドのパイプラインです。吹き出し内外のテキストを検出し、拡散モデルによるインペインティングで原文を消去、LLMとカスタムフォントを用いて60以上の言語へ自動で組版・翻訳します。
+MLモデルを活用してマンガ、Webtoon（Manhwa）、アメコミなどの翻訳を自動化するユーザーフレンドリーなアプリです。吹き出し内外の両方のテキストを対象とし、拡散モデルによるインペインティングで背景の作画を復元、LLMとカスタムフォントを用いて60以上の言語へ組版・翻訳します。
 </div>
 
 <br/>
@@ -79,15 +82,15 @@ AIを活用してマンガ、Webtoon（Manhwa）、アメコミなどの翻訳�
 
 ## 主な機能
 
+- **自動化**：ワンクリック翻訳、手動操作は不要
+- **インターフェース**：Web UI (Gradio) および CLI
+- **処理**：フォルダ構造を保持した単一画像、フォルダ、ZIPアーカイブの一括バッチ処理
 - **検出**：吹き出しおよび吹き出し外テキストの検出（YOLO、SAM 2.1/3）
 - **消去**：吹き出し内および背景テキストのインペインティング消去（FLUX.2 Klein、FLUX.1 Kontext、またはOpenCV）
 - **翻訳**：60以上の言語に対応したOCRと翻訳（クラウドAPIまたはローカルLLM）
 - **描画**：文字揃え、自動改行、カスタムフォントパックに対応したテキストレンダリング
 - **アップスケーリング**：テキスト領域およびページ全体のイラストの高解像度化（2x-AnimeSharpV4）
-- **処理**：フォルダ構造を保持した単一画像、フォルダ、ZIPアーカイブの一括バッチ処理
 - **設定**：多様なページレイアウトに対応し、出力品質を微調整できる柔軟な設定項目
-- **インターフェース**：Web UI (Gradio) および CLI
-- **自動化**：ワンクリック翻訳、手動操作は不要
 
 ---
 

@@ -5,11 +5,10 @@
   <a href="docs/translations/ja/README.md">日本語</a>
 </p>
 
-<p align="center">
-  <img src="assets/icon.png" width="128" alt="MangaTranslator Logo" />
-</p>
-
-<h1 align="center"><b>MangaTranslator</b></h1>
+<h1 align="center">
+  <img src="assets/icon.png" width="128" alt="MangaTranslator Logo" /><br/>
+  MangaTranslator
+</h1>
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/meangrinch/MangaTranslator?label=Release&labelColor=181717&color=0877d2" />

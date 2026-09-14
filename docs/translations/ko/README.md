@@ -5,7 +5,10 @@
   <a href="../ja/README.md">日本語</a>
 </p>
 
-<h1 align="center"><b>MangaTranslator</b></h1>
+<h1 align="center">
+  <img src="../../../assets/icon.png" width="128" alt="MangaTranslator Logo" /><br/>
+  MangaTranslator
+</h1>
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/meangrinch/MangaTranslator?label=Release&labelColor=181717&color=0877d2" />
@@ -15,7 +18,7 @@
 </p>
 
 <div align="center">
-AI를 사용하여 만화, 웹툰(Manhwa), 코믹스를 번역하는 엔드투엔드 파이프라인입니다. 말풍선 및 말풍선 외부 텍스트를 감지하고, 확산 모델 인페인팅으로 원본 텍스트를 제거하며, LLM 및 커스텀 폰트를 사용하여 60개 이상의 언어로 식자 번역을 수행합니다.
+ML 모델을 활용하여 만화, 웹툰(Manhwa), 코믹스 번역을 자동화하는 사용자 친화적인 앱입니다. 말풍선 및 말풍선 외부 텍스트를 모두 대상으로 하며, 확산 모델 기반 인페인팅으로 배경 아트를 복원하고, LLM 및 커스텀 폰트를 사용하여 60개 이상의 언어로 식자 번역을 수행합니다.
 </div>
 
 <br/>
@@ -79,15 +82,15 @@ AI를 사용하여 만화, 웹툰(Manhwa), 코믹스를 번역하는 엔드투�
 
 ## 주요 기능
 
+- **자동화**: 원클릭 번역, 수동 개입 불필요
+- **인터페이스**: Web UI (Gradio) 및 CLI
+- **처리**: 단일 이미지, 폴더 및 ZIP 압축 파일 배치 처리 (디렉토리 구조 보존)
 - **감지**: 말풍선 및 말풍선 외부 텍스트 감지 (YOLO, SAM 2.1/3)
 - **클리닝**: 말풍선 및 배경 텍스트 인페인팅 (FLUX.2 Klein, FLUX.1 Kontext 또는 OpenCV)
 - **번역**: 60개 이상의 언어를 지원하는 OCR 및 번역 (클라우드 API 또는 로컬 LLM)
 - **렌더링**: 텍스트 정렬, 자동 줄바꿈 및 커스텀 폰트 팩을 지원하는 커스텀 텍스트 렌더링
 - **업스케일링**: 텍스트 영역 및 전체 페이지 아트워크 업스케일링 (2x-AnimeSharpV4)
-- **처리**: 단일 이미지, 폴더 및 ZIP 압축 파일 배치 처리 (디렉토리 구조 보존)
 - **설정**: 다양한 페이지 레이아웃에 대응하고 출력 품질을 미세 조정할 수 있는 유연한 설정
-- **인터페이스**: Web UI (Gradio) 및 CLI
-- **자동화**: 원클릭 번역, 수동 개입 불필요
 
 ---
 

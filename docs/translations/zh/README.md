@@ -5,7 +5,10 @@
   <a href="../ja/README.md">日本語</a>
 </p>
 
-<h1 align="center"><b>MangaTranslator</b></h1>
+<h1 align="center">
+  <img src="../../../assets/icon.png" width="128" alt="MangaTranslator Logo" /><br/>
+  MangaTranslator
+</h1>
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/meangrinch/MangaTranslator?label=Release&labelColor=181717&color=0877d2" />
@@ -15,7 +18,7 @@
 </p>
 
 <div align="center">
-用于使用 AI 自动翻译漫画、条漫 (Manhwa) 和美漫的端到端工具。自动检测对话框与框外文本，利用扩散模型进行图像修复以擦除原文，并通过大语言模型 (LLM) 和自定义字体包实现 60 多种语言的自动排版翻译。
+基于机器学习模型实现漫画、条漫 (Manhwa) 和美漫自动翻译的用户友好型应用。同时针对对话框与框外文本，利用基于扩散模型的图像修复技术复原背景画面，并通过大语言模型 (LLM) 和自定义字体包实现 60 多种语言的自动排版翻译。
 </div>
 
 <br/>
@@ -79,15 +82,15 @@
 
 ## 功能特点
 
+- **自动化**：一键翻译，无需人工干预
+- **界面**：Web UI (Gradio) 和命令行界面 (CLI)
+- **处理**：支持目录结构保留的单图、文件夹和 ZIP 批量处理
 - **检测**：对话框与对话框外文本检测（YOLO、SAM 2.1/3）
 - **擦除**：对话框与背景文本的重绘擦除（FLUX.2 Klein、FLUX.1 Kontext 或 OpenCV）
 - **翻译**：支持 60 多种语言的 OCR 与翻译（云端 API 或本地 LLM）
 - **渲染**：支持对齐、自动换行和自定义字体包的文本渲染引擎
 - **超分辨率**：文本区域与整页原画超分辨率放大（2x-AnimeSharpV4）
-- **处理**：支持目录结构保留的单图、文件夹和 ZIP 批量处理
 - **配置**：灵活的配置选项，可适应多样的页面布局并精细调整输出质量
-- **界面**：Web UI (Gradio) 和命令行界面 (CLI)
-- **自动化**：一键翻译，无需人工干预
 
 ---
 
