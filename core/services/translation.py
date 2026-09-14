@@ -2221,6 +2221,16 @@ def prepare_bubble_images_for_translation(
 
     for bubble in bubble_data:
         prepared_bubble = bubble.copy()
+        bx1, by1, bx2, by2 = [round(c) for c in bubble["bbox"]]
+        bx1 = max(0, min(original_cv_image.shape[1], bx1))
+        by1 = max(0, min(original_cv_image.shape[0], by1))
+        bx2 = max(0, min(original_cv_image.shape[1], bx2))
+        by2 = max(0, min(original_cv_image.shape[0], by2))
+        if bx2 > bx1 and by2 > by1:
+            prepared_bubble["original_crop_pil"] = cv2_to_pil(
+                original_cv_image[by1:by2, bx1:bx2].copy()
+            )
+
         x1, y1, x2, y2 = bubble["bbox"]
 
         # Use the tight bbox of the mask

@@ -1551,7 +1551,37 @@ def translate_and_render(
                         bubble["translation"] = translated_texts[i]
                         bbox = bubble["bbox"]
                         text = bubble.get("translation", "")
+                        ocr_text = (bubble.get("ocr_text") or "").strip()
+                        trimmed_text = (text or "").strip()
                         is_outside_text = bubble.get("is_outside_text", False)
+                        entry_type = "outside text" if is_outside_text else "bubble"
+
+                        is_ocr_failed = (
+                            trimmed_text.upper() == "[OCR FAILED]"
+                            or ocr_text.upper() == "[OCR FAILED]"
+                            or ": OCR FAILED]" in trimmed_text.upper()
+                        )
+                        if is_ocr_failed:
+                            if "original_crop_pil" in bubble:
+                                log_message(
+                                    f"Restoring original {entry_type} patch due to OCR failure for {bbox}",
+                                    verbose=verbose,
+                                    always_print=True,
+                                )
+                                rendered_image = pil_cleaned_image.copy()
+                                original_patch = bubble["original_crop_pil"]
+                                rendered_image.paste(
+                                    original_patch,
+                                    (round(bbox[0]), round(bbox[1])),
+                                )
+                                pil_cleaned_image = rendered_image
+                                final_image_to_save = pil_cleaned_image
+                            else:
+                                log_message(
+                                    f"Skipping {entry_type} {bbox} - OCR failed and no original crop available",
+                                    verbose=verbose,
+                                )
+                            continue
 
                         if (
                             not text
@@ -1563,9 +1593,8 @@ def translate_and_render(
                                     _provider_tag,
                                 )
                             )
-                            or text.strip() in invalid_translation_values
+                            or trimmed_text in invalid_translation_values
                         ):
-                            entry_type = "outside text" if is_outside_text else "bubble"
                             log_message(
                                 f"Skipping {entry_type} {bbox} - invalid translation",
                                 verbose=verbose,
