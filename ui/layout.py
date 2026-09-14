@@ -1512,7 +1512,7 @@ def create_layout(
                                 ),
                             )
                             auto_vertical_text = gr.Checkbox(
-                                value=saved_settings.get("auto_vertical_text", False),
+                                value=saved_settings.get("auto_vertical_text", True),
                                 label="Auto Vertical Text for Tall Bubbles",
                                 info=(
                                     "Stack short translated text vertically in tall speech bubbles "
@@ -1528,7 +1528,7 @@ def create_layout(
                                 step=0.05,
                                 label="Vertical Line Spacing Multiplier",
                                 info="Adjusts vertical space between lines when text is stacked vertically.",
-                                visible=saved_settings.get("auto_vertical_text", False),
+                                visible=saved_settings.get("auto_vertical_text", True),
                             )
                             vertical_font_size_mult = gr.Slider(
                                 0.1,
@@ -1539,7 +1539,7 @@ def create_layout(
                                 step=0.05,
                                 label="Vertical Font Size Multiplier",
                                 info="Multiplier for font size when text is stacked vertically.",
-                                visible=saved_settings.get("auto_vertical_text", False),
+                                visible=saved_settings.get("auto_vertical_text", True),
                             )
                             _saved_hyphenate = saved_settings.get(
                                 "hyphenate_before_scaling", True

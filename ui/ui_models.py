@@ -107,7 +107,7 @@ class UIRenderingSettings:
     padding_pixels: float = 4.0
     supersampling_factor: int = 4
     detach_trailing_punctuation: bool = True
-    auto_vertical_text: bool = False
+    auto_vertical_text: bool = True
     vertical_line_spacing_mult: float = 1.0
     vertical_font_size_mult: float = 1.0
 
@@ -696,7 +696,7 @@ class UIConfigState:
                 ),
                 auto_vertical_text=data.get(
                     "auto_vertical_text",
-                    defaults.get("auto_vertical_text", False),
+                    defaults.get("auto_vertical_text", True),
                 ),
                 vertical_line_spacing_mult=data.get("vertical_line_spacing_mult", 1.0),
                 vertical_font_size_mult=data.get("vertical_font_size_mult", 1.0),

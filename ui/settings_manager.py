@@ -215,7 +215,7 @@ DEFAULT_SETTINGS = {
     "padding_pixels": 4.0,
     "supersampling_factor": 4,
     "detach_trailing_punctuation": True,
-    "auto_vertical_text": False,
+    "auto_vertical_text": True,
     "vertical_line_spacing_mult": 1.0,
     "vertical_font_size_mult": 1.0,
     "font_pack": None,

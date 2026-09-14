@@ -492,13 +492,14 @@ def main():
     )
     parser.set_defaults(detach_trailing_punctuation=True)
     parser.add_argument(
-        "--auto-vertical-text",
-        action="store_true",
+        "--no-auto-vertical-text",
+        dest="auto_vertical_text",
+        action="store_false",
         help=(
-            "Automatically stack short translated text vertically in tall speech bubbles "
-            "when it improves the layout."
+            "Disable automatically stacking short translated text vertically in tall speech bubbles"
         ),
     )
+    parser.set_defaults(auto_vertical_text=True)
     parser.add_argument(
         "--vertical-line-spacing-mult",
         type=float,

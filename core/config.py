@@ -120,7 +120,7 @@ class RenderingConfig:
     outline_ratio: float = 0.0
     supersampling_factor: int = 4
     detach_trailing_punctuation: bool = True
-    auto_vertical_text: bool = False
+    auto_vertical_text: bool = True
     vertical_line_spacing_mult: float = 1.0
     vertical_font_size_mult: float = 1.0
 
