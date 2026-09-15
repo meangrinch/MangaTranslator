@@ -115,6 +115,7 @@ def call_openrouter_endpoint(
         "HTTP-Referer": "https://github.com/meangrinch/MangaTranslator",
         "X-OpenRouter-Title": "MangaTranslator",
         "X-OpenRouter-Categories": "writing-assistant,image-gen",
+        "X-OpenRouter-Icon": "https://raw.githubusercontent.com/meangrinch/MangaTranslator/main/assets/icon.png",
     }
 
     metadata = generation_config.get("_metadata", {})
