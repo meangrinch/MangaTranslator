@@ -17,17 +17,17 @@ from utils.model_metadata import (
     flux_sdcpp_text_encoder_default,
 )
 
-# Blur Parameters
-BLUR_SCALE_FACTOR = (
-    0.1  # Multiplier for bounding box dimensions to calculate blur radius
-)
-MIN_BLUR_RADIUS = 1  # Minimum blur radius in pixels
-MAX_BLUR_RADIUS = 10  # Maximum blur radius in pixels
+# Dynamic edge feathering scaled to bubble size; clamped to prevent sharp seams on small text or bleed on large text
+BLUR_SCALE_FACTOR = 0.1
+MIN_BLUR_RADIUS = 1
+MAX_BLUR_RADIUS = 10
 
-# Inpainting Parameters
-FLUX_GUIDANCE_SCALE = 2.5  # Flux Kontext guidance scale
-CONTEXT_PADDING_RATIO = 0.5  # Context padding is 50% of detection size
-MAX_CONTEXT_PADDING = 80  # Context padding capped at 80 pixels
+# Guidance scale balanced for Kontext text erasure
+FLUX_GUIDANCE_SCALE = 2.5
+
+# Surrounding context ratio and pixel ceiling to ensure clean blending without diluting inpaint resolution
+CONTEXT_PADDING_RATIO = 0.5
+MAX_CONTEXT_PADDING = 80
 
 
 def _prompt_value_to_cpu(value):
@@ -134,7 +134,6 @@ class FluxKontextInpainter:
         self.manager = get_model_manager()
         self.cache = get_cache()
 
-        # Preferred resolutions for optimal Flux performance
         self.PREFERED_KONTEXT_RESOLUTIONS = [
             (672, 1568),
             (688, 1504),
@@ -162,7 +161,6 @@ class FluxKontextInpainter:
         self._prompt_embeds_cpu = None
         self._pooled_prompt_embeds_cpu = None
 
-        # Fixed parameters optimized for text removal
         self.guidance_scale = FLUX_GUIDANCE_SCALE
         self.prompt = "Remove all text."
         self.context_padding_ratio = CONTEXT_PADDING_RATIO
@@ -177,12 +175,11 @@ class FluxKontextInpainter:
             self.manager.set_flux_hf_token(self.huggingface_token)
 
         if self.backend == "sdnq":
-            # SDNQ: cross-platform, no token required
             self.pipeline = self.manager.load_flux_kontext_sdnq(
                 low_vram=self.low_vram,
                 verbose=True,
             )
-            # SDNQ uses CPU offload, no separate transformer/text_encoder management
+            # CPU offload handled internally; separate model references not needed
             self.transformer = None
             self.text_encoder_2 = None
         elif self.backend == "sdcpp":
@@ -198,7 +195,6 @@ class FluxKontextInpainter:
             self.transformer = None
             self.text_encoder_2 = None
         else:
-            # Nunchaku: CUDA-only, requires token
             self.manager.set_flux_residual_diff_threshold(self.residual_diff_threshold)
 
             self.transformer, self.text_encoder_2, self.pipeline = (
@@ -281,7 +277,6 @@ class FluxKontextInpainter:
         Returns:
             torch.Tensor: Mask tensor in CHW format (1.0 for areas to keep, 0.0 for areas to inpaint)
         """
-        # Invert mask: True = inpaint (0.0), False = keep (1.0)
         mask_float = mask_np.astype(np.float32)
         mask_inverted = 1.0 - mask_float
         mask_tensor = torch.from_numpy(mask_inverted).unsqueeze(0)
@@ -302,7 +297,6 @@ class FluxKontextInpainter:
             return image_pil
 
         ar = w_in / h_in
-        # Find resolution with minimum aspect ratio difference
         _, w_opt, h_opt = min(
             (abs(ar - w / h), w, h) for (w, h) in self.PREFERED_KONTEXT_RESOLUTIONS
         )
@@ -318,7 +312,6 @@ class FluxKontextInpainter:
         if (w_in, h_in) == (w_opt, h_opt):
             return image_pil
 
-        # Use LANCZOS for high-quality downscaling
         image_scaled = image_pil.resize((w_opt, h_opt), Image.Resampling.LANCZOS)
 
         return image_scaled
@@ -394,7 +387,6 @@ class FluxKontextInpainter:
                 verbose=verbose,
             )
 
-            # Snap to closest preferred aspect ratio
             _, w_opt, h_opt = min(
                 (abs(initial_ar - w / h), w, h) for (w, h) in preferred_resolutions
             )
@@ -448,7 +440,7 @@ class FluxKontextInpainter:
                         new_y2 = H
                         new_y1 = H - target_h
 
-        else:  # Transpose logic
+        else:
             if req_h > h0:
                 target_h = min(H, req_h)
                 delta = target_h - h0
@@ -482,7 +474,6 @@ class FluxKontextInpainter:
         final_w = new_x2 - new_x1
         final_h = new_y2 - new_y1
 
-        # Return cropped mask for compositing
         mask_for_composite = mask_blur_full[:, new_y1:new_y2, new_x1:new_x2]
 
         return (
@@ -510,15 +501,13 @@ class FluxKontextInpainter:
             return destination, source
 
         if dest_channels > source_channels:
-            # Pad source to match destination's channel count
             padding = torch.ones(
                 (*source.shape[:-1], dest_channels - source_channels),
                 device=source.device,
                 dtype=source.dtype,
             )
             source = torch.cat([source, padding], dim=-1)
-        else:  # source_channels > dest_channels
-            # Truncate source to match destination's channel count
+        else:
             source = source[..., :dest_channels]
 
         return destination, source
@@ -599,7 +588,6 @@ class FluxKontextInpainter:
         destination_portion = destination[
             :, :, top : top + visible_height, left : left + visible_width
         ]
-        # Alpha blend source and destination using mask
         blended_portion = (source_portion * mask_portion) + (
             destination_portion * inverse_mask_portion
         )
@@ -688,9 +676,7 @@ class FluxKontextInpainter:
         )
 
         blur_radius = int(max(bbox_width, bbox_height) * BLUR_SCALE_FACTOR)
-        blur_radius = max(
-            MIN_BLUR_RADIUS, min(blur_radius, MAX_BLUR_RADIUS)
-        )  # clamp between MIN and MAX
+        blur_radius = max(MIN_BLUR_RADIUS, min(blur_radius, MAX_BLUR_RADIUS))
         log_message(f"  - Dynamic blur radius set to: {blur_radius}", verbose=verbose)
 
         mask_tensor = (
@@ -716,7 +702,6 @@ class FluxKontextInpainter:
         qwidth = max(1, qx2 - qx1)
         qheight = max(1, qy2 - qy1)
 
-        # Adjust mask_for_composite to the quantized bbox via pad/crop
         dx_left = x - qx1
         dy_top = y - qy1
         dx_right = (qx1 + qwidth) - (x + width)
@@ -979,10 +964,12 @@ class FluxKleinInpainter:
     Uses FP8 quantized models for reduced memory usage.
     """
 
-    # Parameters for Klein models (distilled, optimized)
-    KLEIN_MAX_STEPS = 12  # Max steps for Klein models
-    KLEIN_DEFAULT_STEPS = 4  # Recommended default
-    KLEIN_GUIDANCE_SCALE = 1.0  # Fixed CFG for Klein
+    # Klein is a distilled model: 4 steps hits optimal quality/speed; >12 has diminishing returns
+    KLEIN_MAX_STEPS = 12
+    KLEIN_DEFAULT_STEPS = 4
+
+    # Distilled models bake guidance into weights and require CFG 1.0
+    KLEIN_GUIDANCE_SCALE = 1.0
     KLEIN_PROMPT = (
         "Remove all text, including hand-drawn Japanese sound effects and onomatopoeia. "
         "Preserve character line art, screentones, panel borders, and background details "
@@ -990,12 +977,14 @@ class FluxKleinInpainter:
         "area where text or a sound effect was completely blank."
     )
 
-    # Resolution constraints: 64x64 to 2048x2048, multiple of 16
+    # DiT patch requirements (multiples of 16) and VRAM cap (~4MP max inference)
     MIN_RESOLUTION = 64
     MAX_RESOLUTION = 2048
     RESOLUTION_MULTIPLE = 16
     MAX_INFERENCE_PIXELS = 4_000_000
-    KLEIN_PADDING_MULTIPLIER = 2.0  # Double padding vs Kontext for more context
+    KLEIN_PADDING_MULTIPLIER = (
+        2.0  # Wider context helps preserve surrounding line art and details
+    )
 
     def __init__(
         self,
@@ -1406,7 +1395,6 @@ class FluxKleinInpainter:
         bbox_width = x_max - x_min
         bbox_height = y_max - y_min
 
-        # Calculate context padding (doubled for Klein vs Kontext)
         padding_pixels = int(max(bbox_width, bbox_height) * CONTEXT_PADDING_RATIO)
         padding = int(
             min(padding_pixels, MAX_CONTEXT_PADDING) * self.KLEIN_PADDING_MULTIPLIER
@@ -1449,7 +1437,6 @@ class FluxKleinInpainter:
         image_cropped_pil = image_pil.crop((x1, y1, x2, y2))
         mask_crop_np = mask_np[y1:y2, x1:x2]
 
-        # Build cache parameters
         cache_params = {
             "bbox": (x1, y1, width, height),
             "padding": padding,
@@ -1636,7 +1623,6 @@ class FluxKleinInpainter:
         elif src_channels > dest_channels:
             src_tensor = src_tensor[..., :dest_channels]
 
-        # Use FluxKontextInpainter's composite method (same logic)
         dest_tensor = dest_tensor.movedim(-1, 1)
         src_tensor = src_tensor.movedim(-1, 1)
 
@@ -1665,7 +1651,6 @@ class FluxKleinInpainter:
             (composited[0].cpu().numpy() * 255).astype("uint8")
         )
 
-        # Save to cache if generated (not from cache)
         if (
             self.cache.should_use_inpaint_cache(seed)
             and cache_key is not None
