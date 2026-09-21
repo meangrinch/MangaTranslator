@@ -74,6 +74,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "claude-haiku-4-5-20251001",
     ],
     "SpaceXAI": [
+        "grok-4.7",
         "grok-4.6",
         "grok-4.5",
         "grok-4.3",

@@ -722,7 +722,7 @@ def get_reasoning_effort_config(
     elif provider == "SpaceXAI":
         if not supports_xai_reasoning_parameter(model_name):
             return False, [], None
-        if "multi-agent" in lm:
+        if "multi-agent" in lm or lm.startswith(("grok-4.6", "grok-4.7")):
             return True, ["xhigh", "high", "medium", "low"], "high"
         return True, ["high", "medium", "low", "none"], "high"
 
