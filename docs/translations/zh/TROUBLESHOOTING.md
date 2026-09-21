@@ -29,6 +29,18 @@
   - Nunchaku 需要 NVIDIA CUDA 和 Python 3.10+
   - 如果安装失败，其他重绘方法仍然可用
 
+- **NVIDIA GTX 10 系列 GPU：**
+  - 便携版设置脚本会为 NVIDIA GPU 安装支持 CUDA 12.8/13.0 的 PyTorch 2.11.0，但这与 10 系列显卡不兼容。
+  - 要使其正常运行，需要在便携版环境中手动安装支持 CUDA 12.4 的 PyTorch 2.6.0：
+    - **Windows**（在 `MangaTranslator` 目录下运行）：
+      ```cmd
+      runtime\python.exe -m pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
+      ```
+    - **Linux**（在 `MangaTranslator` 目录下运行）：
+      ```bash
+      ./runtime/bin/python3 -m pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
+      ```
+
 ### 渲染 (Rendering)
 
 - **不支持的字符被移除：**
