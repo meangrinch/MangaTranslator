@@ -10,6 +10,7 @@ from utils.model_metadata import (
     get_gpt5_generation,
     is_gpt5_series,
     is_gpt6_astra,
+    is_gpt6_series,
     is_openai_reasoning_model,
     resolve_openai_api_model_name,
     supports_gpt5_max_effort,
@@ -104,7 +105,7 @@ def call_openai_endpoint(
         lower_model = (model_name or "").lower()
         is_chat_variant = "chat" in lower_model
         is_gpt5 = is_gpt5_series(model_name)
-        is_gpt6 = is_gpt6_astra(model_name)
+        is_gpt6 = is_gpt6_series(model_name)
         gen = get_gpt5_generation(model_name)
         is_reasoning_capable = is_openai_reasoning_model(model_name)
         reasoning_mode = generation_config.get("reasoning_mode")
@@ -114,7 +115,12 @@ def call_openai_endpoint(
             reasoning_payload: dict[str, Any] = {}
             if effort:
                 if is_gpt6:
-                    effort_to_send = "low" if effort in ("none", "minimal") else effort
+                    effort_to_send = (
+                        "low"
+                        if effort == "minimal"
+                        or (is_gpt6_astra(model_name) and effort == "none")
+                        else effort
+                    )
                     reasoning_payload["effort"] = effort_to_send
                 else:
                     none_capable = gen is not None and gen != "5"
@@ -161,8 +167,16 @@ def call_openai_endpoint(
                 payload.pop("temperature", None)
                 payload.pop("top_p", None)
 
+        elif is_gpt6 and not is_chat_variant:
+            # For GPT-6: temp/top_p only allowed when effort is "none" (Sol and Luna)
+            current_effort = payload.get("reasoning", {}).get("effort")
+            allow_sampling = current_effort == "none"
+            if not allow_sampling:
+                payload.pop("temperature", None)
+                payload.pop("top_p", None)
+
         elif is_reasoning_capable and not is_chat_variant:
-            # Non-GPT-5 reasoning models (o3, GPT-6) don't support temp/top_p
+            # Non-GPT-5/6 reasoning models (o3) don't support temp/top_p
             payload.pop("temperature", None)
             payload.pop("top_p", None)
     except Exception:

@@ -53,6 +53,7 @@ from utils.model_metadata import (
     is_gpt5_chat_variant,
     is_gpt5_series,
     is_gpt6_astra,
+    is_gpt6_series,
     is_hy_mt2_model,
     is_meta_reasoning_model,
     is_mimo_reasoning_model,
@@ -520,8 +521,10 @@ def _build_generation_config(
             gen = get_gpt5_generation(model_name)
             reasoning_effort = config.reasoning_effort or "high"
             effort = reasoning_effort
-            if is_gpt6_astra(model_name):
-                if effort in ("none", "minimal"):
+            if is_gpt6_series(model_name):
+                if effort == "minimal" or (
+                    is_gpt6_astra(model_name) and effort == "none"
+                ):
                     effort = "low"
                 generation_config["reasoning_effort"] = effort
             else:
@@ -798,7 +801,7 @@ def _build_generation_config(
 
         is_openai_reasoning = is_openai_model and is_openai_reasoning_model(model_name)
         is_gpt5_model = is_openai_model and is_gpt5_series(model_name)
-        is_gpt6_model = is_openai_model and is_gpt6_astra(model_name)
+        is_gpt6_model = is_openai_model and is_gpt6_series(model_name)
         is_gpt5_1 = is_openai_model and "gpt-5.1" in model_lower
         is_gpt5 = is_openai_model and "gpt-5" in model_lower and not is_gpt5_1
         is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
@@ -819,7 +822,8 @@ def _build_generation_config(
             "is_gpt5_1": is_gpt5_1,
             "is_gpt5": is_gpt5,
             "is_gpt5_model": is_gpt5_model,
-            "is_gpt6_astra": is_gpt6_model,
+            "is_gpt6_astra": is_openai_model and is_gpt6_astra(model_name),
+            "is_gpt6_model": is_gpt6_model,
             "supports_verbosity": is_openai_model
             and supports_openai_verbosity(model_name),
             **anthropic_flags,
@@ -841,7 +845,9 @@ def _build_generation_config(
                 generation_config["reasoning_effort"] = reasoning_effort
             elif is_gpt6_model:
                 effort = config.reasoning_effort or "high"
-                if effort in ("none", "minimal"):
+                if effort == "minimal" or (
+                    is_gpt6_astra(model_name) and effort == "none"
+                ):
                     effort = "low"
                 generation_config["reasoning_effort"] = effort
             elif (
@@ -873,7 +879,7 @@ def _build_generation_config(
         is_azure = is_azure_url(config.openai_compatible_url)
 
         is_openai_reasoning = is_openai_model and _is_openai_reasoning_meta(model_name)
-        is_gpt6_model = is_openai_model and is_gpt6_astra(model_name)
+        is_gpt6_model = is_openai_model and is_gpt6_series(model_name)
         is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
         anthropic_flags = anthropic_model_flags(model_name)
 
@@ -905,7 +911,8 @@ def _build_generation_config(
             "is_anthropic_reasoning": is_anthropic_reasoning,
             "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
             "is_gpt5_model": is_openai_model and is_gpt5_series(model_name),
-            "is_gpt6_astra": is_gpt6_model,
+            "is_gpt6_astra": is_openai_model and is_gpt6_astra(model_name),
+            "is_gpt6_model": is_gpt6_model,
             "supports_verbosity": is_openai_model
             and supports_openai_verbosity(model_name),
             **anthropic_flags,
@@ -917,7 +924,9 @@ def _build_generation_config(
             or is_openai_compatible_reasoning_model(model_name)
         ) and config.reasoning_effort:
             effort = config.reasoning_effort
-            if is_gpt6_model and effort in ("none", "minimal"):
+            if is_gpt6_model and (
+                effort == "minimal" or (is_gpt6_astra(model_name) and effort == "none")
+            ):
                 effort = "low"
             generation_config["reasoning_effort"] = effort
 

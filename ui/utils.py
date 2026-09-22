@@ -38,6 +38,7 @@ from utils.model_metadata import (
     is_gpt5_chat_variant,
     is_gpt5_series,
     is_gpt6_astra,
+    is_gpt6_series,
     is_gpt56_virtual_pro,
     is_hy_mt2_model,
     is_meta_reasoning_model,
@@ -689,6 +690,9 @@ def get_reasoning_effort_config(
         if is_gpt6_astra(model_name):
             return True, ["max", "xhigh", "high", "medium", "low"], "high"
 
+        if is_gpt6_series(model_name):
+            return True, ["max", "xhigh", "high", "medium", "low", "none"], "high"
+
         gen = get_gpt5_generation(model_name)
 
         if "-pro" in lm:
@@ -790,6 +794,8 @@ def get_reasoning_effort_config(
         if is_openai_reasoning_model(model_name):
             if is_gpt6_astra(model_name):
                 return True, ["max", "xhigh", "high", "medium", "low"], "high"
+            if is_gpt6_series(model_name):
+                return True, ["max", "xhigh", "high", "medium", "low", "none"], "high"
             return True, ["high", "medium", "low", "none"], "high"
         if is_xai_reasoning_model(model_name):
             return True, ["high", "medium", "low", "none"], "high"
@@ -839,6 +845,8 @@ def get_reasoning_effort_config(
         ):
             if is_gpt6_astra(model_name):
                 return True, ["max", "xhigh", "high", "medium", "low"], "high"
+            if is_gpt6_series(model_name):
+                return True, ["max", "xhigh", "high", "medium", "low", "none"], "high"
             return True, ["high", "medium", "low", "none"], "high"
         if is_openai_compatible_reasoning_model(model_name):
             return True, ["high", "medium", "low", "none"], "high"
@@ -907,6 +915,10 @@ def get_sampling_interactivity_for_effort(
 
     if is_gpt5_series(model_name):
         allow = reasoning_effort in ("none", "minimal")
+        return allow, allow
+
+    if is_gpt6_series(model_name) and not is_gpt6_astra(model_name):
+        allow = reasoning_effort == "none"
         return allow, allow
 
     return False, False
