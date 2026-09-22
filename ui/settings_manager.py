@@ -108,8 +108,8 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "kimi-k2.6",
     ],
     "Xiaomi MiMo": [
-        "mimo-v2.5-pro",
-        "mimo-v2.5",
+        "mimo-v2.6-pro",
+        "mimo-v2.6-flash",
     ],
     "QwenCloud": [
         "qwen3.8-flash",

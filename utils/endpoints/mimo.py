@@ -23,8 +23,8 @@ def call_mimo_endpoint(
 ) -> str | None:
     """
     Calls the Xiaomi MiMo API endpoint with the provided data and handles retries.
-    MiMo uses OpenAI-compatible API format. mimo-v2.5 supports multimodal inputs;
-    mimo-v2.5-pro is text-only. Both support hybrid reasoning via the thinking parameter.
+    MiMo uses OpenAI-compatible API format. Both mimo-v2.6-flash and
+    mimo-v2.6-pro are multimodal and support hybrid reasoning via the thinking parameter.
 
     Args:
         api_key (str): MiMo API key.

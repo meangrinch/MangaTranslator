@@ -20,6 +20,7 @@ from utils.model_metadata import (
     flux_sdcpp_valid_text_encoder_quant,
     is_anthropic_model_family,
     is_deepseek_vision_model,
+    is_mimo_multimodal_model,
     is_openai_model_family,
     is_opencode_multimodal_model,
     is_zai_vision_model,
@@ -2549,7 +2550,7 @@ def handle_ocr_method_change(
             models = [
                 m
                 for m in settings_manager.PROVIDER_MODELS.get("Xiaomi MiMo", [])
-                if m.lower() == "mimo-v2.5"
+                if is_mimo_multimodal_model(m)
             ]
             saved_settings = settings_manager.get_saved_settings()
             provider_models_dict = saved_settings.get(

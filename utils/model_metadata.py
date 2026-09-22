@@ -483,7 +483,7 @@ def is_mimo_multimodal_model(model_name: str | None) -> bool:
     """Check if a MiMo model supports multimodal (image) input."""
     if not model_name:
         return False
-    return model_name.lower() == "mimo-v2.5"
+    return "mimo-v2.6" in model_name.lower()
 
 
 def is_opencode_multimodal_model(model_name: str | None) -> bool:
@@ -529,8 +529,7 @@ def is_mimo_reasoning_model(model_name: str | None) -> bool:
     """Check if a MiMo model is reasoning-capable (hybrid thinking)."""
     if not model_name:
         return False
-    lm = model_name.lower()
-    return lm in ("mimo-v2.5-pro", "mimo-v2.5")
+    return "mimo-v2.6" in model_name.lower()
 
 
 def is_qwencloud_reasoning_model(model_name: str | None) -> bool:

@@ -41,6 +41,7 @@ from utils.model_metadata import (
     is_gpt56_virtual_pro,
     is_hy_mt2_model,
     is_meta_reasoning_model,
+    is_mimo_multimodal_model,
     is_mimo_reasoning_model,
     is_moonshot_k3_model,
     is_moonshot_reasoning_model,
@@ -1064,7 +1065,7 @@ def update_translation_ui(
     if provider == "Z.ai" and ocr_method == "LLM":
         models = [m for m in models if is_zai_vision_model(m)]
     elif provider == "Xiaomi MiMo" and ocr_method == "LLM":
-        models = [m for m in models if m.lower() == "mimo-v2.5"]
+        models = [m for m in models if is_mimo_multimodal_model(m)]
     elif provider == "DeepSeek" and ocr_method == "LLM":
         models = [m for m in models if is_deepseek_vision_model(m)]
 

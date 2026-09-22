@@ -1118,7 +1118,7 @@ def main():
         api_key = args.mimo_api_key or os.environ.get("MIMO_API_KEY")
         api_key_arg_name = "--mimo-api-key"
         api_key_env_var = "MIMO_API_KEY"
-        default_model = "mimo-v2.5"
+        default_model = "mimo-v2.6-flash"
     elif provider == "QwenCloud":
         api_key = (
             args.qwencloud_api_key
