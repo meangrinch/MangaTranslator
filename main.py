@@ -1075,7 +1075,7 @@ def main():
         api_key = args.openai_api_key or os.environ.get("OPENAI_API_KEY")
         api_key_arg_name = "--openai-api-key"
         api_key_env_var = "OPENAI_API_KEY"
-        default_model = "gpt-5.4-nano-2026-03-17"
+        default_model = "gpt-6-sol"
     elif provider == "Anthropic":
         api_key = args.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
         api_key_arg_name = "--anthropic-api-key"
@@ -1108,12 +1108,12 @@ def main():
         api_key = args.zai_api_key or os.environ.get("ZAI_API_KEY")
         api_key_arg_name = "--zai-api-key"
         api_key_env_var = "ZAI_API_KEY"
-        default_model = "glm-5v-turbo"
+        default_model = "glm-5.3-flash"
     elif provider == "Moonshot AI":
         api_key = args.moonshot_api_key or os.environ.get("MOONSHOT_API_KEY")
         api_key_arg_name = "--moonshot-api-key"
         api_key_env_var = "MOONSHOT_API_KEY"
-        default_model = "kimi-k2.6"
+        default_model = "kimi-k3"
     elif provider == "Xiaomi MiMo":
         api_key = args.mimo_api_key or os.environ.get("MIMO_API_KEY")
         api_key_arg_name = "--mimo-api-key"
