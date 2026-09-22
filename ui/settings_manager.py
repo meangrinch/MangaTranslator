@@ -61,6 +61,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "o3-pro-2025-06-10",
     ],
     "Anthropic": [
+        "claude-opus-5-5",
         "claude-fable-5-1",
         "claude-fable-5",
         "claude-opus-5",
