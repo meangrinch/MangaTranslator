@@ -35,7 +35,6 @@ from utils.exceptions import TranslationError
 from utils.logging import log_message
 from utils.model_metadata import (
     anthropic_model_flags,
-    get_gpt5_generation,
     get_max_tokens_cap,
     is_anthropic_model_family,
     is_anthropic_reasoning_model,
@@ -518,7 +517,6 @@ def _build_generation_config(
         generation_config["image_detail"] = normalize_image_detail()
         is_chat = is_gpt5_chat_variant(model_name)
         if _is_reasoning_model_openai(model_name) and not is_chat:
-            gen = get_gpt5_generation(model_name)
             reasoning_effort = config.reasoning_effort or "high"
             effort = reasoning_effort
             if is_gpt6_series(model_name):
@@ -534,9 +532,7 @@ def _build_generation_config(
                     )
                 if effort == "xhigh" and not supports_gpt5_xhigh_effort(model_name):
                     effort = "high"
-                none_capable = gen is not None and gen != "5"
-                if none_capable or effort != "none":
-                    generation_config["reasoning_effort"] = effort
+                generation_config["reasoning_effort"] = effort
             if is_openai_virtual_pro(model_name):
                 generation_config["reasoning_mode"] = "pro"
         if supports_openai_verbosity(model_name):
@@ -802,8 +798,6 @@ def _build_generation_config(
         is_openai_reasoning = is_openai_model and is_openai_reasoning_model(model_name)
         is_gpt5_model = is_openai_model and is_gpt5_series(model_name)
         is_gpt6_model = is_openai_model and is_gpt6_series(model_name)
-        is_gpt5_1 = is_openai_model and "gpt-5.1" in model_lower
-        is_gpt5 = is_openai_model and "gpt-5" in model_lower and not is_gpt5_1
         is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
         # OpenRouter Grok metadata omit explicit reasoning tags in name
         is_grok_reasoning = is_grok_model and "non-reasoning" not in model_lower
@@ -819,8 +813,6 @@ def _build_generation_config(
             "is_openai_reasoning": is_openai_reasoning,
             "is_anthropic_reasoning": is_anthropic_reasoning,
             "is_grok_reasoning": is_grok_reasoning,
-            "is_gpt5_1": is_gpt5_1,
-            "is_gpt5": is_gpt5,
             "is_gpt5_model": is_gpt5_model,
             "is_gpt6_astra": is_openai_model and is_gpt6_astra(model_name),
             "is_gpt6_model": is_gpt6_model,
@@ -850,11 +842,7 @@ def _build_generation_config(
                 ):
                     effort = "low"
                 generation_config["reasoning_effort"] = effort
-            elif (
-                is_gpt5_1
-                or config.reasoning_effort
-                and config.reasoning_effort != "none"
-            ):
+            elif is_gpt5_model:
                 generation_config["reasoning_effort"] = config.reasoning_effort
         elif is_google_model and config.reasoning_effort:
             effort = config.reasoning_effort

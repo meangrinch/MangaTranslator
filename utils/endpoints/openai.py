@@ -7,7 +7,6 @@ import requests
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 from utils.model_metadata import (
-    get_gpt5_generation,
     is_gpt5_series,
     is_gpt6_astra,
     is_gpt6_series,
@@ -106,7 +105,6 @@ def call_openai_endpoint(
         is_chat_variant = "chat" in lower_model
         is_gpt5 = is_gpt5_series(model_name)
         is_gpt6 = is_gpt6_series(model_name)
-        gen = get_gpt5_generation(model_name)
         is_reasoning_capable = is_openai_reasoning_model(model_name)
         reasoning_mode = generation_config.get("reasoning_mode")
 
@@ -123,11 +121,9 @@ def call_openai_endpoint(
                     )
                     reasoning_payload["effort"] = effort_to_send
                 else:
-                    none_capable = gen is not None and gen != "5"
-
-                    if none_capable and effort == "none":
+                    if effort == "none":
                         reasoning_payload["effort"] = "none"
-                    elif effort != "none":
+                    else:
                         effort_to_send = effort
                         if effort_to_send == "max" and not supports_gpt5_max_effort(
                             model_name
@@ -141,10 +137,6 @@ def call_openai_endpoint(
                             model_name
                         ):
                             effort_to_send = "high"
-                        if none_capable and effort_to_send == "minimal":
-                            effort_to_send = "none"
-                        elif effort_to_send == "minimal" and not is_gpt5:
-                            effort_to_send = "low"
                         reasoning_payload["effort"] = effort_to_send
 
             if reasoning_mode == "pro":
@@ -157,28 +149,12 @@ def call_openai_endpoint(
             verbosity = generation_config.get("verbosity", "low")
             payload["text"] = {"verbosity": verbosity}
 
-        if is_gpt5 and not is_chat_variant:
-            # temp/top_p only allowed when effort is "none" (gpt-5.1+) or "minimal" (base gpt-5)
-            current_effort = payload.get("reasoning", {}).get("effort")
-            allow_sampling = (
-                gen is not None and gen != "5" and current_effort == "none"
-            ) or (gen == "5" and current_effort == "minimal")
-            if not allow_sampling:
-                payload.pop("temperature", None)
-                payload.pop("top_p", None)
-
-        elif is_gpt6 and not is_chat_variant:
-            # For GPT-6: temp/top_p only allowed when effort is "none" (Sol and Luna)
+            # temp/top_p only allowed when effort is "none"
             current_effort = payload.get("reasoning", {}).get("effort")
             allow_sampling = current_effort == "none"
             if not allow_sampling:
                 payload.pop("temperature", None)
                 payload.pop("top_p", None)
-
-        elif is_reasoning_capable and not is_chat_variant:
-            # Non-GPT-5/6 reasoning models (o3) don't support temp/top_p
-            payload.pop("temperature", None)
-            payload.pop("top_p", None)
     except Exception:
         pass
 

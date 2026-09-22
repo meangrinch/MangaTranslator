@@ -705,21 +705,13 @@ def get_reasoning_effort_config(
                 )
             if gen in ("5.4", "5.2"):
                 return True, ["xhigh", "high", "medium"], "high"
-            if gen == "5":
-                return True, ["high"], "high"
             return True, ["high", "medium", "low"], "high"
 
         if supports_gpt5_max_effort(model_name):
             return True, ["max", "xhigh", "high", "medium", "low", "none"], "high"
         if supports_gpt5_xhigh_effort(model_name):
             return True, ["xhigh", "high", "medium", "low", "none"], "high"
-        if gen == "5.1":
-            return True, ["high", "medium", "low", "none"], "high"
-        if gen == "5":
-            return True, ["high", "medium", "low", "minimal"], "high"
-
-        # o3
-        return True, ["high", "medium", "low"], "high"
+        return True, ["high", "medium", "low", "none"], "high"
 
     elif provider == "Anthropic":
         return anthropic_reasoning_effort_config(model_name)
@@ -898,8 +890,8 @@ def get_sampling_interactivity_for_effort(
 ) -> tuple[bool, bool]:
     """Whether temp/top_p sliders should be interactive given the current reasoning effort.
 
-    For GPT-5 series (non-chat): only allowed when effort is 'none' or 'minimal'.
-    For other OpenAI reasoning models (o3, GPT-6): never allowed.
+    For GPT-5 series (non-chat): only allowed when effort is 'none'.
+    For other OpenAI reasoning models (GPT-6): never allowed (except Sol and Luna when effort is 'none').
     For DeepSeek reasoning models: only allowed when effort is 'none'.
     Returns (temp_interactive, top_p_interactive).
     """
@@ -914,7 +906,7 @@ def get_sampling_interactivity_for_effort(
         return True, True
 
     if is_gpt5_series(model_name):
-        allow = reasoning_effort in ("none", "minimal")
+        allow = reasoning_effort == "none"
         return allow, allow
 
     if is_gpt6_series(model_name) and not is_gpt6_astra(model_name):

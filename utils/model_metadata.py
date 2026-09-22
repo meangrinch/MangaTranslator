@@ -201,9 +201,7 @@ def is_openai_model_family(model_name: str | None) -> bool:
     if not model_name:
         return False
     lm = model_name.lower()
-    return (
-        "openai/" in lm or lm.startswith(("gpt-", "o3")) or "/gpt-" in lm or "/o3" in lm
-    )
+    return "openai/" in lm or lm.startswith("gpt-") or "/gpt-" in lm
 
 
 def is_google_model_family(model_name: str | None) -> bool:
@@ -228,7 +226,7 @@ _GPT5_GEN_RE = re.compile(r"gpt-(5(?:\.\d+)?)", re.IGNORECASE)
 def get_gpt5_generation(model_name: str | None) -> str | None:
     """Extract the GPT-5 generation string.
 
-    Returns '5', '5.1', '5.2', '5.3', '5.4', '5.5', '5.6', etc. or None if not a GPT-5 model.
+    Returns '5.1', '5.2', '5.3', '5.4', '5.5', '5.6', etc. or None if not a GPT-5 model.
     """
     if not model_name:
         return None
@@ -326,7 +324,7 @@ def resolve_openai_api_model_name(model_name: str | None) -> str | None:
     """Map UI model names to the slug sent to the OpenAI API.
 
     Virtual GPT-5.6 pro and GPT-6 pro entries (e.g. gpt-5.6-sol-pro, gpt-6-astra-pro, gpt-6-sol-pro)
-    strip the trailing -pro suffix. Historical pro slugs (gpt-5.5-pro-..., o3-pro-...) are left unchanged.
+    strip the trailing -pro suffix. Historical pro slugs (gpt-5.5-pro-...) are left unchanged.
     """
     if not model_name or not is_openai_virtual_pro(model_name):
         return model_name
@@ -346,7 +344,7 @@ def supports_openai_original_image_detail(model_name: str | None) -> bool:
             return False
 
         parts = _parse_gpt5_gen_parts(get_gpt5_generation(model_name))
-        if parts is None or parts == (5, 0):
+        if parts is None:
             return False
 
         return parts >= (5, 4)
@@ -362,15 +360,14 @@ def supports_openai_verbosity(model_name: str | None) -> bool:
 
 
 def is_openai_reasoning_model(model_name: str | None) -> bool:
-    """Check if an OpenAI model is reasoning-capable (GPT-5 series, GPT-6 series, o3)."""
+    """Check if an OpenAI model is reasoning-capable (GPT-5 series, GPT-6 series)."""
     if not model_name:
         return False
     lm = model_name.lower()
     return (
-        lm.startswith(("gpt-5", "gpt-6", "o3"))
+        lm.startswith(("gpt-5", "gpt-6"))
         or "/gpt-5" in lm
         or "/gpt-6" in lm
-        or "/o3" in lm
         or is_gpt6_series(model_name)
     )
 
