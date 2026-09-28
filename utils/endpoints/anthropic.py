@@ -131,6 +131,14 @@ def call_anthropic_endpoint(
             if thinking_type == "adaptive":
                 # Opus 4.6+: Adaptive thinking - Claude decides reasoning depth
                 payload["thinking"] = {"type": "adaptive"}
+            elif thinking_type == "between_tools" or (
+                thinking_type == "disabled"
+                and _claude_capability_flag(
+                    generation_config, "is_claude_between_tools"
+                )
+            ):
+                # Sonnet 5.5: Turn off up-front thinking
+                payload["thinking"] = {"type": "between_tools"}
             elif thinking_type == "disabled":
                 # Sonnet 5: Explicitly turn off adaptive thinking (on by default)
                 payload["thinking"] = {"type": "disabled"}
@@ -165,9 +173,10 @@ def call_anthropic_endpoint(
     except Exception:
         pass
 
-    if payload.get("thinking") == {"type": "disabled"} and payload.get(
-        "output_config", {}
-    ).get("effort") in ("xhigh", "max"):
+    if payload.get("thinking") in (
+        {"type": "disabled"},
+        {"type": "between_tools"},
+    ) and payload.get("output_config", {}).get("effort") in ("xhigh", "max"):
         payload["output_config"]["effort"] = "high"
 
     if enable_web_search:

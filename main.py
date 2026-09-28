@@ -1080,7 +1080,7 @@ def main():
         api_key = args.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
         api_key_arg_name = "--anthropic-api-key"
         api_key_env_var = "ANTHROPIC_API_KEY"
-        default_model = "claude-sonnet-5"
+        default_model = "claude-sonnet-5-5"
     elif provider == "SpaceXAI":
         api_key = (
             args.spacexai_api_key

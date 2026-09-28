@@ -561,9 +561,14 @@ def _build_generation_config(
             )
             generation_config["reasoning_effort"] = reasoning_effort
             if adaptive_default and not omit_thinking:
-                generation_config["thinking_type"] = (
-                    "disabled" if reasoning_effort == "none" else "adaptive"
-                )
+                if reasoning_effort == "none":
+                    generation_config["thinking_type"] = (
+                        "between_tools"
+                        if anthropic_flags.get("is_claude_between_tools")
+                        else "disabled"
+                    )
+                else:
+                    generation_config["thinking_type"] = "adaptive"
             elif anthropic_flags.get("is_claude_effort_max") and not omit_thinking:
                 if reasoning_effort == "auto":
                     generation_config["thinking_type"] = "adaptive"
