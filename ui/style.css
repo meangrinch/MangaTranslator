@@ -275,3 +275,9 @@
 #batch_status_message textarea {
     overflow-y: hidden !important;
 }
+
+/* --- Limit visible entries in dropdown menus --- */
+ul.options {
+    max-height: 400px !important;
+    overflow-y: auto !important;
+}
