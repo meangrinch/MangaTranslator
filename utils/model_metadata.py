@@ -291,6 +291,14 @@ def is_gpt6_sol(model_name: str | None) -> bool:
     return "gpt-6-sol" in lm
 
 
+def is_gpt61_sol(model_name: str | None) -> bool:
+    """Check if a model is GPT-6.1 Sol."""
+    if not model_name:
+        return False
+    lm = model_name.lower()
+    return "gpt-6.1-sol" in lm
+
+
 def is_gpt6_luna(model_name: str | None) -> bool:
     """Check if a model is GPT-6 Luna."""
     if not model_name:

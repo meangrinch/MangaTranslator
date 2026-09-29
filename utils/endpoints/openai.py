@@ -10,6 +10,7 @@ from utils.model_metadata import (
     is_gpt5_series,
     is_gpt6_astra,
     is_gpt6_series,
+    is_gpt61_sol,
     is_openai_reasoning_model,
     resolve_openai_api_model_name,
     supports_gpt5_max_effort,
@@ -116,7 +117,10 @@ def call_openai_endpoint(
                     effort_to_send = (
                         "low"
                         if effort == "minimal"
-                        or (is_gpt6_astra(model_name) and effort == "none")
+                        or (
+                            (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
+                            and effort == "none"
+                        )
                         else effort
                     )
                     reasoning_payload["effort"] = effort_to_send

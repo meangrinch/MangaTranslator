@@ -53,6 +53,7 @@ from utils.model_metadata import (
     is_gpt5_series,
     is_gpt6_astra,
     is_gpt6_series,
+    is_gpt61_sol,
     is_hy_mt2_model,
     is_meta_reasoning_model,
     is_mimo_reasoning_model,
@@ -521,7 +522,8 @@ def _build_generation_config(
             effort = reasoning_effort
             if is_gpt6_series(model_name):
                 if effort == "minimal" or (
-                    is_gpt6_astra(model_name) and effort == "none"
+                    (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
+                    and effort == "none"
                 ):
                     effort = "low"
                 generation_config["reasoning_effort"] = effort
@@ -843,7 +845,8 @@ def _build_generation_config(
             elif is_gpt6_model:
                 effort = config.reasoning_effort or "high"
                 if effort == "minimal" or (
-                    is_gpt6_astra(model_name) and effort == "none"
+                    (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
+                    and effort == "none"
                 ):
                     effort = "low"
                 generation_config["reasoning_effort"] = effort
@@ -918,7 +921,11 @@ def _build_generation_config(
         ) and config.reasoning_effort:
             effort = config.reasoning_effort
             if is_gpt6_model and (
-                effort == "minimal" or (is_gpt6_astra(model_name) and effort == "none")
+                effort == "minimal"
+                or (
+                    (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
+                    and effort == "none"
+                )
             ):
                 effort = "low"
             generation_config["reasoning_effort"] = effort
