@@ -1836,11 +1836,6 @@ def handle_provider_change(
     opencode_tier: str | None = None,
 ):
     """Handles changes in the provider selector."""
-    from core.caching import get_cache
-
-    cache = get_cache()
-    cache.clear_translation_cache()
-    cache.clear_manga_ocr_cache()
     return utils.update_translation_ui(
         provider, ocr_method, use_custom_sampling, opencode_tier
     )
@@ -1854,12 +1849,6 @@ def handle_opencode_tier_change(
     ocr_method: str = "LLM",
 ):
     """Handles switching between OpenCode Zen and OpenCode Go endpoint tiers."""
-    from core.caching import get_cache
-
-    cache = get_cache()
-    cache.clear_translation_cache()
-    cache.clear_manga_ocr_cache()
-
     is_go = "go" in (opencode_tier or "").lower()
     tier_key = "go" if is_go else "zen"
 
@@ -1937,11 +1926,6 @@ def handle_model_change(
     use_custom_sampling: bool = True,
 ):
     """Handles changes in the model name dropdown."""
-    from core.caching import get_cache
-
-    cache = get_cache()
-    cache.clear_translation_cache()
-    cache.clear_manga_ocr_cache()
     return utils.update_params_for_model(
         provider, model_name, current_temp, use_custom_sampling
     )
@@ -2116,14 +2100,6 @@ def handle_conjoined_detection_change(_conjoined_detection: bool):
     return gr.update(interactive=_conjoined_detection)
 
 
-def handle_confidence_threshold_change(_confidence: float):
-    """Handles changes in confidence threshold settings to clear YOLO cache."""
-    from core.caching import get_cache
-
-    cache = get_cache()
-    cache.clear_yolo_cache()
-
-
 def handle_luminance_correction_change(_enabled: bool):
     """Handles changes in the flux luminance correction checkbox to clear inpaint cache."""
     from core.caching import get_cache
@@ -2148,13 +2124,7 @@ def handle_ocr_method_change(
     """Handles changes in OCR method selection."""
     import gradio as gr
 
-    from core.caching import get_cache
-
     from . import layout, utils
-
-    cache = get_cache()
-    cache.clear_translation_cache()
-    cache.clear_manga_ocr_cache()
 
     updates = []
 
