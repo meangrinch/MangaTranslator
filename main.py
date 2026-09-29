@@ -1075,7 +1075,7 @@ def main():
         api_key = args.openai_api_key or os.environ.get("OPENAI_API_KEY")
         api_key_arg_name = "--openai-api-key"
         api_key_env_var = "OPENAI_API_KEY"
-        default_model = "gpt-6-sol"
+        default_model = "gpt-6.1-sol"
     elif provider == "Anthropic":
         api_key = args.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
         api_key_arg_name = "--anthropic-api-key"
@@ -1137,7 +1137,7 @@ def main():
         )
         api_key_arg_name = "--opencode-api-key"
         api_key_env_var = "OPENCODE_API_KEY"
-        default_model = "gpt-5.6-luna"
+        default_model = "deepseek-v4.1-flash"
     elif provider == "OpenRouter":
         api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         api_key_arg_name = "--openrouter-api-key"
