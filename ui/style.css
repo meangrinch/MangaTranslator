@@ -109,101 +109,12 @@
     margin-bottom: 1.3em;
 }
 
-/* --- Label Styling --- */
-#config-content-area .settings-group .block>label,
-#config-content-area .settings-group div.styler>label {
-    display: block;
-    font-weight: bold !important;
-    font-size: var(--text-md) !important;
-    color: var(--body-text-color) !important;
-    margin-bottom: 0.6em !important;
-    padding: 0 !important;
-}
-
-/* If labels have spans, target that */
-#config-content-area .settings-group .block>label>span:not(.has-info),
-#config-content-area .settings-group div.styler>label>span:not(.has-info) {
-    margin-bottom: 0.6em !important;
-    padding: 0 !important;
-}
-
-/* --- Component-Specific Fine-tuning (Minimal) --- */
-/* Sliders */
-#config-content-area .settings-group .gradio-slider input[type="number"] {
-    width: 5em;
-    margin-left: 8px;
-    border-width: 1px !important;
-    box-shadow: none !important;
-}
-
-#config-content-area .settings-group .gradio-slider .wrap {
-    padding: 0 !important;
-}
-
-/* Dropdowns/Textboxes */
-#config-content-area .settings-group .gradio-dropdown input,
-#config-content-area .settings-group .gradio-dropdown select,
-#config-content-area .settings-group .gradio-textbox input {
-    width: 100%;
-    border-width: none !important;
-    box-shadow: none !important;
-}
-
-#config-content-area .settings-group .gradio-dropdown .wrap-inner,
-#config-content-area .settings-group .gradio-textbox .wrap-inner {
-    padding: 0 !important;
+/* --- Remove borders for Dropdowns, Textboxes, and Radio Buttons in Settings --- */
+#config-content-area .settings-group .wrap:has(.wrap-inner),
+#config-content-area .settings-group .input-container input,
+#config-content-area .settings-group .input-container textarea,
+#config-content-area .settings-group label:has(input[type="radio"]) {
     border: none !important;
-}
-
-/* Checkboxes */
-#config-content-area .settings-group .gradio-checkbox label {
-    display: flex !important;
-    align-items: center !important;
-    font-weight: normal !important;
-    margin-bottom: 0 !important;
-}
-
-#config-content-area .settings-group .gradio-checkbox label span {
-    font-weight: normal !important;
-    margin-bottom: 0 !important;
-}
-
-#config-content-area .settings-group .gradio-checkbox input[type="checkbox"] {
-    margin-right: 8px;
-    width: 16px;
-    height: 16px;
-    accent-color: var(--primary-500);
-    cursor: pointer;
-    border-width: 1px !important;
-    box-shadow: none !important;
-}
-
-/* Radio Buttons */
-#config-content-area .settings-group .gradio-radio .radio-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    margin-top: 5px;
-}
-
-#config-content-area .settings-group .gradio-radio .radio-buttons>label {
-    display: flex !important;
-    align-items: center !important;
-    font-weight: normal !important;
-    margin-bottom: 0 !important;
-    cursor: pointer;
-}
-
-#config-content-area .settings-group .gradio-radio .radio-buttons label span {
-    font-weight: normal !important;
-    margin-bottom: 0 !important;
-}
-
-#config-content-area .settings-group .gradio-radio input[type="radio"] {
-    margin-right: 5px;
-    accent-color: var(--primary-500);
-    cursor: pointer;
-    border-width: 1px !important;
     box-shadow: none !important;
 }
 
@@ -239,21 +150,9 @@
     background-color: var(--neutral-900) !important;
 }
 
-/* --- STATUS MESSAGES --- */
-#config_status p,
-#config_status div.prose {
-    margin: 0;
-    padding-left: 5px;
-}
-
 /* --- CONFIG BUTTONS --- */
 #config-button-row {
     margin-bottom: 5px;
-}
-
-/* Hide status message initially*/
-#config_status {
-    display: none;
 }
 
 /* --- IMAGE PREVIEW RESIZING --- */
