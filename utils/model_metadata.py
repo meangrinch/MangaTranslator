@@ -528,39 +528,64 @@ def is_opencode_multimodal_model(model_name: str | None) -> bool:
     """Check if an OpenCode model is multimodal/vision-capable for LLM OCR mode."""
     if not model_name:
         return False
-    lm = model_name.lower()
+    lm = model_name.strip().lower()
     base_name = lm.split("/")[-1]
 
+    if base_name in (
+        "big-pickle",
+        "deepseek-v4-pro",
+        "minimax-m2.7",
+        "glm-5.2",
+        "glm-5.3",
+        "mimo-v2.5-pro",
+    ) or base_name.startswith(("jev-", "hy3", "hy4", "nemotron-", "longcat-2.0")):
+        return False
+
     if (
-        "-code" in base_name
-        or "code-" in base_name
-        or "coder" in base_name
-        or "starcoder" in base_name
+        "starcoder" in base_name
         or "codegeex" in base_name
         or "embed" in base_name
         or (
-            is_deepseek_reasoning_model(model_name)
-            and not is_deepseek_vision_model(model_name)
+            ("coder" in base_name or "-code" in base_name or "code-" in base_name)
+            and not base_name.startswith("kimi-")
         )
     ):
         return False
 
-    return (
+    if is_deepseek_reasoning_model(model_name) and not (
+        is_deepseek_vision_model(model_name) or ("deepseek-v4" in lm and "flash" in lm)
+    ):
+        return False
+
+    # Scoped provider checks to avoid false positives (e.g., Z.ai "v-" pattern matching "jev")
+    if (
         is_openai_model_family(model_name)
         or is_google_model_family(model_name)
         or is_anthropic_model_family(model_name)
+        or "grok" in lm
+        or base_name.startswith(("mimo-", "kimi-"))
         or is_mimo_multimodal_model(model_name)
         or is_moonshot_k3_model(model_name)
-        or is_meta_reasoning_model(model_name)
+        or "muse-spark" in lm
         or is_deepseek_vision_model(model_name)
-        or is_zai_vision_model(model_name)
-        or "grok" in lm
-        or "vl" in lm
-        or "-v" in lm
+        or ("deepseek-v4" in lm and "flash" in lm)
+        or (lm.startswith("glm-") and is_zai_vision_model(model_name))
+    ):
+        return True
+
+    if (
+        "qwen" in lm
+        or base_name == "minimax-m3"
+        or base_name.startswith("longcat-2.5")
         or "vision" in lm
         or "multimodal" in lm
         or "omni" in lm
-    )
+        or "vl" in lm
+    ):
+        return True
+
+    # Unlisted or temporary models default to vision-capable
+    return True
 
 
 def is_mimo_reasoning_model(model_name: str | None) -> bool:
