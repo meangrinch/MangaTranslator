@@ -23,18 +23,12 @@ MLモデルを活用してマンガ、Webtoon（Manhwa）、アメコミなど�
 
 <br/>
 
-<div align="center">
-  <table>
-    <tr>
-      <th style="text-align: center">オリジナル</th>
-      <th style="text-align: center">翻訳後（ワンクリック）</th>
-    </tr>
-    <tr>
-      <td><img src="../../images/example_original.jpg" width="400" /></td>
-      <td><img src="../../images/example_translation.jpg" width="400" /></td>
-    </tr>
-  </table>
-</div>
+<p align="center">
+  <img src="../../images/example_original.jpg" width="400" alt="オリジナル" />
+  <img src="../../images/example_translation.jpg" width="400" alt="翻訳後（ワンクリック）" />
+  <br/>
+  <sub>オリジナル → 翻訳後（ワンクリック）</sub>
+</p>
 
 ---
 

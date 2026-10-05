@@ -23,18 +23,12 @@ ML 모델을 활용하여 만화, 웹툰(Manhwa), 코믹스 번역을 자동화�
 
 <br/>
 
-<div align="center">
-  <table>
-    <tr>
-      <th style="text-align: center">원본</th>
-      <th style="text-align: center">번역본 (원클릭 완료)</th>
-    </tr>
-    <tr>
-      <td><img src="../../images/example_original.jpg" width="400" /></td>
-      <td><img src="../../images/example_translation.jpg" width="400" /></td>
-    </tr>
-  </table>
-</div>
+<p align="center">
+  <img src="../../images/example_original.jpg" width="400" alt="원본" />
+  <img src="../../images/example_translation.jpg" width="400" alt="번역본 (원클릭 완료)" />
+  <br/>
+  <sub>원본 → 번역본 (원클릭 완료)</sub>
+</p>
 
 ---
 

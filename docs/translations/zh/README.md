@@ -23,18 +23,12 @@
 
 <br/>
 
-<div align="center">
-  <table>
-    <tr>
-      <th style="text-align: center">原文</th>
-      <th style="text-align: center">翻译后（一键完成）</th>
-    </tr>
-    <tr>
-      <td><img src="../../images/example_original.jpg" width="400" /></td>
-      <td><img src="../../images/example_translation.jpg" width="400" /></td>
-    </tr>
-  </table>
-</div>
+<p align="center">
+  <img src="../../images/example_original.jpg" width="400" alt="原文" />
+  <img src="../../images/example_translation.jpg" width="400" alt="翻译后（一键完成）" />
+  <br/>
+  <sub>原文 → 翻译后（一键完成）</sub>
+</p>
 
 ---
 

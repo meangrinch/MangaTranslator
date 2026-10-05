@@ -23,18 +23,12 @@ User-friendly app for automating the translation of manga, manhwas, and comics u
 
 <br/>
 
-<div align="center">
-  <table>
-    <tr>
-      <th style="text-align: center">Original</th>
-      <th style="text-align: center">Translated (One-Click)</th>
-    </tr>
-    <tr>
-      <td><img src="docs/images/example_original.jpg" width="400" /></td>
-      <td><img src="docs/images/example_translation.jpg" width="400" /></td>
-    </tr>
-  </table>
-</div>
+<p align="center">
+  <img src="docs/images/example_original.jpg" width="400" alt="Original" />
+  <img src="docs/images/example_translation.jpg" width="400" alt="Translated (One-Click)" />
+  <br/>
+  <sub>Original → Translated (One-Click)</sub>
+</p>
 
 ---
 
