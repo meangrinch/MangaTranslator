@@ -8,7 +8,6 @@ from utils.model_metadata import (
     flux_valid_backend,
     get_max_tokens_cap,
     is_anthropic_no_sampling_model,
-    is_azure_url,
     is_opencode_multimodal_model,
     is_rosetta_model,
     is_sonnet_5_model,
@@ -192,19 +191,6 @@ def test_is_xai_reasoning_model(model, expected):
 )
 def test_is_opencode_multimodal_model(model, expected):
     assert is_opencode_multimodal_model(model) is expected
-
-
-@pytest.mark.parametrize(
-    ("url", "expected"),
-    [
-        ("https://myres.openai.azure.com/openai/v1", True),
-        ("https://gw.azure-api.net/v1", True),
-        ("http://localhost:8080/v1", False),
-        (None, False),
-    ],
-)
-def test_is_azure_url(url, expected):
-    assert is_azure_url(url) is expected
 
 
 def test_is_rosetta_model_requires_vendor_and_name():

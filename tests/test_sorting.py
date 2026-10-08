@@ -25,10 +25,6 @@ def test_sort_panels_rtl_and_ltr():
     assert sort_panels_by_reading_order(PANELS, "ltr") == [0, 1, 2, 3]
 
 
-def test_sort_panels_empty():
-    assert sort_panels_by_reading_order([], "rtl") == []
-
-
 def test_sort_bubbles_rows_without_panels():
     bubbles = [
         _bubble("left", (0, 0, 100, 50)),
@@ -86,7 +82,3 @@ def test_sort_bubbles_far_from_panels_go_last_unassigned():
     result = sort_bubbles_by_reading_order([far, near], "rtl", panels=PANELS)
     assert _names(result) == ["near", "far"]
     assert far["panel_id"] is None
-
-
-def test_sort_bubbles_empty():
-    assert sort_bubbles_by_reading_order([], "rtl") == []

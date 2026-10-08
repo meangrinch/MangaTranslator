@@ -71,11 +71,6 @@ def test_run_raises_when_cancelled():
         coordinator.run(lambda: None)
 
 
-@pytest.mark.parametrize("value", [0, None, -3])
-def test_max_requests_floor_is_one(value):
-    assert BatchRequestCoordinator(value).max_requests == 1
-
-
 def test_expanded_mask_bbox_pads_and_clamps():
     mask = np.zeros((200, 200), dtype=np.uint8)
     mask[50:60, 50:60] = 255

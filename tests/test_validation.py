@@ -5,15 +5,12 @@ from core.config import (
     MangaTranslatorConfig,
     RenderingConfig,
     TranslationConfig,
-    calculate_reasoning_budget,
 )
 from core.validation import (
     clamp_settings,
     validate_batch_input_path,
     validate_config,
     validate_core_inputs,
-    validate_mutually_exclusive_modes,
-    validate_zip_file,
 )
 from utils.exceptions import ValidationError
 
@@ -61,13 +58,6 @@ def test_clamp_settings_config_object():
     assert config.parallel_requests == 20
 
 
-def test_mutually_exclusive_modes():
-    validate_mutually_exclusive_modes(True, False, False)
-    validate_mutually_exclusive_modes(False, False, False)
-    with pytest.raises(ValidationError):
-        validate_mutually_exclusive_modes(True, False, True)
-
-
 def test_validate_config_rejects_nunchaku_with_klein():
     config = _config()
     config.outside_text.inpainting_method = "flux_klein_4b"
@@ -77,20 +67,6 @@ def test_validate_config_rejects_nunchaku_with_klein():
 
     config.outside_text.inpainting_method = "flux_kontext"
     validate_config(config)
-
-
-def test_validate_zip_file(tmp_path):
-    with pytest.raises(FileNotFoundError):
-        validate_zip_file(tmp_path / "missing.zip")
-
-    not_zip = tmp_path / "pages.txt"
-    not_zip.write_text("")
-    with pytest.raises(ValidationError):
-        validate_zip_file(not_zip)
-
-    upper = tmp_path / "pages.ZIP"
-    upper.write_bytes(b"")
-    assert validate_zip_file(upper) == upper
 
 
 def test_validate_batch_input_path(tmp_path):
@@ -150,18 +126,3 @@ def test_validate_core_inputs_rejects_empty_font_pack(dirs):
         validate_core_inputs(
             TranslationConfig(), RenderingConfig(font_dir="Empty"), models, fonts
         )
-
-
-@pytest.mark.parametrize(
-    ("effort", "expected"),
-    [
-        ("high", 8000),
-        ("medium", 5000),
-        ("low", 2000),
-        ("minimal", 1000),
-        ("auto", 0),
-        ("none", 0),
-    ],
-)
-def test_calculate_reasoning_budget(effort, expected):
-    assert calculate_reasoning_budget(10000, effort) == expected

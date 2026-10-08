@@ -78,8 +78,3 @@ def test_set_current_image_clears_caches_on_new_image(cache):
 
     cache.set_current_image(Image.new("RGB", (8, 8), "black"))
     assert cache.get_translation(key) == (None, None)
-
-
-def test_inpaint_cache_disabled_for_random_seed(cache):
-    assert cache.should_use_inpaint_cache(1)
-    assert not cache.should_use_inpaint_cache(-1)

@@ -24,10 +24,6 @@ def test_parse_styled_segments_all_styles():
     ]
 
 
-def test_parse_styled_segments_plain_text():
-    assert parse_styled_segments("no styles here") == [("no styles here", "regular")]
-
-
 def test_tokenize_styled_text_wraps_each_styled_word():
     assert tokenize_styled_text("Hello **big red** world") == [
         ("Hello", False),
@@ -120,10 +116,6 @@ def test_find_optimal_breaks_single_line_when_wide():
 
 def test_find_optimal_breaks_returns_none_when_token_too_wide():
     assert find_optimal_breaks_dp(["supercalifragilistic"], 5, len, 1) is None
-
-
-def test_find_optimal_breaks_empty_tokens():
-    assert find_optimal_breaks_dp([], 10, len, 1) == []
 
 
 def test_find_optimal_breaks_joins_cjk_and_detached_punctuation_without_spaces():

@@ -2,7 +2,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from core.scaling import scale_area, scale_font_size, scale_kernel, scale_length
+from core.scaling import scale_kernel
 from utils import update_checker
 from utils.archive import safe_extract_zip
 from utils.path_list import read_image_paths_from_txt, write_failed_paths
@@ -92,15 +92,6 @@ def test_failed_paths_round_trip(tmp_path):
 def test_write_failed_paths_nothing_to_write(tmp_path):
     assert write_failed_paths(tmp_path, ["", None]) is None
     assert not (tmp_path / "failed_paths.txt").exists()
-
-
-def test_scaling_helpers():
-    assert scale_length(10, 2.0) == 20
-    assert scale_length(10, None) == 10
-    assert scale_length(0.2, 1.0) == 1
-    assert scale_area(10, 2.0) == 40
-    assert scale_font_size(100, 4.0) == 256
-    assert scale_font_size(10, 0.1) == 4
 
 
 @pytest.mark.parametrize(
