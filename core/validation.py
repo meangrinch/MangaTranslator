@@ -124,9 +124,6 @@ _CONFIG_ATTR_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
     "outside_text_osb_min_font_size": (("outside_text", "osb_min_font_size"),),
     "outside_text_osb_line_spacing": (("outside_text", "osb_line_spacing"),),
     "outside_text_osb_padding_pixels": (("outside_text", "osb_padding_pixels"),),
-    "outside_text_osb_auto_vertical_text": (
-        ("outside_text", "osb_auto_vertical_text"),
-    ),
     "outside_text_osb_vertical_line_spacing_mult": (
         ("outside_text", "osb_vertical_line_spacing_mult"),
     ),
