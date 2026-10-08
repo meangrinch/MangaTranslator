@@ -1,34 +1,42 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-/.pytest_cache/
-/.ruff_cache/
+*.egg-info/
 /build/
 /dist/
+
+# Environments
 /venv/
 /.venv/
 /runtime/
 /deps/
-/tests/
-start-webui.bat
-start-webui.sh
-*.otf
-*.ttf
-*.pt
-*.onnx
-/models/.locks/
-/models/flux/
-/models/sam/
-/models/upscale/
-/models/yolo/
-/models/manga-ocr-base/
-/models/paddleocr-vl-1.6/
-/models/sdcpp/
-/models/rtdetr/
-/output/
+.env
+
+# Tool caches
+/.pytest_cache/
+/.ruff_cache/
+/.mypy_cache/
+
+# Editors and OS
+/.vscode/
+/.idea/
 .DS_Store
 Thumbs.db
-/.vscode/
+
+# Local launchers
+start-webui.bat
+start-webui.sh
+
+# Output, logs, and scratch
+/output/
+/.scratch/
 *.log
-*.txt
+
+# Models (downloaded at runtime)
+/models/*
+!/models/models_are_downloaded_here.txt
+*.pt
+*.onnx
+
+# Fonts (user-supplied packs)
+/fonts/*
+!/fonts/place_font_packs_here.txt
