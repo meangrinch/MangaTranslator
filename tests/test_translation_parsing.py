@@ -19,6 +19,21 @@ def test_parse_numbered_list():
     ]
 
 
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        ("1: line one\ncontinued\n2: two", ["line one\ncontinued", "two"]),
+        # One-step format with the translation wrapped onto the next line.
+        ("1: 原文 ||\nHello there\n2: a || b", ["原文 ||\nHello there", "a || b"]),
+        ("1: a\n2: b\n\nLet me know if you need changes.", ["a", "b"]),
+        ("```\n1: a\n2: b\n```", ["a", "b"]),
+        ("```text\n1: a\n2: b\n```", ["a", "b"]),
+    ],
+)
+def test_parse_multiline_items_and_wrappers(response, expected):
+    assert _parse_llm_response_unified(response, 2, "P") == expected
+
+
 def test_parse_marks_missing_and_ignores_out_of_range():
     response = "1: one\n5: extra"
     assert _parse_llm_response_unified(response, 2, "P") == [

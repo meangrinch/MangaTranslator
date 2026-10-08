@@ -78,11 +78,6 @@ from utils.model_metadata import (
 )
 from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
 
-TRANSLATION_PATTERN = re.compile(
-    r'^\s*(\d+)\s*:\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*:|\s*$)',
-    re.MULTILINE | re.DOTALL,
-)
-
 
 def _build_system_prompt_ocr(
     input_language: str | None,
@@ -1188,6 +1183,17 @@ def _call_llm_endpoint(
         raise
 
 
+def _strip_code_fences(text: str) -> str:
+    """Remove a surrounding markdown code fence, if present."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    return cleaned
+
+
 def _parse_llm_response_unified(
     response_text: str | None,
     total_elements: int,
@@ -1209,13 +1215,15 @@ def _parse_llm_response_unified(
         )
         log_message(f"Raw response:\n---\n{response_text}\n---", always_print=True)
 
-        # Pattern matches "1: text" or "1. text" or "1 text" etc.
+        # Pattern matches "1: text" or "1. text". An item runs until the next
+        # numbered line, a blank line, or end of text (\Z, since $ would stop
+        # at the first line break under MULTILINE).
         pattern = re.compile(
-            r'^\s*(\d+)\s*[:.]\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*[:.]|\s*$)',
+            r'^\s*(\d+)\s*[:.]\s*"?\s*(.*?)\s*"?\s*(?=\s*\n\s*\d+\s*[:.]|\n\s*\n|\s*\Z)',
             re.MULTILINE | re.DOTALL,
         )
 
-        matches = pattern.findall(response_text)
+        matches = pattern.findall(_strip_code_fences(response_text))
         result_dict = {}
 
         for num_str, text in matches:
@@ -1439,15 +1447,7 @@ def _parse_rosetta_response(
 
     log_message(f"Raw response:\n---\n{response_text}\n---", always_print=True)
 
-    # Strip markdown code fences if present
-    cleaned = response_text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        cleaned = "\n".join(lines).strip()
+    cleaned = _strip_code_fences(response_text)
 
     try:
         parsed = json.loads(cleaned)
