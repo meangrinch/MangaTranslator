@@ -305,8 +305,8 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_ero_doujinshi_mode": False,
     "batch_parallel_requests": 1,
     "batch_parallel_within_pages": False,
-    "batch_overlap_llm_with_inpaint": False,
-    "batch_retry_failed_once": False,
+    "batch_overlap_llm_with_inpaint": True,
+    "batch_retry_failed_once": True,
     "batch_previous_context_image_count": 0,
     "batch_previous_context_text_count": 3,
 }

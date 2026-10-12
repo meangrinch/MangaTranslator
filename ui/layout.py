@@ -507,7 +507,7 @@ def create_layout(
                             label="Overlap LLM With Inpainting",
                             value=bool(
                                 saved_settings.get(
-                                    "batch_overlap_llm_with_inpaint", False
+                                    "batch_overlap_llm_with_inpaint", True
                                 )
                             ),
                             info="Run LLM translation concurrently with inpainting.",
@@ -553,7 +553,7 @@ def create_layout(
                         batch_retry_failed_once = gr.Checkbox(
                             label="Retry Failed Images Once",
                             value=bool(
-                                saved_settings.get("batch_retry_failed_once", False)
+                                saved_settings.get("batch_retry_failed_once", True)
                             ),
                             info=(
                                 "Automatically retry each failed image once "

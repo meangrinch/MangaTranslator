@@ -243,8 +243,8 @@ class UIConfigState:
     batch_ero_doujinshi_mode: bool = False
     batch_parallel_requests: int = 1
     batch_parallel_within_pages: bool = False
-    batch_overlap_llm_with_inpaint: bool = False
-    batch_retry_failed_once: bool = False
+    batch_overlap_llm_with_inpaint: bool = True
+    batch_retry_failed_once: bool = True
     batch_previous_context_image_count: int = 0
     batch_previous_context_text_count: int = 3
 
@@ -788,9 +788,9 @@ class UIConfigState:
                 data.get("batch_parallel_within_pages", False)
             ),
             batch_overlap_llm_with_inpaint=bool(
-                data.get("batch_overlap_llm_with_inpaint", False)
+                data.get("batch_overlap_llm_with_inpaint", True)
             ),
-            batch_retry_failed_once=bool(data.get("batch_retry_failed_once", False)),
+            batch_retry_failed_once=bool(data.get("batch_retry_failed_once", True)),
             batch_previous_context_image_count=int(
                 data.get("batch_previous_context_image_count", 0)
             ),
