@@ -130,6 +130,7 @@ def main():
         server_port=args.port,
         show_error=True,
         favicon_path=favicon,
+        **layout.get_launch_kwargs(),
     )
 
 

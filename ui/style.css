@@ -1,4 +1,9 @@
 /* --- APP HEADER --- */
+/* Gradio 6 pads gr.HTML even with padding=False */
+.html-container:has(.mangatranslator-header) {
+    padding: 0;
+}
+
 .mangatranslator-header {
     display: flex;
     align-items: center;

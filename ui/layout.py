@@ -284,16 +284,31 @@ function() {{
 """
 
 
+def get_launch_kwargs() -> dict[str, Any]:
+    """Page-level options that Gradio 6 takes in launch() instead of gr.Blocks()."""
+    return {
+        # Gradio 6's bundled Source Sans Pro SemiBold lacks most glyphs, so load it
+        # from Google Fonts like Gradio 5 did; a bare Font stops Gradio declaring the local file.
+        "theme": gr.themes.Default(
+            font=[
+                gr.themes.Font("Source Sans Pro"),
+                "ui-sans-serif",
+                "system-ui",
+                "sans-serif",
+            ],
+        ),
+        "head": '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600&display=swap">',
+        "js": _build_init_js(),
+        "css_paths": str(Path(__file__).with_name("style.css")),
+    }
+
+
 def create_layout(
     models_dir: Path, fonts_base_dir: Path, target_device: Any
 ) -> gr.Blocks:
     """Creates the Gradio UI layout and connects callbacks."""
 
-    css_path = Path(__file__).with_name("style.css")
-
-    with gr.Blocks(
-        title="MangaTranslator", js=_build_init_js(), css_paths=str(css_path)
-    ) as app:
+    with gr.Blocks(title="MangaTranslator") as app:
         gr.HTML(_get_app_header_html(), padding=False)
 
         font_choices, initial_default_font = utils.get_available_font_packs(
@@ -359,7 +374,7 @@ def create_layout(
                         input_image = gr.Image(
                             type="filepath",
                             label="Upload Image",
-                            show_download_button=False,
+                            buttons=["fullscreen"],
                             image_mode=None,
                             elem_id="translator_input_image",
                         )
@@ -414,6 +429,7 @@ def create_layout(
                             type="pil",
                             label="Translated Image",
                             interactive=False,
+                            buttons=["download", "fullscreen"],
                             elem_id="translator_output_image",
                         )
                         status_message = gr.Textbox(
@@ -576,6 +592,7 @@ def create_layout(
                             columns=4,
                             height="auto",
                             object_fit="contain",
+                            buttons=["download", "download_all", "fullscreen"],
                         )
                         batch_status_message = gr.Textbox(
                             label="Status",
@@ -880,7 +897,6 @@ def create_layout(
                                 placeholder="Enter Google AI Studio API key (starts with AI... / AQ...)",
                                 type="password",
                                 value=saved_settings.get("google_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "Google"),
                                 elem_id="google_api_key",
                                 info="Stored locally. Or set via GOOGLE_API_KEY / GEMINI_API_KEY env var.",
@@ -890,7 +906,6 @@ def create_layout(
                                 placeholder="Enter OpenAI API key (starts with sk-...)",
                                 type="password",
                                 value=saved_settings.get("openai_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "OpenAI"),
                                 elem_id="openai_api_key",
                                 info="Stored locally. Or set via OPENAI_API_KEY env var.",
@@ -900,7 +915,6 @@ def create_layout(
                                 placeholder="Enter Anthropic API key (starts with sk-ant-...)",
                                 type="password",
                                 value=saved_settings.get("anthropic_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "Anthropic"),
                                 elem_id="anthropic_api_key",
                                 info="Stored locally. Or set via ANTHROPIC_API_KEY env var.",
@@ -910,7 +924,6 @@ def create_layout(
                                 placeholder="Enter SpaceXAI API key (starts with xai-...)",
                                 type="password",
                                 value=saved_settings.get("xai_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "SpaceXAI"),
                                 elem_id="xai_api_key",
                                 info="Stored locally. Or set via SPACEXAI_API_KEY / XAI_API_KEY env var.",
@@ -920,7 +933,6 @@ def create_layout(
                                 placeholder="Enter Meta Model API key (starts with LLM|...)",
                                 type="password",
                                 value=saved_settings.get("meta_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "Meta Model"),
                                 elem_id="meta_api_key",
                                 info="Stored locally. Or set via META_MODEL_API_KEY / META_API_KEY env var.",
@@ -930,7 +942,6 @@ def create_layout(
                                 placeholder="Enter DeepSeek API key (starts with sk-...)",
                                 type="password",
                                 value=saved_settings.get("deepseek_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "DeepSeek"),
                                 elem_id="deepseek_api_key",
                                 info="Stored locally. Or set via DEEPSEEK_API_KEY env var.",
@@ -940,7 +951,6 @@ def create_layout(
                                 placeholder="Enter Z.ai API key",
                                 type="password",
                                 value=saved_settings.get("zai_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "Z.ai"),
                                 elem_id="zai_api_key",
                                 info="Stored locally. Or set via ZAI_API_KEY env var.",
@@ -950,7 +960,6 @@ def create_layout(
                                 placeholder="Enter Moonshot API key (starts with sk-...)",
                                 type="password",
                                 value=saved_settings.get("moonshot_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "Moonshot AI"),
                                 elem_id="moonshot_api_key",
                                 info="Stored locally. Or set via MOONSHOT_API_KEY env var.",
@@ -960,7 +969,6 @@ def create_layout(
                                 placeholder="Enter MiMo API key (starts with sk-... or tp-...)",
                                 type="password",
                                 value=saved_settings.get("mimo_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "Xiaomi MiMo"),
                                 elem_id="mimo_api_key",
                                 info=(
@@ -973,7 +981,6 @@ def create_layout(
                                 placeholder="Enter QwenCloud API key (starts with sk-...)",
                                 type="password",
                                 value=saved_settings.get("qwencloud_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "QwenCloud"),
                                 elem_id="qwencloud_api_key",
                                 info="Stored locally. Or set via QWENCLOUD_API_KEY / QWEN_API_KEY env var.",
@@ -983,7 +990,6 @@ def create_layout(
                                 placeholder="Enter OpenCode API key (e.g. sk-..., opencode-...)",
                                 type="password",
                                 value=saved_settings.get("opencode_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "OpenCode"),
                                 elem_id="opencode_api_key",
                                 info="Stored locally. Or set via OPENCODE_API_KEY env var.",
@@ -1008,7 +1014,6 @@ def create_layout(
                                 placeholder="Enter OpenRouter API key (starts with sk-or-...)",
                                 type="password",
                                 value=saved_settings.get("openrouter_api_key", ""),
-                                show_copy_button=False,
                                 visible=(config_initial_provider == "OpenRouter"),
                                 elem_id="openrouter_api_key",
                                 info="Stored locally. Or set via OPENROUTER_API_KEY env var.",
@@ -1023,7 +1028,6 @@ def create_layout(
                                         "openai_compatible_url"
                                     ],
                                 ),
-                                show_copy_button=False,
                                 visible=(
                                     config_initial_provider == "OpenAI-Compatible"
                                 ),
@@ -1037,7 +1041,6 @@ def create_layout(
                                 value=saved_settings.get(
                                     "openai_compatible_api_key", ""
                                 ),
-                                show_copy_button=False,
                                 visible=(
                                     config_initial_provider == "OpenAI-Compatible"
                                 ),

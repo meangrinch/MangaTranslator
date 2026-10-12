@@ -1,6 +1,6 @@
 diffusers>=0.37.0
 fonttools>=4.56.0
-gradio>=5.47.2,<=5.50.0
+gradio>=6.30.0,<7
 manga-ocr>=0.1.15
 numpy>=1.24.0
 opencv-contrib-python>=4.8.0
