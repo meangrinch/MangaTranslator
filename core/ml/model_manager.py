@@ -895,7 +895,8 @@ class ModelManager:
             transformers_logging.set_verbosity_error()
             try:
                 manga_ocr_instance = MangaOcr(
-                    pretrained_model_name_or_path=str(model_path)
+                    pretrained_model_name_or_path=str(model_path),
+                    force_cpu=self.device.type == "cpu",
                 )
             finally:
                 transformers_logging.set_verbosity(previous_level)
@@ -1065,6 +1066,12 @@ class ModelManager:
             self.models[ModelType.SAM3] = (processor, model)
             log_message("SAM 3 Tracker model loaded.", verbose=verbose)
             return self.models[ModelType.SAM3]
+
+    def set_device(self, device: torch.device):
+        """Override the auto-detected device (e.g. --cpu). Call before loading models."""
+        with self._lock:
+            self.device = device
+            self.dtype = get_best_dtype(device)
 
     def set_hf_token(self, token: str, enable_fast_download: bool = True):
         """Set the global HuggingFace token for model downloads.

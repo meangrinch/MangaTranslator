@@ -4,6 +4,7 @@ from core.services.translation import (
     _build_hy_mt2_prompt,
     _check_ocr_failure,
     _format_previous_context_texts,
+    _join_ocr_lines,
     _pair_context_lines,
     _parse_llm_response_unified,
     _parse_rosetta_response,
@@ -154,3 +155,15 @@ def test_endpoint_keeps_labels_next_to_their_images(monkeypatch):
         "<image>",
         "go",
     ]
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("何やってんだ\n俺は！！？", "何やってんだ俺は！！？"),
+        ("Hello\nworld", "Hello world"),
+        ("안녕\n하세요", "안녕 하세요"),
+    ],
+)
+def test_join_ocr_lines_adds_spaces_only_outside_cjk(text, expected):
+    assert _join_ocr_lines(text) == expected

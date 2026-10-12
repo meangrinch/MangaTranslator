@@ -1282,6 +1282,16 @@ def _prepare_images_for_ocr(
     return pil_images
 
 
+# Kana, CJK ideographs and punctuation, full-width forms (not Hangul, which uses spaces)
+_CJK_CHARS = "\u3000-\u9fff\uff00-\uffef"
+
+
+def _join_ocr_lines(text: str) -> str:
+    """Collapse line breaks: nothing between CJK characters, a space otherwise."""
+    text = re.sub(rf"(?<=[{_CJK_CHARS}])\s*\n\s*(?=[{_CJK_CHARS}])", "", text)
+    return " ".join(text.split())
+
+
 def _format_ocr_results(
     extracted_texts: list[str],
     bubble_metadata: list[dict[str, Any]],
@@ -1639,8 +1649,7 @@ def _perform_paddle_ocr_vl(
         if text == "[OCR FAILED]" or not text:
             formatted_texts.append(text if text else "[OCR FAILED]")
         else:
-            # Collapse newlines hallucinated by PaddleOCR-VL
-            formatted_texts.append(" ".join(text.split()))
+            formatted_texts.append(_join_ocr_lines(text))
 
     extracted_texts = formatted_texts
 

@@ -5,6 +5,7 @@ import os
 import random
 import re
 import tempfile
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -256,6 +257,19 @@ def _apply_inpaint_render_metadata(
         item["needs_text_background"] = needs_text_bg
 
 
+def _is_page_number(text: str) -> bool:
+    """Match digits, "Page 20", "p. 20", "- 20 -", etc."""
+    # manga-ocr returns full-width characters; NFKC folds them to ASCII
+    text = unicodedata.normalize("NFKC", text)
+    return bool(
+        re.match(
+            r"^\s*[-–—―ー]?\s*(?:page\.?|p\.?)?\s*\d+\s*[-–—―ー]?\s*$",
+            text,
+            re.IGNORECASE,
+        )
+    )
+
+
 def prepare_outside_text_work(
     pil_image: Image.Image,
     config: MangaTranslatorConfig,
@@ -369,14 +383,7 @@ def prepare_outside_text_work(
 
                 kept_suspicious_count = 0
                 for i, text in enumerate(suspicious_texts):
-                    # Regex for page numbers: digits, "Page 20", "p. 20", etc.
-                    is_page_number = bool(
-                        re.match(
-                            r"^\s*(?:page\.?|p\.?)?\s*\d+\s*$", text, re.IGNORECASE
-                        )
-                    )
-
-                    if not is_page_number:
+                    if not _is_page_number(text):
                         safe_results.append(outside_text_results[suspicious_indices[i]])
                         kept_suspicious_count += 1
                     else:

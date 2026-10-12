@@ -87,6 +87,10 @@ def main():
     os.makedirs(FONTS_BASE_DIR, exist_ok=True)
 
     target_device = torch.device("cpu") if args.cpu else get_best_device()
+    if args.cpu:
+        from core.ml.model_manager import get_model_manager
+
+        get_model_manager().set_device(target_device)
 
     device_info_str = "CPU"
     if target_device.type == "cuda":

@@ -1190,6 +1190,10 @@ def main():
             else "cpu"
         )
     )
+    if args.cpu:
+        from core.ml.model_manager import get_model_manager
+
+        get_model_manager().set_device(target_device)
     log_message(
         f"Using {target_device.type.upper()} device.",
         always_print=True,
