@@ -229,6 +229,7 @@ js_reset_status_height = """
 
 
 APP_ICON_PATH = Path(__file__).resolve().parent.parent / "assets" / "icon.png"
+FAVICON_PATH = APP_ICON_PATH.with_name("icon-192.png")
 
 
 def _get_icon_data_uri(path: Path, size: int | None = None) -> str:
@@ -258,32 +259,6 @@ def _get_app_header_html() -> str:
     )
 
 
-def _build_init_js() -> str:
-    favicon_uri = _get_icon_data_uri(APP_ICON_PATH, size=64)
-    favicon_snippet = ""
-    if favicon_uri:
-        favicon_snippet = f"""
-    const faviconUri = "{favicon_uri}";
-    ['icon', 'shortcut icon'].forEach(rel => {{
-        const existing = document.querySelector(`link[rel='${{rel}}']`);
-        if (existing) {{
-            existing.remove();
-        }}
-        const link = document.createElement('link');
-        link.rel = rel;
-        link.type = 'image/png';
-        link.href = faviconUri;
-        document.head.appendChild(link);
-    }});
-"""
-    return f"""
-function() {{
-{favicon_snippet}
-{js_credits}
-}}
-"""
-
-
 def get_launch_kwargs() -> dict[str, Any]:
     """Page-level options that Gradio 6 takes in launch() instead of gr.Blocks()."""
     return {
@@ -298,7 +273,7 @@ def get_launch_kwargs() -> dict[str, Any]:
             ],
         ),
         "head": '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600&display=swap">',
-        "js": _build_init_js(),
+        "js": f"function() {{\n{js_credits}\n}}",
         "css_paths": str(Path(__file__).with_name("style.css")),
     }
 
