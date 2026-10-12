@@ -56,8 +56,9 @@ def call_openai_endpoint(
     """
     if not api_key:
         raise ValidationError("API key is required for OpenAI endpoint")
-    text_part = next((p for p in parts if "text" in p), None)
-    image_parts = [p for p in parts if "inline_data" in p]
+    # The last text part is the prompt; earlier ones label the image after them
+    text_part = next((p for p in reversed(parts) if "text" in p), None)
+    image_parts = [p for p in parts if p is not text_part]
     if not text_part:
         raise ValidationError(
             "Invalid 'parts' format for OpenAI: No text prompt found."
@@ -69,6 +70,9 @@ def call_openai_endpoint(
     input_content = []
     image_detail = generation_config.get("image_detail")
     for part in image_parts:
+        if "text" in part:
+            input_content.append({"type": "input_text", "text": part["text"]})
+            continue
         if (
             "inline_data" in part
             and "data" in part["inline_data"]

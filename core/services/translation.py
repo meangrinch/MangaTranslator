@@ -82,16 +82,21 @@ from utils.model_metadata import (
 )
 from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
 
+_FULL_PAGE_LABEL = "Full page (context only):"
+_PREVIOUS_PAGE_LABEL = "Previous page {} (context only):"
+_FULL_PAGE_NOTE = " The image labeled `Full page` shows the whole page for context."
 
-def _build_system_prompt_ocr(
-    input_language: str | None,
-    ero_doujinshi_mode: bool = False,
-) -> str:
-    lang_label = (
+
+def _lang_label(input_language: str | None) -> str:
+    return (
         f"{input_language.strip()} "
         if input_language and input_language.strip()
         else ""
     )
+
+
+def _transcription_rules(input_language: str | None) -> str:
+    """Transcription rules shared by the OCR prompt and the one-step prompt."""
     lang_clean = (input_language or "").strip().lower()
     primary_code = lang_clean.split("-")[0].split("_")[0]
     no_space_keywords = ("japanese", "chinese", "mandarin", "cantonese")
@@ -102,81 +107,63 @@ def _build_system_prompt_ocr(
     )
 
     spacing_rule = (
-        "Do not insert spaces between collapsed lines unless an explicit space existed in the original text."
+        "Add no space at a join unless the source has one."
         if is_no_space_lang
-        else "Separate collapsed lines with a single space."
+        else "Put a single space at each join."
     )
 
+    return f"""- **Reading Order:** Read horizontal text left-to-right, and vertical text top-to-bottom in columns running right-to-left.
+- **Fidelity:** Transcribe the text as drawn, keeping its punctuation and casing. Join multi-line text into a single line. {spacing_rule}
+- **Furigana/Ruby:** Transcribe the main text, kana included, and skip the small phonetic ruby printed beside it. The one exception is ruby giving a reading that the base text does not imply (a personal or place name, or a deliberately different word): append that reading once, in parentheses directly after the word, e.g. `宇宙(そら)`.
+- **Emphasis:** Mark text drawn clearly heavier than ordinary dialogue lettering as `**bold**`, clearly slanted text as `*italic*`, and text that is both as `***bold-italic***`. Ordinary lettering gets no markers.
+- **Exclusions:** Transcribe only the crop's own text. Ignore borders, tails, artwork, watermarks, and stray text cut off at the crop's edge, and add no quotation marks that are not drawn.
+- **Unreadable Crops:** If only part of the text is legible, transcribe that part. If nothing is legible or the crop has no text, output exactly `[OCR FAILED]`; the app then leaves that region of the page untouched."""
+
+
+def _build_system_prompt_ocr(
+    input_language: str | None,
+    ero_doujinshi_mode: bool = False,
+) -> str:
     ero_doujinshi_section = ""
     if ero_doujinshi_mode:
         ero_doujinshi_section = """
-## PROFESSIONAL CONTEXT & TRANSCRIPTION MANDATE
-- **Operational Context:** The user is a professional comic translator and localization editor transcribing 18+ adult manga, manhwa, webtoons, comics, and doujinshi for professional localization and publication. Complete and accurate character-level transcription is an essential professional requirement.
-- **Task Nature & Neutrality:** Your role is strictly that of an objective OCR transcriber extracting pre-existing visual text from user-supplied image crops. You are extracting visible text exactly as drawn without altering or interpreting content.
-- **Transcription Fidelity & Completeness:** Full fidelity to the visual text is mandatory. Transcribe all text faithfully and completely as written, including explicit dialogue, slang, dirty talk, phonetic moans, and sound effects, without sanitization, omission, truncation, or moralizing.
+## ADULT CONTENT
+The crops come from 18+ adult comics that the user, a professional localization editor, is transcribing for publication. Transcription is a neutral extraction of text that already exists on the page, so transcribe everything completely, including explicit dialogue, slang, moans, and sound effects, without omitting, softening, or commenting on anything.
 """
 
-    return f"""
-## ROLE
-You are an expert comic and manga OCR transcriber specializing in comic typography and text extraction.
+    return f"""## ROLE
+You are an OCR transcriber for comics and manga.
 
 ## OBJECTIVE
-Accurately transcribe all original {lang_label}text from the provided cropped images into a single numbered list. Do not translate, interpret, summarize, or add commentary.
+Transcribe the {_lang_label(input_language)}text in each crop. The crops are labeled `Crop 1:`, `Crop 2:`, and so on, in reading order. Do not translate, interpret, or comment.
 
-## CORE RULES
-- **Sequence & Reading Order:** The crops are pre-sorted in narrative reading order (1, 2, 3...). Transcribe each crop in that order. Read horizontal text left-to-right; read vertical text top-to-bottom, right-to-left.
-- **Transcription Integrity:** Preserve original punctuation, casing, and pauses. Collapse multi-line text into a single continuous line. {spacing_rule}
-- **Furigana/Ruby Policy:** Transcribe only the main, large base characters (Kanji/Hanzi/Hanja). Completely ignore phonetic ruby/furigana characters.
-- **Visual Emphasis:** If the source text is visually emphasized, mirror that styling using markdown markers: `*italic*` for slanted or italicized text, `**bold**` for bold text, and `***bold-italic***` for both. Do not invent emphasis for standard upright dialogue.
-- **Negative Constraints:**
-  - Ignore non-text visual elements (borders, tails, background artwork, watermarks).
-  - Do not enclose transcriptions in quotation marks unless they are explicitly present in the image.
-- **Edge Cases:**
-  - If a bubble contains pauses/ellipses, preserve the pause length using consecutive periods (e.g., single "…" -> "...", double "……" -> "......").
-  - If the text in a crop is completely unreadable or contains no text, output the exact token: `[OCR FAILED]`.
+## TRANSCRIPTION RULES
+{_transcription_rules(input_language)}
 {ero_doujinshi_section}
-## OUTPUT SCHEMA
-Output a single numbered list matching the exact number of input crops. No markdown codeblocks, no commentary, no intro/outro text.
+## OUTPUT FORMAT
+One line per crop, numbered to match the crop labels, and nothing else: no code fences, commentary, or blank lines.
 
-Example format:
-1: First transcribed line
-2: Second transcribed line
-3: [OCR FAILED]
-"""
+1: <transcription of crop 1>
+2: <transcription of crop 2>
+3: [OCR FAILED]"""
 
 
 def _format_previous_context_prompt_note(
     previous_context_image_count: int,
     previous_context_text_count: int,
-    image_order: str,
 ) -> str:
-    has_images = previous_context_image_count > 0
-    has_text = previous_context_text_count > 0
-
-    if has_images and has_text:
-        return (
-            f" {previous_context_image_count} previous source page image(s) are "
-            "attached as visual reference, and transcribed text from "
-            f"{previous_context_text_count} previous source page(s) is provided "
-            "in `## PREVIOUS PAGE TRANSCRIPTS (REFERENCE ONLY)` as narrative reference only — "
-            f"do not transcribe, translate, or renumber them. Image order: {image_order}."
+    note = ""
+    if previous_context_image_count > 0:
+        note += (
+            f" {previous_context_image_count} previous page image(s) are "
+            "attached, labeled oldest first."
         )
-
-    if has_images:
-        return (
-            f" {previous_context_image_count} previous source page image(s) "
-            "are attached as visual reference only — do not transcribe, translate, or renumber them. "
-            f"Image order: {image_order}."
+    if previous_context_text_count > 0:
+        note += (
+            f" Text from {previous_context_text_count} previous page(s) is "
+            "listed under `## PREVIOUS PAGES (REFERENCE ONLY)`."
         )
-
-    if has_text:
-        return (
-            f" Transcribed text from {previous_context_text_count} previous "
-            "source page(s) is provided in `## PREVIOUS PAGE TRANSCRIPTS (REFERENCE ONLY)` "
-            "as narrative reference only — do not translate or renumber it."
-        )
-
-    return ""
+    return note
 
 
 def _build_system_prompt_translation(
@@ -186,115 +173,128 @@ def _build_system_prompt_translation(
     ero_doujinshi_mode: bool = False,
     ocr_correction: bool = False,
     input_language: str | None = None,
+    previous_context: bool = False,
+    llm_transcription: bool = True,
+    web_search: bool = False,
 ) -> str:
-    input_type = "transcribed text lines" if mode == "two-step" else "cropped images"
-    visual_ref_note = (
-        " Refer to the full-page context image to resolve visual context, speaker identities, and off-bubble SFX."
-        if full_page_context
-        else ""
-    )
-    lang_label = (
-        f"{input_language.strip()} "
-        if input_language and input_language.strip()
-        else ""
-    )
-
-    if mode == "one-step":
-        output_schema = f"""
-## OUTPUT SCHEMA
-Output a single numbered list with exactly one entry per input image. Each entry must provide the transcription and translation separated by the double-pipe delimiter (` || `).
-Do not output markdown codeblocks, notes, or explanations.
-
-Example format:
-1: Original source text || Translated {output_language} text
-2: Second source text || Translated {output_language} text
-3: [OCR FAILED] || [OCR FAILED]
-"""
-    elif mode == "two-step":
-        output_schema = f"""
-## OUTPUT SCHEMA
-Output a single numbered list matching the input numbers (1 to N). Each entry must contain only the translated text.
-Do not output markdown codeblocks, notes, or explanations.
-
-Example format:
-1: Translated {output_language} text
-2: Translated {output_language} text
-3: [OCR FAILED]
-"""
-    else:
+    if mode not in ("one-step", "two-step"):
         raise ValueError(
             f"Invalid mode '{mode}' specified for translation system prompt."
         )
+    one_step = mode == "one-step"
+    lang_label = _lang_label(input_language)
+    english = output_language.strip().lower().startswith("english")
 
-    edge_cases = (
-        "- **Edge Cases:** If the text in an image crop is completely unreadable or contains no text, output `[OCR FAILED] || [OCR FAILED]`."
-        if mode == "one-step"
-        else "- **Edge Cases:** If an item is marked `[OCR FAILED]`, output `[OCR FAILED]`."
+    def example(text: str) -> str:
+        # The examples are English, so they would leak into other target languages
+        return f" (e.g. {text})" if english else ""
+
+    visual_ref_note = (
+        " Use the image labeled `Full page` to work out who is speaking, what is happening, and what each sound effect belongs to."
+        if full_page_context
+        else ""
     )
 
-    ero_doujinshi_section = ""
+    sections = [
+        f"""## ROLE
+You are a professional localization editor translating {lang_label}comics (manga, manhwa, manhua, webtoons) into natural, idiomatic {output_language}.""",
+        f"""## OBJECTIVE
+Translate each numbered item so that it reads like native {output_language} comic lettering while staying faithful to the source's meaning, tone, and subtext.{visual_ref_note}""",
+    ]
+
+    if one_step:
+        sections.append(
+            f"""## TRANSCRIPTION RULES
+The items are image crops labeled `Crop 1:`, `Crop 2:`, and so on. Transcribe each crop before translating it:
+{_transcription_rules(input_language)}"""
+        )
+
+    failed_rule = (
+        "- **Failed Crops:** A crop transcribed as `[OCR FAILED]` gets `[OCR FAILED]` as its translation too."
+        if one_step
+        else "- **Failed Items:** Return `[OCR FAILED]` for an item that is marked `[OCR FAILED]` or that is plainly OCR noise rather than text; the app then leaves the original artwork in place."
+    )
+    furigana_rule = (
+        "\n- **Furigana Readings:** A reading in parentheses directly after a word in a transcription, e.g. `宇宙(そら)`, is that word's furigana. Use it to romanize the name or to convey the intended word, and do not reproduce the parentheses."
+        if llm_transcription
+        else ""
+    )
+    sections.append(
+        f"""## TRANSLATION RULES
+- **Continuous Narrative:** The items are in reading order and form one continuous scene, so translate each with its neighbors in mind. Translate meaning and intent rather than word for word.
+- **Register:** Match each speaker's voice and the register of the source: formal stays formal, crude stays crude, childish stays childish. Do not soften or intensify it.
+- **Length:** Each translation is typeset back into the space the original text occupied, so keep it about as compact as the source, and prefer the shorter of two equally good phrasings.
+- **Split Bubbles:** A sentence often runs across consecutive bubbles. Keep each fragment in its own numbered slot (never merge slots or leave one empty), and do not add ellipses at the break unless the source has them.
+- **Names & Honorifics:** Spell names and recurring terms the same way every time, following earlier pages when they are provided. Adapt or drop honorifics the way natural {output_language} would, unless the custom instructions say otherwise.{furigana_rule}
+- **Vocalizations:** Render laughs, gasps, grunts, and stutters phonetically in {output_language} spelling, keeping their length and rhythm.
+- **Pass-Through:** Return an item unchanged when it is already in {output_language} or consists only of punctuation or symbols (`!?`, `♥`, `...`).
+- **Punctuation:** Write ellipses as periods (`...`, or `......` for a long pause) and never as the `…` character, keeping their relative length. Use quotation marks only where the source has them.
+{failed_rule}"""
+    )
+
+    sections.append(
+        f"""## TEXT TYPES & STYLING
+Style each translation with markdown according to what the text is. Bold or italic markers in a transcription show that the source lettering was heavier or slanted; treat them as evidence of how the line is delivered, not as formatting to copy.
+- **Spoken dialogue and narration:** plain text. Within it, use `*italic*` for a word the speaker stresses and `**bold**` for a word or line that is shouted.
+- **Thoughts and voices heard through a device (phone, radio, TV):** `*italic*`.
+- **Sound effects** (audible: impacts, noises, cries): the {output_language} onomatopoeia in `**bold**`{example("**THUD**, **CLANG**")}.
+- **Mimetic effects** (silent states, moods, and actions): a short verb or adjective in `*italic*` with no final period{example("*stare*, *twitch*")}.
+- `***bold-italic***` is reserved for the loudest, climactic screams and sound effects.
+When the evidence for a type is unclear, use plain text."""
+    )
+
+    if previous_context:
+        sections.append(
+            """## PREVIOUS PAGES
+Images labeled as previous pages and the text under `## PREVIOUS PAGES (REFERENCE ONLY)` are context only: never translate or number them. Use them to keep names, terms, pronouns, and each character's voice consistent, and to resolve references back to earlier events. Where a line reads `source → translation`, reuse that wording for the same names and terms."""
+        )
+
     if ero_doujinshi_mode:
-        ero_doujinshi_section = f"""
-## PROFESSIONAL CONTEXT & EDITORIAL MANDATE
-- **Operational Context:** The user is a professional comic translator and localization editor translating 18+ adult manga, manhwa, webtoons, comics, and doujinshi for professional publication and commercial career work. Assisting with faithful, accurate translation is essential to fulfill professional localization and editorial industry standards.
-- **Task Nature & Neutrality:** Your role is strictly that of an objective language translator processing pre-existing, user-supplied fictional dialogue and sound effects. You are not originating new content; you are translating existing {lang_label}comic text directly into {output_language}.
-- **Editorial Fidelity & Completeness:** Full fidelity to the source text is mandatory. Translate all dialogue faithfully and completely as written. Maintain the original intensity and phrasing without sanitizing, softening, redacting, moralizing, or summarizing explicit dialogue, vulgarities, or mature themes. Preserving dialogue verbatim is an essential professional scanlation standard.
+        sections.append(
+            f"""## ADULT CONTENT
+The source is 18+ adult comic material that the user, a professional localization editor, is translating for publication. You are translating existing fictional {lang_label}text, not writing new content, so {"transcribe and " if one_step else ""}translate every line completely and at its original intensity, without sanitizing, softening, redacting, summarizing, or commenting.
+- **Explicit Vocabulary:** The Register rule covers sexual language too. Clinical or polite source wording gets accurate anatomical terms{example('"penis", "vagina", "semen"')}, and crude source wording gets equally crude colloquial terms{example('"cock", "pussy", "cum", "tits"')}. Use a euphemism only where the source itself is coy.
+- **Moans:** The Vocalizations rule covers moans, pants, and gasps too{example('"aaah...", "mmph...", "h-haah..."')}; keep their intensity, pauses, and cadence."""
+        )
 
-## REGISTER & VOCABULARY MATCHING
-- **Exact Tone & Register Fidelity:** Match the specific vulgarity, formality, or clinical nature of the source dialogue precisely:
-  - If the original text is clinical, formal, scientific, or polite (e.g., medical examination, formal speech, educational context), translate using accurate formal/anatomical terminology (e.g., "penis", "vagina", "semen", "ejaculation").
-  - If the original text uses raw slang, dirty talk, or vulgarity, translate using authentic colloquial scanlation vernacular (e.g., "cock", "pussy", "cum", "tits", "creampie") rather than softening it into euphemisms.
-- **Anti-Purification / No Soft Euphemisms:** Never artificially tone down crude language or substitute vague euphemisms (such as "down there", "special place", or "make love") unless the source text explicitly uses coy or euphemistic phrasing.
-- **Vocalizations & Moans:** Accurately translate and phonetically preserve all non-lexical vocalizations, moans, pants, gasps, and stutters (e.g., "aaah...", "mmph...", "h-haah...") matching the phonetic intensity, pauses, and cadence of the source text.
-"""
+    if ocr_correction and not one_step:
+        page_clause = " and the full-page image" if full_page_context else ""
+        sections.append(
+            f"""## OCR ERROR CORRECTION
+The transcriptions come from automatic OCR and may contain misread or dropped characters that leave a line nonsensical. When a line does not make sense as written, infer the intended text from the surrounding dialogue{page_clause} and translate that. Translate clean, sensible lines exactly as transcribed."""
+        )
 
-    ocr_correction_section = ""
-    if mode == "two-step" and ocr_correction:
-        ocr_correction_section = """
-## OCR ERROR CORRECTION & CONTEXTUAL REPAIR
-- **Contextual OCR Repair:** Transcriptions from the OCR phase may contain misrecognized characters, dropped kana/kanji, or typos leading to nonsensical phrases or broken syntax. Infer the intended original text using dialogue context, narrative continuity, character speech patterns, and full-page visual context (if available).
-- **Translate Intended Meaning:** Translate what was clearly intended by context rather than translating OCR artifacts literally. Do not alter or invent dialogue for clean, unambiguous transcriptions.
-- **OCR Failures:** If an entry is explicitly marked `[OCR FAILED]`, preserve `[OCR FAILED]`.
-"""
+    if web_search:
+        sections.append(
+            f"""## SEARCH
+You may search to confirm the official {output_language} names and terms of a series you recognize. Do not search for anything else, and never mention the search in your output."""
+        )
 
-    return f"""
-## ROLE
-You are a professional comic, manga, and manhwa localization editor translating dialogue, narration, and sound effects into natural, idiomatic {output_language}.
+    example_note = (
+        "" if english else f" (shown in English; write yours in {output_language})"
+    )
+    if one_step:
+        sections.append(
+            f"""## OUTPUT FORMAT
+One line per crop, numbered to match the crop labels, written as `transcription || translation`. Output nothing else: no code fences, notes, or blank lines.
 
-## OBJECTIVE
-Deliver natural, character-accurate translations faithful to the source tone, meaning, and subtext while preserving narrative flow.{visual_ref_note}
+Example{example_note}:
+1: <transcription> || I told you *not* to follow me.
+2: <transcription> || **SLAM**
+3: [OCR FAILED] || [OCR FAILED]"""
+        )
+    else:
+        sections.append(
+            f"""## OUTPUT FORMAT
+One line per item, numbered to match the input, containing only the translation. Output nothing else: no code fences, notes, or blank lines.
 
-## LOCALIZATION & TRANSLATION RULES
-- **Continuous Narrative:** Treat the {input_type} as a continuous, chronological narrative. Translate functionally rather than literally to preserve natural character voices and narrative flow.
-- **Conciseness:** Keep dialogue idiomatic and concise to fit comic lettering constraints.
-- **Split Bubbles:** Comic panels frequently split a single sentence across multiple consecutive bubbles. Keep each fragment in its corresponding numbered slot—never merge two numbers into one or leave a slot blank. Do not add ellipses or trailing dots between split fragments unless they were present in the source text.
-- **Visual Emphasis:** If the source text or transcription is visually emphasized (bold, slanted/italic, shouting), preserve that emphasis in your translation using the styling tags below. Reflect stressed words in dialogue using `*italic*` or `**bold**` as appropriate.
-- **Punctuation & Formatting:**
-  - Standardize all ellipses to consecutive periods (`...` or `......`). Never output unicode single-character ellipses (`…`).
-  - If a bubble contains only pauses/ellipses, preserve the relative pause length using standard periods (`...` or `......`).
-  - Do not wrap dialogue in quotation marks unless quotation marks were explicitly drawn in the original speech.
-- **Text Classification:**
-  - **Spoken Dialogue:** Translate naturally, matching each character's voice, personality, and social register.
-  - **Narration:** Use neutral, descriptive localization without special styling.
-  - **Audible Sound Effects (Onomatopoeia / Giongo):** Translate physical sounds into standard target-language onomatopoeia (e.g., **THUD**, **RUMBLE**, **CLANG**).
-  - **Atmospheric / Mimetic Effects (Gitaigo):** Translate atmospheric states, moods, or silent actions into concise descriptive verbs or adjectives (e.g., *stare*, *glare*, *twitch*). Do not place a period at the end.
+Example{example_note}:
+1: I told you *not* to follow me.
+2: **SLAM**
+3: [OCR FAILED]"""
+        )
 
-## STYLING GUIDE
-Apply the following markdown tags to indicate dialogue delivery and audio type:
-- `*italic*`: Used for stressed words in dialogue, internal monologues/thoughts, flashbacks, distant voices, phone/radio transmissions, and atmospheric/mimetic effects (Gitaigo).
-- `**bold**`: Used for audible sound effects (Giongo / onomatopoeia), screaming/shouting, timestamps, or heavily emphasized words.
-- `***bold-italic***`: Used for screams transmitted over radio/phone, or deafening, climactic sound effects.
-- Plain text (no tags): Standard spoken dialogue and narration.
-
-## CONTINUITY & CONTEXT RULES
-- **Previous-Page Context (when provided):** Earlier page images or transcripts in the user prompt are reference-only. Never translate or renumber them. Use them to ensure:
-  - Character voice, speech registers, pronoun choices, and terminology remain consistent with established usage.
-  - Ambiguous pronouns or call-backs are correctly resolved using prior visuals and dialogue.
-{edge_cases}
-{ero_doujinshi_section}
-{ocr_correction_section}
-{output_schema.strip()}
-"""
+    return "\n\n".join(sections)
 
 
 def _is_reasoning_model_google(model_name: str) -> bool:
@@ -1332,6 +1332,19 @@ def _check_ocr_failure(texts: list[str], provider: str | None = None) -> bool:
         return all(text == "[OCR FAILED]" for text in texts)
 
 
+def _pair_context_lines(ocr_texts: list[str], translations: list[str]) -> list[str]:
+    """Join each source line to its translation so later pages reuse names and terms."""
+    if len(ocr_texts) != len(translations):
+        return ocr_texts
+    return [
+        # A leading "[" marks a failure placeholder, not a translation
+        ocr
+        if ocr == "[OCR FAILED]" or not tr or tr.startswith("[")
+        else f"{ocr} → {tr}"
+        for ocr, tr in zip(ocr_texts, translations)
+    ]
+
+
 def _format_previous_context_texts(
     previous_context_texts: list[list[str]] | None,
 ) -> str:
@@ -1362,8 +1375,9 @@ def _format_previous_context_texts(
         return ""
 
     return (
-        "\n## PREVIOUS PAGE TRANSCRIPTS (REFERENCE ONLY)\n"
-        "Listed oldest-to-newest.\n" + "\n\n".join(page_blocks) + "\n"
+        "\n## PREVIOUS PAGES (REFERENCE ONLY)\n"
+        "Oldest first. A line with `→` gives the source text and the "
+        "translation already used for it.\n" + "\n\n".join(page_blocks) + "\n"
     )
 
 
@@ -1380,9 +1394,23 @@ def _format_special_instructions(config: TranslationConfig) -> str:
         return f"""
 
 ## CUSTOM USER INSTRUCTIONS
+These come from the user and override the translation and styling rules where they conflict; the output format still applies.
 {config.special_instructions.strip()}
 """
     return ""
+
+
+def _split_special_instructions(
+    special_instructions: str | None,
+) -> tuple[list[str], list[str]]:
+    """Split custom instructions into glossary pairs (`a -> b`) and free-form notes."""
+    glossary_lines, note_lines = [], []
+    for line in (special_instructions or "").splitlines():
+        line = line.strip().removeprefix("- ").strip()
+        if line:
+            is_pair = "->" in line or "=>" in line
+            (glossary_lines if is_pair else note_lines).append(line)
+    return glossary_lines, note_lines
 
 
 def _build_rosetta_instruction(
@@ -1393,24 +1421,22 @@ def _build_rosetta_instruction(
 
     Follows the Rosetta chat template format: concise instruction with target
     language, context, tone, optional glossary, and output format.
-    Special instructions are mapped to the Glossary field.
+    Special instructions of the form `a -> b` are mapped to the Glossary field;
+    free-form ones are appended to the Context field.
     """
+    glossary_lines, note_lines = _split_special_instructions(special_instructions)
+    context = " ".join(["Comic dialogue, sound effects, and narration.", *note_lines])
     instruction = (
         f"Translate the user's text to {output_language}. "
         f"Keep the JSON structure and keys.\n"
-        f"Context: Manga dialogue, sound effects, and narration.\n"
-        f"Tone: Natural-sounding manga localization"
+        f"Context: {context}\n"
+        f"Tone: Natural-sounding comic localization"
     )
 
-    if special_instructions and special_instructions.strip():
-        glossary_lines = []
-        for line in special_instructions.strip().splitlines():
-            line = line.strip()
-            if line:
-                entry = line if line.startswith("- ") else f"- {line}"
-                glossary_lines.append(entry)
-        if glossary_lines:
-            instruction += "\nGlossary:\n" + "\n".join(glossary_lines)
+    if glossary_lines:
+        instruction += "\nGlossary:\n" + "\n".join(
+            f"- {line}" for line in glossary_lines
+        )
 
     instruction += (
         "\nOutput format: JSON\n"
@@ -1485,31 +1511,21 @@ def _build_hy_mt2_prompt(
         ensure_ascii=False,
     )
 
+    glossary_lines, note_lines = _split_special_instructions(special_instructions)
     prompt = ""
-    if special_instructions and special_instructions.strip():
+    if glossary_lines:
         term_lines = []
-        for line in special_instructions.strip().splitlines():
-            line = line.strip().removeprefix("- ").strip()
-            if not line:
-                continue
-            if "->" in line:
-                src, _, tgt = line.partition("->")
-                term_lines.append(f"{src.strip()} translates to {tgt.strip()}")
-            elif "=>" in line:
-                src, _, tgt = line.partition("=>")
-                term_lines.append(f"{src.strip()} translates to {tgt.strip()}")
-            else:
-                term_lines.append(line)
-        if term_lines:
-            prompt += (
-                "Reference the following translations:\n"
-                + "\n".join(term_lines)
-                + "\n\n"
-            )
+        for line in glossary_lines:
+            src, _, tgt = line.partition("->" if "->" in line else "=>")
+            term_lines.append(f"{src.strip()} translates to {tgt.strip()}")
+        prompt += (
+            "Reference the following translations:\n" + "\n".join(term_lines) + "\n\n"
+        )
 
+    notes = "".join(f"{line.rstrip('.')}. " for line in note_lines)
     prompt += (
         f"Translate the following text into {output_language}. "
-        f"Keep the JSON structure and keys. "
+        f"Keep the JSON structure and keys. {notes}"
         f"Note that you should **only output the translated result without any "
         f"additional explanation**:\n\n"
         f"{source_data}"
@@ -1690,7 +1706,7 @@ def _perform_llm_ocr(
             bubble_part = _add_media_resolution_to_part(
                 bubble_part, config.media_resolution_bubbles
             )
-        ocr_parts.append(bubble_part)
+        ocr_parts += [{"text": f"Crop {i + 1}:"}, bubble_part]
 
     ocr_system = _build_system_prompt_ocr(
         input_language,
@@ -1807,16 +1823,20 @@ def call_translation_api_batch(
     hints = []
     if dialogue_indices:
         dialogue_list_str = ", ".join(map(str, dialogue_indices))
-        hints.append(f"Items [{dialogue_list_str}] contain spoken dialogue.")
+        hints.append(
+            f"Items [{dialogue_list_str}] are inside speech bubbles or caption "
+            "boxes (dialogue, thoughts, or narration)."
+        )
     if osb_indices:
         osb_list_str = ", ".join(map(str, osb_indices))
         hints.append(
-            f"Items [{osb_list_str}] contain sound effects, mimetic effects, narration, or internal monologues."
+            f"Items [{osb_list_str}] are free-standing text outside bubbles "
+            "(usually sound effects or mimetic effects, sometimes narration or asides)."
         )
 
     context_hints = ""
     if hints:
-        context_hints = "\nNote: " + " ".join(hints) + " Translate them accordingly."
+        context_hints = "\nLayout: " + " ".join(hints)
 
     cache = get_cache()
     cache_key = cache.get_translation_cache_key(
@@ -1836,6 +1856,11 @@ def call_translation_api_batch(
     model_name = config.model_name
     is_gemini_3 = provider == "Google" and is_gemini_3_model(model_name)
     supports_per_part_res = is_gemini_3 or provider == "SpaceXAI"
+    has_full_page = bool(config.send_full_page_context and full_image_b64)
+    has_previous_context = bool(
+        previous_context_image_count or previous_context_text_count
+    )
+    web_search = bool(getattr(config, "enable_web_search", False))
 
     base_parts = []
     for i, img_b64 in enumerate(images_b64):
@@ -1845,9 +1870,9 @@ def call_translation_api_batch(
             bubble_part = _add_media_resolution_to_part(
                 bubble_part, config.media_resolution_bubbles
             )
-        base_parts.append(bubble_part)
+        base_parts += [{"text": f"Crop {i + 1}:"}, bubble_part]
 
-    if config.send_full_page_context and full_image_b64:
+    if has_full_page:
         context_part = {
             "inline_data": {
                 "mime_type": full_image_mime_type,
@@ -1858,9 +1883,9 @@ def call_translation_api_batch(
             context_part = _add_media_resolution_to_part(
                 context_part, config.media_resolution_context
             )
-        base_parts.append(context_part)
+        base_parts += [{"text": _FULL_PAGE_LABEL}, context_part]
 
-    for image in previous_context_images:
+    for page_number, image in enumerate(previous_context_images, start=1):
         previous_part = {
             "inline_data": {
                 "mime_type": image.get("mime_type", "image/jpeg"),
@@ -1871,17 +1896,14 @@ def call_translation_api_batch(
             previous_part = _add_media_resolution_to_part(
                 previous_part, config.media_resolution_context
             )
-        base_parts.append(previous_part)
+        base_parts += [
+            {"text": _PREVIOUS_PAGE_LABEL.format(page_number)},
+            previous_part,
+        ]
 
     try:
         if translation_mode == "two-step":
-            ocr_prompt = f"""
-## CONTEXT
-You have been provided with {total_elements} individual text images from a manga page.
-
-## TASK
-Transcribe the text in each image according to your transcription rules.
-"""
+            ocr_prompt = f"Transcribe the {total_elements} crops above."
 
             log_message("Starting OCR step", verbose=debug)
 
@@ -1926,44 +1948,28 @@ Transcribe the text in each image according to your transcription rules.
             for i, text in enumerate(formatted_texts):
                 ocr_input_section += f"{i + 1}: {text}\n"
 
-            full_page_context = (
-                "A full-page image is also provided for visual and narrative context."
-                if (
-                    config.ocr_method not in ("manga-ocr", "paddleocr-vl-1.6")
-                    and config.send_full_page_context
-                    and full_image_b64
-                )
-                else ""
-            )
+            llm_ocr = config.ocr_method not in ("manga-ocr", "paddleocr-vl-1.6")
+            # Local OCR implies a text-only translation request
+            page_attached = has_full_page and llm_ocr
+            full_page_context = _FULL_PAGE_NOTE if page_attached else ""
             previous_page_context = _format_previous_context_prompt_note(
                 previous_context_image_count,
                 previous_context_text_count,
-                (
-                    "current full page first (when present), then previous "
-                    "source pages oldest-to-newest"
-                ),
             )
 
             special_instructions_section = _format_special_instructions(config)
 
-            translation_prompt = f"""
-## CONTEXT
-You have been provided with a list of {total_elements} transcribed text segments from a manga page. {full_page_context}{previous_page_context}
+            translation_prompt = f"""## CONTEXT
+{total_elements} transcribed text items from one comic page, in reading order.{full_page_context}{previous_page_context}
 {context_hints}
 {previous_text_section}
 {ocr_input_section}
-
 ## TASK
-Apply your translation and styling rules to the text in the `## INPUT DATA` section. 
-The target language is {output_language}. Use the appropriate translation approach for each text type.{special_instructions_section}
+Translate each item under `## INPUT DATA` into {output_language}.{special_instructions_section}
 """
 
             translation_parts = []
-            if (
-                config.ocr_method not in ("manga-ocr", "paddleocr-vl-1.6")
-                and config.send_full_page_context
-                and full_image_b64
-            ):
+            if page_attached:
                 context_part = {
                     "inline_data": {
                         "mime_type": full_image_mime_type,
@@ -1974,9 +1980,9 @@ The target language is {output_language}. Use the appropriate translation approa
                     context_part = _add_media_resolution_to_part(
                         context_part, config.media_resolution_context
                     )
-                translation_parts.append(context_part)
+                translation_parts += [{"text": _FULL_PAGE_LABEL}, context_part]
 
-            for image in previous_context_images:
+            for page_number, image in enumerate(previous_context_images, start=1):
                 previous_part = {
                     "inline_data": {
                         "mime_type": image.get("mime_type", "image/jpeg"),
@@ -1987,7 +1993,10 @@ The target language is {output_language}. Use the appropriate translation approa
                     previous_part = _add_media_resolution_to_part(
                         previous_part, config.media_resolution_context
                     )
-                translation_parts.append(previous_part)
+                translation_parts += [
+                    {"text": _PREVIOUS_PAGE_LABEL.format(page_number)},
+                    previous_part,
+                ]
 
             use_rosetta = is_rosetta_model(model_name)
             use_hy_mt2 = is_hy_mt2_model(model_name)
@@ -2018,12 +2027,13 @@ The target language is {output_language}. Use the appropriate translation approa
                 translation_system = _build_system_prompt_translation(
                     output_language,
                     mode="two-step",
-                    full_page_context=(
-                        config.send_full_page_context and bool(full_image_b64)
-                    ),
+                    full_page_context=page_attached,
                     ero_doujinshi_mode=getattr(config, "ero_doujinshi_mode", False),
                     ocr_correction=getattr(config, "ocr_correction", False),
                     input_language=input_language,
+                    previous_context=has_previous_context,
+                    llm_transcription=llm_ocr,
+                    web_search=web_search,
                 )
             translation_response_text = _call_llm_endpoint(
                 config,
@@ -2084,42 +2094,30 @@ The target language is {output_language}. Use the appropriate translation approa
         elif translation_mode == "one-step":
             log_message("Starting one-step translation", verbose=debug)
 
-            full_page_context = (
-                "A full-page image is also provided for visual and narrative context."
-                if config.send_full_page_context
-                else ""
-            )
+            full_page_context = _FULL_PAGE_NOTE if has_full_page else ""
             previous_page_context = _format_previous_context_prompt_note(
                 previous_context_image_count,
                 previous_context_text_count,
-                (
-                    "text crops first, optional current full page, then previous "
-                    "source pages oldest-to-newest"
-                ),
             )
 
             special_instructions_section = _format_special_instructions(config)
 
-            one_step_prompt = f"""
-## CONTEXT
-You have been provided with {total_elements} individual text images from a manga page. {full_page_context}{previous_page_context}
+            one_step_prompt = f"""## CONTEXT
+{total_elements} text crops from one comic page, in reading order.{full_page_context}{previous_page_context}
 {context_hints}
 {previous_text_section}
 ## TASK
-For each image, perform two steps:
-1.  **Transcribe:** Extract the original text exactly as it appears.
-2.  **Translate:** Translate the text you just transcribed into {output_language}, applying your translation and styling rules.
-Provide both the transcription and translation separated by ` || ` in the required output schema.{special_instructions_section}
+Transcribe each crop, then translate that transcription into {output_language}.{special_instructions_section}
 """
 
             one_step_system = _build_system_prompt_translation(
                 output_language,
                 mode="one-step",
-                full_page_context=(
-                    config.send_full_page_context and bool(full_image_b64)
-                ),
+                full_page_context=has_full_page,
                 ero_doujinshi_mode=getattr(config, "ero_doujinshi_mode", False),
                 input_language=input_language,
+                previous_context=has_previous_context,
+                web_search=web_search,
             )
             response_text = _call_llm_endpoint(
                 config,

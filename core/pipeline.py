@@ -51,6 +51,7 @@ from .outside_text_processor import (
     process_outside_text,
 )
 from .services.translation import (
+    _pair_context_lines,
     call_translation_api_batch,
     prepare_bubble_images_for_translation,
 )
@@ -661,6 +662,7 @@ def translate_and_render(
         previous_context_texts_provider: Optional callback used to fetch previous-page
             OCR transcripts immediately before the translation API call.
         ocr_texts_out: Optional mutable list. When provided, the current page's OCR transcripts
+            (each joined to its translation as `source → translation`)
             (in reading order) are appended so the orchestrator can chain them as previous-page
             text context for subsequent pages.
 
@@ -1416,7 +1418,11 @@ def translate_and_render(
                                     translate_future.result()
                                 )
                                 if current_ocr_texts and ocr_texts_out is not None:
-                                    ocr_texts_out.extend(current_ocr_texts)
+                                    ocr_texts_out.extend(
+                                        _pair_context_lines(
+                                            current_ocr_texts, translated_texts
+                                        )
+                                    )
                             except TranslationError as e:
                                 error_str = str(e).lower()
                                 critical_tokens = (
@@ -1469,7 +1475,11 @@ def translate_and_render(
                         try:
                             translated_texts, current_ocr_texts = _run_llm_translation()
                             if current_ocr_texts and ocr_texts_out is not None:
-                                ocr_texts_out.extend(current_ocr_texts)
+                                ocr_texts_out.extend(
+                                    _pair_context_lines(
+                                        current_ocr_texts, translated_texts
+                                    )
+                                )
                         except TranslationError as e:
                             error_str = str(e).lower()
                             critical_tokens = (

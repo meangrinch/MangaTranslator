@@ -51,8 +51,9 @@ def call_moonshot_endpoint(
         "Content-Type": "application/json",
     }
 
-    text_part = next((p for p in parts if "text" in p), None)
-    image_parts = [p for p in parts if "inline_data" in p]
+    # The last text part is the prompt; earlier ones label the image after them
+    text_part = next((p for p in reversed(parts) if "text" in p), None)
+    image_parts = [p for p in parts if p is not text_part]
 
     if not text_part:
         raise ValidationError(
@@ -62,6 +63,9 @@ def call_moonshot_endpoint(
     if image_parts:
         content_list = []
         for part in image_parts:
+            if "text" in part:
+                content_list.append({"type": "text", "text": part["text"]})
+                continue
             if (
                 "inline_data" in part
                 and "data" in part["inline_data"]

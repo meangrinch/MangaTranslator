@@ -54,10 +54,11 @@ def call_anthropic_endpoint(
         raise ValidationError("API key is required for Anthropic endpoint")
     user_prompt_part = None
     image_parts = []
+    # The last text part is the prompt; earlier ones label the image after them
     for part in reversed(parts):
         if "text" in part and user_prompt_part is None:
             user_prompt_part = part
-        elif "inline_data" in part:
+        else:
             image_parts.insert(0, part)
 
     if not user_prompt_part:
@@ -78,6 +79,9 @@ def call_anthropic_endpoint(
     user_prompt_text = user_prompt_part["text"]
     user_content = []
     for part in content_parts:
+        if "text" in part:
+            user_content.append({"type": "text", "text": part["text"]})
+            continue
         if (
             "inline_data" in part
             and "data" in part["inline_data"]

@@ -56,8 +56,9 @@ def call_opencode_endpoint(
     if not api_key:
         raise ValidationError("API key is required for OpenCode endpoint")
 
-    text_part = next((p for p in parts if "text" in p), None)
-    image_parts = [p for p in parts if "inline_data" in p]
+    # The last text part is the prompt; earlier ones label the image after them
+    text_part = next((p for p in reversed(parts) if "text" in p), None)
+    image_parts = [p for p in parts if p is not text_part]
 
     if not text_part:
         raise ValidationError(
@@ -76,6 +77,9 @@ def call_opencode_endpoint(
 
     user_content: list[dict[str, Any]] = []
     for img in image_parts:
+        if "text" in img:
+            user_content.append({"type": "text", "text": img["text"]})
+            continue
         inline = img.get("inline_data", {})
         mime = inline.get("mime_type", "image/png")
         data = inline.get("data", "")

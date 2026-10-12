@@ -4,6 +4,7 @@ from core.services.translation import (
     _build_hy_mt2_prompt,
     _check_ocr_failure,
     _format_previous_context_texts,
+    _pair_context_lines,
     _parse_llm_response_unified,
     _parse_rosetta_response,
 )
@@ -102,4 +103,54 @@ def test_hy_mt2_prompt_converts_glossary_and_embeds_json():
     assert "ナルト translates to Naruto" in prompt
     assert "サスケ translates to Sasuke" in prompt
     assert "Keep honorifics" in prompt
+    assert "Keep honorifics" not in prompt.split("Translate the following")[0]
     assert prompt.endswith('{"1": "こんにちは"}')
+
+
+def test_pair_context_lines_skips_failures():
+    ocr = ["こんにちは", "[OCR FAILED]", "ドン", "やあ"]
+    translations = ["Hello", "[OCR FAILED]", "[P: Missing item 3]", ""]
+    assert _pair_context_lines(ocr, translations) == [
+        "こんにちは → Hello",
+        "[OCR FAILED]",
+        "ドン",
+        "やあ",
+    ]
+    assert _pair_context_lines(ocr, ["Hello"]) == ocr
+
+
+def test_endpoint_keeps_labels_next_to_their_images(monkeypatch):
+    from utils.endpoints import openai_compatible
+
+    sent = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content": "ok"}}]}
+
+    def fake_post(url, json=None, **kwargs):
+        sent.update(json)
+        return FakeResponse()
+
+    monkeypatch.setattr(openai_compatible.requests, "post", fake_post)
+    image = {"inline_data": {"mime_type": "image/png", "data": "AAAA"}}
+    openai_compatible.call_openai_compatible_endpoint(
+        base_url="http://localhost:1/v1",
+        api_key=None,
+        model_name="local-model",
+        parts=[{"text": "Crop 1:"}, image, {"text": "Crop 2:"}, image, {"text": "go"}],
+        generation_config={},
+    )
+    content = sent["messages"][-1]["content"]
+    assert [c.get("text", "<image>") for c in content] == [
+        "Crop 1:",
+        "<image>",
+        "Crop 2:",
+        "<image>",
+        "go",
+    ]
