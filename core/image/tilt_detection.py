@@ -330,10 +330,20 @@ def detect_crop_tilt_angle(
             best_s, best_conc = max(scores, key=lambda sc: sc[1])
             gain = best_conc / max(base_conc, 1e-6)
             if gain >= 1.03 and abs(best_s) >= deadband_deg:
+                # Stroke slant can win the sweep; trust neither when the ink layout leans hard the other way
+                v1 = eigenvectors[0]
+                if v1[1] < 0:
+                    v1 = -v1
+                layout_deg = -math.degrees(math.atan2(v1[0], v1[1]))
+                if best_s * layout_deg < 0 and abs(layout_deg) >= 10.0:
+                    return 0.0, 0.0, oriented_dims, "vertical"
                 conf = max(0.60, (gain - 1.0) / 0.12)
                 return float(best_s), conf, oriented_dims, "vertical"
 
         # Single-column vertical path fallback using PCA / linear regression
+        # Staggered columns and mask fragments fake a lean, so require one full-height column
+        if len(cols) != 1 or len(tall_cols) != 1:
+            return 0.0, 0.0, oriented_dims, "vertical"
         unique_y = np.unique(ys)
         if len(unique_y) >= 8:
             med_x = np.array([np.median(xs[ys == y_val]) for y_val in unique_y])
@@ -350,6 +360,8 @@ def detect_crop_tilt_angle(
                 else theta_row
             )
 
+            if min(abs(theta_row), abs(theta_pca)) < deadband_deg:
+                return 0.0, 0.75, oriented_dims, "vertical"
             if abs(theta_row - theta_pca) <= 8.0:
                 cand_angle = (theta_row + theta_pca) / 2.0
                 clamped = max(-max_tilt_deg, min(max_tilt_deg, cand_angle))
@@ -416,6 +428,9 @@ def detect_crop_tilt_angle(
 
     if abs(cand_angle) < deadband_deg:
         return 0.0, 0.9, oriented_dims, tilt_axis
+    # Past 45 deg the ink runs along the other axis; clamping it would invent a tilt
+    if abs(cand_angle) > 45.0:
+        return 0.0, 0.0, oriented_dims, tilt_axis
 
     # Projection-gain verification (geometric sign & angle proof)
     def calc_concentration(img_bin: np.ndarray) -> tuple[float, float]:

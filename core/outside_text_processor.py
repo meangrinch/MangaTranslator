@@ -178,7 +178,8 @@ def _build_outside_text_data(
             if raw_crop_cv.size > 0:
                 angle_deg, tilt_conf, obb_dims, tilt_axis = detect_crop_tilt_angle(
                     crop_cv=raw_crop_cv,
-                    is_dark_text=original_text_colors.get(raw_bbox_tuple, True),
+                    # original_text_colors flags a dark background, i.e. light ink
+                    is_dark_text=not original_text_colors.get(raw_bbox_tuple, False),
                     max_side=osb_tilt_estimation_side_pixels,
                     deadband_deg=config.outside_text.osb_min_tilt_deg,
                     max_tilt_deg=config.outside_text.osb_max_tilt_deg,
