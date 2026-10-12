@@ -29,7 +29,6 @@ from utils.model_metadata import (
     is_gemini_3_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
-    is_gemini_37_flash_model,
     is_gemini_38_flash_model,
     is_gemini_no_sampling_model,
     is_gemma_model,
@@ -666,9 +665,7 @@ def get_reasoning_effort_config(
             return True, ["high", "minimal"], "high"
 
         if is_gemini_3_model(model_name):
-            if is_gemini_37_flash_model(model_name) or is_gemini_38_flash_model(
-                model_name
-            ):
+            if is_gemini_38_flash_model(model_name):
                 return True, ["high", "medium", "low"], "high"
             if "flash" in lm:
                 return True, ["high", "medium", "low", "minimal"], "high"
@@ -808,9 +805,7 @@ def get_reasoning_effort_config(
             if is_gemma_model(model_name):
                 return True, ["high", "minimal"], "high"
 
-            if is_gemini_37_flash_model(model_name) or is_gemini_38_flash_model(
-                model_name
-            ):
+            if is_gemini_38_flash_model(model_name):
                 return True, ["xhigh", "high", "medium", "low", "none"], "high"
 
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "high"
