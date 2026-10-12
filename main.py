@@ -666,7 +666,7 @@ def main():
             "Method for upscaling images before translation API. "
             "model: Use 2x-AnimeSharpV4 upscaling model (best quality, slower), "
             "model_lite: Use 2x-AnimeSharpV4 Fast RCAN PU model (worse quality, faster/less memory), "
-            "lanczos: Use LANCZOS resampling (worst quality, fastest/least memory), "
+            "lanczos: Use anti-ringing LANCZOS resampling (softer than the models, fastest/least memory), "
             "none: No upscaling (may affect OCR quality for small text)"
         ),
     )

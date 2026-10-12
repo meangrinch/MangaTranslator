@@ -20,7 +20,12 @@ from core.batch_coordinator import (
     paste_image_region,
 )
 from core.config import MangaTranslatorConfig
-from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
+from core.image.image_utils import (
+    cv2_to_pil,
+    pil_to_cv2,
+    process_bubble_image_cached,
+    resize_lanczos_antiring,
+)
 from core.image.inpainting import FluxKleinInpainter, FluxKontextInpainter
 from core.image.ocr_detection import OutsideTextDetector, extract_text_with_manga_ocr
 from core.image.tilt_detection import (
@@ -135,8 +140,8 @@ def _build_outside_text_data(
                 scale_factor = config.translation.osb_min_side_pixels / min_side
                 new_w = int(w * scale_factor)
                 new_h = int(h * scale_factor)
-                resized_text = outside_text_image_pil.resize(
-                    (new_w, new_h), Image.LANCZOS
+                resized_text = resize_lanczos_antiring(
+                    outside_text_image_pil, (new_w, new_h)
                 )
             else:
                 resized_text = outside_text_image_pil

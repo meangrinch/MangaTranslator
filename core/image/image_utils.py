@@ -547,8 +547,29 @@ def upscale_image(
     return result
 
 
+def resize_lanczos_antiring(image: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """Lanczos3 resize clamped to the range of source pixels under the kernel's main lobe.
+
+    The clamp removes the overshoot halos Lanczos leaves around hard edges such as lineart.
+    """
+    resized = np.asarray(image.resize(size, Image.LANCZOS))
+    lo = hi = np.asarray(image)
+    for axis, (src_n, dst_n) in enumerate(zip(image.size[::-1], size[::-1])):
+        scale = src_n / dst_n
+        # Downscaling stretches the kernel, so the main lobe covers more source pixels
+        k = max(scale, 1.0)
+        center = (np.arange(dst_n) + 0.5) * scale
+        first = np.floor(center - k - 0.5).astype(int) + 1
+        last = np.ceil(center + k - 0.5).astype(int) - 1
+        window = np.arange((last - first).max() + 1)
+        idx = np.minimum(first[:, None] + window, last[:, None]).clip(0, src_n - 1)
+        lo = np.take(lo, idx, axis=axis).min(axis=axis + 1)
+        hi = np.take(hi, idx, axis=axis).max(axis=axis + 1)
+    return Image.fromarray(np.clip(resized, lo, hi))
+
+
 def resize_to_max_side(
-    image: Image.Image, max_side: int, verbose: bool = False
+    image: Image.Image, max_side: int, verbose: bool = False, antiring: bool = False
 ) -> Image.Image:
     """Resize so that the largest side equals max_side (aspect ratio preserved)."""
     width, height = image.size
@@ -562,6 +583,8 @@ def resize_to_max_side(
         f"Resizing to max-side {max_side}: {width}x{height} -> {new_width}x{new_height}",
         verbose=verbose,
     )
+    if antiring:
+        return resize_lanczos_antiring(image, (new_width, new_height))
     return image.resize((new_width, new_height), Image.LANCZOS)
 
 

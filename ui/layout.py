@@ -1376,7 +1376,7 @@ def create_layout(
                                 info=(
                                     "Method to resize cropped bubble images/full page before sending to LLM/OCR model. "
                                     "Model is best quality, Model (Lite) is slightly worse quality but faster/less "
-                                    "memory, LANCZOS is worst quality but fastest/least memory."
+                                    "memory, LANCZOS (anti-ringing) is softer than the models but fastest/least memory."
                                 ),
                             )
                             initial_upscale_method = saved_settings.get(

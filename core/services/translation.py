@@ -10,7 +10,12 @@ from PIL import Image
 
 from core.caching import get_cache
 from core.config import TranslationConfig, calculate_reasoning_budget
-from core.image.image_utils import cv2_to_pil, pil_to_cv2, process_bubble_image_cached
+from core.image.image_utils import (
+    cv2_to_pil,
+    pil_to_cv2,
+    process_bubble_image_cached,
+    resize_lanczos_antiring,
+)
 from core.image.ocr_detection import (
     extract_text_with_manga_ocr,
     extract_text_with_paddle_ocr_vl,
@@ -2299,7 +2304,9 @@ def prepare_bubble_images_for_translation(
                 scale_factor = bubble_min_side_pixels / min_side
                 new_w = int(w * scale_factor)
                 new_h = int(h * scale_factor)
-                resized_bubble = bubble_image_pil.resize((new_w, new_h), Image.LANCZOS)
+                resized_bubble = resize_lanczos_antiring(
+                    bubble_image_pil, (new_w, new_h)
+                )
             else:
                 resized_bubble = bubble_image_pil
             final_bubble_pil = resized_bubble

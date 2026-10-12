@@ -257,6 +257,7 @@ def _encode_previous_context_source_page(
                 context_image_pil,
                 effective_context_max_side,
                 verbose=verbose,
+                antiring=True,
             )
 
         context_image_cv = pil_to_cv2(context_image_pil)
@@ -916,6 +917,7 @@ def translate_and_render(
                     context_image_pil,
                     effective_context_max_side,
                     verbose=verbose,
+                    antiring=True,
                 )
                 log_message(
                     "Resized full image for context with LANCZOS", verbose=verbose
