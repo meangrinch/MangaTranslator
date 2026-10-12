@@ -84,9 +84,9 @@ def test_check_ocr_failure(texts, provider, expected):
 
 def test_format_previous_context_skips_empty_and_failed_entries():
     result = _format_previous_context_texts([["a", "[OCR FAILED]", "c"], [], ["  "]])
-    assert "### Previous Page 1\n1: a\n3: c" in result
-    assert "Previous Page 2" not in result
-    assert "Previous Page 3" not in result
+    assert "### Previous page, 3 back\n1: a\n3: c" in result
+    assert "2 back" not in result
+    assert "1 back" not in result
 
 
 @pytest.mark.parametrize("texts", [None, [], [[], ["[OCR FAILED]"]]])

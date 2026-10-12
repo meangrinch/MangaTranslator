@@ -83,7 +83,7 @@ from utils.model_metadata import (
 from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
 
 _FULL_PAGE_LABEL = "Full page (context only):"
-_PREVIOUS_PAGE_LABEL = "Previous page {} (context only):"
+_PREVIOUS_PAGE_LABEL = "Previous page, {} back (context only):"
 _FULL_PAGE_NOTE = " The image labeled `Full page` shows the whole page for context."
 
 
@@ -246,7 +246,7 @@ When the evidence for a type is unclear, use plain text."""
     if previous_context:
         sections.append(
             """## PREVIOUS PAGES
-Images labeled as previous pages and the text under `## PREVIOUS PAGES (REFERENCE ONLY)` are context only: never translate or number them. Use them to keep names, terms, pronouns, and each character's voice consistent, and to resolve references back to earlier events. Where a line reads `source → translation`, reuse that wording for the same names and terms."""
+Images labeled as previous pages and the text under `## PREVIOUS PAGES (REFERENCE ONLY)` are context only: never translate or number them. Each is marked with how many pages back it is, so `1 back` is the page just before this one. Use them to keep names, terms, pronouns, and each character's voice consistent, and to resolve references back to earlier events. Where a line reads `source → translation`, reuse that wording for the same names and terms."""
         )
 
     if ero_doujinshi_mode:
@@ -1369,7 +1369,8 @@ def _format_previous_context_texts(
             lines.append(f"{idx}: {cleaned}")
         if not lines:
             continue
-        page_blocks.append(f"### Previous Page {page_index}\n" + "\n".join(lines))
+        pages_back = len(previous_context_texts) - page_index + 1
+        page_blocks.append(f"### Previous page, {pages_back} back\n" + "\n".join(lines))
 
     if not page_blocks:
         return ""
@@ -1860,7 +1861,11 @@ def call_translation_api_batch(
     has_previous_context = bool(
         previous_context_image_count or previous_context_text_count
     )
-    web_search = bool(getattr(config, "enable_web_search", False))
+    # The OpenAI-Compatible endpoint has no search tool
+    web_search = (
+        bool(getattr(config, "enable_web_search", False))
+        and provider != "OpenAI-Compatible"
+    )
 
     base_parts = []
     for i, img_b64 in enumerate(images_b64):
@@ -1885,7 +1890,9 @@ def call_translation_api_batch(
             )
         base_parts += [{"text": _FULL_PAGE_LABEL}, context_part]
 
-    for page_number, image in enumerate(previous_context_images, start=1):
+    for pages_back, image in zip(
+        range(previous_context_image_count, 0, -1), previous_context_images
+    ):
         previous_part = {
             "inline_data": {
                 "mime_type": image.get("mime_type", "image/jpeg"),
@@ -1897,7 +1904,7 @@ def call_translation_api_batch(
                 previous_part, config.media_resolution_context
             )
         base_parts += [
-            {"text": _PREVIOUS_PAGE_LABEL.format(page_number)},
+            {"text": _PREVIOUS_PAGE_LABEL.format(pages_back)},
             previous_part,
         ]
 
@@ -1982,7 +1989,9 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                     )
                 translation_parts += [{"text": _FULL_PAGE_LABEL}, context_part]
 
-            for page_number, image in enumerate(previous_context_images, start=1):
+            for pages_back, image in zip(
+                range(previous_context_image_count, 0, -1), previous_context_images
+            ):
                 previous_part = {
                     "inline_data": {
                         "mime_type": image.get("mime_type", "image/jpeg"),
@@ -1994,7 +2003,7 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                         previous_part, config.media_resolution_context
                     )
                 translation_parts += [
-                    {"text": _PREVIOUS_PAGE_LABEL.format(page_number)},
+                    {"text": _PREVIOUS_PAGE_LABEL.format(pages_back)},
                     previous_part,
                 ]
 

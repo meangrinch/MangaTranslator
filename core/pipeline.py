@@ -662,9 +662,9 @@ def translate_and_render(
         previous_context_texts_provider: Optional callback used to fetch previous-page
             OCR transcripts immediately before the translation API call.
         ocr_texts_out: Optional mutable list. When provided, the current page's OCR transcripts
-            (each joined to its translation as `source → translation`)
-            (in reading order) are appended so the orchestrator can chain them as previous-page
-            text context for subsequent pages.
+            (in reading order, each joined to its translation as `source → translation`) are
+            appended so the orchestrator can chain them as previous-page text context for
+            subsequent pages.
 
     Returns:
         PIL.Image: Final translated image
