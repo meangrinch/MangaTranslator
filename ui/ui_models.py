@@ -40,6 +40,7 @@ class UICleaningSettings:
 
     thresholding_value: int = 200
     use_otsu_threshold: bool = False
+    auto_threshold: bool = True
     roi_shrink_px: int = 5
     inpaint_colored_bubbles: bool = False
 
@@ -262,6 +263,7 @@ class UIConfigState:
             "reading_direction": self.llm_settings.reading_direction,
             "thresholding_value": self.cleaning.thresholding_value,
             "use_otsu_threshold": self.cleaning.use_otsu_threshold,
+            "auto_threshold": self.cleaning.auto_threshold,
             "roi_shrink_px": self.cleaning.roi_shrink_px,
             "inpaint_colored_bubbles": self.cleaning.inpaint_colored_bubbles,
             "provider": self.provider_settings.provider,
@@ -456,6 +458,9 @@ class UIConfigState:
                 ),
                 use_otsu_threshold=data.get(
                     "use_otsu_threshold", defaults["use_otsu_threshold"]
+                ),
+                auto_threshold=data.get(
+                    "auto_threshold", defaults.get("auto_threshold", True)
                 ),
                 roi_shrink_px=data.get(
                     "roi_shrink_px", defaults.get("roi_shrink_px", 5)
@@ -832,6 +837,7 @@ def map_ui_to_backend_config(
     cleaning_cfg = CleaningConfig(
         thresholding_value=ui_state.cleaning.thresholding_value,
         use_otsu_threshold=ui_state.cleaning.use_otsu_threshold,
+        auto_threshold=ui_state.cleaning.auto_threshold,
         roi_shrink_px=ui_state.cleaning.roi_shrink_px,
         inpaint_colored_bubbles=ui_state.cleaning.inpaint_colored_bubbles,
     )

@@ -33,6 +33,9 @@ SYNTHETIC_CONJOINED_IOA_THRESHOLD = (
 AXIS_DOMINANCE_RATIO = (
     3.0  # Center-offset ratio to classify a box pair as axis-aligned (~18° cone)
 )
+CONJOINED_BOX_PAD_MIN_COVERAGE = (
+    0.3  # Parent-mask share of a child box below which the whole box is added
+)
 
 
 def _box_contains(inner, outer) -> bool:
@@ -576,6 +579,25 @@ def _build_rect_mask_from_box(box, img_h: int, img_w: int) -> np.ndarray:
     if x1 > x0 and y1 > y0:
         mask[y0:y1, x0:x1] = 255
     return mask
+
+
+def _pad_parent_mask_with_uncovered_boxes(
+    parent_mask: np.ndarray, group_boxes: list, img_h: int, img_w: int
+) -> np.ndarray:
+    """Add the box of any child the parent mask barely covers, so no split mask is empty.
+
+    Well-covered children keep the parent's outline: padding them out to their
+    box lets the cleaning fill leak past the bubble outline into the box corners.
+    """
+    parent = parent_mask > 0
+    padded = parent.copy()
+    for box in group_boxes:
+        box_mask = _build_rect_mask_from_box(box, img_h, img_w) > 0
+        box_area = np.count_nonzero(box_mask)
+        covered = np.count_nonzero(np.logical_and(parent, box_mask))
+        if box_area and covered / box_area < CONJOINED_BOX_PAD_MIN_COVERAGE:
+            padded |= box_mask
+    return padded
 
 
 def _filter_encompassing_osb_text_boxes(
@@ -1162,11 +1184,9 @@ def _build_segmentation_detections(
         group_boxes = [secondary_boxes[s_idx] for s_idx in s_indices]
         group_osb = _get_group_osb_text_boxes(osb_text_boxes_np, grouping_parent_box)
 
-        # Prevent empty split masks when children fall outside the parent mask
-        if parent_mask is not None:
-            for box in group_boxes:
-                box_mask = _build_rect_mask_from_box(box, img_h, img_w) > 0
-                parent_mask = np.logical_or(parent_mask > 0, box_mask)
+        parent_mask = _pad_parent_mask_with_uncovered_boxes(
+            parent_mask, group_boxes, img_h, img_w
+        )
 
         split_masks = _split_conjoined_mask(
             parent_mask,
@@ -1214,10 +1234,9 @@ def _build_segmentation_detections(
         group_boxes = [grouping_primary_boxes[idx] for idx in member_indices]
         group_osb = _get_group_osb_text_boxes(osb_text_boxes_np, parent_box)
 
-        if parent_mask is not None:
-            for box in group_boxes:
-                box_mask = _build_rect_mask_from_box(box, img_h, img_w) > 0
-                parent_mask = np.logical_or(parent_mask > 0, box_mask)
+        parent_mask = _pad_parent_mask_with_uncovered_boxes(
+            parent_mask, group_boxes, img_h, img_w
+        )
 
         split_masks = _split_conjoined_mask(
             parent_mask,

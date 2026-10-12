@@ -747,6 +747,15 @@ def create_layout(
                                     "value fails, regardless of set value."
                                 ),
                             )
+                            auto_threshold = gr.Checkbox(
+                                value=saved_settings.get("auto_threshold", True),
+                                label="Scale Threshold to Bubble Background",
+                                info=(
+                                    "Treat the fixed value as calibrated for pure-white bubbles and "
+                                    "scale it to each bubble's own background, so off-white or gray "
+                                    "bubbles are cleaned like white ones. Ignored when Otsu is forced."
+                                ),
+                            )
                             roi_shrink_px = gr.Slider(
                                 0,
                                 10,
@@ -2435,6 +2444,7 @@ def create_layout(
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
+            auto_threshold,
             inpaint_colored_bubbles,
             roi_shrink_px,
             provider_selector,
@@ -2579,6 +2589,7 @@ def create_layout(
             config_reading_direction,
             thresholding_value,
             use_otsu_threshold,
+            auto_threshold,
             inpaint_colored_bubbles,
             roi_shrink_px,
             provider_selector,
@@ -2724,6 +2735,7 @@ def create_layout(
             use_panel_sorting_checkbox,
             thresholding_value,
             use_otsu_threshold,
+            auto_threshold,
             inpaint_colored_bubbles,
             roi_shrink_px,
             provider_selector,
@@ -2870,6 +2882,7 @@ def create_layout(
             use_panel_sorting_checkbox,
             thresholding_value,
             use_otsu_threshold,
+            auto_threshold,
             inpaint_colored_bubbles,
             roi_shrink_px,
             provider_selector,

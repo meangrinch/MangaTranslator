@@ -302,6 +302,17 @@ def main():
         help="Force Otsu's method for thresholding instead of the fixed value (on all bubbles)",
     )
     parser.add_argument(
+        "--no-auto-threshold",
+        dest="auto_threshold",
+        action="store_false",
+        help=(
+            "Disable scaling --thresholding-value to each bubble's background brightness "
+            "(scaling cleans off-white or gray bubbles like white ones; ignored with "
+            "--use-otsu-threshold)"
+        ),
+    )
+    parser.set_defaults(auto_threshold=True)
+    parser.add_argument(
         "--thresholding-value",
         type=int,
         default=200,
@@ -1215,6 +1226,7 @@ def main():
         cleaning=CleaningConfig(
             thresholding_value=args.thresholding_value,
             use_otsu_threshold=use_otsu_config_val,
+            auto_threshold=args.auto_threshold,
             roi_shrink_px=max(0, min(10, int(args.roi_shrink_px))),
             inpaint_colored_bubbles=args.inpaint_colored_bubbles,
         ),

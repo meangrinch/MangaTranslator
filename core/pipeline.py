@@ -102,6 +102,7 @@ def _clean_speech_bubbles_for_page(
             device=device,
             thresholding_value=config.cleaning.thresholding_value,
             use_otsu_threshold=use_otsu,
+            auto_threshold=config.cleaning.auto_threshold,
             roi_shrink_px=config.cleaning.roi_shrink_px,
             verbose=verbose,
             processing_scale=processing_scale,

@@ -225,6 +225,7 @@ def process_single_bubble(
     neighbor_bboxes: list | None = None,
     processing_scale: float = 1.0,
     image_bgr: np.ndarray | None = None,
+    auto_threshold: bool = False,
 ):
     """
     Process a single speech bubble mask to extract text regions and determine fill color.
@@ -247,6 +248,7 @@ def process_single_bubble(
         neighbor_bboxes: Neighboring bboxes for shrink logic
         processing_scale: Processing scale multiplier
         image_bgr (numpy.ndarray): BGR image for text color sampling
+        auto_threshold (bool): Scale thresholding_value by the bubble's background level
 
     Returns:
         tuple: (final_mask, fill_color_bgr, is_colored, sample_color_bgr, text_bbox, text_color_bgr)
@@ -309,8 +311,23 @@ def process_single_bubble(
                 roi_for_thresholding, thresh_val, 255, cv2.THRESH_BINARY
             )
         else:
+            threshold = thresholding_value
+            if auto_threshold:
+                # thresholding_value is calibrated for a pure-white bubble; rescale it
+                # so off-white or gray paper is thresholded at the same relative level
+                interior = cv2.erode(base_mask, constraint_erosion_kernel, iterations=2)
+                bg_pixels = roi_for_thresholding[interior == 255]
+                if bg_pixels.size == 0:
+                    bg_pixels = roi_for_thresholding[base_mask == 255]
+                bg_level = float(np.percentile(bg_pixels, 75))
+                threshold = round(thresholding_value * bg_level / 255)
+                log_message(
+                    f"{'[SAM]' if is_sam else ''}  Auto threshold: {threshold} "
+                    f"(background={bg_level:.0f})",
+                    verbose=verbose,
+                )
             _, thresholded_roi = cv2.threshold(
-                roi_for_thresholding, thresholding_value, 255, cv2.THRESH_BINARY
+                roi_for_thresholding, threshold, 255, cv2.THRESH_BINARY
             )
 
         thresholded_roi = cv2.bitwise_and(thresholded_roi, roi_mask)
@@ -533,6 +550,7 @@ def clean_speech_bubbles(
     verbose: bool = False,
     processing_scale: float = 1.0,
     conjoined_confidence=0.35,
+    auto_threshold: bool = False,
     inpaint_colored_bubbles: bool = False,
     flux_hf_token: str = "",
     flux_num_inference_steps: int = 8,
@@ -563,6 +581,8 @@ def clean_speech_bubbles(
         thresholding_value (int): Fixed threshold value for text detection (0-255). Lower values (e.g., 180)
                                  are useful for uncleaned text close to bubble's edges.
         use_otsu_threshold (bool): If True, use Otsu's method for thresholding instead of the fixed value.
+        auto_threshold (bool): If True, scale thresholding_value by each bubble's background level
+                               (ignored when use_otsu_threshold is set).
         roi_shrink_px (int): Number of pixels to shrink the ROI inwards before identification/fill.
         inpaint_colored_bubbles (bool): If True, detect non-solid background bubbles and inpaint text with Flux.
         flux_hf_token (str): Hugging Face token for Flux downloads (shared with outside-text removal).
@@ -686,6 +706,7 @@ def clean_speech_bubbles(
                         neighbor_bboxes=detection.get("conjoined_neighbor_bboxes"),
                         processing_scale=processing_scale,
                         image_bgr=image,
+                        auto_threshold=auto_threshold,
                     )
                 except Exception as e:
                     retry_success = False
@@ -784,6 +805,7 @@ def clean_speech_bubbles(
                         neighbor_bboxes=detection.get("conjoined_neighbor_bboxes"),
                         processing_scale=processing_scale,
                         image_bgr=image,
+                        auto_threshold=auto_threshold,
                     )
 
                 except Exception as e:

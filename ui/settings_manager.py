@@ -195,6 +195,7 @@ DEFAULT_SETTINGS = {
     "use_osb_text_verification": True,
     "use_panel_sorting": True,
     "use_otsu_threshold": False,
+    "auto_threshold": True,
     "thresholding_value": 200,
     "roi_shrink_px": 5,
     "inpaint_colored_bubbles": False,
@@ -393,6 +394,7 @@ CANONICAL_CONFIG_KEY_ORDER: list[str] = [
     # Cleaning
     "thresholding_value",
     "use_otsu_threshold",
+    "auto_threshold",
     "roi_shrink_px",
     "inpaint_colored_bubbles",
     # Outside Text Removal
