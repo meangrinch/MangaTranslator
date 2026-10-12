@@ -818,6 +818,7 @@ def translate_and_render(
                 confidence=config.detection.panel_confidence,
                 device=device,
                 verbose=verbose,
+                image_override=pil_image_processed,
             )
             if debug_panels:
                 log_message(
@@ -1149,68 +1150,6 @@ def translate_and_render(
                     f"Sorting all text elements ({reading_direction.upper()})",
                     verbose=verbose,
                 )
-
-                panels = None
-                debug_panels = None
-                if ENABLE_COMPONENT_ORDER_DEBUG:
-                    try:
-                        log_message(
-                            "Detecting panels for ordering debug...",
-                            verbose=verbose,
-                        )
-                        debug_panels = detect_panels(
-                            image_path,
-                            confidence=config.detection.panel_confidence,
-                            device=config.device,
-                            verbose=verbose,
-                        )
-                        if debug_panels:
-                            log_message(
-                                f"Detected {len(debug_panels)} panels",
-                                always_print=True,
-                            )
-                        else:
-                            log_message(
-                                "No panels detected",
-                                verbose=verbose,
-                            )
-                    except Exception as e:
-                        log_message(
-                            f"Panel detection failed: {e}. Using global sorting.",
-                            always_print=True,
-                        )
-                        debug_panels = None
-
-                    if config.detection.use_panel_sorting:
-                        panels = debug_panels
-                elif config.detection.use_panel_sorting:
-                    try:
-                        log_message(
-                            "Detecting panels for panel-aware sorting...",
-                            verbose=verbose,
-                        )
-                        panels = detect_panels(
-                            image_path,
-                            confidence=config.detection.panel_confidence,
-                            device=config.device,
-                            verbose=verbose,
-                        )
-                        if panels:
-                            log_message(
-                                f"Detected {len(panels)} panels for sorting",
-                                always_print=True,
-                            )
-                        else:
-                            log_message(
-                                "No panels detected, using global sorting",
-                                verbose=verbose,
-                            )
-                    except Exception as e:
-                        log_message(
-                            f"Panel detection failed: {e}. Using global sorting.",
-                            always_print=True,
-                        )
-                        panels = None
 
                 # Sort all text elements (speech bubbles + OSB text) by reading order
                 sorted_bubble_data = sort_bubbles_by_reading_order(

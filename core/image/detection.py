@@ -290,6 +290,10 @@ def _remove_contained_boxes(
 
             # Check if box i is contained in box j
             if _calculate_ioa(boxes_list[i], boxes_list[j]) > threshold:
+                # Near-duplicate pair: boxes arrive sorted by confidence, so
+                # keep the earlier one and let the later one be dropped instead
+                if j > i and _calculate_ioa(boxes_list[j], boxes_list[i]) > threshold:
+                    continue
                 keep[i] = False
                 break
 

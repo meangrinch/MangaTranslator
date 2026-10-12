@@ -701,7 +701,8 @@ class ModelManager:
         """Determine which speech bubble model type a path corresponds to."""
         if model_path is None:
             return ModelType.YOLO_SPEECH_BUBBLE
-        p = Path(model_path)
+        # Callers may pass a path relative to the working directory
+        p = Path(model_path).resolve()
         if p == self.model_paths[ModelType.YOLO_SPEECH_BUBBLE_2]:
             return ModelType.YOLO_SPEECH_BUBBLE_2
         return ModelType.YOLO_SPEECH_BUBBLE
@@ -726,7 +727,9 @@ class ModelManager:
             )
 
             path = (
-                self.model_paths[model_type] if model_path is None else Path(model_path)
+                self.model_paths[model_type]
+                if model_path is None
+                else Path(model_path).resolve()
             )
 
             if path == self.model_paths[model_type]:
