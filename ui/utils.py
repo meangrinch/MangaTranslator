@@ -56,6 +56,7 @@ from utils.model_metadata import (
     is_zai_vision_model,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
+    supports_meta_max_effort,
     supports_meta_reasoning_effort,
     supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
@@ -756,6 +757,8 @@ def get_reasoning_effort_config(
         return False, [], None
 
     elif provider == "Meta Model":
+        if supports_meta_max_effort(model_name):
+            return True, ["max", "xhigh", "high", "medium", "low", "minimal"], "high"
         if supports_meta_reasoning_effort(model_name):
             return True, ["xhigh", "high", "medium", "low", "minimal"], "high"
         return False, [], None
@@ -789,6 +792,8 @@ def get_reasoning_effort_config(
             return True, ["high", "medium", "low", "none"], "high"
         if is_xai_reasoning_model(model_name):
             return True, ["high", "medium", "low", "none"], "high"
+        if supports_meta_max_effort(model_name):
+            return True, ["max", "xhigh", "high", "medium", "low", "minimal"], "high"
         if supports_meta_reasoning_effort(model_name):
             return True, ["xhigh", "high", "medium", "low", "minimal"], "high"
         if is_anthropic_reasoning_model(model_name):

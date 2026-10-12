@@ -84,6 +84,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "grok-4.20-multi-agent-0309",
     ],
     "Meta Model": [
+        "muse-wonder-1.0",
         "muse-spark-1.3-contributor",
         "muse-spark-1.3",
         "muse-spark-1.2-contributor",

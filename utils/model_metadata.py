@@ -567,7 +567,7 @@ def is_opencode_multimodal_model(model_name: str | None) -> bool:
         or base_name.startswith(("mimo-", "kimi-"))
         or is_mimo_multimodal_model(model_name)
         or is_moonshot_k3_model(model_name)
-        or "muse-spark" in lm
+        or is_meta_reasoning_model(model_name)
         or is_deepseek_vision_model(model_name)
         or ("deepseek-v4" in lm and "flash" in lm)
         or (lm.startswith("glm-") and is_zai_vision_model(model_name))
@@ -612,19 +612,24 @@ def supports_qwencloud_reasoning_effort(model_name: str | None) -> bool:
 
 
 def is_meta_reasoning_model(model_name: str | None) -> bool:
-    """Check if a Meta Model API model is reasoning-capable (muse-spark series)."""
+    """Check if a Meta Model API model is reasoning-capable (muse-spark and muse-wonder series)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return "muse-spark" in lm
+    return "muse-spark" in lm or "muse-wonder" in lm
 
 
 def supports_meta_reasoning_effort(model_name: str | None) -> bool:
     """Check if a Meta Model API model supports reasoning effort configuration."""
+    return is_meta_reasoning_model(model_name)
+
+
+def supports_meta_max_effort(model_name: str | None) -> bool:
+    """Check if a Meta model supports "max" effort (muse-wonder, standard-tier muse-spark-1.3)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return "muse-spark" in lm
+    return "muse-wonder" in lm or ("muse-spark-1.3" in lm and "contributor" not in lm)
 
 
 def is_opus_45_model(model_name: str | None) -> bool:

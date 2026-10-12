@@ -16,6 +16,7 @@ from utils.model_metadata import (
     resolve_openai_api_model_name,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
+    supports_meta_max_effort,
     supports_openai_original_image_detail,
 )
 
@@ -175,6 +176,21 @@ def test_anthropic_effort_config(model, expected):
 )
 def test_is_xai_reasoning_model(model, expected):
     assert is_xai_reasoning_model(model) is expected
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("muse-wonder-1.0", True),
+        ("muse-spark-1.3", True),
+        ("muse-spark-1.3-contributor", False),
+        ("muse-spark-1.3-contributor-free", False),
+        ("muse-spark-1.2", False),
+        (None, False),
+    ],
+)
+def test_supports_meta_max_effort(model, expected):
+    assert supports_meta_max_effort(model) is expected
 
 
 @pytest.mark.parametrize(
