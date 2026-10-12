@@ -48,10 +48,9 @@ def call_gemini_endpoint(
     if not api_key:
         raise ValidationError("API key is required for Google endpoint")
 
-    # Detect Gemini 3 models - they require v1alpha API for per-part media_resolution
-    is_gemini_3 = "gemini-3" in (model_name or "").lower()
-    api_version = "v1alpha" if is_gemini_3 else "v1beta"
-    url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+    # Key goes in a header so it never appears in URLs echoed by request errors
+    headers = {"x-goog-api-key": api_key}
 
     safety_settings_config = [
         {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -86,7 +85,9 @@ def call_gemini_endpoint(
                 verbose=debug,
             )
 
-            response = requests.post(url, json=payload, timeout=timeout)
+            response = requests.post(
+                url, json=payload, headers=headers, timeout=timeout
+            )
             response.raise_for_status()
 
             log_message("Processing Google response", verbose=debug)
