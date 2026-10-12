@@ -24,7 +24,7 @@ def call_opencode_endpoint(
     system_prompt: str | None = None,
     tier: str = "zen",
     debug: bool = False,
-    timeout: int = 120,
+    timeout: int = 300,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,

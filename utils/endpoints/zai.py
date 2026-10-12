@@ -16,7 +16,7 @@ def call_zai_endpoint(
     generation_config: dict[str, Any],
     system_prompt: str | None = None,
     debug: bool = False,
-    timeout: int = 120,
+    timeout: int = 300,
     max_retries: int = 3,
     base_delay: float = 1.0,
     enable_web_search: bool = False,
