@@ -18,7 +18,7 @@
 </p>
 
 <div align="center">
-User-friendly app for automating the translation of manga, manhwas, and comics using ML models. Targets both speech bubbles and outside-bubble text, restores background art with diffusion-based inpainting, and typesets translations across 60+ languages using LLMs and custom fonts.
+One-click app that translates manga, manhwa, manhua, and comics using ML models. Targets both speech bubbles and outside-bubble text, restores background art with diffusion-based inpainting, and typesets translations across 60+ languages using LLMs and custom fonts.
 </div>
 
 <br/>
