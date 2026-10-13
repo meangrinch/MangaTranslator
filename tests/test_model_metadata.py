@@ -8,6 +8,7 @@ from utils.model_metadata import (
     flux_valid_backend,
     get_max_tokens_cap,
     is_anthropic_no_sampling_model,
+    is_opencode_chat_completions_model,
     is_opencode_multimodal_model,
     is_rosetta_model,
     is_sonnet_5_model,
@@ -207,6 +208,29 @@ def test_supports_meta_max_effort(model, expected):
 )
 def test_is_opencode_multimodal_model(model, expected):
     assert is_opencode_multimodal_model(model) is expected
+
+
+@pytest.mark.parametrize(
+    ("model", "tier", "expected"),
+    [
+        ("kimi-k2.6", "zen", True),
+        ("glm-5.3-flash", "go", True),
+        ("some-brand-new-model", "zen", True),
+        ("gpt-6-luna", "go", False),
+        ("claude-haiku-5-5", "zen", False),
+        ("gemini-3.8-flash", "zen", False),
+        ("grok-4.7", "go", False),
+        ("muse-spark-1.3-contributor-free", "zen", False),
+        ("jev-1.13-free", "zen", False),
+        ("qwen3.7-plus", "zen", False),
+        ("qwen3.8-max", "zen", True),
+        ("qwen3.8-max", "go", False),
+        ("minimax-m3", "zen", True),
+        ("minimax-m3", "go", False),
+    ],
+)
+def test_is_opencode_chat_completions_model(model, tier, expected):
+    assert is_opencode_chat_completions_model(model, tier) is expected
 
 
 def test_is_rosetta_model_requires_vendor_and_name():

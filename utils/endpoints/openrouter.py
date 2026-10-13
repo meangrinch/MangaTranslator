@@ -116,7 +116,6 @@ def call_openrouter_endpoint(
         "HTTP-Referer": "https://github.com/meangrinch/MangaTranslator",
         "X-OpenRouter-Title": "MangaTranslator",
         "X-OpenRouter-Categories": "writing-assistant,image-gen",
-        "X-OpenRouter-Icon": "https://raw.githubusercontent.com/meangrinch/MangaTranslator/main/assets/icon.png",
     }
 
     metadata = generation_config.get("_metadata", {})
@@ -231,6 +230,13 @@ def call_openrouter_endpoint(
     elif reasoning_effort and is_reasoning_model and not is_claude_max:
         reasoning_config["effort"] = reasoning_effort
 
+    # Claude rejects a custom temperature while thinking is on
+    if is_anthropic_model and (
+        reasoning_config.get("enabled")
+        or reasoning_config.get("effort", "none") != "none"
+    ):
+        payload.pop("temperature", None)
+
     if reasoning_config:
         reasoning_config["exclude"] = True
         payload["reasoning"] = reasoning_config
@@ -274,8 +280,11 @@ def call_openrouter_endpoint(
                         return ""
                 else:
                     if "error" in result:
-                        error_msg = result.get("error", {}).get(
-                            "message", "Unknown error"
+                        error_obj = result["error"]
+                        error_msg = (
+                            error_obj.get("message", "Unknown error")
+                            if isinstance(error_obj, dict)
+                            else str(error_obj)
                         )
                         raise TranslationError(
                             f"OpenRouter API returned error: {error_msg}"

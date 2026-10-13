@@ -13,7 +13,7 @@ from utils.model_metadata import (
 )
 
 
-def build_openai_compatible_url(base_url: str, model_name: str | None = None) -> str:
+def build_openai_compatible_url(base_url: str) -> str:
     """Builds the full chat completions URL for generic or Azure OpenAI endpoints."""
     if not base_url:
         raise ValidationError("Base URL is required for OpenAI-Compatible endpoint")
@@ -21,54 +21,28 @@ def build_openai_compatible_url(base_url: str, model_name: str | None = None) ->
     url = base_url.strip()
 
     if is_azure_url(url):
+        # v1 route: no api-version, and the deployment name goes in the body's `model`
         parsed = urlsplit(url)
-        path = parsed.path.rstrip("/")
-
-        if "/openai/deployments/" in path:
-            if not path.endswith("/chat/completions") and not path.endswith(
-                "/messages"
-            ):
-                path = f"{path}/chat/completions"
-            target_url = urlunsplit(
-                (parsed.scheme, parsed.netloc, path, parsed.query, parsed.fragment)
+        prefix = parsed.path.split("/openai")[0].rstrip("/")
+        prefix = prefix.removesuffix("/chat/completions").removesuffix("/v1")
+        query = "&".join(
+            param
+            for param in parsed.query.split("&")
+            if param and not param.startswith("api-version=")
+        )
+        return urlunsplit(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                f"{prefix}/openai/v1/chat/completions",
+                query,
+                "",
             )
-        else:
-            if path.endswith("/openai/v1"):
-                path = path[:-10]
-            elif path.endswith("/v1"):
-                path = path[:-3]
+        )
 
-            if model_name:
-                path = f"{path}/openai/deployments/{model_name}/chat/completions"
-            else:
-                path = f"{path}/chat/completions"
-
-            target_url = urlunsplit(
-                (parsed.scheme, parsed.netloc, path, parsed.query, parsed.fragment)
-            )
-
-        if "/openai/deployments/" in target_url and "api-version=" not in target_url:
-            parsed_target = urlsplit(target_url)
-            new_query = (
-                f"{parsed_target.query}&api-version=2024-06-01"
-                if parsed_target.query
-                else "api-version=2024-06-01"
-            )
-            target_url = urlunsplit(
-                (
-                    parsed_target.scheme,
-                    parsed_target.netloc,
-                    parsed_target.path,
-                    new_query,
-                    parsed_target.fragment,
-                )
-            )
-
-        return target_url
-    else:
-        if url.endswith("/chat/completions"):
-            return url
-        return f"{url.rstrip('/')}/chat/completions"
+    if url.endswith("/chat/completions"):
+        return url
+    return f"{url.rstrip('/')}/chat/completions"
 
 
 def call_openai_compatible_endpoint(
@@ -119,7 +93,7 @@ def call_openai_compatible_endpoint(
             "Invalid 'parts' format for OpenAI-Compatible: No text prompt found."
         )
 
-    url = build_openai_compatible_url(base_url, model_name)
+    url = build_openai_compatible_url(base_url)
     headers = {
         "Content-Type": "application/json",
     }
@@ -159,10 +133,16 @@ def call_openai_compatible_endpoint(
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})
 
+    # OpenAI reasoning models reject max_tokens on chat completions
+    token_limit_key = (
+        "max_completion_tokens"
+        if metadata.get("is_openai_reasoning", False)
+        else "max_tokens"
+    )
     payload = {
         "model": model_name,
         "messages": messages,
-        "max_tokens": generation_config.get("max_tokens", 4096),
+        token_limit_key: generation_config.get("max_tokens", 4096),
     }
 
     is_openai_model = metadata.get("is_openai_model", False)
@@ -265,8 +245,11 @@ def call_openai_compatible_endpoint(
                         "No choices in OpenAI-Compatible response", always_print=True
                     )
                     if "error" in result:
-                        error_msg = result.get("error", {}).get(
-                            "message", "Unknown error"
+                        error_obj = result["error"]
+                        error_msg = (
+                            error_obj.get("message", "Unknown error")
+                            if isinstance(error_obj, dict)
+                            else str(error_obj)
                         )
                         raise TranslationError(
                             f"OpenAI-Compatible API returned error: {error_msg}"

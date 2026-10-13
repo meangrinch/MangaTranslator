@@ -39,6 +39,7 @@ from utils.endpoints import (
 from utils.exceptions import TranslationError
 from utils.logging import log_message
 from utils.model_metadata import (
+    NO_WEB_SEARCH_PROVIDERS,
     anthropic_model_flags,
     get_max_tokens_cap,
     is_anthropic_model_family,
@@ -623,7 +624,7 @@ def _build_generation_config(
         if use_sampling:
             generation_config.update(
                 {
-                    "temperature": temperature,
+                    "temperature": min(temperature, 1.0),
                     "top_p": top_p,
                 }
             )
@@ -1039,7 +1040,6 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 system_prompt=system_prompt,
                 debug=debug,
-                enable_web_search=config.enable_web_search,
             )
         elif provider == "Z.ai":
             api_key = config.zai_api_key
@@ -1071,7 +1071,6 @@ def _call_llm_endpoint(
                 generation_config=generation_config,
                 system_prompt=system_prompt,
                 debug=debug,
-                enable_web_search=config.enable_web_search,
             )
         elif provider == "Xiaomi MiMo":
             api_key = config.mimo_api_key
@@ -1137,7 +1136,6 @@ def _call_llm_endpoint(
                 system_prompt=system_prompt,
                 tier=tier,
                 debug=debug,
-                enable_web_search=config.enable_web_search,
             )
         elif provider == "OpenRouter":
             api_key = config.openrouter_api_key
@@ -1870,10 +1868,9 @@ def call_translation_api_batch(
     has_previous_context = bool(
         previous_context_image_count or previous_context_text_count
     )
-    # The OpenAI-Compatible endpoint has no search tool
     web_search = (
         bool(getattr(config, "enable_web_search", False))
-        and provider != "OpenAI-Compatible"
+        and provider not in NO_WEB_SEARCH_PROVIDERS
     )
 
     base_parts = []

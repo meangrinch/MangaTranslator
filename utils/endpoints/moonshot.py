@@ -6,7 +6,7 @@ import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
-from utils.model_metadata import is_moonshot_k3_model
+from utils.model_metadata import is_moonshot_k3_model, is_moonshot_reasoning_model
 
 
 def call_moonshot_endpoint(
@@ -19,7 +19,6 @@ def call_moonshot_endpoint(
     timeout: int = 300,
     max_retries: int = 3,
     base_delay: float = 1.0,
-    enable_web_search: bool = False,
 ) -> str | None:
     """
     Calls the Moonshot AI (Kimi) API endpoint with the provided data and handles retries.
@@ -37,7 +36,6 @@ def call_moonshot_endpoint(
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
         base_delay (float): Initial delay for retries in seconds.
-        enable_web_search (bool): Enable Moonshot's built-in web search.
 
     Returns:
         Optional[str]: The raw text content from the API response if successful.
@@ -119,12 +117,10 @@ def call_moonshot_endpoint(
     if reasoning_effort:
         payload["reasoning_effort"] = reasoning_effort
 
-    if is_moonshot_k3_model(model_name):
+    # Kimi K2.x and K3 use fixed sampling values and reject any others
+    if is_moonshot_reasoning_model(model_name):
         payload.pop("temperature", None)
         payload.pop("top_p", None)
-
-    if enable_web_search:
-        payload["tools"] = [{"type": "builtin_search"}]
 
     payload = {k: v for k, v in payload.items() if v is not None}
 

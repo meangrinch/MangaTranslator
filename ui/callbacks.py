@@ -1963,14 +1963,13 @@ def handle_reasoning_effort_change(
 def handle_use_custom_sampling_change(
     provider: str,
     model_name: str | None,
-    current_temp: float,
+    reasoning_effort: str | None,
     use_custom_sampling: bool,
 ):
     """Updates sampling slider interactivity when custom sampling is toggled."""
-    updates = utils.update_params_for_model(
-        provider, model_name, current_temp, use_custom_sampling
-    )
-    return updates[0], updates[1], updates[2]
+    return handle_reasoning_effort_change(
+        provider, model_name, reasoning_effort, use_custom_sampling
+    )[:3]
 
 
 def handle_app_load(

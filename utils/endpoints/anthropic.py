@@ -152,17 +152,31 @@ def call_anthropic_endpoint(
                     from core.config import calculate_reasoning_budget
 
                     max_tokens_value = generation_config.get("max_tokens", 4096)
-                    budget_tokens = calculate_reasoning_budget(
-                        max_tokens_value, reasoning_effort
+                    # The API rejects budgets under 1024, or not below max_tokens
+                    budget_tokens = max(
+                        1024,
+                        calculate_reasoning_budget(max_tokens_value, reasoning_effort),
                     )
-                    payload["thinking"] = {
-                        "type": "enabled",
-                        "budget_tokens": budget_tokens,
-                    }
+                    if budget_tokens < max_tokens_value:
+                        payload["thinking"] = {
+                            "type": "enabled",
+                            "budget_tokens": budget_tokens,
+                        }
+                    else:
+                        log_message(
+                            f"max_tokens {max_tokens_value} leaves no room for a "
+                            "thinking budget; sending without thinking",
+                            always_print=True,
+                        )
                 elif reasoning_effort == "none":
                     payload["thinking"] = {"type": "enabled", "budget_tokens": 0}
         except Exception:
             pass
+
+    # Models that still accept sampling params reject them while thinking is on
+    if payload.get("thinking", {}).get("type") in ("adaptive", "enabled"):
+        payload.pop("temperature", None)
+        payload.pop("top_k", None)
 
     try:
         effort = generation_config.get("effort")
@@ -184,9 +198,16 @@ def call_anthropic_endpoint(
         payload["output_config"]["effort"] = "high"
 
     if enable_web_search:
-        payload["tools"] = [{"type": "web_search_20250305", "name": "web_search"}]
+        # 4.6+ models (the max-effort tier) filter results in code execution first
+        web_search_type = (
+            "web_search_20260209"
+            if _claude_capability_flag(generation_config, "is_claude_effort_max")
+            else "web_search_20250305"
+        )
+        payload["tools"] = [{"type": web_search_type, "name": "web_search"}]
     payload = {k: v for k, v in payload.items() if v is not None}
 
+    content_blocks: list[dict[str, Any]] = []
     for attempt in range(max_retries + 1):
         current_delay = min(base_delay * (2**attempt), 16.0)
         try:
@@ -214,18 +235,26 @@ def call_anthropic_endpoint(
                         f"Anthropic API returned error: {error_type} - {error_message}"
                     )
 
-                if (
-                    "content" in result
-                    and isinstance(result["content"], list)
-                    and len(result["content"]) > 0
-                ):
-                    text_content = ""
-                    for block in result["content"]:
-                        if block.get("type") == "text":
-                            text_content = block.get("text", "")
-                            break
+                if isinstance(result.get("content"), list):
+                    content_blocks += result["content"]
+                if content_blocks:
+                    # A long server-tool turn pauses; sending it back as-is resumes
+                    # it. Continuations share the retry budget.
+                    if (
+                        result.get("stop_reason") == "pause_turn"
+                        and attempt < max_retries
+                    ):
+                        messages[1:] = [
+                            {"role": "assistant", "content": content_blocks}
+                        ]
+                        continue
 
-                    return text_content.strip()
+                    # Citations split one answer across text blocks, and tool blocks
+                    # separate a preamble from the answer that follows them
+                    return "".join(
+                        block.get("text", "") if block.get("type") == "text" else "\n"
+                        for block in content_blocks
+                    ).strip()
 
                 else:
                     stop_reason = result.get("stop_reason")

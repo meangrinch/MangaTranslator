@@ -27,7 +27,6 @@ def call_opencode_endpoint(
     timeout: int = 300,
     max_retries: int = 3,
     base_delay: float = 1.0,
-    enable_web_search: bool = False,
 ) -> str | None:
     """Call the OpenCode Chat Completions API with the given prompt and image parts.
 
@@ -42,7 +41,6 @@ def call_opencode_endpoint(
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum retry attempts for rate limits (429).
         base_delay (float): Initial delay for retries in seconds.
-        enable_web_search (bool): Enable model's built-in web search tool if supported.
 
     Returns:
         Optional[str]: The raw text content from the API response if successful,
@@ -69,6 +67,8 @@ def call_opencode_endpoint(
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
+        # OpenCode asks clients to identify themselves instead of sending a library default
+        "User-Agent": "MangaTranslator",
     }
 
     messages: list[dict[str, Any]] = []
@@ -111,9 +111,6 @@ def call_opencode_endpoint(
     reasoning_effort = generation_config.get("reasoning_effort")
     if reasoning_effort and reasoning_effort != "none":
         payload["reasoning_effort"] = reasoning_effort
-
-    if enable_web_search:
-        payload["tools"] = [{"type": "web_search"}]
 
     payload = {k: v for k, v in payload.items() if v is not None}
 

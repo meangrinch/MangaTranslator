@@ -8,6 +8,8 @@ from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 from utils.model_metadata import supports_meta_reasoning_effort
 
+from .openai import extract_responses_text
+
 
 def call_meta_model_endpoint(
     api_key: str,
@@ -22,7 +24,7 @@ def call_meta_model_endpoint(
     enable_web_search: bool = False,
 ) -> str | None:
     """
-    Calls the Meta Model API chat completions endpoint with the provided data and handles retries.
+    Calls the Meta Model API Responses endpoint with the provided data and handles retries.
 
     Args:
         api_key (str): Meta Model API key.
@@ -42,7 +44,7 @@ def call_meta_model_endpoint(
     if not api_key:
         raise ValidationError("API key is required for Meta Model API endpoint")
 
-    url = "https://api.meta.ai/v1/chat/completions"
+    url = "https://api.meta.ai/v1/responses"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -57,45 +59,39 @@ def call_meta_model_endpoint(
             "Invalid 'parts' format for Meta Model API: No text prompt found."
         )
 
-    if image_parts:
-        content_list = []
-        for part in image_parts:
-            if "text" in part:
-                content_list.append({"type": "text", "text": part["text"]})
-                continue
-            if (
-                "inline_data" in part
-                and "data" in part["inline_data"]
-                and "mime_type" in part["inline_data"]
-            ):
-                mime_type = part["inline_data"]["mime_type"]
-                base64_image = part["inline_data"]["data"]
-                content_list.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
-                    }
-                )
-            else:
-                log_message(
-                    f"Invalid image part format for Meta Model API: {part}",
-                    always_print=True,
-                )
-        content_list.append({"type": "text", "text": text_part["text"]})
-        user_content = content_list
-    else:
-        user_content = text_part["text"]
-
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": user_content})
+    content_list = []
+    for part in image_parts:
+        if "text" in part:
+            content_list.append({"type": "input_text", "text": part["text"]})
+            continue
+        if (
+            "inline_data" in part
+            and "data" in part["inline_data"]
+            and "mime_type" in part["inline_data"]
+        ):
+            mime_type = part["inline_data"]["mime_type"]
+            base64_image = part["inline_data"]["data"]
+            content_list.append(
+                {
+                    "type": "input_image",
+                    "image_url": f"data:{mime_type};base64,{base64_image}",
+                }
+            )
+        else:
+            log_message(
+                f"Invalid image part format for Meta Model API: {part}",
+                always_print=True,
+            )
+    content_list.append({"type": "input_text", "text": text_part["text"]})
 
     payload: dict[str, Any] = {
         "model": model_name,
-        "messages": messages,
-        "max_tokens": generation_config.get("max_tokens", 4096),
+        "input": [{"role": "user", "content": content_list}],
+        "max_output_tokens": generation_config.get("max_tokens", 4096),
     }
+
+    if system_prompt:
+        payload["instructions"] = system_prompt
 
     temp = generation_config.get("temperature")
     if temp is not None:
@@ -111,8 +107,9 @@ def call_meta_model_endpoint(
         and reasoning_effort not in ("auto", "none")
         and supports_meta_reasoning_effort(model_name)
     ):
-        payload["reasoning_effort"] = reasoning_effort
+        payload["reasoning"] = {"effort": reasoning_effort}
 
+    # Built-in web search only exists on the Responses API
     if enable_web_search:
         payload["tools"] = [{"type": "web_search"}]
 
@@ -135,26 +132,8 @@ def call_meta_model_endpoint(
             try:
                 result = response.json()
 
-                if "choices" in result and len(result["choices"]) > 0:
-                    choice = result["choices"][0]
-                    finish_reason = choice.get("finish_reason")
-
-                    message = choice.get("message")
-                    if message and "content" in message:
-                        content = message["content"]
-                        return content.strip() if content else ""
-                    log_message(
-                        f"No message content in Meta Model API response. Finish reason: {finish_reason}",
-                        always_print=True,
-                    )
-                    log_message(
-                        f"Full response: {json.dumps(result, indent=2)}",
-                        verbose=debug,
-                    )
-                    return ""
-                log_message("No choices in Meta Model API response", always_print=True)
-                if "error" in result:
-                    error_obj = result.get("error", {})
+                if result.get("error"):
+                    error_obj = result["error"]
                     error_msg = (
                         error_obj.get("message", "Unknown error")
                         if isinstance(error_obj, dict)
@@ -163,6 +142,20 @@ def call_meta_model_endpoint(
                     raise TranslationError(
                         f"Meta Model API returned error: {error_msg}"
                     )
+
+                output_text = extract_responses_text(result)
+                if output_text:
+                    return output_text
+
+                log_message(
+                    f"No text content in Meta Model API response. Status: {result.get('status')}, "
+                    f"details: {result.get('incomplete_details')}",
+                    always_print=True,
+                )
+                log_message(
+                    f"Full response: {json.dumps(result, indent=2)}",
+                    verbose=debug,
+                )
                 return None
 
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:

@@ -7,6 +7,8 @@ import requests
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 
+from .openai import extract_responses_text
+
 
 def call_xai_endpoint(
     api_key: str,
@@ -163,30 +165,22 @@ def call_xai_endpoint(
             try:
                 result = response.json()
 
-                finish_reason = "unknown"
-                if "output" in result and isinstance(result["output"], list):
-                    for output_item in result["output"]:
-                        finish_reason = output_item.get("finish_reason", finish_reason)
-                        if isinstance(output_item, dict) and "content" in output_item:
-                            content = output_item["content"]
-                            if isinstance(content, str) and content.strip():
-                                return content.strip()
-                            elif isinstance(content, list):
-                                for content_block in content:
-                                    if (
-                                        isinstance(content_block, dict)
-                                        and "text" in content_block
-                                    ):
-                                        text = content_block["text"]
-                                        if text and text.strip():
-                                            return text.strip()
-
-                if "error" in result:
-                    error_msg = result.get("error", {}).get("message", "Unknown error")
+                if result.get("error"):
+                    error_obj = result["error"]
+                    error_msg = (
+                        error_obj.get("message", "Unknown error")
+                        if isinstance(error_obj, dict)
+                        else str(error_obj)
+                    )
                     raise TranslationError(f"SpaceXAI API returned error: {error_msg}")
 
+                output_text = extract_responses_text(result)
+                if output_text:
+                    return output_text
+
                 log_message(
-                    f"No text content in SpaceXAI response. Finish reason: {finish_reason}",
+                    f"No text content in SpaceXAI response. Status: {result.get('status')}, "
+                    f"details: {result.get('incomplete_details')}",
                     always_print=True,
                 )
                 log_message(

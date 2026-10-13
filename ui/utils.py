@@ -9,8 +9,10 @@ from PIL import Image
 
 from core.llm_defaults import get_provider_sampling_defaults
 from utils.endpoints import openrouter_is_reasoning_model
+from utils.endpoints.openai_compatible import build_openai_compatible_url
 from utils.logging import log_message
 from utils.model_metadata import (
+    NO_WEB_SEARCH_PROVIDERS,
     anthropic_effort_config,
     anthropic_model_flags,
     anthropic_omits_thinking_config,
@@ -44,11 +46,11 @@ from utils.model_metadata import (
     is_meta_reasoning_model,
     is_mimo_multimodal_model,
     is_mimo_reasoning_model,
-    is_moonshot_k3_model,
     is_moonshot_reasoning_model,
     is_openai_compatible_reasoning_model,
     is_openai_model_family,
     is_openai_reasoning_model,
+    is_opencode_chat_completions_model,
     is_opencode_multimodal_model,
     is_qwencloud_reasoning_model,
     is_xai_reasoning_model,
@@ -445,16 +447,8 @@ def get_enable_web_search_label_and_info(provider: str) -> tuple[str, str]:
             "Use Meta Model's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
-        "DeepSeek": (
-            "Use DeepSeek's web search tool for up-to-date information. "
-            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
-        ),
         "Z.ai": (
             "Use Z.ai's web search tool for up-to-date information. "
-            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
-        ),
-        "Moonshot AI": (
-            "Use Moonshot AI's web search tool for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "Xiaomi MiMo": (
@@ -463,10 +457,6 @@ def get_enable_web_search_label_and_info(provider: str) -> tuple[str, str]:
         ),
         "QwenCloud": (
             "Use QwenCloud's web search tool for up-to-date information. "
-            "Might improve translation quality. Can be used with 'special instructions' to discover more information."
-        ),
-        "OpenCode": (
-            "Use model's built-in web search tool for up-to-date information if supported. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "OpenRouter": (
@@ -894,8 +884,20 @@ def get_sampling_interactivity_for_effort(
     For GPT-5 series (non-chat): only allowed when effort is 'none'.
     For other OpenAI reasoning models (GPT-6): never allowed (except Sol and Luna when effort is 'none').
     For DeepSeek reasoning models: only allowed when effort is 'none'.
+    For Claude models that accept sampling params: only allowed while thinking is off.
     Returns (temp_interactive, top_p_interactive).
     """
+    if (
+        (
+            provider == "Anthropic"
+            or (provider == "OpenRouter" and is_anthropic_model_family(model_name))
+        )
+        and is_anthropic_reasoning_model(model_name)
+        and not is_anthropic_no_sampling_model(model_name)
+    ):
+        allow = reasoning_effort == "none"
+        return allow, allow
+
     if provider == "DeepSeek" and is_deepseek_reasoning_model(model_name):
         allow = reasoning_effort == "none"
         return allow, allow
@@ -926,7 +928,7 @@ def _model_disallows_all_sampling_params(provider: str, model_name: str | None) 
     if provider == "OpenRouter" and is_anthropic_model_family(model_name):
         return is_anthropic_no_sampling_model(model_name)
     if provider == "Moonshot AI":
-        return is_moonshot_k3_model(model_name)
+        return is_moonshot_reasoning_model(model_name)
     if provider == "Google" or (
         provider == "OpenRouter" and is_google_model_family(model_name)
     ):
@@ -1138,13 +1140,25 @@ def update_translation_ui(
     temp_max = get_temperature_max(provider, remembered_model)
     new_temp_value = min(default_temp, temp_max)
 
+    reasoning_effort_visible, reasoning_choices, reasoning_default_value = (
+        get_reasoning_effort_config(provider, remembered_model)
+    )
+    if reasoning_choices and reasoning_default_value not in reasoning_choices:
+        reasoning_default_value = reasoning_choices[0] if reasoning_choices else None
+    elif not reasoning_choices:
+        reasoning_default_value = None
+
+    # Sliders follow the effort the radio is reset to below
     temp_interactive, top_p_interactive, top_k_interactive = (
         get_sampling_slider_interactivity(
-            provider, remembered_model, use_custom_sampling=use_custom_sampling
+            provider,
+            remembered_model,
+            reasoning_default_value,
+            use_custom_sampling=use_custom_sampling,
         )
     )
     use_custom_sampling_visible = is_use_custom_sampling_visible(
-        provider, remembered_model
+        provider, remembered_model, reasoning_default_value
     )
 
     temp_update = gr.update(
@@ -1180,7 +1194,7 @@ def update_translation_ui(
         remembered_model
     )
 
-    enable_web_search_visible = provider not in ("OpenAI-Compatible",)
+    enable_web_search_visible = provider not in NO_WEB_SEARCH_PROVIDERS
     enable_web_search_label, enable_web_search_info = (
         get_enable_web_search_label_and_info(provider)
     )
@@ -1220,18 +1234,9 @@ def update_translation_ui(
         info=mr_context_info, **mr_update_kwargs
     )
 
-    reasoning_effort_visible, reasoning_choices, reasoning_default_value = (
-        get_reasoning_effort_config(provider, remembered_model)
-    )
-
     reasoning_info_text = get_reasoning_effort_info_text(
         provider, remembered_model, reasoning_choices
     )
-
-    if reasoning_choices and reasoning_default_value not in reasoning_choices:
-        reasoning_default_value = reasoning_choices[0] if reasoning_choices else None
-    elif not reasoning_choices:
-        reasoning_default_value = None
 
     reasoning_effort_label = get_reasoning_effort_label(provider, remembered_model)
 
@@ -1325,12 +1330,26 @@ def update_params_for_model(
         return gr.update(), gr.update()
 
     temp_max = get_temperature_max(provider, model_name)
+    reasoning_visible, reasoning_choices, default_val = get_reasoning_effort_config(
+        provider, model_name
+    )
+
+    if default_val in reasoning_choices:
+        value = default_val
+    elif reasoning_choices:
+        value = reasoning_choices[0]
+    else:
+        value = None
+
+    # Sliders follow the effort the radio is reset to below
     temp_interactive, top_p_interactive, top_k_interactive = (
         get_sampling_slider_interactivity(
-            provider, model_name, use_custom_sampling=use_custom_sampling
+            provider, model_name, value, use_custom_sampling=use_custom_sampling
         )
     )
-    use_custom_sampling_visible = is_use_custom_sampling_visible(provider, model_name)
+    use_custom_sampling_visible = is_use_custom_sampling_visible(
+        provider, model_name, value
+    )
 
     if is_hy_mt2_model(model_name):
         hy = get_hy_mt2_sampling_defaults(model_name)
@@ -1370,17 +1389,6 @@ def update_params_for_model(
     is_gemini_3_google = provider == "Google" and is_gemini_3_model(model_name)
     is_gemini_3_openrouter = provider == "OpenRouter" and is_gemini_3_model(model_name)
 
-    reasoning_visible, reasoning_choices, default_val = get_reasoning_effort_config(
-        provider, model_name
-    )
-
-    if default_val in reasoning_choices:
-        value = default_val
-    elif reasoning_choices:
-        value = reasoning_choices[0]
-    else:
-        value = None
-
     info_text = get_reasoning_effort_info_text(provider, model_name, reasoning_choices)
     reasoning_effort_label = get_reasoning_effort_label(provider, model_name)
 
@@ -1392,8 +1400,7 @@ def update_params_for_model(
         info=info_text,
     )
 
-    # Web search checkbox is visible for all providers except OpenAI-Compatible
-    enable_web_search_visible = provider not in ("OpenAI-Compatible",)
+    enable_web_search_visible = provider not in NO_WEB_SEARCH_PROVIDERS
 
     enable_web_search_label, enable_web_search_info = (
         get_enable_web_search_label_and_info(provider)
@@ -1650,14 +1657,10 @@ def fetch_and_update_compatible_models(
             if is_azure_url(url):
                 headers["api-key"] = api_key
 
-        if (
-            is_azure_url(url)
-            and not url.endswith("/models")
-            and "/openai/deployments/" not in url
-        ):
-            fetch_url = f"{url.rstrip('/')}/openai/deployments?api-version=2024-06-01"
-        else:
-            fetch_url = f"{url.rstrip('/')}/models"
+        fetch_url = (
+            build_openai_compatible_url(url).removesuffix("/chat/completions")
+            + "/models"
+        )
 
         response = requests.get(fetch_url, headers=headers, timeout=15)
         response.raise_for_status()
@@ -1705,7 +1708,8 @@ def fetch_and_update_compatible_models(
             "provider_models", DEFAULT_SETTINGS["provider_models"]
         )
         remembered_comp_model = provider_models_dict.get("OpenAI-Compatible")
-        selected_comp_model = (
+        # A deployment named in the URL is the model to send
+        selected_comp_model = extracted_dep_name or (
             current_model
             if current_model in fetched_models
             else (
@@ -1782,7 +1786,12 @@ def fetch_and_update_opencode_models(
                     elif isinstance(item, str):
                         fetched_ids.append(item)
 
-            fetched_ids.sort()
+            # Only chat/completions models are callable from this app
+            fetched_ids = sorted(
+                m
+                for m in fetched_ids
+                if is_opencode_chat_completions_model(m, tier_key)
+            )
             OPENCODE_MODEL_CACHE[tier_key] = fetched_ids
             models = fetched_ids
             log_message(

@@ -91,6 +91,9 @@ FLUX_SDCPP_TEXT_ENCODER_QUANTS = FLUX_SDCPP_QWEN_QUANTS + tuple(
 )
 FLUX_BACKENDS = ("sdcpp", "sdnq", "nunchaku")
 
+# Providers whose API has no built-in web search tool this app can use
+NO_WEB_SEARCH_PROVIDERS = ("OpenAI-Compatible", "DeepSeek", "Moonshot AI", "OpenCode")
+
 
 def flux_sdcpp_text_encoder_asset_key(model_key: str) -> str | None:
     """Map a Flux model key to its sd.cpp text-encoder asset key."""
@@ -523,6 +526,25 @@ def is_mimo_multimodal_model(model_name: str | None) -> bool:
     if not model_name:
         return False
     return "mimo-v2.6" in model_name.lower()
+
+
+def is_opencode_chat_completions_model(
+    model_name: str | None, tier: str = "zen"
+) -> bool:
+    """Check if OpenCode serves a model on chat/completions, the only route this app calls.
+
+    The rest are served on /responses, /messages, or a Gemini-style path.
+    """
+    if not model_name:
+        return False
+    base_name = model_name.strip().lower().split("/")[-1]
+    # shortcut: name prefixes copied from OpenCode's endpoint tables (2026-10) because
+    # its /models list has no endpoint field; revisit when a listed model 404s.
+    if base_name.startswith(("gpt-", "claude-", "gemini-", "grok-", "muse-", "jev-")):
+        return False
+    if tier == "go":
+        return not base_name.startswith(("qwen", "minimax-"))
+    return not base_name.startswith("qwen") or base_name.startswith("qwen3.8-max")
 
 
 def is_opencode_multimodal_model(model_name: str | None) -> bool:

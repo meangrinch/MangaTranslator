@@ -8,6 +8,8 @@ from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 from utils.model_metadata import supports_qwencloud_reasoning_effort
 
+from .openai import extract_responses_text
+
 
 def call_qwencloud_endpoint(
     api_key: str,
@@ -165,7 +167,7 @@ def call_qwencloud_endpoint(
             try:
                 result = response.json()
 
-                if "error" in result:
+                if result.get("error"):
                     error_obj = result.get("error", {})
                     error_msg = (
                         error_obj.get("message", "Unknown error")
@@ -174,13 +176,13 @@ def call_qwencloud_endpoint(
                     )
                     raise TranslationError(f"QwenCloud API returned error: {error_msg}")
 
-                output_text = result.get("output_text")
-                if isinstance(output_text, str) and output_text.strip():
-                    return output_text.strip()
+                output_text = extract_responses_text(result)
+                if output_text:
+                    return output_text
 
-                finish_reason = result.get("finish_reason") or "unknown"
                 log_message(
-                    f"No text content in QwenCloud response. Finish reason: {finish_reason}",
+                    f"No text content in QwenCloud response. Status: {result.get('status')}, "
+                    f"details: {result.get('incomplete_details')}",
                     always_print=True,
                 )
                 log_message(

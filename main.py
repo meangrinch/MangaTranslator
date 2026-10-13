@@ -15,6 +15,7 @@ from utils.archive import safe_extract_zip
 from utils.model_metadata import (
     FLUX_SDCPP_DIFFUSION_QUANTS,
     FLUX_SDCPP_TEXT_ENCODER_QUANTS,
+    NO_WEB_SEARCH_PROVIDERS,
     flux_sdcpp_text_encoder_quants,
 )
 
@@ -586,7 +587,8 @@ def main():
         "--enable-web-search",
         action="store_true",
         help=(
-            "Enable model's built-in web search for up-to-date information. OpenRouter uses its own web search tool."
+            "Enable model's built-in web search for up-to-date information. OpenRouter uses its own web search tool. "
+            f"Not available for {', '.join(NO_WEB_SEARCH_PROVIDERS)}."
         ),
     )
     parser.add_argument(
@@ -1172,6 +1174,13 @@ def main():
         log_message(
             f"Warning: {provider} API key not provided via {api_key_arg_name} or {api_key_env_var} "
             f"environment variable. Translation will likely fail.",
+            always_print=True,
+        )
+
+    if args.enable_web_search and provider in NO_WEB_SEARCH_PROVIDERS:
+        log_message(
+            f"Warning: {provider} has no built-in web search; "
+            "--enable-web-search is ignored.",
             always_print=True,
         )
 

@@ -10,6 +10,7 @@ from PIL import Image
 from core.text.text_processing import text_layout_control_interactivity
 from utils.model_metadata import (
     FLUX_SDCPP_DIFFUSION_QUANTS,
+    NO_WEB_SEARCH_PROVIDERS,
     flux_sdcpp_text_encoder_default,
     flux_sdcpp_text_encoder_quants,
     flux_sdcpp_valid_text_encoder_quant,
@@ -1139,7 +1140,7 @@ def create_layout(
                             )
 
                             _initial_enable_web_search_visible = (
-                                config_initial_provider not in ("OpenAI-Compatible",)
+                                config_initial_provider not in NO_WEB_SEARCH_PROVIDERS
                             )
                             (
                                 _initial_enable_web_search_label,
@@ -1274,9 +1275,6 @@ def create_layout(
                             initial_use_custom_sampling_value = saved_settings.get(
                                 "use_custom_sampling", True
                             )
-                            initial_reasoning_effort = saved_settings.get(
-                                "reasoning_effort"
-                            )
                             (
                                 initial_temp_interactive,
                                 initial_top_p_interactive,
@@ -1284,14 +1282,15 @@ def create_layout(
                             ) = utils.get_sampling_slider_interactivity(
                                 config_initial_provider,
                                 config_initial_model_name,
-                                initial_reasoning_effort,
+                                # The effort the radio shows, not the raw saved one
+                                _initial_reasoning_effort_value,
                                 use_custom_sampling=initial_use_custom_sampling_value,
                             )
                             initial_use_custom_sampling_visible = (
                                 utils.is_use_custom_sampling_visible(
                                     config_initial_provider,
                                     config_initial_model_name,
-                                    initial_reasoning_effort,
+                                    _initial_reasoning_effort_value,
                                 )
                             )
 
@@ -3251,7 +3250,7 @@ def create_layout(
             inputs=[
                 provider_selector,
                 config_model_name,
-                temperature,
+                reasoning_effort_dropdown,
                 use_custom_sampling_checkbox,
             ],
             outputs=[temperature, top_p, top_k],

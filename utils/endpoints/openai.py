@@ -18,6 +18,31 @@ from utils.model_metadata import (
 )
 
 
+def extract_responses_text(result: dict[str, Any]) -> str | None:
+    """Read the answer text from a Responses API body.
+
+    Documented raw JSON has no top-level `output_text` (that field is SDK-only), and
+    reasoning items carry their own text parts, so only `output_text` parts are read.
+    Parts of one item are joined directly; items go on separate lines so a preamble
+    before a tool call does not run into the answer.
+    """
+    items = [
+        "".join(
+            block["text"]
+            for block in item.get("content") or []
+            if isinstance(block, dict)
+            and block.get("type") == "output_text"
+            and isinstance(block.get("text"), str)
+        )
+        for item in result.get("output") or []
+        if isinstance(item, dict)
+    ]
+    text = "\n".join(item for item in items if item).strip()
+    if not text and isinstance(result.get("output_text"), str):
+        text = result["output_text"].strip()
+    return text or None
+
+
 def call_openai_endpoint(
     api_key: str,
     model_name: str,
@@ -183,30 +208,13 @@ def call_openai_endpoint(
             try:
                 result = response.json()
 
-                # Prefer convenience field if available
-                output_text = result.get("output_text")
-                if isinstance(output_text, str) and output_text.strip():
-                    return output_text.strip()
+                output_text = extract_responses_text(result)
+                if output_text:
+                    return output_text
 
-                # Fallback: parse output list content
-                output_items = result.get("output")
-                if isinstance(output_items, list):
-                    for item in output_items:
-                        content_blocks = (
-                            item.get("content") if isinstance(item, dict) else None
-                        )
-                        if isinstance(content_blocks, list):
-                            for block in content_blocks:
-                                if isinstance(block, dict):
-                                    text_val = block.get("text") or block.get(
-                                        "output_text"
-                                    )
-                                    if isinstance(text_val, str) and text_val.strip():
-                                        return text_val.strip()
-
-                finish_reason = result.get("finish_reason") or "unknown"
                 log_message(
-                    f"No text content in OpenAI response. Finish reason: {finish_reason}",
+                    f"No text content in OpenAI response. Status: {result.get('status')}, "
+                    f"details: {result.get('incomplete_details')}",
                     always_print=True,
                 )
                 log_message(

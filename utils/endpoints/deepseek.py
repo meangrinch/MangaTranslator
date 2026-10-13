@@ -7,6 +7,8 @@ import requests
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 
+from .openai import extract_responses_text
+
 
 def call_deepseek_endpoint(
     api_key: str,
@@ -18,7 +20,6 @@ def call_deepseek_endpoint(
     timeout: int = 300,
     max_retries: int = 3,
     base_delay: float = 1.0,
-    enable_web_search: bool = False,
 ) -> str | None:
     """
     Calls the DeepSeek Responses API endpoint with the provided data and handles retries.
@@ -35,7 +36,6 @@ def call_deepseek_endpoint(
         timeout (int): Request timeout in seconds.
         max_retries (int): Maximum number of retries for rate limiting errors.
         base_delay (float): Initial delay for retries in seconds.
-        enable_web_search (bool): Enable DeepSeek's web search tool.
 
     Returns:
         Optional[str]: The raw text content from the API response if successful,
@@ -111,15 +111,14 @@ def call_deepseek_endpoint(
     if system_prompt:
         payload["instructions"] = system_prompt
 
-    # Add thinking parameter if present
+    # The Responses API takes reasoning.effort; "none" turns thinking off
     thinking_config = generation_config.get("thinking")
     thinking_enabled = thinking_config and thinking_config.get("type") == "enabled"
-    if thinking_config:
-        payload["thinking"] = thinking_config
-
-    reasoning_effort = generation_config.get("reasoning_effort")
-    if reasoning_effort:
-        payload["reasoning_effort"] = reasoning_effort
+    reasoning_effort = (
+        generation_config.get("reasoning_effort") if thinking_enabled else "none"
+    )
+    if thinking_config and reasoning_effort:
+        payload["reasoning"] = {"effort": reasoning_effort}
 
     # Thinking mode does not support temperature/top_p (no error, but no effect)
     if not thinking_enabled:
@@ -130,9 +129,6 @@ def call_deepseek_endpoint(
         top_p = generation_config.get("top_p")
         if top_p is not None:
             payload["top_p"] = top_p
-
-    if enable_web_search:
-        payload["tools"] = [{"type": "web_search"}]
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
@@ -153,17 +149,22 @@ def call_deepseek_endpoint(
             try:
                 result = response.json()
 
-                if "error" in result:
-                    error_msg = result.get("error", {}).get("message", "Unknown error")
+                if result.get("error"):
+                    error_obj = result["error"]
+                    error_msg = (
+                        error_obj.get("message", "Unknown error")
+                        if isinstance(error_obj, dict)
+                        else str(error_obj)
+                    )
                     raise TranslationError(f"DeepSeek API returned error: {error_msg}")
 
-                output_text = result.get("output_text")
-                if isinstance(output_text, str) and output_text.strip():
-                    return output_text.strip()
+                output_text = extract_responses_text(result)
+                if output_text:
+                    return output_text
 
-                finish_reason = result.get("finish_reason") or "unknown"
                 log_message(
-                    f"No text content in DeepSeek response. Finish reason: {finish_reason}",
+                    f"No text content in DeepSeek response. Status: {result.get('status')}, "
+                    f"details: {result.get('incomplete_details')}",
                     always_print=True,
                 )
                 log_message(

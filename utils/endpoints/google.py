@@ -102,10 +102,16 @@ def call_gemini_endpoint(
                     candidate = result["candidates"][0]
                     content_parts = candidate.get("content", {}).get("parts", [{}])
                     if content_parts:
-                        # Filter out thought parts for gemma-4
-                        for part in content_parts:
-                            if "text" in part and not part.get("thought", False):
-                                return part.get("text", "").strip()
+                        # Skip thought parts (gemma-4); code execution parts separate
+                        # a preamble from the answer that follows them
+                        text = "".join(
+                            part["text"]
+                            if "text" in part and not part.get("thought", False)
+                            else "\n"
+                            for part in content_parts
+                        ).strip()
+                        if text:
+                            return text
 
                         # Fallback if no non-thought text part exists
                         if "text" in content_parts[0]:
