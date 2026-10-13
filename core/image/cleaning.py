@@ -553,7 +553,7 @@ def clean_speech_bubbles(
     auto_threshold: bool = False,
     inpaint_colored_bubbles: bool = False,
     flux_hf_token: str = "",
-    flux_num_inference_steps: int = 8,
+    flux_num_inference_steps: int = 4,
     flux_residual_diff_threshold: float = 0.15,
     flux_seed: int = 1,
     osb_text_verification: bool = False,

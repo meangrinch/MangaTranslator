@@ -142,8 +142,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         max_font_size,
         min_font_size,
         line_spacing_mult,
-        use_subpixel_rendering,
-        font_hinting,
         use_ligatures,
         output_format,
         jpeg_quality,
@@ -207,8 +205,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_osb_auto_vertical_text_val,
         outside_text_osb_vertical_line_spacing_mult_val,
         outside_text_osb_vertical_font_size_mult_val,
-        outside_text_osb_use_subpixel_rendering_val,
-        outside_text_osb_font_hinting_val,
         outside_text_bbox_expansion_percent_width_val,
         outside_text_bbox_expansion_percent_height_val,
         outside_text_osb_render_expansion_narrow_multiplier_val,
@@ -314,8 +310,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             osb_vertical_font_size_mult=float(
                 outside_text_osb_vertical_font_size_mult_val
             ),
-            osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
-            osb_font_hinting=outside_text_osb_font_hinting_val,
             bbox_expansion_percent_width=float(
                 outside_text_bbox_expansion_percent_width_val
             ),
@@ -385,8 +379,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             max_font_size=max_font_size,
             min_font_size=min_font_size,
             line_spacing_mult=line_spacing_mult,
-            use_subpixel_rendering=use_subpixel_rendering,
-            font_hinting=font_hinting,
             use_ligatures=use_ligatures,
             hyphenate_before_scaling=hyphenate_before_scaling_val,
             detach_trailing_punctuation=detach_trailing_punctuation_val,
@@ -1143,8 +1135,6 @@ def handle_save_config_click(*args: Any) -> str:
         max_fs,
         min_fs,
         ls,
-        subpix,
-        hint,
         liga,
         out_fmt,
         jq,
@@ -1218,8 +1208,6 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_osb_auto_vertical_text_val,
         outside_text_osb_vertical_line_spacing_mult_val,
         outside_text_osb_vertical_font_size_mult_val,
-        outside_text_osb_use_subpixel_rendering_val,
-        outside_text_osb_font_hinting_val,
         outside_text_bbox_expansion_percent_width_val,
         outside_text_bbox_expansion_percent_height_val,
         outside_text_osb_render_expansion_narrow_multiplier_val,
@@ -1304,8 +1292,6 @@ def handle_save_config_click(*args: Any) -> str:
             osb_vertical_font_size_mult=float(
                 outside_text_osb_vertical_font_size_mult_val
             ),
-            osb_use_subpixel_rendering=outside_text_osb_use_subpixel_rendering_val,
-            osb_font_hinting=outside_text_osb_font_hinting_val,
             bbox_expansion_percent_width=float(
                 outside_text_bbox_expansion_percent_width_val
             ),
@@ -1375,8 +1361,6 @@ def handle_save_config_click(*args: Any) -> str:
             max_font_size=max_fs,
             min_font_size=min_fs,
             line_spacing_mult=ls,
-            use_subpixel_rendering=subpix,
-            font_hinting=hint,
             use_ligatures=liga,
             hyphenate_before_scaling=hyphenate_before_scaling_val,
             detach_trailing_punctuation=detach_trailing_punctuation_val,
@@ -1674,8 +1658,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         default_ui_state.rendering.max_font_size,
         default_ui_state.rendering.min_font_size,
         default_ui_state.rendering.line_spacing_mult,
-        default_ui_state.rendering.use_subpixel_rendering,
-        default_ui_state.rendering.font_hinting,
         default_ui_state.rendering.use_ligatures,
         default_ui_state.output.output_format,
         default_ui_state.output.jpeg_quality,
@@ -1796,8 +1778,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         default_ui_state.outside_text.osb_auto_vertical_text,
         default_ui_state.outside_text.osb_vertical_line_spacing_mult,
         default_ui_state.outside_text.osb_vertical_font_size_mult,
-        default_ui_state.outside_text.osb_use_subpixel_rendering,
-        default_ui_state.outside_text.osb_font_hinting,
         default_ui_state.outside_text.bbox_expansion_percent_width,
         default_ui_state.outside_text.bbox_expansion_percent_height,
         default_ui_state.outside_text.osb_render_expansion_narrow_multiplier,

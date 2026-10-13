@@ -506,8 +506,6 @@ def render_text_skia(
             regular_hb_face,
             features_to_enable,
             text_color,
-            config.use_subpixel_rendering,
-            config.font_hinting,
             base_outline * factor,
             verbose,
             pre_translate_x=(
@@ -575,8 +573,6 @@ def render_text_skia(
             regular_hb_face,
             features_to_enable,
             text_color,
-            config.use_subpixel_rendering,
-            config.font_hinting,
             outline_px,
             verbose,
             pre_translate_x=(

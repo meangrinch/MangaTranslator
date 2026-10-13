@@ -396,7 +396,7 @@ def create_layout(
                         overlap_llm_with_inpaint = gr.Checkbox(
                             label="Overlap LLM With Inpainting",
                             value=bool(
-                                saved_settings.get("overlap_llm_with_inpaint", False)
+                                saved_settings.get("overlap_llm_with_inpaint", True)
                             ),
                             info="Run LLM translation concurrently with inpainting.",
                         )
@@ -491,7 +491,8 @@ def create_layout(
                             info=(
                                 "Controls the number of parallel workers, "
                                 "one per page. Does not affect translation "
-                                "quality."
+                                "quality. LLM calls only run in parallel when "
+                                "Previous Context OCR Text is 0."
                             ),
                         )
                         batch_parallel_within_pages = gr.Checkbox(
@@ -1463,23 +1464,6 @@ def create_layout(
                                 label="Line Spacing Multiplier",
                                 info="Adjusts the vertical space between lines of text (1.0 = standard).",
                             )
-                            use_subpixel_rendering = gr.Checkbox(
-                                value=saved_settings.get(
-                                    "use_subpixel_rendering", False
-                                ),
-                                label="Use Subpixel Rendering",
-                                info=(
-                                    "Improves text clarity on RGB-based displays. "
-                                    "Disable if using a PenTile-based display (i.e., an OLED screen)"
-                                ),
-                            )
-                            font_hinting = gr.Radio(
-                                choices=["none", "slight", "normal", "full"],
-                                value=saved_settings.get("font_hinting", "none"),
-                                label="Font Hinting",
-                                info="Adjusts glyph outlines to fit pixel grid. 'None' is often best for "
-                                "high-res displays.",
-                            )
                             use_ligatures = gr.Checkbox(
                                 value=saved_settings.get("use_ligatures", False),
                                 label="Use Standard Ligatures (e.g., fi, fl)",
@@ -2086,27 +2070,6 @@ def create_layout(
                                     label="Line Spacing Multiplier",
                                     info="Adjusts the vertical space between lines of text (1.0 = standard).",
                                 )
-                                outside_text_osb_use_subpixel_rendering = gr.Checkbox(
-                                    value=saved_settings.get(
-                                        "outside_text_osb_use_subpixel_rendering", True
-                                    ),
-                                    label="Use Subpixel Rendering",
-                                    info=(
-                                        "Improves text clarity on RGB-based displays. "
-                                        "Disable if using a PenTile-based display (i.e., an OLED screen)"
-                                    ),
-                                )
-                                outside_text_osb_font_hinting = gr.Radio(
-                                    choices=["none", "slight", "normal", "full"],
-                                    value=saved_settings.get(
-                                        "outside_text_osb_font_hinting", "none"
-                                    ),
-                                    label="Font Hinting",
-                                    info=(
-                                        "Adjusts glyph outlines to fit pixel grid. 'None' is often best for "
-                                        "high-res displays."
-                                    ),
-                                )
                                 outside_text_osb_use_ligatures = gr.Checkbox(
                                     value=saved_settings.get(
                                         "outside_text_osb_use_ligatures", False
@@ -2484,8 +2447,6 @@ def create_layout(
             max_font_size,
             min_font_size,
             line_spacing_mult,
-            use_subpixel_rendering,
-            font_hinting,
             use_ligatures,
             output_format,
             jpeg_quality,
@@ -2559,8 +2520,6 @@ def create_layout(
             outside_text_osb_auto_vertical_text,
             outside_text_osb_vertical_line_spacing_mult,
             outside_text_osb_vertical_font_size_mult,
-            outside_text_osb_use_subpixel_rendering,
-            outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent_width,
             outside_text_bbox_expansion_percent_height,
             outside_text_osb_render_expansion_narrow_multiplier,
@@ -2630,8 +2589,6 @@ def create_layout(
             max_font_size,
             min_font_size,
             line_spacing_mult,
-            use_subpixel_rendering,
-            font_hinting,
             use_ligatures,
             output_format,
             jpeg_quality,
@@ -2706,8 +2663,6 @@ def create_layout(
             outside_text_osb_auto_vertical_text,
             outside_text_osb_vertical_line_spacing_mult,
             outside_text_osb_vertical_font_size_mult,
-            outside_text_osb_use_subpixel_rendering,
-            outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent_width,
             outside_text_bbox_expansion_percent_height,
             outside_text_osb_render_expansion_narrow_multiplier,
@@ -2781,8 +2736,6 @@ def create_layout(
             max_font_size,
             min_font_size,
             line_spacing_mult,
-            use_subpixel_rendering,
-            font_hinting,
             use_ligatures,
             output_format,
             jpeg_quality,
@@ -2846,8 +2799,6 @@ def create_layout(
             outside_text_osb_auto_vertical_text,
             outside_text_osb_vertical_line_spacing_mult,
             outside_text_osb_vertical_font_size_mult,
-            outside_text_osb_use_subpixel_rendering,
-            outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent_width,
             outside_text_bbox_expansion_percent_height,
             outside_text_osb_render_expansion_narrow_multiplier,
@@ -2929,8 +2880,6 @@ def create_layout(
             max_font_size,
             min_font_size,
             line_spacing_mult,
-            use_subpixel_rendering,
-            font_hinting,
             use_ligatures,
             output_format,
             jpeg_quality,
@@ -2994,8 +2943,6 @@ def create_layout(
             outside_text_osb_auto_vertical_text,
             outside_text_osb_vertical_line_spacing_mult,
             outside_text_osb_vertical_font_size_mult,
-            outside_text_osb_use_subpixel_rendering,
-            outside_text_osb_font_hinting,
             outside_text_bbox_expansion_percent_width,
             outside_text_bbox_expansion_percent_height,
             outside_text_osb_render_expansion_narrow_multiplier,

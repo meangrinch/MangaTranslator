@@ -187,8 +187,6 @@ def draw_layout(
     regular_hb_face: hb.Face,
     features_to_enable: dict[str, bool],
     text_color: int,
-    use_subpixel_rendering: bool,
-    font_hinting: str,
     outline_width: float = 0.0,
     verbose: bool = False,
     pre_translate_x: float = 0.0,
@@ -213,8 +211,6 @@ def draw_layout(
         regular_hb_face: Regular HarfBuzz face (fallback)
         features_to_enable: HarfBuzz features to enable
         text_color: Skia color for the text
-        use_subpixel_rendering: Whether to use subpixel rendering
-        font_hinting: Font hinting level ("none", "slight", "normal", "full")
         outline_width: Width of text outline (0 = no outline)
         verbose: Whether to print detailed logs
 
@@ -232,14 +228,6 @@ def draw_layout(
             line_data["segments"] = parse_styled_segments(
                 line_data["text_with_markers"]
             )
-
-        hinting_map = {
-            "none": skia.FontHinting.kNone,
-            "slight": skia.FontHinting.kSlight,
-            "normal": skia.FontHinting.kNormal,
-            "full": skia.FontHinting.kFull,
-        }
-        skia_hinting = hinting_map.get(font_hinting.lower(), skia.FontHinting.kNone)
 
         paint = skia.Paint(AntiAlias=True, Color=text_color)
 
@@ -336,8 +324,8 @@ def draw_layout(
                     )
 
                     skia_font_segment = skia.Font(typeface_to_use, final_font_size)
-                    skia_font_segment.setSubpixel(use_subpixel_rendering)
-                    skia_font_segment.setHinting(skia_hinting)
+                    skia_font_segment.setSubpixel(True)
+                    skia_font_segment.setHinting(skia.FontHinting.kNone)
 
                     hb_font_segment = hb.Font(hb_face_to_use)
                     hb_font_segment.ptem = float(final_font_size)
@@ -451,8 +439,8 @@ def draw_layout(
                             continue
 
                         skia_font_segment = skia.Font(typeface_to_use, final_font_size)
-                        skia_font_segment.setSubpixel(use_subpixel_rendering)
-                        skia_font_segment.setHinting(skia_hinting)
+                        skia_font_segment.setSubpixel(True)
+                        skia_font_segment.setHinting(skia.FontHinting.kNone)
 
                         hb_font_segment = hb.Font(hb_face_to_use)
                         hb_font_segment.ptem = float(final_font_size)

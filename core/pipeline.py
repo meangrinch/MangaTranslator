@@ -1826,16 +1826,6 @@ def translate_and_render(
                             min_font_size=min_font,
                             max_font_size=max_font,
                             line_spacing_mult=line_spacing,
-                            use_subpixel_rendering=(
-                                config.outside_text.osb_use_subpixel_rendering
-                                if is_outside_text
-                                else config.rendering.use_subpixel_rendering
-                            ),
-                            font_hinting=(
-                                config.outside_text.osb_font_hinting
-                                if is_outside_text
-                                else config.rendering.font_hinting
-                            ),
                             use_ligatures=use_ligs,
                             hyphenate_before_scaling=should_hyphenate,
                             hyphen_penalty=config.rendering.hyphen_penalty,

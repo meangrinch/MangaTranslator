@@ -110,8 +110,6 @@ class RenderingConfig:
     max_font_size: int = 16
     min_font_size: int = 8
     line_spacing_mult: float = 1.0
-    use_subpixel_rendering: bool = False
-    font_hinting: str = "none"
     use_ligatures: bool = False
     hyphenate_before_scaling: bool = True
     hyphen_penalty: float = 1000.0
@@ -145,7 +143,7 @@ class OutsideTextConfig:
     flux_sdcpp_cache_mode: str = "none"
     flux_sdcpp_diffusion_quant: str = "Q4_K_M"
     flux_sdcpp_text_encoder_quant: str = ""
-    flux_num_inference_steps: int = 8
+    flux_num_inference_steps: int = 4
     flux_luminance_correction: bool = (
         True  # Match patch luminance to surrounding context
     )
@@ -164,8 +162,6 @@ class OutsideTextConfig:
     osb_auto_vertical_text: bool = True
     osb_vertical_line_spacing_mult: float = 1.0
     osb_vertical_font_size_mult: float = 1.0
-    osb_use_subpixel_rendering: bool = False
-    osb_font_hinting: str = "none"
     bbox_expansion_percent_width: float = 0.1
     bbox_expansion_percent_height: float = 0.1
     osb_render_expansion_narrow_multiplier: float = 1.0
@@ -215,8 +211,8 @@ class MangaTranslatorConfig:
     processing_scale: float = 1.0
     parallel_requests: int = 1
     batch_parallel_within_pages: bool = False
-    overlap_llm_with_inpaint: bool = False
-    retry_failed_once: bool = False
+    overlap_llm_with_inpaint: bool = True
+    retry_failed_once: bool = True
     request_coordinator: Any | None = None
 
     def __post_init__(self):

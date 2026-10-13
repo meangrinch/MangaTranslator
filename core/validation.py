@@ -272,10 +272,6 @@ def validate_core_inputs(
         raise ValidationError("Line Spacing Multiplier must be a positive number.")
     if rendering_cfg.min_font_size > rendering_cfg.max_font_size:
         raise ValidationError("Min Font Size cannot be larger than Max Font Size.")
-    if rendering_cfg.font_hinting not in ["none", "slight", "normal", "full"]:
-        raise ValidationError(
-            "Invalid Font Hinting value. Must be one of: none, slight, normal, full."
-        )
 
     # --- Translation Config Validation (Basic) ---
     if not translation_cfg.provider:

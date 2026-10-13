@@ -108,7 +108,6 @@ def test_validate_core_inputs_ok(dirs):
     ("translation", "rendering"),
     [
         (TranslationConfig(), RenderingConfig(font_dir="Pack", min_font_size=20)),
-        (TranslationConfig(), RenderingConfig(font_dir="Pack", font_hinting="max")),
         (TranslationConfig(reading_direction="ttb"), RenderingConfig(font_dir="Pack")),
         (TranslationConfig(model_name=""), RenderingConfig(font_dir="Pack")),
     ],

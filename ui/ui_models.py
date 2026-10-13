@@ -98,8 +98,6 @@ class UIRenderingSettings:
     max_font_size: int = 16
     min_font_size: int = 8
     line_spacing_mult: float = 1.0
-    use_subpixel_rendering: bool = True
-    font_hinting: str = "none"
     use_ligatures: bool = False
     hyphenate_before_scaling: bool = True
     hyphen_penalty: float = 1000.0
@@ -144,7 +142,7 @@ class UIOutsideTextSettings:
     flux_sdcpp_cache_mode: str = "none"
     flux_sdcpp_diffusion_quant: str = "Q4_K_M"
     flux_sdcpp_text_encoder_quant: str = "Q4_K_XL"
-    flux_num_inference_steps: int = 8
+    flux_num_inference_steps: int = 4
     flux_luminance_correction: bool = (
         True  # Match patch luminance to surrounding context
     )
@@ -163,8 +161,6 @@ class UIOutsideTextSettings:
     osb_auto_vertical_text: bool = True
     osb_vertical_line_spacing_mult: float = 1.0
     osb_vertical_font_size_mult: float = 1.0
-    osb_use_subpixel_rendering: bool = True
-    osb_font_hinting: str = "none"
     bbox_expansion_percent_width: float = 0.1
     bbox_expansion_percent_height: float = 0.1
     osb_render_expansion_narrow_multiplier: float = 1.0
@@ -214,7 +210,7 @@ class UIGeneralSettings:
     )
     auto_scale: bool = True
     split_long_strips: bool = True
-    overlap_llm_with_inpaint: bool = False
+    overlap_llm_with_inpaint: bool = True
 
 
 @dataclass
@@ -305,8 +301,6 @@ class UIConfigState:
             "max_font_size": self.rendering.max_font_size,
             "min_font_size": self.rendering.min_font_size,
             "line_spacing_mult": self.rendering.line_spacing_mult,
-            "use_subpixel_rendering": self.rendering.use_subpixel_rendering,
-            "font_hinting": self.rendering.font_hinting,
             "use_ligatures": self.rendering.use_ligatures,
             "hyphenate_before_scaling": self.rendering.hyphenate_before_scaling,
             "hyphen_penalty": self.rendering.hyphen_penalty,
@@ -348,8 +342,6 @@ class UIConfigState:
             "outside_text_osb_auto_vertical_text": self.outside_text.osb_auto_vertical_text,
             "outside_text_osb_vertical_line_spacing_mult": self.outside_text.osb_vertical_line_spacing_mult,
             "outside_text_osb_vertical_font_size_mult": self.outside_text.osb_vertical_font_size_mult,
-            "outside_text_osb_use_subpixel_rendering": self.outside_text.osb_use_subpixel_rendering,
-            "outside_text_osb_font_hinting": self.outside_text.osb_font_hinting,
             "outside_text_bbox_expansion_percent_width": self.outside_text.bbox_expansion_percent_width,
             "outside_text_bbox_expansion_percent_height": self.outside_text.bbox_expansion_percent_height,
             "outside_text_osb_render_expansion_narrow_multiplier": (
@@ -516,7 +508,7 @@ class UIConfigState:
                     ),
                 ),
                 flux_num_inference_steps=data.get(
-                    "outside_text_flux_num_inference_steps", 8
+                    "outside_text_flux_num_inference_steps", 4
                 ),
                 flux_luminance_correction=data.get(
                     "outside_text_flux_luminance_correction", True
@@ -550,10 +542,6 @@ class UIConfigState:
                 osb_vertical_font_size_mult=data.get(
                     "outside_text_osb_vertical_font_size_mult", 1.0
                 ),
-                osb_use_subpixel_rendering=data.get(
-                    "outside_text_osb_use_subpixel_rendering", True
-                ),
-                osb_font_hinting=data.get("outside_text_osb_font_hinting", "none"),
                 bbox_expansion_percent_width=data.get(
                     "outside_text_bbox_expansion_percent_width", 0.1
                 ),
@@ -672,10 +660,6 @@ class UIConfigState:
                 line_spacing_mult=data.get(
                     "line_spacing_mult", defaults["line_spacing_mult"]
                 ),
-                use_subpixel_rendering=data.get(
-                    "use_subpixel_rendering", defaults["use_subpixel_rendering"]
-                ),
-                font_hinting=data.get("font_hinting", defaults["font_hinting"]),
                 use_ligatures=data.get("use_ligatures", defaults["use_ligatures"]),
                 hyphenate_before_scaling=data.get(
                     "hyphenate_before_scaling",
@@ -772,7 +756,7 @@ class UIConfigState:
                 overlap_llm_with_inpaint=bool(
                     data.get(
                         "overlap_llm_with_inpaint",
-                        defaults.get("overlap_llm_with_inpaint", False),
+                        defaults.get("overlap_llm_with_inpaint", True),
                     )
                 ),
             ),
@@ -917,8 +901,6 @@ def map_ui_to_backend_config(
         max_font_size=ui_state.rendering.max_font_size,
         min_font_size=ui_state.rendering.min_font_size,
         line_spacing_mult=ui_state.rendering.line_spacing_mult,
-        use_subpixel_rendering=ui_state.rendering.use_subpixel_rendering,
-        font_hinting=ui_state.rendering.font_hinting,
         use_ligatures=ui_state.rendering.use_ligatures,
         hyphenate_before_scaling=ui_state.rendering.hyphenate_before_scaling,
         hyphen_penalty=ui_state.rendering.hyphen_penalty,
@@ -983,8 +965,6 @@ def map_ui_to_backend_config(
         osb_auto_vertical_text=ui_state.outside_text.osb_auto_vertical_text,
         osb_vertical_line_spacing_mult=ui_state.outside_text.osb_vertical_line_spacing_mult,
         osb_vertical_font_size_mult=ui_state.outside_text.osb_vertical_font_size_mult,
-        osb_use_subpixel_rendering=ui_state.outside_text.osb_use_subpixel_rendering,
-        osb_font_hinting=ui_state.outside_text.osb_font_hinting,
         bbox_expansion_percent_width=ui_state.outside_text.bbox_expansion_percent_width,
         bbox_expansion_percent_height=ui_state.outside_text.bbox_expansion_percent_height,
         osb_render_expansion_narrow_multiplier=ui_state.outside_text.osb_render_expansion_narrow_multiplier,

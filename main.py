@@ -53,7 +53,8 @@ def main():
         type=int,
         default=1,
         help=(
-            "Batch only: number of parallel workers, one per page (1-20, default: 1)"
+            "Batch only: number of parallel workers, one per page (1-20, default: 1). "
+            "LLM calls only run in parallel when --batch-previous-context-texts is 0"
         ),
     )
     parser.add_argument(
@@ -65,14 +66,16 @@ def main():
         ),
     )
     parser.add_argument(
-        "--retry-failed-once",
-        action="store_true",
-        help="Batch only: automatically retry each failed image once at the very end",
+        "--no-retry-failed-once",
+        dest="retry_failed_once",
+        action="store_false",
+        help="Batch only: do not retry each failed image once at the very end",
     )
     parser.add_argument(
-        "--overlap-llm-with-inpaint",
-        action="store_true",
-        help="Run LLM translation concurrently with inpainting",
+        "--no-overlap-llm-with-inpaint",
+        dest="overlap_llm_with_inpaint",
+        action="store_false",
+        help="Do not run LLM translation concurrently with inpainting",
     )
     parser.add_argument(
         "--batch-previous-context-images",
@@ -350,7 +353,10 @@ def main():
         help="Controls diversity. Lower is more focused, higher is more random (0.0-1.0)",
     )
     parser.add_argument(
-        "--top-k", type=int, default=1, help="Limits sampling pool to top K tokens"
+        "--top-k",
+        type=int,
+        default=None,
+        help="Limits sampling pool to top K tokens (default: provider default)",
     )
     parser.add_argument(
         "--max-tokens",
@@ -434,20 +440,6 @@ def main():
         type=float,
         default=1.0,
         help="Line spacing multiplier for rendering text (1.0 = standard)",
-    )
-    parser.add_argument(
-        "--no-subpixel-rendering",
-        dest="use_subpixel_rendering",
-        action="store_false",
-        help="Disable subpixel rendering for speech bubble text (disable for OLED displays)",
-    )
-    parser.set_defaults(use_subpixel_rendering=True)
-    parser.add_argument(
-        "--font-hinting",
-        type=str,
-        choices=["none", "slight", "normal", "full"],
-        default="none",
-        help="Font hinting mode for speech bubble text",
     )
     parser.add_argument(
         "--use-ligatures",
@@ -839,19 +831,6 @@ def main():
         help="Line spacing multiplier for OSB text (0.5-2.0)",
     )
     parser.add_argument(
-        "--osb-use-subpixel",
-        action="store_true",
-        default=True,
-        help="Enable subpixel rendering for OSB text (disable for OLED displays)",
-    )
-    parser.add_argument(
-        "--osb-font-hinting",
-        type=str,
-        choices=["none", "slight", "normal", "full"],
-        default="none",
-        help="Font hinting mode for OSB text",
-    )
-    parser.add_argument(
         "--osb-padding-pixels",
         type=float,
         default=4.0,
@@ -1062,6 +1041,7 @@ def main():
         RenderingConfig,
         TranslationConfig,
     )
+    from core.llm_defaults import get_provider_sampling_defaults
     from core.pipeline import batch_translate_images, translate_and_render
     from core.validation import (
         autodetect_yolo_model_path,
@@ -1339,7 +1319,11 @@ def main():
             model_name=model_name,
             temperature=args.temperature,
             top_p=args.top_p,
-            top_k=args.top_k,
+            top_k=(
+                args.top_k
+                if args.top_k is not None
+                else get_provider_sampling_defaults(provider)["top_k"]
+            ),
             max_tokens=args.max_tokens,
             input_language=args.input_language,
             output_language=args.output_language,
@@ -1384,8 +1368,6 @@ def main():
             max_font_size=args.max_font_size,
             min_font_size=args.min_font_size,
             line_spacing_mult=args.line_spacing_mult,
-            use_subpixel_rendering=args.use_subpixel_rendering,
-            font_hinting=args.font_hinting,
             use_ligatures=args.use_ligatures,
             hyphenate_before_scaling=args.hyphenate_before_scaling,
             hyphen_penalty=args.hyphen_penalty,
@@ -1436,8 +1418,6 @@ def main():
             osb_auto_vertical_text=args.osb_auto_vertical_text,
             osb_vertical_line_spacing_mult=args.osb_vertical_line_spacing_mult,
             osb_vertical_font_size_mult=args.osb_vertical_font_size_mult,
-            osb_use_subpixel_rendering=args.osb_use_subpixel,
-            osb_font_hinting=args.osb_font_hinting,
             bbox_expansion_percent_width=args.osb_bbox_expansion_width,
             bbox_expansion_percent_height=args.osb_bbox_expansion_height,
             osb_render_expansion_narrow_multiplier=args.osb_render_expansion_narrow,
