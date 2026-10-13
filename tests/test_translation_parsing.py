@@ -1,7 +1,7 @@
 import pytest
 
 from core.services.translation import (
-    _build_hy_mt2_prompt,
+    _build_system_prompt_hy_mt2,
     _check_ocr_failure,
     _format_previous_context_texts,
     _join_ocr_lines,
@@ -95,17 +95,21 @@ def test_format_previous_context_empty(texts):
     assert _format_previous_context_texts(texts) == ""
 
 
-def test_hy_mt2_prompt_converts_glossary_and_embeds_json():
-    prompt = _build_hy_mt2_prompt(
-        "English",
-        ["こんにちは"],
-        "- ナルト -> Naruto\nサスケ => Sasuke\nKeep honorifics",
+def test_hy_mt2_system_prompt_adds_optional_rules_only_when_enabled():
+    base = _build_system_prompt_hy_mt2("English", input_language="Japanese")
+    assert base.startswith("You translate Japanese comics into natural English.")
+    assert "(e.g. **THUD**)" in base
+    for marker in ("Previous pages", "automatic OCR", "adult comic"):
+        assert marker not in base
+
+    full = _build_system_prompt_hy_mt2(
+        "French", ero_doujinshi_mode=True, ocr_correction=True, previous_context=True
     )
-    assert "ナルト translates to Naruto" in prompt
-    assert "サスケ translates to Sasuke" in prompt
-    assert "Keep honorifics" in prompt
-    assert "Keep honorifics" not in prompt.split("Translate the following")[0]
-    assert prompt.endswith('{"1": "こんにちは"}')
+    for marker in ("Previous pages", "automatic OCR", "adult comic"):
+        assert marker in full
+    # English examples would leak into other target languages
+    assert "(e.g. **THUD**)" not in full
+    assert "write yours in French" in full
 
 
 def test_pair_context_lines_skips_failures():

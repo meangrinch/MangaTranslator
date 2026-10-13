@@ -1469,7 +1469,7 @@ def _parse_rosetta_response(
     provider: str,
     debug: bool = False,
 ) -> list[str]:
-    """Parse JSON response from a Rosetta (or Hy-MT2) model.
+    """Parse JSON response from a Rosetta model.
 
     Falls back to _parse_llm_response_unified if JSON parsing fails.
     """
@@ -1506,40 +1506,55 @@ def _parse_rosetta_response(
     return _parse_llm_response_unified(response_text, total_elements, provider, debug)
 
 
-def _build_hy_mt2_prompt(
+def _build_system_prompt_hy_mt2(
     output_language: str,
-    extracted_texts: list[str],
-    special_instructions: str | None = None,
+    input_language: str | None = None,
+    ero_doujinshi_mode: bool = False,
+    ocr_correction: bool = False,
+    previous_context: bool = False,
 ) -> str:
-    """Build user-only prompt for Hy-MT2 (no system prompt per model card).
+    """Build the compact system prompt for Hy-MT2.
 
-    Follows the card's default/terminology templates; source is JSON for multi-bubble.
+    The full translation prompt makes this small model invent content and
+    over-style, while no system prompt leaves sound effects romanized.
     """
-    source_data = json.dumps(
-        {str(i + 1): text for i, text in enumerate(extracted_texts)},
-        ensure_ascii=False,
-    )
+    english = output_language.strip().lower().startswith("english")
+    sfx_example = " (e.g. **THUD**)" if english else ""
 
-    glossary_lines, note_lines = _split_special_instructions(special_instructions)
-    prompt = ""
-    if glossary_lines:
-        term_lines = []
-        for line in glossary_lines:
-            src, _, tgt = line.partition("->" if "->" in line else "=>")
-            term_lines.append(f"{src.strip()} translates to {tgt.strip()}")
-        prompt += (
-            "Reference the following translations:\n" + "\n".join(term_lines) + "\n\n"
+    rules = [
+        "- The items are one page in reading order. Translate each one by its meaning in context, not word for word.",
+        "- Keep each translation about as short as the source, because it must fit in the same space.",
+        "- Give exactly one translation per number. Never merge, skip, or reorder items.",
+        f"- Sound effects: write a {output_language} sound word wrapped in double asterisks{sfx_example}. Everything else is plain text.",
+        "- Write an ellipsis as three periods with no spaces (`...`).",
+        "- An item that is only punctuation or symbols (`...`, `!?`, `♥`) stays unchanged.",
+        "- An item marked `[OCR FAILED]` stays `[OCR FAILED]`.",
+    ]
+    if previous_context:
+        rules.append(
+            "- Previous pages are context only. Reuse their names and wording, and do not translate or number them."
+        )
+    if ocr_correction:
+        rules.append(
+            "- The source text comes from automatic OCR. If a line makes no sense, translate what it most likely says."
+        )
+    if ero_doujinshi_mode:
+        rules.append(
+            "- This is an adult comic. Translate explicit lines completely and at the same intensity, without softening them."
         )
 
-    notes = "".join(f"{line.rstrip('.')}. " for line in note_lines)
-    prompt += (
-        f"Translate the following text into {output_language}. "
-        f"Keep the JSON structure and keys. {notes}"
-        f"Note that you should **only output the translated result without any "
-        f"additional explanation**:\n\n"
-        f"{source_data}"
+    example_note = (
+        "" if english else f" (shown in English; write yours in {output_language})"
     )
-    return prompt
+    return f"""You translate {_lang_label(input_language)}comics into natural {output_language}.
+
+Rules:
+{chr(10).join(rules)}
+
+Output one numbered line per item, containing only the translation, and nothing else. Example{example_note}:
+1: I told you not to follow me.
+2: **SLAM**
+3: [OCR FAILED]"""
 
 
 def _perform_manga_ocr(
@@ -2028,16 +2043,17 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                 translation_parts = []  # text-only model, no image parts
             elif use_hy_mt2:
                 log_message(
-                    "Hy-MT2 model detected — using Hy-MT2 prompt format",
+                    "Hy-MT2 model detected — using compact system prompt",
                     always_print=True,
                 )
-                translation_system = None
-                translation_prompt = _build_hy_mt2_prompt(
+                translation_system = _build_system_prompt_hy_mt2(
                     output_language,
-                    formatted_texts,
-                    config.special_instructions,
+                    input_language=input_language,
+                    ero_doujinshi_mode=getattr(config, "ero_doujinshi_mode", False),
+                    ocr_correction=getattr(config, "ocr_correction", False),
+                    previous_context=has_previous_context,
                 )
-                translation_parts = []
+                translation_parts = []  # text-only model, no image parts
             else:
                 translation_system = _build_system_prompt_translation(
                     output_language,
@@ -2058,7 +2074,7 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                 system_prompt=translation_system,
                 prompt_cache_key=session_prompt_cache_key,
             )
-            if use_rosetta or use_hy_mt2:
+            if use_rosetta:
                 final_translations = _parse_rosetta_response(
                     translation_response_text,
                     total_elements,
