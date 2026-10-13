@@ -37,8 +37,8 @@ MLモデルを活用してマンガ、Webtoon（Manhwa）、中国漫画（Manhu
 ### 1. ダウンロード
 
 - **ポータブルパッケージ（推奨）：** [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable) からポータブルビルドをダウンロードします。
-  - Windows： 事前準備は不要です。
-  - Linux / macOS： Python 3.10以上およびGitが必要です。
+  - Windows：事前準備は不要です。
+  - Linux / macOS：Python 3.10以上およびGitが必要です。
 - **ソースからインストール：**
   ```bash
   git clone https://github.com/meangrinch/MangaTranslator.git
@@ -53,7 +53,7 @@ MLモデルを活用してマンガ、Webtoon（Manhwa）、中国漫画（Manhu
 
 ### 2. 設定
 
-- **プロバイダー：** Web UIの Config → Translation 画面でLLMプロバイダー（Google、OpenAI、Anthropic、DeepSeekなど）を選択してAPIキーを入力するか、ローカルのOpenAI互換エンドポイント（llama.cppなど）を使用します。「Save Config」をクリックすると設定がセッションを越えて保持されます。
+- **プロバイダー：** Web UIの Config → Translation 画面でLLMプロバイダー（Google、OpenAI、Anthropic、DeepSeekなど）を選択してAPIキーを入力するか、ローカルのOpenAI互換エンドポイント（llama.cppなど）を使用します。「Save Config」をクリックするとAPIキーや設定がセッションを越えて保持されます。
 - **吹き出し外テキスト（任意）：** Config → OSB Text 画面で [deepghs/AnimeText_yolo](https://huggingface.co/deepghs/AnimeText_yolo) へのアクセス権を持つHugging Faceトークンを設定します。
 - **環境変数：** Web UIとCLIの両方で利用できるよう、環境変数（`GEMINI_API_KEY`、`HF_TOKEN` など）に認証情報を設定することも可能です。
 
@@ -78,11 +78,11 @@ MLモデルを活用してマンガ、Webtoon（Manhwa）、中国漫画（Manhu
 
 - **自動化**：ワンクリック翻訳、手動操作は不要
 - **インターフェース**：Web UI (Gradio) および CLI
-- **処理**：フォルダ構造を保持した単一画像、フォルダ、ZIPアーカイブの一括バッチ処理
+- **処理**：フォルダ構造を保持した単一画像、フォルダ、ZIPアーカイブのバッチ処理
 - **検出**：吹き出しおよび吹き出し外テキストの検出（YOLO、SAM 2.1/3）
 - **消去**：吹き出し内および背景テキストのインペインティング消去（FLUX.2 Klein、FLUX.1 Kontext、またはOpenCV）
 - **翻訳**：60以上の言語に対応したOCRと翻訳（クラウドAPIまたはローカルLLM）
-- **描画**：文字揃え、自動改行、カスタムフォントパックに対応したテキストレンダリング
+- **描画**：文字揃え、自動改行、カスタムフォントパックに対応したカスタムテキストレンダリング
 - **アップスケーリング**：テキスト領域およびページ全体のイラストの高解像度化（2x-AnimeSharpV4）
 - **設定**：多様なページレイアウトに対応し、出力品質を微調整できる柔軟な設定項目
 
@@ -117,7 +117,7 @@ MangaTranslatorはオープンソースで無料です。作業時間の短縮�
 - 作者：[grinnch](https://github.com/meangrinch)
 
 <details>
-<summary><b>ML モデルと関連ライブラリ</b></summary>
+<summary><b>MLモデルと関連ライブラリ</b></summary>
 
 - YOLOv8m Speech Bubble Detector: [kitsumed](https://huggingface.co/kitsumed/yolov8m_seg-speech-bubble)
 - Manga109 Speech Bubble Detector: [huyvux3005](https://huggingface.co/huyvux3005/manga109-segmentation-bubble)

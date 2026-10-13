@@ -70,7 +70,7 @@ One-click app that translates manga, manhwa, manhua, and comics using ML models.
 *For additional examples, see [CLI](docs/CLI.md).*
 
 > [!TIP]
-> You can enable `Cleaning-only Mode` by navigating to Config -> Other in the Web UI, or pass `--cleaning-only` in the CLI, to remove text without translating (e.g., for manual scanlation).
+> You can enable `Cleaning-only Mode` by navigating to Config → Other in the Web UI, or pass `--cleaning-only` in the CLI, to remove text without translating (e.g., for manual scanlation).
 
 ---
 
