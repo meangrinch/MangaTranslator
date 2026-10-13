@@ -426,7 +426,7 @@ def main():
     parser.add_argument(
         "--max-font-size",
         type=int,
-        default=16,
+        default=32,
         help="Max font size for rendering text (px)",
     )
     parser.add_argument(
@@ -435,6 +435,16 @@ def main():
         default=8,
         help="Min font size for rendering text (px)",
     )
+    parser.add_argument(
+        "--no-auto-font-size",
+        dest="auto_font_size",
+        action="store_false",
+        help=(
+            "Disable matching each page's speech bubble font size to its original lettering "
+            "and use the largest size that fits within the min/max font size range instead"
+        ),
+    )
+    parser.set_defaults(auto_font_size=True)
     parser.add_argument(
         "--line-spacing-mult",
         type=float,
@@ -1367,6 +1377,7 @@ def main():
             font_dir=args.font_dir,
             max_font_size=args.max_font_size,
             min_font_size=args.min_font_size,
+            auto_font_size=args.auto_font_size,
             line_spacing_mult=args.line_spacing_mult,
             use_ligatures=args.use_ligatures,
             hyphenate_before_scaling=args.hyphenate_before_scaling,

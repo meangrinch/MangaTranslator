@@ -52,7 +52,8 @@
   - 确保启用了“面板感知排序 (Use Panel-aware Sorting)”
 
 - **文字太大或太小：**
-  - 调整“最大字号 (Max Font Size)”和“最小字号 (Min Font Size)”的范围
+  - 调整“最大字号 (Max Font Size)”和“最小字号 (Min Font Size)”的范围（“自动字号 (Auto Font Size)”会在此范围内取值）
+  - 取消勾选“自动字号 (Auto Font Size)”，改为使用每个气泡能容纳的最大字号，而不是匹配原始文字大小
 
 - **为不同的气泡类型使用不同的字体（例如：心理活动 vs. 说话）：**
   - 用您想要的任何字体文件替换该字体的斜体（italic）/粗体（bold）/粗斜体（bold+italic）变体，只需确保文件名中包含这些关键字，以便程序能检测到变体

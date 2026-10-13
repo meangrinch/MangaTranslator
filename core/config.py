@@ -107,8 +107,9 @@ class RenderingConfig:
     """Configuration for rendering translated text."""
 
     font_dir: str = "./fonts"
-    max_font_size: int = 16
+    max_font_size: int = 32
     min_font_size: int = 8
+    auto_font_size: bool = True
     line_spacing_mult: float = 1.0
     use_ligatures: bool = False
     hyphenate_before_scaling: bool = True

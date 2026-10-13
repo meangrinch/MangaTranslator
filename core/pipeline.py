@@ -39,6 +39,7 @@ from .image.detection import detect_panels, detect_speech_bubbles
 from .image.image_utils import (
     convert_image_to_target_mode,
     cv2_to_pil,
+    estimate_glyph_size,
     pil_to_cv2,
     resize_to_max_side,
     save_image_with_compression,
@@ -60,6 +61,7 @@ from .services.translation import (
     call_translation_api_batch,
     prepare_bubble_images_for_translation,
 )
+from .text.font_manager import find_font_variants, get_cap_height_ratio
 from .text.placeholders import generate_test_placeholders
 from .text.text_processing import supports_long_word_breaking
 from .text.text_renderer import render_text_skia
@@ -71,6 +73,86 @@ if TYPE_CHECKING:
 ENABLE_COMPONENT_ORDER_DEBUG = False
 PREVIOUS_CONTEXT_CACHE_MAX_SIZE = 32
 NATURAL_SORT_TOKEN_RE = re.compile(r"(\d+)")
+# Translated cap height relative to the measured original lettering. CJK glyphs fill the em
+# box and their translations run longer, so professional lettering sits near 0.75 of it.
+# Other scripts are measured at about cap height already, so they are matched as is.
+AUTO_FONT_CJK_GLYPH_RATIO = 0.75
+AUTO_FONT_CJK_LANGUAGE_PREFIXES = ("japanese", "korean", "chinese")
+# Typical translated cap height on a 1 MP page, assumed when a page has no measurable text
+AUTO_FONT_TYPICAL_CAP_HEIGHT = 13.0
+# Ink parts at which one bubble's measurement is fully trusted. Bubbles with fewer count for
+# less, and a page that cannot reach it in total (e.g. a lone "..." bubble) is unmeasurable.
+AUTO_FONT_TRUSTED_INK_PARTS = 10
+
+
+def _page_glyph_size(
+    page_image: np.ndarray, bubbles_info: list[dict[str, Any]], full_width: bool
+) -> float | None:
+    """Typical original lettering size across the page's speech bubbles, None if unmeasurable."""
+    gray = (
+        page_image
+        if page_image.ndim == 2
+        else cv2.cvtColor(page_image, cv2.COLOR_BGR2GRAY)
+    )
+    measured = []
+    for info in bubbles_info:
+        mask = info.get("mask")
+        if mask is None:
+            continue
+        size_and_parts = estimate_glyph_size(gray, info["bbox"], mask, full_width)
+        if size_and_parts:
+            size, parts = size_and_parts
+            measured.append((size, min(parts, AUTO_FONT_TRUSTED_INK_PARTS)))
+    total_weight = sum(weight for _, weight in measured)
+    if total_weight < AUTO_FONT_TRUSTED_INK_PARTS:
+        return None
+
+    # Weighted median, so ellipses and shouts in a few giant strokes are outvoted
+    measured.sort()
+    weight_so_far = 0
+    for i, (size, weight) in enumerate(measured):
+        weight_so_far += weight
+        if weight_so_far * 2 > total_weight:
+            return size
+        if weight_so_far * 2 == total_weight:
+            return (size + measured[i + 1][0]) / 2
+
+
+def _resolve_main_max_font(
+    config: MangaTranslatorConfig,
+    page_image: np.ndarray,
+    bubbles_info: list[dict[str, Any]],
+    min_font: int,
+    max_font: int,
+    processing_scale: float,
+    strip_glyph_size: list[float] | None,
+    verbose: bool,
+) -> int:
+    """Speech bubble max font size, lowered to the auto size when that is enabled."""
+    if not config.rendering.auto_font_size:
+        return max_font
+
+    cjk_source = config.translation.input_language.lower().startswith(
+        AUTO_FONT_CJK_LANGUAGE_PREFIXES
+    )
+    if strip_glyph_size:
+        glyph_size = strip_glyph_size[0]
+    else:
+        glyph_size = _page_glyph_size(page_image, bubbles_info, cjk_source)
+        if glyph_size is not None and strip_glyph_size is not None:
+            strip_glyph_size.append(glyph_size)
+
+    if glyph_size is None:
+        cap_height = AUTO_FONT_TYPICAL_CAP_HEIGHT * processing_scale
+    else:
+        cap_height = glyph_size * (AUTO_FONT_CJK_GLYPH_RATIO if cjk_source else 1.0)
+    regular_font_path = find_font_variants(config.rendering.font_dir, verbose=verbose)[
+        "regular"
+    ]
+    auto_max = round(cap_height / get_cap_height_ratio(str(regular_font_path)))
+    auto_max = max(min_font, min(max_font, auto_max))
+    log_message(f"Auto font size: {auto_max}", verbose=verbose)
+    return auto_max
 
 
 def _should_overlap_llm_with_inpaint(config: MangaTranslatorConfig) -> bool:
@@ -705,6 +787,7 @@ def _translate_strip(
         int(getattr(config.translation, "previous_context_text_count", 0) or 0), 1
     )
     section_texts: list[list[str]] = []
+    strip_glyph_size: list[float] = []
 
     def context_texts() -> list[list[str]]:
         incoming = (
@@ -732,6 +815,7 @@ def _translate_strip(
                 previous_context_images=previous_context_images,
                 previous_context_texts_provider=context_texts,
                 ocr_texts_out=texts,
+                strip_glyph_size=strip_glyph_size,
             )
             sections.append(
                 section if section.mode == target_mode else section.convert(target_mode)
@@ -774,6 +858,7 @@ def translate_and_render(
     previous_context_texts: list[list[str]] | None = None,
     previous_context_texts_provider: Callable[[], list[list[str]]] | None = None,
     ocr_texts_out: list[str] | None = None,
+    strip_glyph_size: list[float] | None = None,
 ):
     """
     Main function to translate manga speech bubbles and render translations using a config object.
@@ -791,6 +876,9 @@ def translate_and_render(
             (in reading order, each joined to its translation as `source → translation`) are
             appended so the orchestrator can chain them as previous-page text context for
             subsequent pages.
+        strip_glyph_size: Optional mutable list shared by the sections of one long strip. The
+            first section with measurable lettering stores its glyph size, and later sections
+            reuse it so auto font size stays the same along the strip.
 
     Returns:
         PIL.Image: Final translated image
@@ -1456,6 +1544,17 @@ def translate_and_render(
                         final_image_to_save = pil_cleaned_image
                 else:
                     if getattr(config, "test_mode", False):
+                        # Size placeholders against the same max the renderer will use
+                        main_max_font = _resolve_main_max_font(
+                            config,
+                            original_cv_image,
+                            processed_bubbles_info,
+                            main_min_font,
+                            main_max_font,
+                            processing_scale,
+                            strip_glyph_size,
+                            verbose,
+                        )
                         translated_texts = generate_test_placeholders(
                             sorted_bubble_data=sorted_bubble_data,
                             processed_bubbles_info=processed_bubbles_info,
@@ -1626,6 +1725,16 @@ def translate_and_render(
                         )
 
                 # Render Translations
+                main_max_font = _resolve_main_max_font(
+                    config,
+                    original_cv_image,
+                    processed_bubbles_info,
+                    main_min_font,
+                    main_max_font,
+                    processing_scale,
+                    strip_glyph_size,
+                    verbose,
+                )
                 bubble_render_info_map = {
                     tuple(info["bbox"]): {
                         "color": info["color"],

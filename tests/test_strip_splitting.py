@@ -55,10 +55,17 @@ def test_strip_sections_chain_context_share_one_scale_and_stitch_back(
 ):
     strip = _noise_strip(1400).convert("RGB")
     seen = []
+    glyph_size_lists = []
 
     def fake_translate_and_render(
-        section_path, config, previous_context_texts_provider, ocr_texts_out, **_
+        section_path,
+        config,
+        previous_context_texts_provider,
+        ocr_texts_out,
+        strip_glyph_size,
+        **_,
     ):
+        glyph_size_lists.append(strip_glyph_size)
         seen.append(
             (
                 previous_context_texts_provider(),
@@ -97,6 +104,9 @@ def test_strip_sections_chain_context_share_one_scale_and_stitch_back(
         ([["text 2"]], nominal_scale, False),
     ]
     assert ocr_texts == ["text 1", "text 2", "text 3"]
+    assert glyph_size_lists[0] == [] and all(
+        shared is glyph_size_lists[0] for shared in glyph_size_lists
+    )
     assert np.array_equal(np.asarray(stitched), np.asarray(strip))
     saved = Image.open(output_path).convert("RGB")
     assert np.array_equal(np.asarray(saved), np.asarray(strip))

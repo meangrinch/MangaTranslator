@@ -3,6 +3,7 @@ import os
 from collections import OrderedDict
 from pathlib import Path
 
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.ttLib import TTFont
 
 from utils.exceptions import FontError
@@ -41,7 +42,11 @@ class LRUCache:
 _font_data_cache = LRUCache(max_size=50)
 _font_features_cache = LRUCache(max_size=50)
 _font_cmap_cache = LRUCache(max_size=50)
+_font_cap_height_cache = LRUCache(max_size=50)
 _font_variants_cache: dict[str, dict[str, Path | None]] = {}
+
+# Typical cap height for fonts that have no Latin capitals to measure
+DEFAULT_CAP_HEIGHT_RATIO = 0.7
 
 # Font style detection keywords
 FONT_KEYWORDS = {
@@ -133,6 +138,40 @@ def get_font_cmap(font_path: str) -> set:
 
     _font_cmap_cache.put(font_path, supported_codepoints)
     return supported_codepoints
+
+
+def get_cap_height_ratio(font_path: str) -> float:
+    """
+    Returns the font's capital letter height as a fraction of its em size.
+
+    Measures the outline of "H" because the OS/2 cap height field is often
+    missing or wrong in comic fonts. Results are cached.
+
+    Args:
+        font_path: Path to the font file.
+
+    Returns:
+        Cap height / units per em, or DEFAULT_CAP_HEIGHT_RATIO if the font has no "H".
+    """
+    cached_ratio = _font_cap_height_cache.get(font_path)
+    if cached_ratio is not None:
+        return cached_ratio
+
+    ratio = DEFAULT_CAP_HEIGHT_RATIO
+    try:
+        font = TTFont(font_path, fontNumber=0)
+        glyph_set = font.getGlyphSet()
+        pen = BoundsPen(glyph_set)
+        glyph_set[font.getBestCmap()[ord("H")]].draw(pen)
+        ratio = (pen.bounds[3] - pen.bounds[1]) / font["head"].unitsPerEm
+    except Exception as e:
+        log_message(
+            f"Failed to measure cap height of {os.path.basename(font_path)}: {e}",
+            always_print=True,
+        )
+
+    _font_cap_height_cache.put(font_path, ratio)
+    return ratio
 
 
 def sanitize_text_for_font(text: str, font_path: str, verbose: bool = False) -> str:

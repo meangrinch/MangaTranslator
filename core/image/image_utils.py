@@ -169,6 +169,58 @@ def save_image_with_compression(
         raise ImageProcessingError(f"Failed to save image to {output_path}") from e
 
 
+# How far from the paper level a pixel must be to count as ink
+GLYPH_INK_CONTRAST = 0.55
+GLYPH_MIN_PART_AREA = 6  # Smaller ink specks are noise
+
+
+def estimate_glyph_size(
+    gray: np.ndarray,
+    bbox: tuple[int, int, int, int],
+    mask: np.ndarray,
+    full_width: bool,
+) -> tuple[float, int] | None:
+    """
+    Estimates the size in pixels of the original lettering inside a speech bubble.
+
+    Args:
+        gray: Grayscale page image with the original text still present
+        bbox: Bubble bounding box (x1, y1, x2, y2)
+        mask: Binary mask (0/255) of the bubble interior, same size as gray
+        full_width: Whether the script uses square full-width glyphs (CJK), which may
+                   also be set vertically
+
+    Returns:
+        Approximate glyph size (full glyph if full_width, otherwise letter height) and the
+        number of ink parts it was read from, or None if the bubble holds no text
+    """
+    x1, y1, x2, y2 = (max(0, round(v)) for v in bbox)
+    # Erode so the bubble outline is not read as ink
+    interior = cv2.erode(mask, np.ones((5, 5), np.uint8))[y1:y2, x1:x2] > 0
+    if not interior.any():
+        return None
+
+    crop = gray[y1:y2, x1:x2]
+    paper = float(np.median(crop[interior]))
+    if paper < 128:
+        ink = crop > paper + GLYPH_INK_CONTRAST * (255 - paper)
+    else:
+        ink = crop < paper * (1 - GLYPH_INK_CONTRAST)
+
+    _, _, stats, _ = cv2.connectedComponentsWithStats(
+        (ink & interior).astype(np.uint8), 8
+    )
+    parts = stats[1:][stats[1:, cv2.CC_STAT_AREA] >= GLYPH_MIN_PART_AREA]
+    if len(parts) == 0:
+        return None
+
+    # Ruby text and detached strokes are smaller than a whole glyph, so read the upper tail
+    sizes = parts[:, cv2.CC_STAT_HEIGHT]
+    if full_width:
+        sizes = np.maximum(sizes, parts[:, cv2.CC_STAT_WIDTH])
+    return float(np.percentile(sizes, 90)), len(parts)
+
+
 def calculate_centroid_expansion_box(
     cleaned_mask: np.ndarray, padding_pixels: float = 4.0, verbose: bool = False
 ) -> tuple[tuple[int, int, int, int], tuple[float, float]]:

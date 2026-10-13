@@ -95,8 +95,9 @@ class UITranslationLLMSettings:
 class UIRenderingSettings:
     """UI state for rendering settings."""
 
-    max_font_size: int = 16
+    max_font_size: int = 32
     min_font_size: int = 8
+    auto_font_size: bool = True
     line_spacing_mult: float = 1.0
     use_ligatures: bool = False
     hyphenate_before_scaling: bool = True
@@ -300,6 +301,7 @@ class UIConfigState:
             "font_pack": self.font_pack,
             "max_font_size": self.rendering.max_font_size,
             "min_font_size": self.rendering.min_font_size,
+            "auto_font_size": self.rendering.auto_font_size,
             "line_spacing_mult": self.rendering.line_spacing_mult,
             "use_ligatures": self.rendering.use_ligatures,
             "hyphenate_before_scaling": self.rendering.hyphenate_before_scaling,
@@ -657,6 +659,9 @@ class UIConfigState:
             rendering=UIRenderingSettings(
                 max_font_size=data.get("max_font_size", defaults["max_font_size"]),
                 min_font_size=data.get("min_font_size", defaults["min_font_size"]),
+                auto_font_size=data.get(
+                    "auto_font_size", defaults.get("auto_font_size", True)
+                ),
                 line_spacing_mult=data.get(
                     "line_spacing_mult", defaults["line_spacing_mult"]
                 ),
@@ -900,6 +905,7 @@ def map_ui_to_backend_config(
         font_dir=str(font_dir_path),
         max_font_size=ui_state.rendering.max_font_size,
         min_font_size=ui_state.rendering.min_font_size,
+        auto_font_size=ui_state.rendering.auto_font_size,
         line_spacing_mult=ui_state.rendering.line_spacing_mult,
         use_ligatures=ui_state.rendering.use_ligatures,
         hyphenate_before_scaling=ui_state.rendering.hyphenate_before_scaling,

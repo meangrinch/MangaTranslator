@@ -1443,7 +1443,7 @@ def create_layout(
                             max_font_size = gr.Slider(
                                 5,
                                 50,
-                                value=saved_settings.get("max_font_size", 16),
+                                value=saved_settings.get("max_font_size", 32),
                                 step=1,
                                 label="Max Font Size (px)",
                                 info="The largest font size the renderer will attempt to use.",
@@ -1455,6 +1455,15 @@ def create_layout(
                                 step=1,
                                 label="Min Font Size (px)",
                                 info="The smallest font size the renderer will attempt to use before giving up.",
+                            )
+                            auto_font_size = gr.Checkbox(
+                                value=saved_settings.get("auto_font_size", True),
+                                label="Auto Font Size",
+                                info=(
+                                    "Match each page's speech bubble font size to its original "
+                                    "lettering, within the Min and Max Font Size limits. Disable to "
+                                    "use the largest size that fits each bubble."
+                                ),
                             )
                             line_spacing_mult = gr.Slider(
                                 0.5,
@@ -2446,6 +2455,7 @@ def create_layout(
             force_cache_translations,
             max_font_size,
             min_font_size,
+            auto_font_size,
             line_spacing_mult,
             use_ligatures,
             output_format,
@@ -2588,6 +2598,7 @@ def create_layout(
             force_cache_translations,
             max_font_size,
             min_font_size,
+            auto_font_size,
             line_spacing_mult,
             use_ligatures,
             output_format,
@@ -2735,6 +2746,7 @@ def create_layout(
             font_dropdown,
             max_font_size,
             min_font_size,
+            auto_font_size,
             line_spacing_mult,
             use_ligatures,
             output_format,
@@ -2879,6 +2891,7 @@ def create_layout(
             font_dropdown,
             max_font_size,
             min_font_size,
+            auto_font_size,
             line_spacing_mult,
             use_ligatures,
             output_format,

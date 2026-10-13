@@ -52,7 +52,8 @@
   - Ensure "Use Panel-aware Sorting" is enabled
 
 - **Text too large/small:**
-  - Adjust "Max Font Size" and "Min Font Size" ranges
+  - Adjust "Max Font Size" and "Min Font Size" ranges ("Auto Font Size" stays within them)
+  - Disable "Auto Font Size" to use the largest size that fits each bubble instead of matching the original text size
 
 - **Using different fonts for different bubble types (e.g., thoughts vs. speech):**
   - Replace the italic/bold/bold+italic variants of a font with any font file you want, just ensure the filenames contain one of those keywords so they are detected as variants
