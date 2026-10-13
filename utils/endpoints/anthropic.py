@@ -1,11 +1,10 @@
 import json
-import time
 from typing import Any
-
-import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
+
+from ._http import COMMON_STATUS_HINTS, post_with_retries
 
 
 def _claude_capability_flag(generation_config: dict[str, Any], key: str) -> bool:
@@ -208,119 +207,61 @@ def call_anthropic_endpoint(
     payload = {k: v for k, v in payload.items() if v is not None}
 
     content_blocks: list[dict[str, Any]] = []
-    for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2**attempt), 16.0)
-        try:
+
+    def parse(result: dict[str, Any]) -> tuple[str | None, bool]:
+        """Return the text received so far and whether the turn paused."""
+        if result.get("type") == "error":
+            error_data = result.get("error", {})
+            error_type = error_data.get("type", "unknown_error")
+            error_message = error_data.get("message", "No error message provided.")
+            raise TranslationError(
+                f"Anthropic API returned error: {error_type} - {error_message}"
+            )
+
+        if isinstance(result.get("content"), list):
+            content_blocks.extend(result["content"])
+        if not content_blocks:
+            stop_reason = result.get("stop_reason")
+            stop_details_text = ""
+            if stop_reason == "refusal" and result.get("stop_details"):
+                stop_details_text = (
+                    f". Stop details: "
+                    f"{json.dumps(result['stop_details'], ensure_ascii=False)}"
+                )
             log_message(
-                f"Anthropic API request (attempt {attempt + 1}/{max_retries + 1})",
+                f"No text content in Anthropic response. Stop reason: {stop_reason}{stop_details_text}",
+                always_print=True,
+            )
+            log_message(
+                f"Full response: {json.dumps(result, indent=2)}",
                 verbose=debug,
             )
+            return None, False
 
-            response = requests.post(
-                url, headers=headers, json=payload, timeout=timeout
-            )
-            response.raise_for_status()
+        # Citations split one answer across text blocks, and tool blocks
+        # separate a preamble from the answer that follows them
+        text = "".join(
+            block.get("text", "") if block.get("type") == "text" else "\n"
+            for block in content_blocks
+        ).strip()
+        return text, result.get("stop_reason") == "pause_turn"
 
-            log_message("Processing Anthropic response", verbose=debug)
-            try:
-                result = response.json()
-
-                if result.get("type") == "error":
-                    error_data = result.get("error", {})
-                    error_type = error_data.get("type", "unknown_error")
-                    error_message = error_data.get(
-                        "message", "No error message provided."
-                    )
-                    raise TranslationError(
-                        f"Anthropic API returned error: {error_type} - {error_message}"
-                    )
-
-                if isinstance(result.get("content"), list):
-                    content_blocks += result["content"]
-                if content_blocks:
-                    # A long server-tool turn pauses; sending it back as-is resumes
-                    # it. Continuations share the retry budget.
-                    if (
-                        result.get("stop_reason") == "pause_turn"
-                        and attempt < max_retries
-                    ):
-                        messages[1:] = [
-                            {"role": "assistant", "content": content_blocks}
-                        ]
-                        continue
-
-                    # Citations split one answer across text blocks, and tool blocks
-                    # separate a preamble from the answer that follows them
-                    return "".join(
-                        block.get("text", "") if block.get("type") == "text" else "\n"
-                        for block in content_blocks
-                    ).strip()
-
-                else:
-                    stop_reason = result.get("stop_reason")
-                    stop_details_text = ""
-                    if stop_reason == "refusal" and result.get("stop_details"):
-                        stop_details_text = (
-                            f". Stop details: "
-                            f"{json.dumps(result['stop_details'], ensure_ascii=False)}"
-                        )
-                    log_message(
-                        f"No text content in Anthropic response. Stop reason: {stop_reason}{stop_details_text}",
-                        always_print=True,
-                    )
-                    log_message(
-                        f"Full response: {json.dumps(result, indent=2)}",
-                        verbose=debug,
-                    )
-                    return None
-
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise TranslationError(
-                    f"Error processing successful Anthropic API response: {e!s}"
-                ) from e
-
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code
-            error_text = e.response.text[:500]
-
-            if status_code == 429 and attempt < max_retries:
-                log_message(
-                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
-                )
-                time.sleep(current_delay)
-                continue
-            else:
-                error_reason = f"Status {status_code}: {error_text}"
-                if status_code == 429 and attempt == max_retries:
-                    error_reason = (
-                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
-                    )
-                elif status_code == 400:
-                    error_reason += " (Check payload)"
-                elif status_code == 401:
-                    error_reason += " (Check API key)"
-                elif status_code == 403:
-                    error_reason += " (Permission denied, check API key/plan)"
-                log_message(
-                    f"Anthropic API HTTP Error: {error_reason}", always_print=True
-                )
-                raise TranslationError(
-                    f"Anthropic API HTTP Error: {error_reason}"
-                ) from e
-
-        except requests.exceptions.RequestException as e:
-            if attempt < max_retries:
-                log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
-                    verbose=debug,
-                )
-                time.sleep(current_delay)
-                continue
-            else:
-                raise TranslationError(
-                    f"Anthropic API Connection Error after retries: {e!s}"
-                ) from e
-
-    raise TranslationError(
-        f"Failed to get response from Anthropic API after {max_retries + 1} attempts."
-    )
+    # A long server-tool turn pauses; sending it back as-is resumes it
+    continuations_left = max_retries
+    while True:
+        text, paused = post_with_retries(
+            url,
+            headers,
+            payload,
+            parse,
+            label="Anthropic",
+            debug=debug,
+            timeout=timeout,
+            max_retries=max_retries,
+            base_delay=base_delay,
+            status_hints=COMMON_STATUS_HINTS,
+        )
+        if not paused or continuations_left <= 0:
+            return text
+        continuations_left -= 1
+        messages[1:] = [{"role": "assistant", "content": content_blocks}]

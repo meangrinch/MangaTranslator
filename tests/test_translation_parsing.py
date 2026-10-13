@@ -142,7 +142,7 @@ def test_endpoint_keeps_labels_next_to_their_images(monkeypatch):
         sent.update(json)
         return FakeResponse()
 
-    monkeypatch.setattr(openai_compatible.requests, "post", fake_post)
+    monkeypatch.setattr("requests.post", fake_post)
     image = {"inline_data": {"mime_type": "image/png", "data": "AAAA"}}
     openai_compatible.call_openai_compatible_endpoint(
         base_url="http://localhost:1/v1",

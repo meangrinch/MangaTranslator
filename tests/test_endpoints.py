@@ -1,4 +1,6 @@
 import copy
+import time
+from types import SimpleNamespace
 
 import pytest
 import requests
@@ -15,6 +17,7 @@ from utils.endpoints import (
     call_qwencloud_endpoint,
     call_xai_endpoint,
 )
+from utils.endpoints._http import post_with_retries
 from utils.endpoints.openai_compatible import build_openai_compatible_url
 from utils.exceptions import TranslationError
 from utils.model_metadata import anthropic_model_flags
@@ -367,3 +370,87 @@ def test_openai_compatible_token_limit_param(post, is_reasoning, token_key):
     )
     assert post.sent[token_key] == 4096
     assert len({"max_tokens", "max_completion_tokens"} & post.sent.keys()) == 1
+
+
+class FakeReply:
+    text = "body"
+
+    def __init__(self, reply):
+        is_status = isinstance(reply, int)
+        self.status_code, self.body = (reply, None) if is_status else (200, reply)
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.exceptions.HTTPError(response=self)
+
+    def json(self):
+        return self.body
+
+
+@pytest.fixture
+def net(monkeypatch):
+    """Fake requests.post replaying `net.queue` (status codes, JSON bodies, or exceptions); records sleeps."""
+    state = SimpleNamespace(queue=[], sleeps=[])
+
+    def fake(url, **kwargs):
+        reply = state.queue.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return FakeReply(reply)
+
+    monkeypatch.setattr(requests, "post", fake)
+    monkeypatch.setattr(time, "sleep", state.sleeps.append)
+    return state
+
+
+def retrying_post(**kwargs):
+    return post_with_retries(
+        "http://x", {}, {}, lambda result: result["text"], label="Test", **kwargs
+    )
+
+
+def test_retry_backs_off_on_429_then_returns_parsed_body(net):
+    net.queue = [429, 429, {"text": "ok"}]
+    assert retrying_post() == "ok"
+    assert net.sleeps == [1.0, 2.0]
+
+
+# core/pipeline.py matches on "429" / "rate limit" in these messages
+def test_retry_gives_up_on_429_after_max_retries(net):
+    net.queue = [429] * 3
+    with pytest.raises(
+        TranslationError,
+        match="Test API HTTP Error: Rate limited after 3 attempts: body",
+    ):
+        retrying_post(max_retries=2)
+    assert net.sleeps == [1.0, 2.0]
+
+
+def test_other_http_errors_raise_at_once_with_hint(net):
+    net.queue = [401]
+    with pytest.raises(
+        TranslationError,
+        match=r"Test API HTTP Error: Status 401: body \(Check API key\)",
+    ):
+        retrying_post(status_hints={401: "Check API key"})
+    assert net.sleeps == []
+
+
+def test_connection_errors_retry_then_raise(net):
+    down = requests.exceptions.ConnectionError("down")
+    net.queue = [down, {"text": "ok"}]
+    assert retrying_post() == "ok"
+
+    net.queue = [down, down]
+    with pytest.raises(
+        TranslationError, match="Test API Connection Error after retries: down"
+    ):
+        retrying_post(max_retries=1)
+
+
+def test_unreadable_body_raises_translation_error(net):
+    net.queue = [{"other": 1}]
+    with pytest.raises(
+        TranslationError, match="Error processing successful Test API response"
+    ):
+        retrying_post()

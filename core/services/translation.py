@@ -299,11 +299,6 @@ Example{example_note}:
     return "\n\n".join(sections)
 
 
-def _is_reasoning_model_google(model_name: str) -> bool:
-    """Check if a Google model is reasoning-capable."""
-    return is_google_reasoning_model(model_name)
-
-
 def _is_reasoning_model_openai(model_name: str) -> bool:
     """Check if an OpenAI model is reasoning-capable."""
     return _is_openai_reasoning_meta(model_name)
@@ -314,36 +309,74 @@ def _is_reasoning_model_anthropic(model_name: str) -> bool:
     return is_anthropic_reasoning_model(model_name)
 
 
-def _add_media_resolution_to_part(
-    part: dict[str, Any],
-    media_resolution_ui: str,
-) -> dict[str, Any]:
-    """
-    Add media_resolution to an inline_data part.
+_GEMINI_MEDIA_RESOLUTIONS = {
+    "auto": "MEDIA_RESOLUTION_UNSPECIFIED",
+    "high": "MEDIA_RESOLUTION_HIGH",
+    "medium": "MEDIA_RESOLUTION_MEDIUM",
+    "low": "MEDIA_RESOLUTION_LOW",
+}
 
-    Args:
-        part: Part dictionary with inline_data
-        media_resolution_ui: UI format media resolution ("auto"/"high"/"medium"/"low")
 
-    Returns:
-        Part dictionary with media_resolution added
-    """
-    if "inline_data" not in part:
-        return part
-
-    media_resolution_mapping = {
-        "auto": "MEDIA_RESOLUTION_UNSPECIFIED",
-        "high": "MEDIA_RESOLUTION_HIGH",
-        "medium": "MEDIA_RESOLUTION_MEDIUM",
-        "low": "MEDIA_RESOLUTION_LOW",
-    }
-    backend_media_resolution = media_resolution_mapping.get(
+def _gemini_media_resolution(media_resolution_ui: str) -> str:
+    """Map a UI media resolution ("auto"/"high"/"medium"/"low") to the Gemini API enum."""
+    return _GEMINI_MEDIA_RESOLUTIONS.get(
         media_resolution_ui.lower(), "MEDIA_RESOLUTION_UNSPECIFIED"
     )
 
-    result = part.copy()
-    result["media_resolution"] = {"level": backend_media_resolution}
-    return result
+
+def _supports_per_part_media_resolution(provider: str, model_name: str) -> bool:
+    """Gemini 3+ and SpaceXAI take media resolution per image part, not per request."""
+    return provider == "SpaceXAI" or (
+        provider == "Google" and is_gemini_3_plus_model(model_name)
+    )
+
+
+def _image_part(
+    mime_type: str, data: str, media_resolution_ui: str | None = None
+) -> dict[str, Any]:
+    """Build an inline image part, tagged with its media resolution when one is given."""
+    part: dict[str, Any] = {"inline_data": {"mime_type": mime_type, "data": data}}
+    if media_resolution_ui is not None:
+        part["media_resolution"] = {
+            "level": _gemini_media_resolution(media_resolution_ui)
+        }
+    return part
+
+
+def _gemini_thinking_level(model_name: str, effort: str) -> str:
+    """Gemini 3.8 Flash and Gemini 4 have no "minimal" level, so it falls back to "high"."""
+    if effort == "minimal" and (
+        is_gemini_38_flash_model(model_name) or is_gemini_4_model(model_name)
+    ):
+        return "high"
+    return effort
+
+
+def _gemini_thinking_config(
+    model_name: str, reasoning_effort: str | None, max_tokens: int
+) -> dict[str, Any] | None:
+    """Build Gemini's thinkingConfig, or None to leave thinking at the model default."""
+    if is_gemini_3_plus_model(model_name) or is_gemma_model(model_name):
+        return {
+            "thinkingLevel": _gemini_thinking_level(
+                model_name, reasoning_effort or "high"
+            )
+        }
+    if not is_google_reasoning_model(model_name):
+        return None
+
+    # Gemini 2.5 takes a token budget instead of a level
+    effort = reasoning_effort or "auto"
+    if effort == "auto":
+        return None
+    if effort == "none":
+        if is_gemini_25_flash_model(model_name):
+            return {"thinkingBudget": 0}
+        # 2.5 Pro cannot turn thinking off, so use its minimum budget
+        if is_gemini_25_pro_model(model_name):
+            return {"thinkingBudget": 128}
+        return None
+    return {"thinkingBudget": calculate_reasoning_budget(max_tokens, effort)}
 
 
 def _build_generation_config(
@@ -391,7 +424,7 @@ def _build_generation_config(
     else:
         is_reasoning = False
         if provider == "Google":
-            is_reasoning = _is_reasoning_model_google(model_name)
+            is_reasoning = is_google_reasoning_model(model_name)
         elif provider == "OpenAI":
             is_reasoning = _is_reasoning_model_openai(model_name)
         elif provider == "Anthropic":
@@ -433,11 +466,7 @@ def _build_generation_config(
         max_tokens_value = max_tokens_cap
 
     if provider == "Google":
-        is_gemini_3 = is_gemini_3_plus_model(model_name)
-        is_gemma = is_gemma_model(model_name)
-        generation_config = {
-            "maxOutputTokens": max_tokens_value,
-        }
+        generation_config = {"maxOutputTokens": max_tokens_value}
         if use_sampling and not is_gemini_no_sampling_model(model_name):
             generation_config.update(
                 {
@@ -446,62 +475,19 @@ def _build_generation_config(
                     "topK": top_k,
                 }
             )
-        if not is_gemini_3:
-            media_resolution_mapping = {
-                "auto": "MEDIA_RESOLUTION_UNSPECIFIED",
-                "high": "MEDIA_RESOLUTION_HIGH",
-                "medium": "MEDIA_RESOLUTION_MEDIUM",
-                "low": "MEDIA_RESOLUTION_LOW",
-            }
-            backend_media_resolution = media_resolution_mapping.get(
-                config.media_resolution.lower(), "MEDIA_RESOLUTION_UNSPECIFIED"
+        if not _supports_per_part_media_resolution(provider, model_name):
+            generation_config["media_resolution"] = _gemini_media_resolution(
+                config.media_resolution
             )
-            generation_config["media_resolution"] = backend_media_resolution
-        if is_gemini_3 or is_gemma:
-            reasoning_effort = config.reasoning_effort or "high"
-            if (
-                is_gemini_38_flash_model(model_name) or is_gemini_4_model(model_name)
-            ) and reasoning_effort == "minimal":
-                reasoning_effort = "high"
-            generation_config["thinkingConfig"] = {"thinkingLevel": reasoning_effort}
-            log_message(
-                f"Using reasoning effort '{reasoning_effort}' for {model_name}",
-                verbose=debug,
-            )
-        elif _is_reasoning_model_google(model_name) and not is_gemini_3:
-            reasoning_effort = config.reasoning_effort or "auto"
-            is_flash = is_gemini_25_flash_model(model_name)
-            is_pro = is_gemini_25_pro_model(model_name)
-            if reasoning_effort == "none":
-                if is_flash:
-                    generation_config["thinkingConfig"] = {"thinkingBudget": 0}
-                    log_message(f"Disabled reasoning for {model_name}", verbose=debug)
-                elif is_pro:
-                    generation_config["thinkingConfig"] = {"thinkingBudget": 128}
-                    log_message(
-                        f"Using 'none' reasoning effort (thinkingBudget: 128) for {model_name}",
-                        verbose=debug,
-                    )
-                else:
-                    log_message(
-                        f"Warning: 'none' not supported for {model_name}, using 'auto'",
-                        verbose=debug,
-                    )
-            elif reasoning_effort == "auto":
-                log_message(
-                    f"Using auto reasoning allocation for {model_name}", verbose=debug
-                )
-            else:
-                thinking_budget = calculate_reasoning_budget(
-                    max_tokens_value, reasoning_effort
-                )
-                generation_config["thinkingConfig"] = {
-                    "thinkingBudget": thinking_budget
-                }
-                log_message(
-                    f"Using reasoning effort '{reasoning_effort}' (budget: {thinking_budget} tokens) for {model_name}",
-                    verbose=debug,
-                )
+        thinking_config = _gemini_thinking_config(
+            model_name, config.reasoning_effort, max_tokens_value
+        )
+        if thinking_config:
+            generation_config["thinkingConfig"] = thinking_config
+        log_message(
+            f"Thinking config for {model_name}: {thinking_config or 'model default'}",
+            verbose=debug,
+        )
         return generation_config
 
     elif provider == "OpenAI":
@@ -851,12 +837,9 @@ def _build_generation_config(
             elif is_gpt5_model:
                 generation_config["reasoning_effort"] = config.reasoning_effort
         elif is_google_model and config.reasoning_effort:
-            effort = config.reasoning_effort
-            if (
-                is_gemini_38_flash_model(model_name) or is_gemini_4_model(model_name)
-            ) and effort == "minimal":
-                effort = "high"
-            generation_config["reasoning_effort"] = effort
+            generation_config["reasoning_effort"] = _gemini_thinking_level(
+                model_name, config.reasoning_effort
+            )
 
         if anthropic_flags and config.effort:
             generation_config["effort"] = config.effort
@@ -1721,18 +1704,18 @@ def _perform_llm_ocr(
         List of extracted text strings, or early return with failure list
     """
     total_elements = len(images_b64)
+    bubble_res = (
+        config.media_resolution_bubbles
+        if _supports_per_part_media_resolution(provider, config.model_name)
+        else None
+    )
     ocr_parts = []
     for i, img_b64 in enumerate(images_b64):
         mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
-        bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
-        supports_per_part_res = (
-            provider == "Google" and is_gemini_3_plus_model(config.model_name)
-        ) or provider == "SpaceXAI"
-        if supports_per_part_res:
-            bubble_part = _add_media_resolution_to_part(
-                bubble_part, config.media_resolution_bubbles
-            )
-        ocr_parts += [{"text": f"Crop {i + 1}:"}, bubble_part]
+        ocr_parts += [
+            {"text": f"Crop {i + 1}:"},
+            _image_part(mime_type, img_b64, bubble_res),
+        ]
 
     ocr_system = _build_system_prompt_ocr(
         input_language,
@@ -1880,8 +1863,9 @@ def call_translation_api_batch(
         return cached_translation
 
     model_name = config.model_name
-    is_gemini_3 = provider == "Google" and is_gemini_3_plus_model(model_name)
-    supports_per_part_res = is_gemini_3 or provider == "SpaceXAI"
+    per_part_res = _supports_per_part_media_resolution(provider, model_name)
+    bubble_res = config.media_resolution_bubbles if per_part_res else None
+    context_res = config.media_resolution_context if per_part_res else None
     has_full_page = bool(config.send_full_page_context and full_image_b64)
     has_previous_context = bool(
         previous_context_image_count or previous_context_text_count
@@ -1894,42 +1878,27 @@ def call_translation_api_batch(
     base_parts = []
     for i, img_b64 in enumerate(images_b64):
         mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
-        bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
-        if supports_per_part_res:
-            bubble_part = _add_media_resolution_to_part(
-                bubble_part, config.media_resolution_bubbles
-            )
-        base_parts += [{"text": f"Crop {i + 1}:"}, bubble_part]
+        base_parts += [
+            {"text": f"Crop {i + 1}:"},
+            _image_part(mime_type, img_b64, bubble_res),
+        ]
 
     if has_full_page:
-        context_part = {
-            "inline_data": {
-                "mime_type": full_image_mime_type,
-                "data": full_image_b64,
-            }
-        }
-        if supports_per_part_res:
-            context_part = _add_media_resolution_to_part(
-                context_part, config.media_resolution_context
-            )
-        base_parts += [{"text": _FULL_PAGE_LABEL}, context_part]
+        base_parts += [
+            {"text": _FULL_PAGE_LABEL},
+            _image_part(full_image_mime_type, full_image_b64, context_res),
+        ]
 
     for pages_back, image in zip(
         range(previous_context_image_count, 0, -1), previous_context_images
     ):
-        previous_part = {
-            "inline_data": {
-                "mime_type": image.get("mime_type", "image/jpeg"),
-                "data": image.get("data", ""),
-            }
-        }
-        if supports_per_part_res:
-            previous_part = _add_media_resolution_to_part(
-                previous_part, config.media_resolution_context
-            )
         base_parts += [
             {"text": _PREVIOUS_PAGE_LABEL.format(pages_back)},
-            previous_part,
+            _image_part(
+                image.get("mime_type", "image/jpeg"),
+                image.get("data", ""),
+                context_res,
+            ),
         ]
 
     try:
@@ -2001,34 +1970,21 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
 
             translation_parts = []
             if page_attached:
-                context_part = {
-                    "inline_data": {
-                        "mime_type": full_image_mime_type,
-                        "data": full_image_b64,
-                    }
-                }
-                if supports_per_part_res:
-                    context_part = _add_media_resolution_to_part(
-                        context_part, config.media_resolution_context
-                    )
-                translation_parts += [{"text": _FULL_PAGE_LABEL}, context_part]
+                translation_parts += [
+                    {"text": _FULL_PAGE_LABEL},
+                    _image_part(full_image_mime_type, full_image_b64, context_res),
+                ]
 
             for pages_back, image in zip(
                 range(previous_context_image_count, 0, -1), previous_context_images
             ):
-                previous_part = {
-                    "inline_data": {
-                        "mime_type": image.get("mime_type", "image/jpeg"),
-                        "data": image.get("data", ""),
-                    }
-                }
-                if supports_per_part_res:
-                    previous_part = _add_media_resolution_to_part(
-                        previous_part, config.media_resolution_context
-                    )
                 translation_parts += [
                     {"text": _PREVIOUS_PAGE_LABEL.format(pages_back)},
-                    previous_part,
+                    _image_part(
+                        image.get("mime_type", "image/jpeg"),
+                        image.get("data", ""),
+                        context_res,
+                    ),
                 ]
 
             use_rosetta = is_rosetta_model(model_name)

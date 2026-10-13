@@ -1,13 +1,11 @@
 import json
-import time
 from typing import Any
-
-import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 from utils.model_metadata import supports_meta_reasoning_effort
 
+from ._http import COMMON_STATUS_HINTS, post_with_retries
 from .openai import extract_responses_text
 
 
@@ -115,93 +113,43 @@ def call_meta_model_endpoint(
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2**attempt), 16.0)
-        try:
-            log_message(
-                f"Meta Model API request (attempt {attempt + 1}/{max_retries + 1})",
-                verbose=debug,
+    def parse(result: dict[str, Any]) -> str | None:
+        if result.get("error"):
+            error_obj = result["error"]
+            error_msg = (
+                error_obj.get("message", "Unknown error")
+                if isinstance(error_obj, dict)
+                else str(error_obj)
             )
+            raise TranslationError(f"Meta Model API returned error: {error_msg}")
 
-            response = requests.post(
-                url, headers=headers, json=payload, timeout=timeout
-            )
-            response.raise_for_status()
+        output_text = extract_responses_text(result)
+        if output_text:
+            return output_text
 
-            log_message("Processing Meta Model API response", verbose=debug)
-            try:
-                result = response.json()
+        log_message(
+            f"No text content in Meta Model API response. Status: {result.get('status')}, "
+            f"details: {result.get('incomplete_details')}",
+            always_print=True,
+        )
+        log_message(
+            f"Full response: {json.dumps(result, indent=2)}",
+            verbose=debug,
+        )
+        return None
 
-                if result.get("error"):
-                    error_obj = result["error"]
-                    error_msg = (
-                        error_obj.get("message", "Unknown error")
-                        if isinstance(error_obj, dict)
-                        else str(error_obj)
-                    )
-                    raise TranslationError(
-                        f"Meta Model API returned error: {error_msg}"
-                    )
-
-                output_text = extract_responses_text(result)
-                if output_text:
-                    return output_text
-
-                log_message(
-                    f"No text content in Meta Model API response. Status: {result.get('status')}, "
-                    f"details: {result.get('incomplete_details')}",
-                    always_print=True,
-                )
-                log_message(
-                    f"Full response: {json.dumps(result, indent=2)}",
-                    verbose=debug,
-                )
-                return None
-
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise TranslationError(
-                    f"Error processing successful Meta Model API response: {e!s}"
-                ) from e
-
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code
-            error_text = e.response.text[:500]
-
-            if status_code == 429 and attempt < max_retries:
-                log_message(
-                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
-                )
-                time.sleep(current_delay)
-                continue
-
-            error_reason = f"Status {status_code}: {error_text}"
-            if status_code == 429 and attempt == max_retries:
-                error_reason = (
-                    f"Rate limited after {max_retries + 1} attempts: {error_text}"
-                )
-            elif status_code == 400:
-                error_reason += " (Check payload)"
-            elif status_code == 401:
-                error_reason += " (Check API key)"
-            elif status_code == 403:
-                error_reason += " (Permission denied, check API key/plan)"
-            elif status_code == 404:
-                error_reason += " (Model not found or permission denied)"
-
-            raise TranslationError(f"Meta Model API HTTP Error: {error_reason}") from e
-
-        except requests.exceptions.RequestException as e:
-            if attempt < max_retries:
-                log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
-                    verbose=debug,
-                )
-                time.sleep(current_delay)
-                continue
-            raise TranslationError(
-                f"Meta Model API Connection Error after retries: {e!s}"
-            ) from e
-
-    raise TranslationError(
-        f"Failed to get response from Meta Model API after {max_retries + 1} attempts."
+    return post_with_retries(
+        url,
+        headers,
+        payload,
+        parse,
+        label="Meta Model",
+        debug=debug,
+        timeout=timeout,
+        max_retries=max_retries,
+        base_delay=base_delay,
+        status_hints={
+            **COMMON_STATUS_HINTS,
+            404: "Model not found or permission denied",
+        },
     )

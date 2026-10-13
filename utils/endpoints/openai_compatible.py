@@ -1,9 +1,6 @@
 import json
-import time
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
-
-import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
@@ -11,6 +8,8 @@ from utils.model_metadata import (
     is_azure_url,
     is_gemini_no_sampling_model,
 )
+
+from ._http import post_with_retries
 
 
 def build_openai_compatible_url(base_url: str) -> str:
@@ -205,102 +204,52 @@ def call_openai_compatible_endpoint(
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2**attempt), 16.0)
-        try:
-            log_message(
-                f"OpenAI-Compatible API request to {url} (attempt {attempt + 1}/{max_retries + 1})",
-                verbose=debug,
-            )
+    def parse(result: dict[str, Any]) -> str | None:
+        if "choices" in result and len(result["choices"]) > 0:
+            choice = result["choices"][0]
+            finish_reason = choice.get("finish_reason")
 
-            response = requests.post(
-                url, headers=headers, json=payload, timeout=timeout
-            )
-            response.raise_for_status()
-
-            log_message(f"Processing response from {url}", verbose=debug)
-            try:
-                result = response.json()
-
-                if "choices" in result and len(result["choices"]) > 0:
-                    choice = result["choices"][0]
-                    finish_reason = choice.get("finish_reason")
-
-                    message = choice.get("message")
-                    if message and "content" in message:
-                        content = message["content"]
-                        return content.strip() if content else ""
-                    else:
-                        log_message(
-                            f"No message content in response. Finish reason: {finish_reason}",
-                            always_print=True,
-                        )
-                        log_message(
-                            f"Full response: {json.dumps(result, indent=2)}",
-                            verbose=debug,
-                        )
-                        return ""
-                else:
-                    log_message(
-                        "No choices in OpenAI-Compatible response", always_print=True
-                    )
-                    if "error" in result:
-                        error_obj = result["error"]
-                        error_msg = (
-                            error_obj.get("message", "Unknown error")
-                            if isinstance(error_obj, dict)
-                            else str(error_obj)
-                        )
-                        raise TranslationError(
-                            f"OpenAI-Compatible API returned error: {error_msg}"
-                        )
-                    return None
-
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise TranslationError(
-                    f"Error processing successful OpenAI-Compatible API response: {e!s}"
-                ) from e
-
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code
-            error_text = e.response.text[:500]
-
-            if status_code == 429 and attempt < max_retries:
-                log_message(
-                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
-                )
-                time.sleep(current_delay)
-                continue
+            message = choice.get("message")
+            if message and "content" in message:
+                content = message["content"]
+                return content.strip() if content else ""
             else:
-                error_reason = f"Status {status_code}: {error_text}"
-                if status_code == 429 and attempt == max_retries:
-                    error_reason = (
-                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
-                    )
-                elif status_code == 400:
-                    error_reason += " (Check payload)"
-                elif status_code == 401:
-                    error_reason += " (Check API key if provided)"
-                elif status_code == 403:
-                    error_reason += " (Permission denied)"
-
-                raise TranslationError(
-                    f"OpenAI-Compatible API HTTP Error: {error_reason}"
-                ) from e
-
-        except requests.exceptions.RequestException as e:
-            if attempt < max_retries:
                 log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
+                    f"No message content in response. Finish reason: {finish_reason}",
+                    always_print=True,
+                )
+                log_message(
+                    f"Full response: {json.dumps(result, indent=2)}",
                     verbose=debug,
                 )
-                time.sleep(current_delay)
-                continue
-            else:
+                return ""
+        else:
+            log_message("No choices in OpenAI-Compatible response", always_print=True)
+            if "error" in result:
+                error_obj = result["error"]
+                error_msg = (
+                    error_obj.get("message", "Unknown error")
+                    if isinstance(error_obj, dict)
+                    else str(error_obj)
+                )
                 raise TranslationError(
-                    f"OpenAI-Compatible API Connection Error after retries: {e!s}"
-                ) from e
+                    f"OpenAI-Compatible API returned error: {error_msg}"
+                )
+            return None
 
-    raise TranslationError(
-        f"Failed to get response from OpenAI-Compatible API ({url}) after {max_retries + 1} attempts."
+    return post_with_retries(
+        url,
+        headers,
+        payload,
+        parse,
+        label="OpenAI-Compatible",
+        debug=debug,
+        timeout=timeout,
+        max_retries=max_retries,
+        base_delay=base_delay,
+        status_hints={
+            400: "Check payload",
+            401: "Check API key if provided",
+            403: "Permission denied",
+        },
     )

@@ -1,5 +1,4 @@
 import json
-import time
 from typing import Any
 
 import requests
@@ -7,6 +6,8 @@ import requests
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
 from utils.model_metadata import is_gemini_no_sampling_model
+
+from ._http import COMMON_STATUS_HINTS, post_with_retries
 
 # OpenRouter model metadata cache & reasoning detection
 _OPENROUTER_MODELS_META: dict[str, dict[str, Any]] = {}
@@ -243,106 +244,45 @@ def call_openrouter_endpoint(
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2**attempt), 16.0)
-        try:
-            log_message(
-                f"OpenRouter API request (attempt {attempt + 1}/{max_retries + 1})",
-                verbose=debug,
-            )
+    def parse(result: dict[str, Any]) -> str | None:
+        if "choices" in result and len(result["choices"]) > 0:
+            choice = result["choices"][0]
+            finish_reason = choice.get("finish_reason")
 
-            response = requests.post(
-                url, headers=headers, json=payload, timeout=timeout
-            )
-            response.raise_for_status()
-
-            log_message("Processing OpenRouter response", verbose=debug)
-            try:
-                result = response.json()
-
-                if "choices" in result and len(result["choices"]) > 0:
-                    choice = result["choices"][0]
-                    finish_reason = choice.get("finish_reason")
-
-                    message = choice.get("message")
-                    if message and "content" in message:
-                        content = message["content"]
-                        return content.strip() if content else ""
-                    else:
-                        log_message(
-                            f"No message content in response. Finish reason: {finish_reason}",
-                            always_print=True,
-                        )
-                        log_message(
-                            f"Full response: {json.dumps(result, indent=2)}",
-                            verbose=debug,
-                        )
-                        return ""
-                else:
-                    if "error" in result:
-                        error_obj = result["error"]
-                        error_msg = (
-                            error_obj.get("message", "Unknown error")
-                            if isinstance(error_obj, dict)
-                            else str(error_obj)
-                        )
-                        raise TranslationError(
-                            f"OpenRouter API returned error: {error_msg}"
-                        )
-                    return None
-
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise TranslationError(
-                    f"Error processing OpenRouter API response: {e!s}"
-                ) from e
-
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code
-            error_text = e.response.text[:500]
-
-            if status_code == 429 and attempt < max_retries:
-                log_message(
-                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
-                )
-                time.sleep(current_delay)
-                continue
-            else:
-                error_reason = f"Status {status_code}: {error_text}"
-                if status_code == 429 and attempt == max_retries:
-                    error_reason = (
-                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
-                    )
-                elif status_code == 400:
-                    error_reason += " (Check payload)"
-                elif status_code == 401:
-                    error_reason += " (Check API key)"
-                elif status_code == 403:
-                    error_reason += " (Permission denied, check API key/plan)"
-
-                log_message(
-                    f"OpenRouter API HTTP Error: {error_reason}", always_print=True
-                )
-                raise TranslationError(
-                    f"OpenRouter API HTTP Error: {error_reason}"
-                ) from e
-
-        except requests.exceptions.RequestException as e:
-            if attempt < max_retries:
-                log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
-                    verbose=debug,
-                )
-                time.sleep(current_delay)
-                continue
+            message = choice.get("message")
+            if message and "content" in message:
+                content = message["content"]
+                return content.strip() if content else ""
             else:
                 log_message(
-                    f"OpenRouter connection failed after {max_retries + 1} attempts: {e!s}",
+                    f"No message content in response. Finish reason: {finish_reason}",
                     always_print=True,
                 )
-                raise TranslationError(
-                    f"OpenRouter API Connection Error after retries: {e!s}"
-                ) from e
+                log_message(
+                    f"Full response: {json.dumps(result, indent=2)}",
+                    verbose=debug,
+                )
+                return ""
+        else:
+            if "error" in result:
+                error_obj = result["error"]
+                error_msg = (
+                    error_obj.get("message", "Unknown error")
+                    if isinstance(error_obj, dict)
+                    else str(error_obj)
+                )
+                raise TranslationError(f"OpenRouter API returned error: {error_msg}")
+            return None
 
-    raise TranslationError(
-        f"Failed to get response from OpenRouter API after {max_retries + 1} attempts."
+    return post_with_retries(
+        url,
+        headers,
+        payload,
+        parse,
+        label="OpenRouter",
+        debug=debug,
+        timeout=timeout,
+        max_retries=max_retries,
+        base_delay=base_delay,
+        status_hints=COMMON_STATUS_HINTS,
     )

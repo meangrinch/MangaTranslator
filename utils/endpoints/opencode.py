@@ -1,11 +1,10 @@
 import json
-import time
 from typing import Any
-
-import requests
 
 from utils.exceptions import TranslationError, ValidationError
 from utils.logging import log_message
+
+from ._http import post_with_retries
 
 
 def get_opencode_endpoint_url(tier: str = "zen") -> str:
@@ -116,114 +115,64 @@ def call_opencode_endpoint(
 
     tier_label = "Go" if "go" in (tier or "").lower() else "Zen"
 
-    for attempt in range(max_retries + 1):
-        current_delay = min(base_delay * (2**attempt), 16.0)
-        try:
+    def parse(result: dict[str, Any]) -> str | None:
+        if "error" in result:
+            error_obj = result.get("error", {})
+            error_msg = (
+                error_obj.get("message", "Unknown error")
+                if isinstance(error_obj, dict)
+                else str(error_obj)
+            )
+            raise TranslationError(
+                f"OpenCode ({tier_label}) API returned error: {error_msg}"
+            )
+
+        if "choices" in result and len(result["choices"]) > 0:
+            choice = result["choices"][0]
+            message = choice.get("message")
+            if message and "content" in message:
+                content = message["content"]
+                return content.strip() if content else ""
+
+            output_text = choice.get("text")
+            if isinstance(output_text, str) and output_text.strip():
+                return output_text.strip()
+
+            finish_reason = choice.get("finish_reason") or "unknown"
             log_message(
-                f"OpenCode ({tier_label}) API request to {url} (attempt {attempt + 1}/{max_retries + 1})",
+                f"No message content in OpenCode response. Finish reason: {finish_reason}",
+                always_print=True,
+            )
+            log_message(
+                f"Full response: {json.dumps(result, indent=2)}",
                 verbose=debug,
             )
+            return ""
 
-            response = requests.post(
-                url, headers=headers, json=payload, timeout=timeout
-            )
-            response.raise_for_status()
+        # Fallback check for output_text at top level
+        if "output_text" in result and isinstance(result["output_text"], str):
+            return result["output_text"].strip()
 
-            log_message(f"Processing OpenCode ({tier_label}) response", verbose=debug)
-            try:
-                result = response.json()
+        log_message(
+            f"No choices in OpenCode ({tier_label}) response",
+            always_print=True,
+        )
+        return None
 
-                if "error" in result:
-                    error_obj = result.get("error", {})
-                    error_msg = (
-                        error_obj.get("message", "Unknown error")
-                        if isinstance(error_obj, dict)
-                        else str(error_obj)
-                    )
-                    raise TranslationError(
-                        f"OpenCode ({tier_label}) API returned error: {error_msg}"
-                    )
-
-                if "choices" in result and len(result["choices"]) > 0:
-                    choice = result["choices"][0]
-                    message = choice.get("message")
-                    if message and "content" in message:
-                        content = message["content"]
-                        return content.strip() if content else ""
-
-                    output_text = choice.get("text")
-                    if isinstance(output_text, str) and output_text.strip():
-                        return output_text.strip()
-
-                    finish_reason = choice.get("finish_reason") or "unknown"
-                    log_message(
-                        f"No message content in OpenCode response. Finish reason: {finish_reason}",
-                        always_print=True,
-                    )
-                    log_message(
-                        f"Full response: {json.dumps(result, indent=2)}",
-                        verbose=debug,
-                    )
-                    return ""
-
-                # Fallback check for output_text at top level
-                if "output_text" in result and isinstance(result["output_text"], str):
-                    return result["output_text"].strip()
-
-                log_message(
-                    f"No choices in OpenCode ({tier_label}) response",
-                    always_print=True,
-                )
-                return None
-
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise TranslationError(
-                    f"Error processing successful OpenCode ({tier_label}) API response: {e!s}"
-                ) from e
-
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code
-            error_text = e.response.text[:500]
-
-            if status_code == 429 and attempt < max_retries:
-                log_message(
-                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
-                )
-                time.sleep(current_delay)
-                continue
-
-            error_reason = f"Status {status_code}: {error_text}"
-            if status_code == 429 and attempt == max_retries:
-                error_reason = (
-                    f"Rate limited after {max_retries + 1} attempts: {error_text}"
-                )
-            elif status_code == 400:
-                error_reason += " (Check payload / model support)"
-            elif status_code == 401:
-                error_reason += " (Check OpenCode API key)"
-            elif status_code == 403:
-                error_reason += f" (Permission denied for {tier_label} tier, check subscription or credits)"
-            elif status_code == 404:
-                error_reason += (
-                    f" (Model '{model_name}' not found on {tier_label} tier)"
-                )
-
-            raise TranslationError(
-                f"OpenCode ({tier_label}) API HTTP Error: {error_reason}"
-            ) from e
-
-        except requests.exceptions.RequestException as e:
-            if attempt < max_retries:
-                log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
-                    verbose=debug,
-                )
-                time.sleep(current_delay)
-                continue
-            raise TranslationError(
-                f"OpenCode ({tier_label}) API Connection Error after retries: {e!s}"
-            ) from e
-
-    raise TranslationError(
-        f"Failed to get response from OpenCode ({tier_label}) API after {max_retries + 1} attempts."
+    return post_with_retries(
+        url,
+        headers,
+        payload,
+        parse,
+        label=f"OpenCode ({tier_label})",
+        debug=debug,
+        timeout=timeout,
+        max_retries=max_retries,
+        base_delay=base_delay,
+        status_hints={
+            400: "Check payload / model support",
+            401: "Check OpenCode API key",
+            403: f"Permission denied for {tier_label} tier, check subscription or credits",
+            404: f"Model '{model_name}' not found on {tier_label} tier",
+        },
     )

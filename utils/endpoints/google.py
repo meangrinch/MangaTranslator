@@ -1,11 +1,48 @@
 import json
-import time
 from typing import Any
 
-import requests
-
-from utils.exceptions import TranslationError, ValidationError
+from utils.exceptions import ValidationError
 from utils.logging import log_message
+
+from ._http import post_with_retries
+
+_SAFETY_SETTINGS = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+]
+
+
+def _extract_text(result: dict[str, Any], debug: bool) -> str | None:
+    """Return the answer text, "" if the candidate has none, or None if the prompt was blocked."""
+    block_reason = (result.get("promptFeedback") or {}).get("blockReason")
+    candidates = result.get("candidates")
+    if block_reason or not candidates:
+        log_message(
+            f"No candidates in Google response. Block reason: {block_reason or 'unknown'}",
+            always_print=True,
+        )
+        log_message(f"Full response: {json.dumps(result, indent=2)}", verbose=debug)
+        return None
+
+    candidate = candidates[0]
+    parts = candidate.get("content", {}).get("parts") or []
+    # Skip thought parts (gemma-4); code execution parts separate
+    # a preamble from the answer that follows them
+    text = "".join(
+        part["text"] if "text" in part and not part.get("thought") else "\n"
+        for part in parts
+    ).strip()
+    # Fall back to the first part when every text part is a thought
+    text = text or (parts[0].get("text", "").strip() if parts else "")
+    if not text:
+        log_message(
+            f"No text content in Google response. Finish reason: {candidate.get('finishReason') or 'unknown'}",
+            always_print=True,
+        )
+        log_message(f"Full response: {json.dumps(result, indent=2)}", verbose=debug)
+    return text
 
 
 def call_gemini_endpoint(
@@ -29,21 +66,22 @@ def call_gemini_endpoint(
         model_name (str): Google model to use.
         parts (List[Dict[str, Any]]): List of content parts (text, images).
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, etc.).
+        system_prompt (Optional[str]): System prompt for the conversation.
         debug (bool): Whether to print debugging information.
         timeout (int): Request timeout in seconds.
-        max_retries (int): Maximum number of retries for rate limiting errors.
+        max_retries (int): Maximum number of retries for rate limiting and connection errors.
         base_delay (float): Initial delay for retries in seconds.
         enable_web_search (bool): Enable web search (Google Search) for up-to-date information.
         enable_code_execution (bool): Enable Gemini's code execution tool for image zoom/inspection.
 
     Returns:
         Optional[str]: The raw text content from the API response if successful,
-                       None if blocked by safety settings or if no content is found after retries.
+                       "" if the response has no text, or None if it was blocked or has no candidates.
 
     Raises:
-        ValueError: If API key is missing.
-        RuntimeError: If API call fails after retries for non-rate-limited HTTP errors,
-                      connection errors, or response processing fails.
+        ValidationError: If API key is missing.
+        TranslationError: If API call fails after retries for non-rate-limited HTTP errors,
+                          connection errors, or response processing fails.
     """
     if not api_key:
         raise ValidationError("API key is required for Google endpoint")
@@ -52,17 +90,10 @@ def call_gemini_endpoint(
     # Key goes in a header so it never appears in URLs echoed by request errors
     headers = {"x-goog-api-key": api_key}
 
-    safety_settings_config = [
-        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-    ]
-
     payload = {
         "contents": [{"parts": parts}],
         "generationConfig": generation_config,
-        "safetySettings": safety_settings_config,
+        "safetySettings": _SAFETY_SETTINGS,
     }
     if system_prompt:
         payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
@@ -75,112 +106,14 @@ def call_gemini_endpoint(
     if tools:
         payload["tools"] = tools
 
-    for attempt in range(max_retries + 1):
-        current_delay = min(
-            base_delay * (2**attempt), 16.0
-        )  # Exponential backoff, max 16s
-        try:
-            log_message(
-                f"Google API request (attempt {attempt + 1}/{max_retries + 1})",
-                verbose=debug,
-            )
-
-            response = requests.post(
-                url, json=payload, headers=headers, timeout=timeout
-            )
-            response.raise_for_status()
-
-            log_message("Processing Google response", verbose=debug)
-            try:
-                result = response.json()
-                prompt_feedback = result.get("promptFeedback")
-                if prompt_feedback and prompt_feedback.get("blockReason"):
-                    block_reason = prompt_feedback.get("blockReason")
-                    return None
-
-                if "candidates" in result and len(result["candidates"]) > 0:
-                    candidate = result["candidates"][0]
-                    content_parts = candidate.get("content", {}).get("parts", [{}])
-                    if content_parts:
-                        # Skip thought parts (gemma-4); code execution parts separate
-                        # a preamble from the answer that follows them
-                        text = "".join(
-                            part["text"]
-                            if "text" in part and not part.get("thought", False)
-                            else "\n"
-                            for part in content_parts
-                        ).strip()
-                        if text:
-                            return text
-
-                        # Fallback if no non-thought text part exists
-                        if "text" in content_parts[0]:
-                            return content_parts[0].get("text", "").strip()
-
-                    finish_reason = candidate.get("finishReason") or "unknown"
-                    log_message(
-                        f"No text content in Google response. Finish reason: {finish_reason}",
-                        always_print=True,
-                    )
-                    log_message(
-                        f"Full response: {json.dumps(result, indent=2)}",
-                        verbose=debug,
-                    )
-                    return ""
-
-                else:
-                    block_reason = (
-                        prompt_feedback.get("blockReason")
-                        if prompt_feedback
-                        else "unknown"
-                    )
-                    log_message(
-                        f"No candidates in Google response. Block reason: {block_reason}",
-                        always_print=True,
-                    )
-                    log_message(
-                        f"Full response: {json.dumps(result, indent=2)}",
-                        verbose=debug,
-                    )
-                    return None
-
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-                raise TranslationError(
-                    f"Error processing successful Google API response: {e!s}"
-                ) from e
-
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code
-            error_text = e.response.text[:500]  # Limit error text length
-
-            if status_code == 429 and attempt < max_retries:
-                log_message(
-                    f"Rate limited, retrying in {current_delay:.1f}s", verbose=debug
-                )
-                time.sleep(current_delay)
-                continue
-            else:
-                error_reason = f"Status {status_code}: {error_text}"
-                if status_code == 429 and attempt == max_retries:
-                    error_reason = (
-                        f"Rate limited after {max_retries + 1} attempts: {error_text}"
-                    )
-
-                raise TranslationError(f"Google API HTTP Error: {error_reason}") from e
-
-        except requests.exceptions.RequestException as e:
-            if attempt < max_retries:
-                log_message(
-                    f"Connection error, retrying in {current_delay:.1f}s: {e!s}",
-                    verbose=debug,
-                )
-                time.sleep(current_delay)
-                continue
-            else:
-                raise TranslationError(
-                    f"Google API Connection Error after retries: {e!s}"
-                ) from e
-
-    raise TranslationError(
-        f"Failed to get response from Google API after {max_retries + 1} attempts."
+    return post_with_retries(
+        url,
+        headers,
+        payload,
+        lambda result: _extract_text(result, debug),
+        label="Google",
+        debug=debug,
+        timeout=timeout,
+        max_retries=max_retries,
+        base_delay=base_delay,
     )
