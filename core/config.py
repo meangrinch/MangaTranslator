@@ -62,7 +62,7 @@ class TranslationConfig:
     top_p: float = float(_DEFAULT_SAMPLING["top_p"])
     top_k: int = int(_DEFAULT_SAMPLING["top_k"])
     max_tokens: int | None = (
-        None  # None = use default logic (16384 for reasoning, 4096 otherwise)
+        None  # None = use default logic (32768 for reasoning, 4096 otherwise)
     )
     input_language: str = "Japanese"
     output_language: str = "English"

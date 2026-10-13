@@ -1499,7 +1499,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
     top_k_val = top_k_update.get("value", default_ui_state.llm_settings.top_k)
     use_custom_sampling_visible = use_custom_sampling_update.get("visible", True)
     is_reasoning = utils.is_reasoning_model(default_provider, default_model_name)
-    max_tokens_val = 16384 if is_reasoning else 4096
+    max_tokens_val = 32768 if is_reasoning else 4096
     enable_web_search_visible = enable_web_search_update.get("visible", False)
     enable_code_execution_visible = enable_code_execution_update.get("visible", False)
     image_detail_visible = image_detail_update.get("visible", False)

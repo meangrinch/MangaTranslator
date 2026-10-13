@@ -1181,12 +1181,13 @@ def update_translation_ui(
 
     if remembered_model:
         is_reasoning = is_reasoning_model(provider, remembered_model)
-        max_tokens_value = 16384 if is_reasoning else 4096
+        max_tokens_value = 32768 if is_reasoning else 4096
     else:
         max_tokens_value = 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, remembered_model)
     max_tokens_maximum = max_tokens_cap if max_tokens_cap is not None else 63488
+    max_tokens_value = min(max_tokens_value, max_tokens_maximum)
     max_tokens_update = gr.update(value=max_tokens_value, maximum=max_tokens_maximum)
 
     is_gemini_3_google = provider == "Google" and is_gemini_3_model(remembered_model)
@@ -1452,9 +1453,10 @@ def update_params_for_model(
 
     is_reasoning = is_reasoning_model(provider, model_name)
 
-    max_tokens_value = 16384 if is_reasoning else 4096
+    max_tokens_value = 32768 if is_reasoning else 4096
     max_tokens_cap = get_max_tokens_cap(provider, model_name)
     max_tokens_maximum = max_tokens_cap if max_tokens_cap is not None else 63488
+    max_tokens_value = min(max_tokens_value, max_tokens_maximum)
     max_tokens_update = gr.update(value=max_tokens_value, maximum=max_tokens_maximum)
 
     # Effort dropdown (Claude Opus 4.5+ and Sonnet 4.6)

@@ -363,8 +363,8 @@ def main():
         type=int,
         default=None,
         help=(
-            "Maximum number of tokens in the response (2048-32768). "
-            "Default: 4096 for non-reasoning models, 16384 for reasoning models"
+            "Maximum number of tokens in the response (4096-63488). "
+            "Default: 4096 for non-reasoning models, 32768 for reasoning models"
         ),
     )
     parser.add_argument(

@@ -425,7 +425,7 @@ def _build_generation_config(
                 or is_meta_reasoning_model(model_name)
                 or is_anthropic_reasoning_model(model_name)
             )
-        max_tokens_value = 16384 if is_reasoning else 4096
+        max_tokens_value = 32768 if is_reasoning else 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, model_name)
     if max_tokens_cap is not None and max_tokens_value > max_tokens_cap:

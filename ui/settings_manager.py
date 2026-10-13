@@ -203,7 +203,7 @@ DEFAULT_SETTINGS = {
     "temperature": DEFAULT_PROVIDER_SAMPLING["temperature"],
     "top_p": DEFAULT_PROVIDER_SAMPLING["top_p"],
     "top_k": DEFAULT_PROVIDER_SAMPLING["top_k"],
-    "max_tokens": 16384,
+    "max_tokens": 32768,
     "max_font_size": 16,
     "min_font_size": 8,
     "line_spacing_mult": 1.0,

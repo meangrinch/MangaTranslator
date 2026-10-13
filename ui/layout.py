@@ -332,7 +332,7 @@ def create_layout(
             is_reasoning = utils.is_reasoning_model(
                 initial_provider, initial_model_name
             )
-            initial_max_tokens = 16384 if is_reasoning else 4096
+            initial_max_tokens = 32768 if is_reasoning else 4096
 
         # Calculate initial max_tokens maximum based on provider/model
         initial_max_tokens_cap = utils.get_max_tokens_cap(
@@ -1339,7 +1339,7 @@ def create_layout(
                                 elem_id="config_top_k",
                             )
                             max_tokens = gr.Slider(
-                                2048,
+                                4096,
                                 initial_max_tokens_maximum,
                                 value=initial_max_tokens,
                                 step=1024,

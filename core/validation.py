@@ -13,7 +13,7 @@ SETTING_CONSTRAINTS: dict[str, tuple[float, float]] = {
     "temperature": (0.0, 2.0),
     "top_p": (0.0, 1.0),
     "top_k": (0, 64),
-    "max_tokens": (2048, 63488),
+    "max_tokens": (4096, 63488),
     "bubble_min_side_pixels": (64, 512),
     "context_image_max_side_pixels": (512, 2560),
     "previous_context_image_count": (0, 10),
