@@ -28,7 +28,8 @@ from utils.model_metadata import (
     is_deepseek_reasoning_model,
     is_deepseek_vision_model,
     is_gemini_3_flash_model,
-    is_gemini_3_model,
+    is_gemini_3_plus_model,
+    is_gemini_4_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
     is_gemini_38_flash_model,
@@ -491,7 +492,7 @@ def get_reasoning_effort_label(provider: str, model_name: str | None = None) -> 
     if not model_name:
         return "Reasoning Effort"
 
-    gemini3 = is_gemini_3_model(model_name)
+    gemini3 = is_gemini_3_plus_model(model_name)
     gemma = is_gemma_model(model_name)
 
     if provider == "SpaceXAI" and "multi-agent" in model_name.lower():
@@ -531,7 +532,7 @@ def get_reasoning_effort_info_text(
 
     # Determine base description text based on provider/model
     if provider == "Google":
-        if is_gemini_3_model(model_name) or is_gemma_model(model_name):
+        if is_gemini_3_plus_model(model_name) or is_gemma_model(model_name):
             return "Controls model's internal reasoning effort."
         base_text = "Controls reasoning token allocation relative to 'max_tokens'"
     elif provider == "Anthropic":
@@ -582,7 +583,7 @@ def get_reasoning_effort_info_text(
                 and is_openai_reasoning_model(model_name)
             )
             or is_xai_reasoning_model(model_name)
-            or is_gemini_3_model(model_name)
+            or is_gemini_3_plus_model(model_name)
             or is_gemma_model(model_name)
         ):
             return "Controls model's internal reasoning effort."
@@ -655,7 +656,7 @@ def get_reasoning_effort_config(
         if is_gemma_model(model_name):
             return True, ["high", "minimal"], "high"
 
-        if is_gemini_3_model(model_name):
+        if is_gemini_3_plus_model(model_name):
             if is_gemini_38_flash_model(model_name):
                 return True, ["high", "medium", "low"], "high"
             if "flash" in lm:
@@ -800,7 +801,7 @@ def get_reasoning_effort_config(
             if is_gemma_model(model_name):
                 return True, ["high", "minimal"], "high"
 
-            if is_gemini_38_flash_model(model_name):
+            if is_gemini_38_flash_model(model_name) or is_gemini_4_model(model_name):
                 return True, ["xhigh", "high", "medium", "low", "none"], "high"
 
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "high"
@@ -1009,11 +1010,11 @@ def get_media_resolution_config(
     Returns:
         Tuple of (visible, choices, info_text)
     """
-    if provider == "Google" and is_gemini_3_model(model_name):
+    if provider == "Google" and is_gemini_3_plus_model(model_name):
         return (
             True,
             ["auto", "high", "medium", "low"],
-            "Resolution for Gemini 3 to process images.",
+            "Resolution for Gemini to process images.",
         )
     elif provider == "SpaceXAI":
         return (True, ["auto", "high", "low"], "Resolution for Grok to process images.")
@@ -1190,8 +1191,10 @@ def update_translation_ui(
     max_tokens_value = min(max_tokens_value, max_tokens_maximum)
     max_tokens_update = gr.update(value=max_tokens_value, maximum=max_tokens_maximum)
 
-    is_gemini_3_google = provider == "Google" and is_gemini_3_model(remembered_model)
-    is_gemini_3_openrouter = provider == "OpenRouter" and is_gemini_3_model(
+    is_gemini_3_google = provider == "Google" and is_gemini_3_plus_model(
+        remembered_model
+    )
+    is_gemini_3_openrouter = provider == "OpenRouter" and is_gemini_3_plus_model(
         remembered_model
     )
 
@@ -1387,8 +1390,10 @@ def update_params_for_model(
         )
     use_custom_sampling_update = gr.update(visible=use_custom_sampling_visible)
 
-    is_gemini_3_google = provider == "Google" and is_gemini_3_model(model_name)
-    is_gemini_3_openrouter = provider == "OpenRouter" and is_gemini_3_model(model_name)
+    is_gemini_3_google = provider == "Google" and is_gemini_3_plus_model(model_name)
+    is_gemini_3_openrouter = provider == "OpenRouter" and is_gemini_3_plus_model(
+        model_name
+    )
 
     info_text = get_reasoning_effort_info_text(provider, model_name, reasoning_choices)
     reasoning_effort_label = get_reasoning_effort_label(provider, model_name)
@@ -1868,7 +1873,7 @@ def format_thinking_status(
 
     thinking_status_str = ""
     if provider == "Google" and model_name:
-        if is_gemini_3_model(model_name):
+        if is_gemini_3_plus_model(model_name):
             effort = reasoning_effort or "high"
             thinking_status_str = f" (thinking: {effort})"
         elif is_gemini_25_flash_model(model_name):
@@ -1877,7 +1882,7 @@ def format_thinking_status(
                 thinking_status_str = " (no thinking)"
             else:
                 thinking_status_str = f" (thinking: {effort})"
-    elif provider == "OpenRouter" and is_gemini_3_model(model_name):
+    elif provider == "OpenRouter" and is_gemini_3_plus_model(model_name):
         effort = reasoning_effort or "high"
         thinking_status_str = f" (thinking: {effort})"
     elif (

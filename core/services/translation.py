@@ -46,7 +46,8 @@ from utils.model_metadata import (
     is_anthropic_reasoning_model,
     is_azure_url,
     is_deepseek_reasoning_model,
-    is_gemini_3_model,
+    is_gemini_3_plus_model,
+    is_gemini_4_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
     is_gemini_38_flash_model,
@@ -432,7 +433,7 @@ def _build_generation_config(
         max_tokens_value = max_tokens_cap
 
     if provider == "Google":
-        is_gemini_3 = is_gemini_3_model(model_name)
+        is_gemini_3 = is_gemini_3_plus_model(model_name)
         is_gemma = is_gemma_model(model_name)
         generation_config = {
             "maxOutputTokens": max_tokens_value,
@@ -458,7 +459,9 @@ def _build_generation_config(
             generation_config["media_resolution"] = backend_media_resolution
         if is_gemini_3 or is_gemma:
             reasoning_effort = config.reasoning_effort or "high"
-            if is_gemini_38_flash_model(model_name) and reasoning_effort == "minimal":
+            if (
+                is_gemini_38_flash_model(model_name) or is_gemini_4_model(model_name)
+            ) and reasoning_effort == "minimal":
                 reasoning_effort = "high"
             generation_config["thinkingConfig"] = {"thinkingLevel": reasoning_effort}
             log_message(
@@ -784,7 +787,6 @@ def _build_generation_config(
         is_openai_model = is_openai_model_family(model_name)
         is_anthropic_model = is_anthropic_model_family(model_name)
         is_grok_model = "grok-4" in model_lower
-        is_gemini_3 = is_gemini_3_model(model_name)
         is_google_model = is_google_model_family(model_name)
 
         generation_config = {"max_tokens": max_tokens_value}
@@ -811,7 +813,6 @@ def _build_generation_config(
             "is_openai_model": is_openai_model,
             "is_anthropic_model": is_anthropic_model,
             "is_grok_model": is_grok_model,
-            "is_gemini_3": is_gemini_3,
             "is_google_model": is_google_model,
             "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
             "is_openai_reasoning": is_openai_reasoning,
@@ -851,7 +852,9 @@ def _build_generation_config(
                 generation_config["reasoning_effort"] = config.reasoning_effort
         elif is_google_model and config.reasoning_effort:
             effort = config.reasoning_effort
-            if is_gemini_38_flash_model(model_name) and effort == "minimal":
+            if (
+                is_gemini_38_flash_model(model_name) or is_gemini_4_model(model_name)
+            ) and effort == "minimal":
                 effort = "high"
             generation_config["reasoning_effort"] = effort
 
@@ -1723,7 +1726,7 @@ def _perform_llm_ocr(
         mime_type = mime_types[i] if i < len(mime_types) else "image/jpeg"
         bubble_part = {"inline_data": {"mime_type": mime_type, "data": img_b64}}
         supports_per_part_res = (
-            provider == "Google" and is_gemini_3_model(config.model_name)
+            provider == "Google" and is_gemini_3_plus_model(config.model_name)
         ) or provider == "SpaceXAI"
         if supports_per_part_res:
             bubble_part = _add_media_resolution_to_part(
@@ -1877,7 +1880,7 @@ def call_translation_api_batch(
         return cached_translation
 
     model_name = config.model_name
-    is_gemini_3 = provider == "Google" and is_gemini_3_model(model_name)
+    is_gemini_3 = provider == "Google" and is_gemini_3_plus_model(model_name)
     supports_per_part_res = is_gemini_3 or provider == "SpaceXAI"
     has_full_page = bool(config.send_full_page_context and full_image_b64)
     has_previous_context = bool(

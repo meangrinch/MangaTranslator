@@ -8,6 +8,10 @@ from utils.model_metadata import (
     flux_valid_backend,
     get_max_tokens_cap,
     is_anthropic_no_sampling_model,
+    is_gemini_3_plus_model,
+    is_gemini_4_model,
+    is_gemini_no_sampling_model,
+    is_google_reasoning_model,
     is_opencode_chat_completions_model,
     is_opencode_multimodal_model,
     is_rosetta_model,
@@ -32,6 +36,9 @@ from utils.model_metadata import (
         ("OpenRouter", "openai/gpt-4o", 16384),
         ("OpenRouter", "anthropic/claude-sonnet-4-6", None),
         ("Moonshot AI", "kimi-k2.5", 32768),
+        ("Google", "gemini-4-argon", 32768),
+        ("Google", "gemini-3.8-flash", None),
+        ("OpenRouter", "google/gemini-4-argon", None),
         ("OpenAI", None, None),
     ],
 )
@@ -231,6 +238,20 @@ def test_is_opencode_multimodal_model(model, expected):
 )
 def test_is_opencode_chat_completions_model(model, tier, expected):
     assert is_opencode_chat_completions_model(model, tier) is expected
+
+
+@pytest.mark.parametrize("model", ["gemini-4-argon", "google/gemini-4-argon"])
+def test_gemini_4_is_a_thinking_level_model_without_sampling(model):
+    assert is_gemini_4_model(model)
+    assert is_gemini_3_plus_model(model)
+    assert is_gemini_no_sampling_model(model)
+    assert is_google_reasoning_model(model)
+
+
+def test_gemini_4_does_not_match_gemma_4_or_gemini_3():
+    assert not is_gemini_4_model("gemma-4-31b-it")
+    assert not is_gemini_4_model("gemini-3.8-flash")
+    assert not is_gemini_3_plus_model("gemma-4-31b-it")
 
 
 def test_is_rosetta_model_requires_vendor_and_name():

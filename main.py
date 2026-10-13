@@ -619,21 +619,21 @@ def main():
         type=str,
         choices=["auto", "high", "medium", "low"],
         default="auto",
-        help="Media resolution for Gemini models (Google provider only, not used for Gemini 3)",
+        help="Media resolution for Gemini models (Google provider only, not used for Gemini 3+)",
     )
     parser.add_argument(
         "--media-resolution-bubbles",
         type=str,
         choices=["auto", "high", "medium", "low"],
         default="auto",
-        help="Media resolution for bubble images (Gemini 3 and Grok only)",
+        help="Media resolution for bubble images (Gemini 3+ and Grok only)",
     )
     parser.add_argument(
         "--media-resolution-context",
         type=str,
         choices=["auto", "high", "medium", "low"],
         default="auto",
-        help="Media resolution for context (full page) images (Gemini 3 and Grok only)",
+        help="Media resolution for context (full page) images (Gemini 3+ and Grok only)",
     )
     parser.add_argument(
         "--image-detail",

@@ -150,6 +150,7 @@ def get_max_tokens_cap(provider: str, model_name: str | None) -> int | None:
     Returns:
         - 32768 for OpenAI GPT 4.1 models
         - 16384 for OpenAI GPT 4o models and models with "chat" in the name
+        - 32768 for Gemini 4 models on the Google provider
         - None for all other models (no cap, use existing 63488 max)
     """
     if not model_name:
@@ -176,6 +177,10 @@ def get_max_tokens_cap(provider: str, model_name: str | None) -> int | None:
                 return 16384
     elif provider == "Moonshot AI":
         if "kimi-k2." in model_lower:
+            return 32768
+    elif provider == "Google":
+        # Non-streaming requests stop at 32768 thinking+output tokens on Gemini 4
+        if is_gemini_4_model(model_name):
             return 32768
 
     return None
@@ -879,11 +884,21 @@ def is_gemma_model(model_name: str | None) -> bool:
     return "gemma-" in model_name.lower()
 
 
-def is_gemini_3_model(model_name: str | None) -> bool:
-    """Check if a model is any Gemini 3 variant (3, 3.1, etc.)."""
+def is_gemini_4_model(model_name: str | None) -> bool:
+    """Check if a model is any Gemini 4 variant (e.g., gemini-4-argon)."""
     if not model_name:
         return False
-    return "gemini-3" in model_name.lower()
+    return "gemini-4" in model_name.lower()
+
+
+def is_gemini_3_plus_model(model_name: str | None) -> bool:
+    """Check if a model is Gemini 3 or newer (3, 3.1, 4, etc.).
+
+    Gemini 4 shares the Gemini 3 API surface: thinking levels and per-part media resolution.
+    """
+    if not model_name:
+        return False
+    return "gemini-3" in model_name.lower() or is_gemini_4_model(model_name)
 
 
 def is_gemini_3_flash_model(model_name: str | None) -> bool:
@@ -924,6 +939,7 @@ def is_gemini_no_sampling_model(model_name: str | None) -> bool:
         is_gemini_38_flash_model(model_name)
         or is_gemini_36_flash_model(model_name)
         or is_gemini_35_flash_lite_model(model_name)
+        or is_gemini_4_model(model_name)
     )
 
 
@@ -943,11 +959,11 @@ def is_gemini_25_pro_model(model_name: str | None) -> bool:
 
 
 def is_google_reasoning_model(model_name: str | None) -> bool:
-    """Check if a Google model is reasoning-capable (Gemini 2.5, 3 series, or Gemma)."""
+    """Check if a Google model is reasoning-capable (Gemini 2.5, 3/4 series, or Gemma)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return "gemini-2.5" in lm or "gemini-3" in lm or "gemma-" in lm
+    return "gemini-2.5" in lm or is_gemini_3_plus_model(lm) or "gemma-" in lm
 
 
 def is_rosetta_model(model_name: str | None) -> bool:

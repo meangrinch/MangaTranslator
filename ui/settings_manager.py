@@ -16,6 +16,7 @@ CONFIG_FILE = (
 
 PROVIDER_MODELS: dict[str, list[str]] = {
     "Google": [
+        "gemini-4-argon",
         "gemini-3.8-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash-lite",
