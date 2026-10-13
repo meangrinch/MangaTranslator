@@ -48,7 +48,7 @@
 
 - **错误的阅读顺序：**
   - 设置正确的“阅读方向 (Reading Direction)”（漫画通常为从右向左 `rtl`，美漫等为从左向右 `ltr`）
-  - 对于能力较弱的 LLM，尝试使用“两步 (two-step)”模式或禁用“发送整页给 LLM (Send Full Page to LLM)”
+  - 对于能力较弱的 LLM，尝试使用“两步 (two-step)”模式
   - 确保启用了“面板感知排序 (Use Panel-aware Sorting)”
 
 - **文字太大或太小：**
@@ -106,7 +106,7 @@
 - **翻译质量较差：**
   - 对于能力较弱的 LLM，尝试使用“两步 (two-step)”翻译模式
   - 在“两步 (two-step)”模式下，尝试启用“OCR 校正 (OCR Correction)”，根据上下文修复较差的 OCR 识别文本
-  - 尝试禁用“发送整页给 LLM (Send Full Page to LLM)”
+  - 保持启用“发送整页给 LLM (Send Full Page to LLM)”；没有整页图像时，LLM 在翻译拟声词时无法看到它们对应的画面
   - 尝试使用本地 OCR 方法，特别是对于能力较弱 of LLM：
     - "manga-ocr": 仅限日语源文本
     - "paddleocr-vl-1.6": 非日语源文本
@@ -114,6 +114,9 @@
   - 将“气泡/上下文缩放方法 (Bubble/Context Resizing Method)”切换到质量更好的方法（例如 "Model"）
   - 在批量模式下，尝试提高“前文 OCR 文本 (Previous Context OCR Text)”
   - 在批量模式下，尝试提高“前文图像 (Previous Context Images)”（需要开启“发送整页给 LLM”）
+
+- **本地 LLM 返回空响应、超时或请求缓慢：**
+  - 在服务器端禁用推理 (reasoning) 以防止过度思考（例如 llama.cpp 的 `--reasoning off`）
 
 - **API 拒绝/审查拦截：**
   - 尝试启用“Ero-doujinshi 模式 (Ero-doujinshi Mode)”（针对 18+ 成人内容）
@@ -123,7 +126,7 @@
 - **LLM Token 消耗量过高：**
   - 禁用“发送整页给 LLM (Send Full Page to LLM)”
   - 将“前文图像 (Previous Context Images)”和“前文 OCR 文本 (Previous Context OCR Text)”设置为 0
-  - 降低“气泡最小边长 (Bubble Min Side Pixels)”/“上下文图像最大边长 (Context Image Max Side Pixels)”/“OSB 最小边长 (OSB Min Side Pixels)”的目标大小
+  - 降低“气泡最小边长 (Bubble Min Side Pixels)”/“上下文图像最大边长 (Context Image Max Side Pixels)”/“OSB 最小边长 (OSB Min Side Pixels)”的目标大小（对每张图像使用固定 Token 数的模型无效）
   - 降低“媒体分辨率 (Media Resolution)”（如果使用 Gemini 或 SpaceXAI 模型）
   - 降低“图像细节 (Image Detail)”（如果使用 OpenAI 模型）
   - 使用 "manga-ocr/paddleocr-vl-1.6" OCR 方法（其效果可能不及更强的多模态模型）

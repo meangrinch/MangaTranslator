@@ -662,7 +662,7 @@ def main():
         action="store_false",
         help=(
             "Disable including the full page image as context for translation. Enable if "
-            "encountering refusals or using less-capable LLMs"
+            "encountering refusals or to reduce token usage"
         ),
     )
     parser.add_argument(

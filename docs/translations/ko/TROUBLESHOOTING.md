@@ -48,7 +48,7 @@
 
 - **말풍선 읽기 순서가 올바르지 않음:**
   - 올바른 "읽기 방향 (Reading Direction)"을 설정하세요 (일본/한국 만화의 경우 `rtl`(우횡서/우에서 좌로), 웹툰이나 미국 만화의 경우 `ltr`(좌횡서/좌에서 우로)).
-  - 다소 성능이 떨어지는 LLM의 경우, "2단계 (two-step)" 번역 모드를 사용해 보거나 "전체 페이지를 LLM으로 전송 (Send Full Page to LLM)" 옵션을 비활성화해 보세요.
+  - 다소 성능이 떨어지는 LLM의 경우, "2단계 (two-step)" 번역 모드를 사용해 보세요.
   - "컷 감지 정렬 사용 (Use Panel-aware Sorting)" 옵션이 활성화되어 있는지 확인하세요.
 
 - **텍스트 크기가 너무 크거나 작음:**
@@ -105,7 +105,7 @@
 - **번역 품질이 좋지 않음:**
   - 성능이 낮은 LLM의 경우 "2단계 (two-step)" 번역 모드를 사용해 보세요.
   - "2단계 (two-step)" 모드에서는 "OCR 보정 (OCR Correction)" 옵션을 활성화하여 문맥에 맞게 불완전한 OCR 텍스트를 보정해 보세요.
-  - "전체 페이지를 LLM으로 전송 (Send Full Page to LLM)" 옵션을 비활성화해 보세요.
+  - "전체 페이지를 LLM으로 전송 (Send Full Page to LLM)" 옵션을 활성화된 상태로 유지하세요. 페이지가 없으면 효과음이 무엇의 소리인지 모른 채 번역됩니다.
   - 성능이 낮은 LLM을 사용할 때는 다음과 같은 로컬 OCR 방식을 병행해 보세요:
     - "manga-ocr": 일본어 원본 전용
     - "paddleocr-vl-1.6": 일본어 이외의 원본용
@@ -113,6 +113,9 @@
   - "말풍선/컨텍스트 크기 조정 방식 (Bubble/Context Resizing Method)"을 더 고품질의 방식(예: "Model")으로 변경하세요.
   - 배치(일괄) 모드에서 "이전 컨텍스트 OCR 텍스트 (Previous Context OCR Text)" 값을 늘려보세요.
   - 배치 모드에서 "이전 컨텍스트 이미지 (Previous Context Images)" 값을 늘려보세요 ("전체 페이지를 LLM으로 전송" 옵션 필요).
+
+- **로컬 LLM에서 빈 응답, 시간 초과 또는 느린 요청이 발생함:**
+  - 과도한 추론을 방지하려면 서버에서 추론(reasoning)을 비활성화하세요 (예: llama.cpp의 `--reasoning off`).
 
 - **API 거부/검열 발생:**
   - "에로 동인지 모드 (Ero-doujinshi Mode)" 옵션을 활성화해 보세요 (성인용 18+ 콘텐츠의 경우).
@@ -122,7 +125,7 @@
 - **LLM 토큰 사용량이 지나치게 높음:**
   - "전체 페이지를 LLM으로 전송 (Send Full Page to LLM)" 옵션을 비활성화하세요.
   - "이전 컨텍스트 이미지 (Previous Context Images)" 및 "이전 컨텍스트 OCR 텍스트 (Previous Context OCR Text)"를 0으로 설정하세요.
-  - "말풍선 최소 가로세로 픽셀 (Bubble Min Side Pixels)", "컨텍스트 이미지 최대 가로세로 픽셀 (Context Image Max Side Pixels)", "OSB 최소 가로세로 픽셀 (OSB Min Side Pixels)"의 대상 크기를 낮추세요.
+  - "말풍선 최소 가로세로 픽셀 (Bubble Min Side Pixels)", "컨텍스트 이미지 최대 가로세로 픽셀 (Context Image Max Side Pixels)", "OSB 최소 가로세로 픽셀 (OSB Min Side Pixels)"의 대상 크기를 낮추세요 (이미지당 토큰 수가 고정된 모델에서는 효과가 없습니다).
   - "미디어 해상도 (Media Resolution)"를 낮추세요 (Gemini 또는 SpaceXAI 모델을 사용하는 경우).
   - "이미지 디테일 (Image Detail)"을 낮추세요 (OpenAI 모델을 사용하는 경우).
   - "manga-ocr" 또는 "paddleocr-vl-1.6" OCR 방식을 사용하세요 (다만, 고성능 VLM을 직접 사용하는 것보다 인식률이 떨어질 수 있습니다).

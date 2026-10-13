@@ -48,7 +48,7 @@
 
 - **読む順番が正しくない:**
   - 正しい「読む方向（Reading Direction）」を設定してください（日本の漫画の場合は `rtl` (右から左)、アメコミなどの場合は `ltr` (左から右)）。
-  - 性能の低い LLM の場合は、「2ステップ（two-step）」モードを試すか、「ページ全体を LLM に送信（Send Full Page to LLM）」を無効にしてみてください。
+  - 性能の低い LLM の場合は、「2ステップ（two-step）」モードを試してください。
   - 「コマを考慮したソート（Use Panel-aware Sorting）」が有効になっていることを確認してください。
 
 - **テキストが大きすぎる / 小さすぎる:**
@@ -105,7 +105,7 @@
 - **翻訳の品質が悪い:**
   - 性能の低い LLM の場合は、「2ステップ（two-step）」翻訳モードを試してください。
   - 「2ステップ（two-step）」モードでは、「OCR 補正（OCR Correction）」を有効にして、文脈に基づいて不完全な OCR 結果を補正してみてください。
-  - 「ページ全体を LLM に送信（Send Full Page to LLM）」を無効にしてみてください。
+  - 「ページ全体を LLM に送信（Send Full Page to LLM）」は有効のままにしてください。ページがないと、効果音が何の音か分からないまま翻訳されます。
   - 性能 of 低い LLM を使用する場合は、ローカルの OCR 方法を試してください:
     - "manga-ocr": 日本語の原文のみ
     - "paddleocr-vl-1.6": 日本語以外の原文
@@ -113,6 +113,9 @@
   - 「吹き出し/文脈リサイズ方法（Bubble/Context Resizing Method）」をより高品質な方法（例: "Model"）に切り替えてください。
   - バッチモードでは、「前文の OCR テキスト（Previous Context OCR Text）」を増やしてみてください。
   - バッチモードでは、「前文の画像（Previous Context Images）」を増やしてみてください（「ページ全体を LLM に送信」が必要です）。
+
+- **ローカル LLM で空の応答・タイムアウト・リクエストの遅延が発生する:**
+  - 考えすぎを防ぐため、サーバー側で推論（reasoning）を無効にしてください（例: llama.cpp の `--reasoning off`）。
 
 - **API の拒否 / 検閲による規制:**
   - 「エロ同人誌モード（Ero-doujinshi Mode）」を有効にしてみてください（18禁・成人向けコンテンツの場合）。
@@ -122,7 +125,7 @@
 - **LLM のトークン使用量が高すぎる:**
   - 「ページ全体を LLM に送信（Send Full Page to LLM）」を無効にしてください。
   - 「前文の画像（Previous Context Images）」および「前文の OCR テキスト（Previous Context OCR Text）」を 0 に設定してください。
-  - 「吹き出し最小短辺ピクセル（Bubble Min Side Pixels）」/「文脈画像最大長辺ピクセル（Context Image Max Side Pixels）」/「OSB 最小短辺ピクセル（OSB Min Side Pixels）」のターゲットサイズを下げてください。
+  - 「吹き出し最小短辺ピクセル（Bubble Min Side Pixels）」/「文脈画像最大長辺ピクセル（Context Image Max Side Pixels）」/「OSB 最小短辺ピクセル（OSB Min Side Pixels）」のターゲットサイズを下げてください（画像 1 枚あたりのトークン数が固定のモデルでは効果がありません）。
   - 「メディア解像度（Media Resolution）」を下げてください（Gemini または SpaceXAI 모델を使用している場合）。
   - 「画像ディテール（Image Detail）」を下げてください（OpenAI モデルを使用している場合）。
   - "manga-ocr/paddleocr-vl-1.6" OCR 方法を使用してください（より高性能な VLM を直接使用するよりも性能が劣る場合があります）。

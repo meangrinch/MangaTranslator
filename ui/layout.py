@@ -1355,8 +1355,8 @@ def create_layout(
                                 ),
                                 label="Send Full Page to LLM",
                                 info=(
-                                    "Include full page image as context. Might improve translation quality. "
-                                    "Disable if refusals/using less-capable models or to reduce token usage."
+                                    "Include full page image as context. Helps most with sound effects. "
+                                    "Disable if encountering refusals or to reduce token usage."
                                 ),
                                 interactive=initial_ocr_method
                                 not in ("manga-ocr", "paddleocr-vl-1.6"),

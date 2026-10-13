@@ -33,10 +33,10 @@
 
 ### 纯文本模型与术语表
 
-通过 OpenAI-Compatible 服务商使用以下模型时会自动检测并获得优化的提示词。它们是纯文本模型，需要两步翻译模式加本地 OCR。`special_instructions` 字段映射到其术语表格式（每行一条，例如 `term -> translation`）：
+通过 OpenAI-Compatible 服务商使用以下模型时会自动检测并获得优化的提示词。它们是纯文本模型，需要两步翻译模式加本地 OCR。术语表条目填写在 `special_instructions` 字段中（每行一条，例如 `term -> translation`）：
 
-- **YanoljaNEXT-Rosetta**（例如 `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`）
-- **Hy-MT2**（例如 `tencent/Hy-MT2-7B`），同时会自动预填推荐的采样参数
+- **YanoljaNEXT-Rosetta**（例如 `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`），使用其自有的 JSON 提示词格式，并将 `special_instructions` 映射到其术语表字段
+- **Hy-MT2**（例如 `tencent/Hy-MT2-7B`），使用精简的系统提示词，并在 Web UI 中自动预填推荐的采样参数
 
 ---
 

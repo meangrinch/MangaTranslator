@@ -48,7 +48,7 @@
 
 - **Incorrect reading order:**
   - Set correct "Reading Direction" (rtl for manga, ltr for comics and manhwa/manhua)
-  - Try "two-step" mode or disabling "Send Full Page to LLM" for less-capable LLMs
+  - Try "two-step" mode for less-capable LLMs
   - Ensure "Use Panel-aware Sorting" is enabled
 
 - **Text too large/small:**
@@ -106,7 +106,7 @@
 - **Poor translations:**
   - Try "two-step" translation mode for less-capable LLMs
   - In "two-step" mode, try enabling "OCR Correction" to contextually repair poor OCR transcripts
-  - Try disabling "Send Full Page to LLM"
+  - Keep "Send Full Page to LLM" enabled; without the page, sound effects are translated without seeing what they belong to
   - Try using a local OCR method, particularly for less-capable LLMs:
     - "manga-ocr": Japanese sources only
     - "paddleocr-vl-1.6": non-Japanese sources
@@ -114,6 +114,9 @@
   - Switch "Bubble/Context Resizing Method" to a better quality method (e.g., "Model")
   - In batch mode, try raising "Previous Context OCR Text"
   - In batch mode, try raising "Previous Context Images" (requires "Send Full Page to LLM")
+
+- **Empty responses, timeouts, or slow requests with local LLMs:**
+  - Disable reasoning on the server to prevent overthinking (e.g., `--reasoning off` in llama.cpp)
 
 - **API refusals/censorship:**
   - Try enabling "Ero-doujinshi Mode" (for 18+ content)
@@ -123,7 +126,7 @@
 - **High LLM token usage:**
   - Disable "Send Full Page to LLM"
   - Set "Previous Context Images" and "Previous Context OCR Text" to 0
-  - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes
+  - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes (no effect on models that use a fixed number of tokens per image)
   - Lower "Media Resolution" (if using Gemini or SpaceXAI models)
   - Lower "Image Detail" (if using OpenAI models)
   - Use "manga-ocr/paddleocr-vl-1.6" OCR method (may perform worse than more-capable VLMs)

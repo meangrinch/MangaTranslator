@@ -33,10 +33,10 @@
 
 ### テキスト専用モデルと用語集
 
-以下のモデルは、OpenAI-Compatibleプロバイダー経由で使用すると自動検出され、最適化されたプロンプトが適用されます。テキスト専用モデルのため、2段階翻訳モードとローカルOCRが必要です。`special_instructions` フィールドは用語集フォーマット（1行に1項目、例：`term -> translation`）にマッピングされます：
+以下のモデルは、OpenAI-Compatibleプロバイダー経由で使用すると自動検出され、最適化されたプロンプトが適用されます。テキスト専用モデルのため、2段階翻訳モードとローカルOCRが必要です。用語集の項目は `special_instructions` フィールドに記入します（1行に1項目、例：`term -> translation`）：
 
-- **YanoljaNEXT-Rosetta**（例：`yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`）
-- **Hy-MT2**（例：`tencent/Hy-MT2-7B`、推奨サンプリングパラメータも自動入力されます）
+- **YanoljaNEXT-Rosetta**（例：`yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`、独自のJSONプロンプト形式を使用し、`special_instructions` は用語集フィールドにマッピングされます）
+- **Hy-MT2**（例：`tencent/Hy-MT2-7B`、コンパクトなシステムプロンプトを使用し、Web UIでは推奨サンプリングパラメータが自動入力されます）
 
 ---
 

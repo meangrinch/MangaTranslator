@@ -33,10 +33,10 @@
 
 ### 텍스트 전용 모델 및 용어집
 
-다음 모델은 OpenAI-Compatible 제공자를 통해 사용할 때 자동으로 감지되어 최적화된 프롬프트를 받습니다. 텍스트 전용 모델이며 2단계 번역 및 로컬 OCR이 필요합니다. `special_instructions` 필드는 해당 모델의 용어집 형식(한 줄에 하나의 항목, 예: `term -> translation`)에 매핑됩니다:
+다음 모델은 OpenAI-Compatible 제공자를 통해 사용할 때 자동으로 감지되어 최적화된 프롬프트를 받습니다. 텍스트 전용 모델이며 2단계 번역 및 로컬 OCR이 필요합니다. 용어집 항목은 `special_instructions` 필드에 입력합니다(한 줄에 하나의 항목, 예: `term -> translation`):
 
-- **YanoljaNEXT-Rosetta** (예: `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`)
-- **Hy-MT2** (예: `tencent/Hy-MT2-7B`), 권장 샘플링 매개변수도 자동으로 미리 채워집니다.
+- **YanoljaNEXT-Rosetta** (예: `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`), 자체 JSON 프롬프트 형식을 사용하며 `special_instructions`가 용어집 필드에 매핑됩니다.
+- **Hy-MT2** (예: `tencent/Hy-MT2-7B`), 간결한 시스템 프롬프트를 사용하며 웹 UI에서 권장 샘플링 매개변수가 자동으로 미리 채워집니다.
 
 ---
 

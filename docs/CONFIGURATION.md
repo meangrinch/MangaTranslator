@@ -33,10 +33,10 @@ All required models are downloaded automatically on first use.
 
 ### Text-Only Models & Glossaries
 
-The following models are automatically detected when used via the OpenAI-Compatible provider and receive optimized prompting. They are text-only and require two-step translation + local OCR. The `special_instructions` field maps to their glossary format (one entry per line, e.g., `term -> translation`):
+The following models are automatically detected when used via the OpenAI-Compatible provider and receive optimized prompting. They are text-only and require two-step translation + local OCR. Glossary entries go in the `special_instructions` field (one entry per line, e.g., `term -> translation`):
 
-- **YanoljaNEXT-Rosetta** (e.g., `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`)
-- **Hy-MT2** (e.g., `tencent/Hy-MT2-7B`), which also pre-fills recommended sampling parameters
+- **YanoljaNEXT-Rosetta** (e.g., `yanolja/YanoljaNEXT-Rosetta-4B-2511-GGUF`), which uses its own JSON prompt format with `special_instructions` mapped to its glossary field
+- **Hy-MT2** (e.g., `tencent/Hy-MT2-7B`), which uses a compact system prompt and has its recommended sampling parameters pre-filled in the web UI
 
 ---
 
