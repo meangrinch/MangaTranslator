@@ -3,11 +3,14 @@ import base64
 import math
 import os
 import re
+import tempfile
 import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -43,6 +46,8 @@ from .image.image_utils import (
     upscale_image_to_dimension,
 )
 from .image.sorting import sort_bubbles_by_reading_order, sort_panels_by_reading_order
+from .image.strip_splitting import TARGET_RATIO as STRIP_TARGET_RATIO
+from .image.strip_splitting import find_cut_rows
 from .image.tilt_detection import compute_effective_tilt_angle
 from .ml.model_manager import get_model_manager
 from .outside_text_processor import (
@@ -640,6 +645,126 @@ def _apply_pre_upscale_if_needed(
     return upscaled, factor
 
 
+def _detect_strip_text_rows(
+    crop: Image.Image, image_path: Path, config: MangaTranslatorConfig
+) -> list[tuple[int, int]]:
+    """Row ranges occupied by bubbles and text in a strip crop, for choosing cut rows."""
+    bubbles, text_free_boxes = detect_speech_bubbles(
+        image_path,
+        config.yolo_model_path,
+        config.detection.confidence,
+        verbose=config.verbose,
+        device=config.device,
+        conjoined_detection=config.detection.conjoined_detection,
+        conjoined_confidence=config.detection.conjoined_confidence,
+        image_override=crop,
+        bubble_detector_model=config.detection.bubble_detector_model,
+    )
+    boxes = [bubble["bbox"] for bubble in bubbles] + list(text_free_boxes)
+    return [(int(box[1]), int(box[3])) for box in boxes]
+
+
+def _translate_strip(
+    image_path: Path,
+    strip: Image.Image,
+    cut_rows: list[int],
+    config: MangaTranslatorConfig,
+    output_path: str | Path | None,
+    target_mode: str,
+    cancellation_manager: Optional["CancellationManager"],
+    previous_context_images: list[dict[str, str]],
+    previous_context_texts: list[list[str]],
+    previous_context_texts_provider: Callable[[], list[list[str]]] | None,
+    ocr_texts_out: list[str] | None,
+) -> Image.Image:
+    """Translate a long strip section by section and stitch the results back together."""
+    start_time = time.time()
+    width, height = strip.size
+    bounds = [0, *cut_rows, height]
+    log_message(
+        f"Long strip ({width}x{height}): splitting into {len(bounds) - 1} sections "
+        f"at rows {cut_rows}",
+        always_print=True,
+    )
+
+    section_config = replace(
+        config,
+        preprocessing=replace(config.preprocessing, split_long_strips=False),
+    )
+    if config.preprocessing.auto_scale:
+        # Section heights vary, so scaling each by its own area would change font sizes
+        # and kernels from one section to the next. All share a nominal section's scale.
+        pre_upscale = _resolve_pre_upscale_factor(config.preprocessing)
+        section_config = replace(
+            section_config,
+            processing_scale=math.sqrt(STRIP_TARGET_RATIO) * width * pre_upscale / 1000,
+            preprocessing=replace(section_config.preprocessing, auto_scale=False),
+        )
+    # Sections of one image are one page to the reader, so they always share context.
+    context_count = max(
+        int(getattr(config.translation, "previous_context_text_count", 0) or 0), 1
+    )
+    section_texts: list[list[str]] = []
+
+    def context_texts() -> list[list[str]]:
+        incoming = (
+            previous_context_texts_provider()
+            if previous_context_texts_provider is not None
+            else previous_context_texts
+        )
+        return [*(incoming or []), *section_texts][-context_count:]
+
+    sections: list[Image.Image] = []
+    # Open image handles can outlive a section on Windows and block directory removal.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
+        for index, (top, bottom) in enumerate(pairwise(bounds)):
+            log_message(
+                f"Processing section {index + 1}/{len(bounds) - 1} (rows {top}-{bottom})",
+                always_print=True,
+            )
+            section_path = Path(temp_dir) / f"{image_path.stem}_section{index + 1}.png"
+            strip.crop((0, top, width, bottom)).save(section_path)
+            texts: list[str] = []
+            section = translate_and_render(
+                section_path,
+                section_config,
+                cancellation_manager=cancellation_manager,
+                previous_context_images=previous_context_images,
+                previous_context_texts_provider=context_texts,
+                ocr_texts_out=texts,
+            )
+            sections.append(
+                section if section.mode == target_mode else section.convert(target_mode)
+            )
+            if texts:
+                section_texts.append(texts)
+                if ocr_texts_out is not None:
+                    ocr_texts_out.extend(texts)
+
+    stitched = Image.new(
+        target_mode, (sections[0].width, sum(section.height for section in sections))
+    )
+    offset = 0
+    for section in sections:
+        stitched.paste(section, (0, offset))
+        offset += section.height
+
+    if output_path:
+        save_image_with_compression(
+            stitched,
+            output_path,
+            jpeg_quality=config.output.jpeg_quality,
+            png_compression=config.output.png_compression,
+            verbose=config.verbose,
+        )
+
+    log_message(
+        f"Strip processing completed in {time.time() - start_time:.2f}s",
+        always_print=True,
+    )
+    return stitched
+
+
 def translate_and_render(
     image_path: str | Path,
     config: MangaTranslatorConfig,
@@ -721,6 +846,27 @@ def translate_and_render(
     pil_image_processed = convert_image_to_target_mode(
         pil_original, target_mode, verbose
     )
+
+    if config.preprocessing.split_long_strips and not config.upscaling_only:
+        cut_rows = find_cut_rows(
+            pil_image_processed,
+            lambda crop: _detect_strip_text_rows(crop, image_path, config),
+        )
+        if cut_rows:
+            return _translate_strip(
+                image_path,
+                pil_image_processed,
+                cut_rows,
+                config,
+                output_path,
+                target_mode,
+                cancellation_manager,
+                previous_context_images,
+                previous_context_texts,
+                previous_context_texts_provider,
+                ocr_texts_out,
+            )
+
     pil_image_processed, _ = _apply_pre_upscale_if_needed(
         pil_image_processed, config, verbose
     )
@@ -775,7 +921,7 @@ def translate_and_render(
             f"Dynamic processing scale: {processing_scale:.2f}x", verbose=verbose
         )
     else:
-        processing_scale = 1.0
+        processing_scale = config.processing_scale
 
     get_cache().set_current_image(pil_image_processed, verbose)
 

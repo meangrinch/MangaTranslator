@@ -242,6 +242,7 @@ DEFAULT_SETTINGS = {
     "media_resolution_bubbles": "auto",  # Gemini 3 models
     "media_resolution_context": "auto",  # Gemini 3 models
     "auto_scale": True,
+    "split_long_strips": True,
     "send_full_page_context": True,
     "whiteout_conjoined_bubbles": True,
     "special_instructions": "",

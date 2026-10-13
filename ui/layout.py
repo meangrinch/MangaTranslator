@@ -2377,6 +2377,15 @@ def create_layout(
                                     "across different image resolutions."
                                 ),
                             )
+                            split_long_strips = gr.Checkbox(
+                                value=saved_settings.get("split_long_strips", True),
+                                label="Split Long Strips",
+                                info=(
+                                    "Translate manhwa/manhua strips taller than 8x their width "
+                                    "in sections and stitch them back together. Improves bubble "
+                                    "detection on very long images."
+                                ),
+                            )
                         setting_groups.append(group_output)
 
                         # --- Other Settings ---
@@ -2567,6 +2576,7 @@ def create_layout(
             image_upscale_factor,
             image_upscale_model,
             auto_scale,
+            split_long_strips,
             batch_parallel_requests,
             batch_parallel_within_pages,
             overlap_llm_with_inpaint,
@@ -2713,6 +2723,7 @@ def create_layout(
             image_upscale_factor,
             image_upscale_model,
             auto_scale,
+            split_long_strips,
             batch_parallel_requests,
             batch_parallel_within_pages,
             overlap_llm_with_inpaint,
@@ -2852,6 +2863,7 @@ def create_layout(
             image_upscale_factor,
             image_upscale_model,
             auto_scale,
+            split_long_strips,
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,
@@ -2999,6 +3011,7 @@ def create_layout(
             image_upscale_factor,
             image_upscale_model,
             auto_scale,
+            split_long_strips,
             batch_input_language,
             batch_output_language,
             batch_font_dropdown,

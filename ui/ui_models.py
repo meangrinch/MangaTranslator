@@ -213,6 +213,7 @@ class UIGeneralSettings:
         None  # GPT-5 series only: controls response verbosity (high/medium/low)
     )
     auto_scale: bool = True
+    split_long_strips: bool = True
     overlap_llm_with_inpaint: bool = False
 
 
@@ -391,6 +392,7 @@ class UIConfigState:
             "effort": self.general.effort,
             "verbosity": self.general.verbosity,
             "auto_scale": self.general.auto_scale,
+            "split_long_strips": self.general.split_long_strips,
             "input_language": self.input_language,
             "output_language": self.output_language,
             "batch_input_language": self.batch_input_language,
@@ -764,6 +766,9 @@ class UIConfigState:
                 effort=data.get("effort", defaults.get("effort", "medium")),
                 verbosity=data.get("verbosity", defaults.get("verbosity", "low")),
                 auto_scale=data.get("auto_scale", defaults.get("auto_scale", True)),
+                split_long_strips=data.get(
+                    "split_long_strips", defaults.get("split_long_strips", True)
+                ),
                 overlap_llm_with_inpaint=bool(
                     data.get(
                         "overlap_llm_with_inpaint",
@@ -997,6 +1002,7 @@ def map_ui_to_backend_config(
         enabled=upscale_mode == "initial",
         factor=upscale_factor,
         auto_scale=ui_state.general.auto_scale,
+        split_long_strips=ui_state.general.split_long_strips,
     )
 
     backend_config = MangaTranslatorConfig(

@@ -565,6 +565,15 @@ def main():
             "based on image size relative to 1MP. Prevents consistent behavior across different image resolutions."
         ),
     )
+    parser.add_argument(
+        "--no-split-long-strips",
+        action="store_false",
+        dest="split_long_strips",
+        help=(
+            "Disable splitting of long manhwa/manhua strips (taller than 8x their width) "
+            "into sections that are translated separately and stitched back together."
+        ),
+    )
     # General args
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--cpu", action="store_true", help="Force CPU usage")
@@ -1004,6 +1013,7 @@ def main():
     parser.set_defaults(send_full_page_context=True)
     parser.set_defaults(whiteout_conjoined_bubbles=True)
     parser.set_defaults(auto_scale=True)
+    parser.set_defaults(split_long_strips=True)
     parser.set_defaults(
         verbose=False,
         cpu=False,
@@ -1448,6 +1458,7 @@ def main():
             enabled=args.image_upscale_mode == "initial",
             factor=args.image_upscale_factor,
             auto_scale=args.auto_scale,
+            split_long_strips=args.split_long_strips,
         ),
         test_mode=args.test_mode,
     )

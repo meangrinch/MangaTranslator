@@ -282,6 +282,7 @@ class PreprocessingConfig:
     enabled: bool = False
     factor: float = 2.0
     auto_scale: bool = True
+    split_long_strips: bool = True
 
 
 def calculate_reasoning_budget(total_tokens: int, effort_level: str) -> int:
