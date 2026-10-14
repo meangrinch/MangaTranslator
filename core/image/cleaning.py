@@ -165,7 +165,6 @@ def _build_adaptive_shrink_mask(
     shrink pinches off narrow junction passages and leaves remnant text.
     """
     adjacency_margin = max(1, round(JUNCTION_ADJACENCY_MARGIN * processing_scale))
-    junction_min_shrink = max(1.0, JUNCTION_MIN_SHRINK * processing_scale)
 
     dist_map = cv2.distanceTransform(
         roi_mask, cv2.DIST_L2, DISTANCE_TRANSFORM_MASK_SIZE
@@ -195,7 +194,9 @@ def _build_adaptive_shrink_mask(
             continue
 
         junction_slice = dist_map[zone_y1:zone_y2, zone_x1:zone_x2]
-        restored = np.where(junction_slice >= junction_min_shrink, 255, 0).astype(
+        # Not scaled: ROI edge pixels sit at distance exactly 1.0, so a scaled
+        # threshold drops that ring and strands text straddling the split line
+        restored = np.where(junction_slice >= JUNCTION_MIN_SHRINK, 255, 0).astype(
             np.uint8
         )
         np.bitwise_or(
