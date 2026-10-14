@@ -1010,7 +1010,7 @@ def handle_batch_click(
 
         if not zip_file_path and not input_files:
             raise gr.Error(
-                f"{ERROR_PREFIX}Please upload images, a folder, a ZIP archive, "
+                f"{ERROR_PREFIX}Please upload images, a folder, a ZIP/CBZ archive, "
                 "or a failed-paths .txt file."
             )
 

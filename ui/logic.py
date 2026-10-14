@@ -11,7 +11,7 @@ from PIL import Image
 from core.config import MangaTranslatorConfig, RenderingConfig
 from core.pipeline import batch_translate_images, translate_and_render
 from core.validation import validate_batch_input_path, validate_core_inputs
-from utils.archive import safe_extract_zip
+from utils.archive import ARCHIVE_SUFFIXES, safe_extract_zip
 from utils.exceptions import (
     CancellationError,
     CleaningError,
@@ -268,7 +268,7 @@ def process_batch_logic(
     Args:
         input_dir_or_files: Can be one of:
             - Path to input directory (str)
-            - Path to ZIP archive (str ending in .zip)
+            - Path to ZIP archive (str ending in .zip or .cbz)
             - Path to failed-paths .txt (str ending in .txt)
             - List of file paths (List[str])
             - Dictionary with both "zip" and "files" keys to process both simultaneously (Dict[str, Any])
@@ -419,7 +419,7 @@ def process_batch_logic(
         elif isinstance(input_dir_or_files, str):
             input_path = validate_batch_input_path(input_dir_or_files)
 
-            if input_path.is_file() and input_path.suffix.lower() == ".zip":
+            if input_path.is_file() and input_path.suffix.lower() in ARCHIVE_SUFFIXES:
                 extracted_path, zip_temp_dir_obj = extract_zip_to_temp(input_path)
                 process_dir = extracted_path
                 preserve_structure = True

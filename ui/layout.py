@@ -430,9 +430,9 @@ def create_layout(
                             type="filepath",
                         )
                         input_zip = gr.File(
-                            label="Upload ZIP Archive (preserves directory structure) or failed_paths.txt",
+                            label="Upload ZIP/CBZ Archive (preserves directory structure) or failed_paths.txt",
                             file_count="single",
-                            file_types=[".zip", ".txt"],
+                            file_types=[".zip", ".cbz", ".txt"],
                             type="filepath",
                         )
                         batch_font_dropdown = gr.Dropdown(

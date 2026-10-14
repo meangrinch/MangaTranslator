@@ -1,10 +1,11 @@
+import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 
 import pytest
 
 from core.scaling import scale_kernel
 from utils import update_checker
-from utils.archive import safe_extract_zip
+from utils.archive import copy_comic_info, safe_extract_zip
 from utils.path_list import read_image_paths_from_txt, write_failed_paths
 
 
@@ -32,6 +33,43 @@ def test_safe_extract_zip_rejects_path_traversal(tmp_path):
         safe_extract_zip(zf, dest)
     assert not (tmp_path / "evil.png").exists()
     assert not (dest / "ok.png").exists()
+
+
+def test_copy_comic_info_sets_target_language(tmp_path):
+    src = tmp_path / "in"
+    (src / "ch2").mkdir(parents=True)
+    (src / "ComicInfo.xml").write_text(
+        "<ComicInfo><Series>S</Series><LanguageISO>ja</LanguageISO></ComicInfo>",
+        encoding="utf-8",
+    )
+    (src / "ch2" / "comicinfo.xml").write_text(
+        "<ComicInfo><Series>S2</Series></ComicInfo>", encoding="utf-8"
+    )
+    out = tmp_path / "out"
+
+    copy_comic_info(src, out, "chinese (simplified)", preserve_structure=True)
+
+    root = ET.parse(out / "ComicInfo.xml").getroot()
+    assert root.findtext("Series") == "S"
+    assert root.findtext("LanguageISO") == "zh-Hans"
+    assert (
+        ET.parse(out / "ch2" / "comicinfo.xml").getroot().findtext("LanguageISO")
+        == "zh-Hans"
+    )
+
+
+def test_copy_comic_info_drops_unknown_language_and_skips_subdirs(tmp_path):
+    src = tmp_path / "in"
+    (src / "ch2").mkdir(parents=True)
+    xml = "<ComicInfo><LanguageISO>ja</LanguageISO></ComicInfo>"
+    (src / "ComicInfo.xml").write_text(xml, encoding="utf-8")
+    (src / "ch2" / "ComicInfo.xml").write_text(xml, encoding="utf-8")
+    out = tmp_path / "out"
+
+    copy_comic_info(src, out, "Klingon", preserve_structure=False)
+
+    assert ET.parse(out / "ComicInfo.xml").getroot().find("LanguageISO") is None
+    assert not (out / "ch2").exists()
 
 
 @pytest.mark.parametrize(

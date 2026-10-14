@@ -11,7 +11,7 @@ import time
 import zipfile
 from pathlib import Path
 
-from utils.archive import safe_extract_zip
+from utils.archive import ARCHIVE_SUFFIXES, safe_extract_zip
 from utils.model_metadata import (
     FLUX_SDCPP_DIFFUSION_QUANTS,
     FLUX_SDCPP_TEXT_ENCODER_QUANTS,
@@ -30,7 +30,7 @@ def main():
         type=str,
         required=True,
         help=(
-            "Path to input image; with --batch: directory, ZIP archive, "
+            "Path to input image; with --batch: directory, ZIP/CBZ archive, "
             "or failed_paths.txt"
         ),
     )
@@ -44,7 +44,7 @@ def main():
         "--batch",
         action="store_true",
         help=(
-            "Process all images in the input directory, ZIP archive "
+            "Process all images in the input directory, ZIP/CBZ archive "
             "(preserves folder structure), or failed_paths.txt"
         ),
     )
@@ -1484,7 +1484,7 @@ def main():
             None
             if suffix == ".txt"
             else input_path.stem
-            if suffix == ".zip"
+            if suffix in ARCHIVE_SUFFIXES
             else input_path.resolve().name
         )
         zip_temp_dir_obj = None
@@ -1492,7 +1492,7 @@ def main():
         preserve_structure = False
         source_path_map = None
 
-        if input_path.is_file() and input_path.suffix.lower() == ".zip":
+        if input_path.is_file() and suffix in ARCHIVE_SUFFIXES:
             log_message(f"Detected ZIP archive: {input_path.name}", always_print=True)
             try:
                 temp_dir_obj = tempfile.TemporaryDirectory()
@@ -1569,7 +1569,7 @@ def main():
         elif not input_path.is_dir():
             log_message(
                 f"Error: --batch requires --input '{args.input}' to be a directory, "
-                "ZIP archive, or failed-paths .txt file.",
+                "ZIP/CBZ archive, or failed-paths .txt file.",
                 always_print=True,
             )
             sys.exit(1)

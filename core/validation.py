@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any
 
 from core.config import MangaTranslatorConfig, RenderingConfig, TranslationConfig
+from utils.archive import ARCHIVE_SUFFIXES
 from utils.exceptions import ValidationError
 
 SETTING_CONSTRAINTS: dict[str, tuple[float, float]] = {
@@ -348,8 +349,8 @@ def validate_zip_file(zip_path: str | Path) -> Path:
     if not zip_file_path.exists():
         raise FileNotFoundError(f"ZIP file not found: {zip_path}")
 
-    if not zip_file_path.suffix.lower() == ".zip":
-        raise ValidationError(f"File is not a ZIP archive: {zip_path}")
+    if zip_file_path.suffix.lower() not in ARCHIVE_SUFFIXES:
+        raise ValidationError(f"File is not a ZIP/CBZ archive: {zip_path}")
 
     return zip_file_path
 
@@ -375,10 +376,10 @@ def validate_batch_input_path(input_path: str | Path) -> Path:
     if path.is_dir():
         return path
 
-    if path.is_file() and path.suffix.lower() in {".zip", ".txt"}:
+    if path.is_file() and path.suffix.lower() in (*ARCHIVE_SUFFIXES, ".txt"):
         return path
 
     raise ValidationError(
-        f"Input path '{input_path}' must be a directory, ZIP archive, "
+        f"Input path '{input_path}' must be a directory, ZIP/CBZ archive, "
         "or failed-paths .txt file."
     )

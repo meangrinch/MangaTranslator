@@ -24,6 +24,7 @@ from core.config import MangaTranslatorConfig, PreprocessingConfig, RenderingCon
 from core.scaling import scale_font_size, scale_length, scale_scalar
 from core.terminology import default_glossary_path, load_terms
 from core.validation import validate_config
+from utils.archive import copy_comic_info
 from utils.exceptions import (
     CancellationError,
     CleaningError,
@@ -3039,6 +3040,10 @@ def batch_translate_images(
             cancellation_manager=cancellation_manager,
             source_path_map=source_path_map,
         )
+
+    copy_comic_info(
+        input_dir, output_dir, config.translation.output_language, preserve_structure
+    )
 
     if progress_callback:
         progress_callback(1.0, "Processing complete")

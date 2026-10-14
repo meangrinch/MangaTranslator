@@ -11,6 +11,7 @@ from core.validation import (
     validate_batch_input_path,
     validate_config,
     validate_core_inputs,
+    validate_zip_file,
 )
 from utils.exceptions import ValidationError
 
@@ -75,6 +76,11 @@ def test_validate_batch_input_path(tmp_path):
     path_list = tmp_path / "failed_paths.txt"
     path_list.write_text("")
     assert validate_batch_input_path(path_list) == path_list
+
+    comic = tmp_path / "chapter.CBZ"
+    comic.write_bytes(b"")
+    assert validate_batch_input_path(comic) == comic
+    assert validate_zip_file(comic) == comic
 
     image = tmp_path / "page.png"
     image.write_bytes(b"")

@@ -78,7 +78,7 @@ One-click app that translates manga, manhwa, manhua, and comics using ML models.
 
 - **Automation**: One-click translation; no manual intervention required
 - **Interfaces**: Web UI (Gradio) and CLI
-- **Processing**: Single image, folder, and ZIP archive batch processing (with directory preservation)
+- **Processing**: Single image, folder, and ZIP/CBZ archive batch processing (with directory preservation)
 - **Detection**: Speech bubble and outside-bubble text detection (YOLO, SAM 2.1/3)
 - **Cleaning**: Inpaint speech bubbles and background text (FLUX.2 Klein, FLUX.1 Kontext, or OpenCV)
 - **Translation**: OCR and translation supporting 60+ languages (cloud API or local LLM)
