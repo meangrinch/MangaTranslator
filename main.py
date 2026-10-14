@@ -397,7 +397,7 @@ def main():
         default="medium",
         choices=["high", "medium", "low"],
         help=(
-            "Opus 4.5/4.6, Sonnet 4.6 only: Controls token spending eagerness when responding. "
+            "Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+ only: Controls token spending eagerness when responding. "
             "Separate from 'max_tokens' and 'reasoning_effort'."
         ),
     )

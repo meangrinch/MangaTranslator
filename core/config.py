@@ -69,10 +69,10 @@ class TranslationConfig:
     reading_direction: str = "rtl"
     translation_mode: str = "one-step"
     reasoning_effort: str | None = (
-        None  # Default: Google uses "auto", Anthropic uses "none", others use "high"
+        None  # None = per-provider fallback in translation._build_generation_config
     )
     effort: str | None = (
-        None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)
+        None  # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: token spending eagerness (max/xhigh/high/medium/low)
     )
     verbosity: str | None = (
         None  # GPT-5 and GPT-6 series: controls response verbosity (high/medium/low)

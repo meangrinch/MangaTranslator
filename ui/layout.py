@@ -1087,7 +1087,7 @@ def create_layout(
                                 elem_id="reasoning_effort_dropdown",
                             )
 
-                            # Effort dropdown (Claude Opus 4.5+ and Sonnet 4.6)
+                            # Effort dropdown (Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+)
                             (
                                 _initial_effort_visible,
                                 _initial_effort_choices,
@@ -1108,12 +1108,12 @@ def create_layout(
                                 choices=_initial_effort_choices,
                                 label="Effort",
                                 value=_initial_effort_value,
-                                info="Controls token spending eagerness. Opus 4.5+, Sonnet 4.6+, Fable 5+ only.",
+                                info="Controls token spending eagerness. Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+ only.",
                                 visible=_initial_effort_visible,
                                 elem_id="effort_dropdown",
                             )
 
-                            # Verbosity dropdown (GPT-5 series only)
+                            # Verbosity dropdown (GPT-5 and GPT-6 series)
                             (
                                 _initial_verbosity_visible,
                                 _initial_verbosity_choices,

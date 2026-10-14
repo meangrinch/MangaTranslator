@@ -231,9 +231,9 @@ DEFAULT_SETTINGS = {
     "cleaning_only": False,
     "upscaling_only": False,
     "test_mode": False,
-    "reasoning_effort": None,  # Default: Google uses "auto", Anthropic uses "none", others use "high"
-    "effort": "medium",  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness (xhigh/high/medium/low)
-    "verbosity": "low",  # GPT-5 series only: controls response verbosity (high/medium/low)
+    "reasoning_effort": None,  # None = the model's default from get_reasoning_effort_config
+    "effort": "medium",  # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: token spending eagerness (max/xhigh/high/medium/low)
+    "verbosity": "low",  # GPT-5 and GPT-6 series: controls response verbosity (high/medium/low)
     "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
     "enable_code_execution": False,  # Enable Gemini's code execution for image zoom/inspection.
     "use_custom_sampling": True,

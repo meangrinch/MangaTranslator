@@ -205,9 +205,11 @@ class UIGeneralSettings:
     media_resolution_bubbles: str = "auto"  # Gemini 3 models
     media_resolution_context: str = "auto"  # Gemini 3 models
     reasoning_effort: str | None = None
-    effort: str | None = None  # Opus 4.5+, Sonnet 4.6 only: token spending eagerness
+    effort: str | None = (
+        None  # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: token spending eagerness
+    )
     verbosity: str | None = (
-        None  # GPT-5 series only: controls response verbosity (high/medium/low)
+        None  # GPT-5 and GPT-6 series: controls response verbosity (high/medium/low)
     )
     auto_scale: bool = True
     split_long_strips: bool = True

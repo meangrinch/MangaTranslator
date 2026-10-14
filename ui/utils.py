@@ -781,7 +781,7 @@ def get_effort_config(
     provider: str, model_name: str | None
 ) -> tuple[bool, list[str], str | None]:
     """
-    Get effort configuration for Claude Opus 4.5+ and Sonnet 4.6 models (Anthropic/OpenRouter/OpenAI-Compatible).
+    Get effort configuration for Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, and Fable 5+ models (Anthropic/OpenRouter/OpenAI-Compatible).
 
     Returns:
         Tuple of (visible, choices, default_value)
@@ -1190,7 +1190,7 @@ def update_translation_ui(
         info=reasoning_info_text,
     )
 
-    # Effort dropdown (Claude Opus 4.5+ and Sonnet 4.6)
+    # Effort dropdown (Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+)
     effort_visible, effort_choices, effort_default_value = get_effort_config(
         provider, remembered_model
     )
@@ -1217,7 +1217,7 @@ def update_translation_ui(
         info=image_detail_info,
     )
 
-    # Verbosity dropdown (GPT-5 series only)
+    # Verbosity dropdown (GPT-5 and GPT-6 series)
     verbosity_visible, verbosity_choices, verbosity_default_value = (
         get_verbosity_config(provider, remembered_model)
     )
@@ -1402,7 +1402,7 @@ def update_params_for_model(
     max_tokens_value = min(max_tokens_value, max_tokens_maximum)
     max_tokens_update = gr.update(value=max_tokens_value, maximum=max_tokens_maximum)
 
-    # Effort dropdown (Claude Opus 4.5+ and Sonnet 4.6)
+    # Effort dropdown (Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+)
     effort_visible, effort_choices, effort_default_value = get_effort_config(
         provider, model_name
     )
@@ -1416,7 +1416,7 @@ def update_params_for_model(
         visible=is_code_execution_visible(provider, model_name)
     )
 
-    # Verbosity dropdown (GPT-5 series only)
+    # Verbosity dropdown (GPT-5 and GPT-6 series)
     verbosity_visible, verbosity_choices, verbosity_default_value = (
         get_verbosity_config(provider, model_name)
     )
