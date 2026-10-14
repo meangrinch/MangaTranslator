@@ -989,6 +989,11 @@ def is_gemini_no_sampling_model(model_name: str | None) -> bool:
     )
 
 
+def is_gemini_no_minimal_thinking_model(model_name: str | None) -> bool:
+    """Check if a Gemini model has no "minimal" thinking level (3.8 Flash and Gemini 4)."""
+    return is_gemini_38_flash_model(model_name) or is_gemini_4_model(model_name)
+
+
 def is_gemini_25_flash_model(model_name: str | None) -> bool:
     """Check if a model is Gemini 2.5 Flash."""
     if not model_name:

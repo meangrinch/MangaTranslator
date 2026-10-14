@@ -48,10 +48,9 @@ from utils.model_metadata import (
     is_anthropic_reasoning_model,
     is_deepseek_reasoning_model,
     is_gemini_3_plus_model,
-    is_gemini_4_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
-    is_gemini_38_flash_model,
+    is_gemini_no_minimal_thinking_model,
     is_gemini_no_sampling_model,
     is_gemma_model,
     is_google_model_family,
@@ -331,10 +330,8 @@ def _image_part(
 
 
 def _gemini_thinking_level(model_name: str, effort: str) -> str:
-    """Gemini 3.8 Flash and Gemini 4 have no "minimal" level, so it falls back to "high"."""
-    if effort == "minimal" and (
-        is_gemini_38_flash_model(model_name) or is_gemini_4_model(model_name)
-    ):
+    """Fall back to "high" on Gemini models that have no "minimal" thinking level."""
+    if effort == "minimal" and is_gemini_no_minimal_thinking_model(model_name):
         return "high"
     return effort
 
