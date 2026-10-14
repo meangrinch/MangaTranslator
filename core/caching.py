@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+from core.terminology import load_terms
 from utils.logging import log_message
 
 
@@ -292,6 +293,9 @@ class UnifiedCache:
             ).hexdigest()[:16]
             cache_params["previous_context_text_count"] = len(previous_context_texts)
             cache_params["previous_context_text_hash"] = previous_texts_hash
+        glossary_path = getattr(config, "terminology_memory_path", None)
+        if getattr(config, "terminology_memory", False) and glossary_path:
+            cache_params["glossary"] = sorted(load_terms(glossary_path).items())
         config_hash = self._hash_dict(cache_params)
 
         key_string = f"trans_{images_hash}_{full_hash}_{config_hash}"
@@ -320,12 +324,21 @@ class UnifiedCache:
             return entry.get("translations"), entry.get("ocr_texts")
         return entry, None
 
+    def get_translation_terms(self, cache_key: str | None) -> list:
+        """Terminology-memory pairs stored with a cached translation."""
+        if cache_key is None:
+            return []
+        with self._lock:
+            entry = self._translation_cache.get(cache_key)
+        return entry.get("new_terms", []) if isinstance(entry, dict) else []
+
     def set_translation(
         self,
         cache_key: str | None,
         translations: list,
         ocr_texts: list | None = None,
         verbose: bool = False,
+        new_terms: list | None = None,
     ) -> None:
         """Cache translation results.
 
@@ -334,10 +347,15 @@ class UnifiedCache:
             translations: Translation results to cache
             ocr_texts: Optional source-language OCR transcripts captured alongside the translations
             verbose: Whether to print verbose logging
+            new_terms: Terminology-memory pairs the response proposed, replayed on a hit
         """
         if cache_key is None:
             return
-        entry = {"translations": translations, "ocr_texts": ocr_texts}
+        entry = {
+            "translations": translations,
+            "ocr_texts": ocr_texts,
+            "new_terms": new_terms or [],
+        }
         with self._lock:
             self._translation_cache.put(cache_key, entry)
         log_message(

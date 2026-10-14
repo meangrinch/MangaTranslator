@@ -115,6 +115,7 @@
   - Switch "Bubble/Context Resizing Method" to a better quality method (e.g., "Model")
   - In batch mode, try raising "Previous Context OCR Text"
   - In batch mode, try raising "Previous Context Images" (requires "Send Full Page to LLM")
+  - In batch mode, point "Glossary File" at the previous chapter's glossary to keep names consistent across chapters (new glossaries are saved in `output/.glossary`)
 
 - **Empty responses, timeouts, or slow requests with local LLMs:**
   - Disable reasoning on the server to prevent overthinking (e.g., `--reasoning off` in llama.cpp)

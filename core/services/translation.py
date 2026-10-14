@@ -20,6 +20,13 @@ from core.image.ocr_detection import (
     extract_text_with_manga_ocr,
     extract_text_with_paddle_ocr_vl,
 )
+from core.terminology import (
+    NEW_TERMS_MARKER,
+    format_glossary_section,
+    load_terms,
+    record_new_terms,
+    split_new_terms,
+)
 from utils.endpoints import (
     call_anthropic_endpoint,
     call_deepseek_endpoint,
@@ -176,6 +183,7 @@ def _build_system_prompt_translation(
     previous_context: bool = False,
     llm_transcription: bool = True,
     web_search: bool = False,
+    terminology_memory: bool = False,
 ) -> str:
     if mode not in ("one-step", "two-step"):
         raise ValueError(
@@ -270,13 +278,31 @@ The transcriptions come from automatic OCR and may contain misread or dropped ch
 You may search to confirm the official {output_language} names and terms of a series you recognize. Do not search for anything else, and never mention the search in your output."""
         )
 
+    if terminology_memory:
+        sections.append(
+            f"""## GLOSSARY
+The request's `## GLOSSARY` lists this series' established terms as `source -> translation`. Use each translation exactly whenever its source term appears in that role.
+
+After the numbered lines, list the recurring names and world-specific terms on this page that the glossary lacks: character names, titles and ranks, offices and institutions, places, and organizations. List only terms distinctive to this series' world; skip words with an ordinary dictionary translation, such as generic royal titles, family terms, and occupations, unless the word is a title attached to a character's name or a form of address used in place of one (e.g. 妃 in 梨花妃), which gets its own entry. Honorifics are not titles. Write `{NEW_TERMS_MARKER}` on its own line, then one `source -> translation` line per term, or omit the block when there are none. Choose each translation in this order:
+1. **Official Names:** If you know the official {output_language} name this series uses for the term, use it.
+2. **Personal Names:** Romanize the reading the source gives, using the furigana when present. When that reading is a katakana approximation of a Chinese or Korean name, use that language's standard romanization of the characters (pinyin or Revised Romanization), taking the katakana only as a sign of which language's reading is meant{example("春花 (チュンファ) → Chunhua, not Chunfa")}. Romanize Japanese names in Hepburn, spelling long vowels out (`ou`, `uu`) rather than with macrons.
+3. **Titles, Ranks, Offices, Institutions, and Descriptive Places:** Translate the meaning into the term a professional {output_language} localization would use{example("内務府 → Imperial Household Department")}, unless the series uses the word itself as a name.
+4. **Glossary Conventions:** Match the conventions the glossary already follows, such as its romanization scheme and how it renders comparable titles.
+Write each source as the bare term, without furigana, honorifics, or an attached title. A name with a title is two entries, one for the name and one for the title. Capitalize each translation as it would be mid-sentence."""
+        )
+
+    nothing_else = (
+        f"Output nothing else besides the optional `{NEW_TERMS_MARKER}` block:"
+        if terminology_memory
+        else "Output nothing else:"
+    )
     example_note = (
         "" if english else f" (shown in English; write yours in {output_language})"
     )
     if one_step:
         sections.append(
             f"""## OUTPUT FORMAT
-One line per crop, numbered to match the crop labels, written as `transcription || translation`. Output nothing else: no code fences, notes, or blank lines.
+One line per crop, numbered to match the crop labels, written as `transcription || translation`. {nothing_else} no code fences, notes, or blank lines.
 
 Example{example_note}:
 1: <transcription> || I told you *not* to follow me.
@@ -286,7 +312,7 @@ Example{example_note}:
     else:
         sections.append(
             f"""## OUTPUT FORMAT
-One line per item, numbered to match the input, containing only the translation. Output nothing else: no code fences, notes, or blank lines.
+One line per item, numbered to match the input, containing only the translation. {nothing_else} no code fences, notes, or blank lines.
 
 Example{example_note}:
 1: I told you *not* to follow me.
@@ -998,6 +1024,37 @@ def _format_previous_context_texts(
     )
 
 
+def _record_glossary_terms(
+    path: str,
+    pairs: list[tuple[str, str]],
+    transcriptions: list[str],
+    debug: bool,
+) -> None:
+    if not pairs:
+        return
+    try:
+        added, rejected = record_new_terms(path, pairs, transcriptions)
+    except OSError as e:
+        # The translation is already paid for; losing a few terms is the lesser cost
+        log_message(
+            f"Warning: could not save terminology memory to {path}: {e}",
+            always_print=True,
+        )
+        return
+    if added:
+        log_message(
+            "Terminology memory added: "
+            + ", ".join(f"{src} -> {tr}" for src, tr in added),
+            always_print=True,
+        )
+    if rejected:
+        log_message(
+            "Terminology memory rejected (source not on page): "
+            + ", ".join(f"{src} -> {tr}" for src, tr in rejected),
+            verbose=debug,
+        )
+
+
 def _format_special_instructions(config: TranslationConfig) -> str:
     """Format user's special instructions section for prompts.
 
@@ -1033,6 +1090,7 @@ def _split_special_instructions(
 def _build_rosetta_instruction(
     output_language: str,
     special_instructions: str | None = None,
+    glossary_terms: dict[str, str] | None = None,
 ) -> str:
     """Build instruction prompt for YanoljaNEXT Rosetta translation models.
 
@@ -1042,6 +1100,7 @@ def _build_rosetta_instruction(
     free-form ones are appended to the Context field.
     """
     glossary_lines, note_lines = _split_special_instructions(special_instructions)
+    glossary_lines += [f"{src} -> {tr}" for src, tr in (glossary_terms or {}).items()]
     context = " ".join(["Comic dialogue, sound effects, and narration.", *note_lines])
     instruction = (
         f"Translate the user's text to {output_language}. "
@@ -1120,6 +1179,7 @@ def _build_system_prompt_hy_mt2(
     ero_doujinshi_mode: bool = False,
     ocr_correction: bool = False,
     previous_context: bool = False,
+    glossary: bool = False,
 ) -> str:
     """Build the compact system prompt for Hy-MT2.
 
@@ -1141,6 +1201,10 @@ def _build_system_prompt_hy_mt2(
     if previous_context:
         rules.append(
             "- Previous pages are context only. Reuse their names and wording, and do not translate or number them."
+        )
+    if glossary:
+        rules.append(
+            "- Translate each term listed under `## GLOSSARY` exactly as the glossary gives it."
         )
     if ocr_correction:
         rules.append(
@@ -1437,6 +1501,11 @@ def call_translation_api_batch(
         cleaned_previous_texts = cleaned_previous_texts[-configured_text_count:]
     previous_context_text_count = len(cleaned_previous_texts)
     previous_text_section = _format_previous_context_texts(cleaned_previous_texts)
+    glossary_path = (
+        config.terminology_memory_path if config.terminology_memory else None
+    )
+    glossary_terms = load_terms(glossary_path) if glossary_path else {}
+    previous_text_section += format_glossary_section(glossary_terms)
 
     # Include conditional bubble hints
     total_elements = len(images_b64)
@@ -1480,6 +1549,14 @@ def call_translation_api_batch(
     cached_translation, cached_ocr_texts = cache.get_translation(cache_key)
     if cached_translation is not None:
         log_message("  - Using cached translation", always_print=True)
+        if glossary_path:
+            # Replay so a fresh glossary file grows exactly as it did on the cached run
+            _record_glossary_terms(
+                glossary_path,
+                cache.get_translation_terms(cache_key),
+                cached_ocr_texts or [],
+                debug,
+            )
         if ocr_texts_output is not None and cached_ocr_texts is not None:
             ocr_texts_output.extend(cached_ocr_texts)
         return cached_translation
@@ -1619,6 +1696,7 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                 translation_system = _build_rosetta_instruction(
                     output_language,
                     config.special_instructions,
+                    glossary_terms=glossary_terms,
                 )
                 translation_prompt = _build_rosetta_source_prompt(formatted_texts)
                 translation_parts = []  # text-only model, no image parts
@@ -1633,6 +1711,7 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                     ero_doujinshi_mode=getattr(config, "ero_doujinshi_mode", False),
                     ocr_correction=getattr(config, "ocr_correction", False),
                     previous_context=has_previous_context,
+                    glossary=bool(glossary_terms),
                 )
                 translation_parts = []  # text-only model, no image parts
             else:
@@ -1646,6 +1725,7 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                     previous_context=has_previous_context,
                     llm_transcription=llm_ocr,
                     web_search=web_search,
+                    terminology_memory=bool(glossary_path),
                 )
             translation_response_text = _call_llm_endpoint(
                 config,
@@ -1655,6 +1735,12 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                 system_prompt=translation_system,
                 prompt_cache_key=session_prompt_cache_key,
             )
+            new_terms = []
+            if glossary_path and not (use_rosetta or use_hy_mt2):
+                translation_response_text, new_terms = split_new_terms(
+                    translation_response_text
+                )
+                _record_glossary_terms(glossary_path, new_terms, extracted_texts, debug)
             if use_rosetta:
                 final_translations = _parse_rosetta_response(
                     translation_response_text,
@@ -1697,7 +1783,10 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                     combined_results.append(final_translations[i])
 
             cache.set_translation(
-                cache_key, combined_results, ocr_texts=extracted_texts
+                cache_key,
+                combined_results,
+                ocr_texts=extracted_texts,
+                new_terms=new_terms,
             )
             if ocr_texts_output is not None:
                 ocr_texts_output.extend(extracted_texts)
@@ -1730,6 +1819,7 @@ Transcribe each crop, then translate that transcription into {output_language}.{
                 input_language=input_language,
                 previous_context=has_previous_context,
                 web_search=web_search,
+                terminology_memory=bool(glossary_path),
             )
             response_text = _call_llm_endpoint(
                 config,
@@ -1739,6 +1829,9 @@ Transcribe each crop, then translate that transcription into {output_language}.{
                 system_prompt=one_step_system,
                 prompt_cache_key=session_prompt_cache_key,
             )
+            new_terms = []
+            if glossary_path:
+                response_text, new_terms = split_new_terms(response_text)
 
             # Parse one-step format ("Original || Translated")
             raw_lines = _parse_llm_response_unified(
@@ -1758,7 +1851,11 @@ Transcribe each crop, then translate that transcription into {output_language}.{
                     ocr_texts.append("[OCR FAILED]")
                     translations.append(line)
 
-            cache.set_translation(cache_key, translations, ocr_texts=ocr_texts)
+            if new_terms:
+                _record_glossary_terms(glossary_path, new_terms, ocr_texts, debug)
+            cache.set_translation(
+                cache_key, translations, ocr_texts=ocr_texts, new_terms=new_terms
+            )
             if ocr_texts_output is not None:
                 ocr_texts_output.extend(ocr_texts)
             return translations

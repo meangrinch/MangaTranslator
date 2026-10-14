@@ -1,7 +1,9 @@
 import pytest
 
 from core.services.translation import (
+    _build_rosetta_instruction,
     _build_system_prompt_hy_mt2,
+    _build_system_prompt_translation,
     _check_ocr_failure,
     _format_previous_context_texts,
     _join_ocr_lines,
@@ -171,3 +173,34 @@ def test_endpoint_keeps_labels_next_to_their_images(monkeypatch):
 )
 def test_join_ocr_lines_adds_spaces_only_outside_cjk(text, expected):
     assert _join_ocr_lines(text) == expected
+
+
+@pytest.mark.parametrize("mode", ["one-step", "two-step"])
+def test_system_prompt_adds_glossary_rules_only_when_enabled(mode):
+    off = _build_system_prompt_translation("English", mode)
+    on = _build_system_prompt_translation("English", mode, terminology_memory=True)
+    assert "## GLOSSARY" not in off and "NEW TERMS:" not in off
+    assert "## GLOSSARY" in on
+    assert "besides the optional `NEW TERMS:` block" in on
+    assert on.index("## GLOSSARY") < on.index("## OUTPUT FORMAT")
+    assert "Chunhua" in on and "Imperial Household Department" in on
+
+
+def test_system_prompt_glossary_rules_drop_english_examples_for_other_languages():
+    prompt = _build_system_prompt_translation(
+        "French", "one-step", terminology_memory=True
+    )
+    assert "official French name" in prompt
+    assert "Chunhua" not in prompt and "Imperial Household" not in prompt
+
+
+def test_hy_mt2_prompt_mentions_glossary_only_when_given():
+    assert "glossary" not in _build_system_prompt_hy_mt2("English").lower()
+    assert "glossary" in _build_system_prompt_hy_mt2("English", glossary=True).lower()
+
+
+def test_rosetta_instruction_merges_glossary_terms():
+    instruction = _build_rosetta_instruction(
+        "English", "王 -> King", glossary_terms={"猫猫": "Maomao"}
+    )
+    assert "Glossary:\n- 王 -> King\n- 猫猫 -> Maomao" in instruction

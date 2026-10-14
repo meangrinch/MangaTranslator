@@ -51,6 +51,19 @@ def test_translation_key_changes_with_inputs(cache, change):
     assert _key(cache, **change) != _key(cache)
 
 
+def test_translation_key_changes_with_glossary_entries(cache, tmp_path):
+    path = tmp_path / "g.txt"
+    config = replace(
+        DETERMINISTIC, terminology_memory=True, terminology_memory_path=str(path)
+    )
+    empty = _key(cache, config)
+    path.write_text("猫猫 -> Maomao\n", encoding="utf-8")
+    one_term = _key(cache, config)
+    assert empty != one_term
+    path.write_text("猫猫 -> Maomao\n# note\n", encoding="utf-8")
+    assert _key(cache, config) == one_term
+
+
 def test_translation_round_trip(cache):
     key = _key(cache)
     cache.set_translation(key, ["hello"], ocr_texts=["こんにちは"])

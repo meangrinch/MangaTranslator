@@ -248,6 +248,8 @@ class UIConfigState:
     batch_retry_failed_once: bool = True
     batch_previous_context_image_count: int = 0
     batch_previous_context_text_count: int = 3
+    batch_terminology_memory: bool = True
+    batch_glossary_file: str = ""
 
     def to_save_dict(self) -> dict[str, Any]:
         """Converts the UI state into a dictionary suitable for saving to config.json."""
@@ -409,6 +411,8 @@ class UIConfigState:
                 else 0
             ),
             "batch_previous_context_text_count": self.batch_previous_context_text_count,
+            "batch_terminology_memory": self.batch_terminology_memory,
+            "batch_glossary_file": self.batch_glossary_file,
         }
         return data
 
@@ -798,6 +802,8 @@ class UIConfigState:
             batch_previous_context_text_count=int(
                 data.get("batch_previous_context_text_count", 3)
             ),
+            batch_terminology_memory=bool(data.get("batch_terminology_memory", True)),
+            batch_glossary_file=str(data.get("batch_glossary_file", "") or ""),
         )
 
 
@@ -888,6 +894,13 @@ def map_ui_to_backend_config(
         ),
         previous_context_text_count=(
             ui_state.batch_previous_context_text_count if is_batch else 0
+        ),
+        terminology_memory=is_batch and ui_state.batch_terminology_memory,
+        terminology_memory_path=(
+            # Windows "Copy as path" wraps the path in quotes
+            (ui_state.batch_glossary_file.strip().strip('"') or None)
+            if is_batch
+            else None
         ),
         osb_min_side_pixels=ui_state.llm_settings.osb_min_side_pixels,
         special_instructions=ui_state.llm_settings.special_instructions,

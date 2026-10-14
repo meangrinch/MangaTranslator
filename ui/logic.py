@@ -337,6 +337,7 @@ def process_batch_logic(
         process_dir = None
         preserve_structure = False
         source_path_map: dict[str, str] = {}
+        glossary_name = None
 
         if (
             isinstance(input_dir_or_files, dict)
@@ -352,6 +353,7 @@ def process_batch_logic(
             zip_path = Path(zip_path_str)
             if not zip_path.exists():
                 raise FileNotFoundError(f"ZIP file '{zip_path_str}' does not exist.")
+            glossary_name = zip_path.stem
 
             extracted_path, zip_temp_dir_obj = extract_zip_to_temp(zip_path)
 
@@ -421,6 +423,7 @@ def process_batch_logic(
                 extracted_path, zip_temp_dir_obj = extract_zip_to_temp(input_path)
                 process_dir = extracted_path
                 preserve_structure = True
+                glossary_name = input_path.stem
             elif input_path.is_file() and input_path.suffix.lower() == ".txt":
                 image_paths = read_image_paths_from_txt(input_path)
                 if not image_paths:
@@ -442,6 +445,7 @@ def process_batch_logic(
             elif input_path.is_dir():
                 process_dir = input_path
                 preserve_structure = False
+                glossary_name = input_path.resolve().name
 
         if not process_dir:
             raise LogicError("Could not determine processing directory.")
@@ -454,6 +458,7 @@ def process_batch_logic(
             preserve_structure=preserve_structure,
             cancellation_manager=cancellation_manager,
             source_path_map=source_path_map or None,
+            glossary_name=glossary_name,
         )
 
         processing_time = time.time() - start_time

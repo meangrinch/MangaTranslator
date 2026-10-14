@@ -92,6 +92,24 @@ def main():
             "as narrative context (0-50, default: 3)"
         ),
     )
+    parser.add_argument(
+        "--batch-terminology-memory",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Batch only: have the LLM save names and terms to a glossary file and "
+            "reuse them for consistency (default: on)"
+        ),
+    )
+    parser.add_argument(
+        "--batch-glossary-file",
+        type=str,
+        default=None,
+        help=(
+            "Batch only: glossary file to read and update, e.g. the previous chapter's. "
+            "Default: a new output/.glossary/<input name>_<date>.txt"
+        ),
+    )
     # --- Provider and API Key Arguments ---
     parser.add_argument(
         "--provider",
@@ -1366,6 +1384,8 @@ def main():
             previous_context_text_count=(
                 args.batch_previous_context_texts if args.batch else 0
             ),
+            terminology_memory=args.batch and args.batch_terminology_memory,
+            terminology_memory_path=(args.batch_glossary_file if args.batch else None),
             osb_min_side_pixels=args.osb_min_side_pixels,
             special_instructions=args.special_instructions,
             ero_doujinshi_mode=args.ero_doujinshi_mode,
@@ -1458,6 +1478,14 @@ def main():
     # --- Execute ---
     if args.batch:
         input_path = Path(args.input)
+        suffix = input_path.suffix.lower()
+        glossary_name = (
+            None
+            if suffix == ".txt"
+            else input_path.stem
+            if suffix == ".zip"
+            else input_path.resolve().name
+        )
         zip_temp_dir_obj = None
         path_list_temp_dir_obj = None
         preserve_structure = False
@@ -1568,6 +1596,7 @@ def main():
                 output_dir,
                 preserve_structure=preserve_structure,
                 source_path_map=source_path_map,
+                glossary_name=glossary_name,
             )
             failed_paths_file = results.get("failed_paths_file")
             if failed_paths_file:

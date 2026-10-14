@@ -93,6 +93,8 @@ class TranslationConfig:
     context_image_max_side_pixels: int = 1024
     previous_context_image_count: int = 0
     previous_context_text_count: int = 0
+    terminology_memory: bool = False
+    terminology_memory_path: str | None = None  # Batch resolves a default when unset
     osb_min_side_pixels: int = 128
     special_instructions: str | None = None
     ero_doujinshi_mode: bool = False

@@ -115,6 +115,7 @@
   - 将“气泡/上下文缩放方法 (Bubble/Context Resizing Method)”切换到质量更好的方法（例如 "Model"）
   - 在批量模式下，尝试提高“前文 OCR 文本 (Previous Context OCR Text)”
   - 在批量模式下，尝试提高“前文图像 (Previous Context Images)”（需要开启“发送整页给 LLM”）
+  - 在批量模式下，将“术语表文件 (Glossary File)”指向上一章的术语表，可在各章之间保持名称翻译一致（新术语表保存在 `output/.glossary` 中）
 
 - **本地 LLM 返回空响应、超时或请求缓慢：**
   - 在服务器端禁用推理 (reasoning) 以防止过度思考（例如 llama.cpp 的 `--reasoning off`）

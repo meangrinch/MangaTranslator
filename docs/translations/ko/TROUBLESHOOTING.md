@@ -114,6 +114,7 @@
   - "말풍선/컨텍스트 크기 조정 방식 (Bubble/Context Resizing Method)"을 더 고품질의 방식(예: "Model")으로 변경하세요.
   - 배치(일괄) 모드에서 "이전 컨텍스트 OCR 텍스트 (Previous Context OCR Text)" 값을 늘려보세요.
   - 배치 모드에서 "이전 컨텍스트 이미지 (Previous Context Images)" 값을 늘려보세요 ("전체 페이지를 LLM으로 전송" 옵션 필요).
+  - 배치 모드에서 "용어집 파일 (Glossary File)"에 이전 챕터의 용어집을 지정하면 챕터 간 이름 번역을 일관되게 유지할 수 있습니다 (새 용어집은 `output/.glossary`에 저장됩니다).
 
 - **로컬 LLM에서 빈 응답, 시간 초과 또는 느린 요청이 발생함:**
   - 과도한 추론을 방지하려면 서버에서 추론(reasoning)을 비활성화하세요 (예: llama.cpp의 `--reasoning off`).

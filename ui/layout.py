@@ -474,14 +474,42 @@ def create_layout(
                                 info="Optimize translation for 18+ content. Uses more tokens, but may reduce refusals.",
                                 elem_id="batch_ero_doujinshi_mode",
                             )
-                        batch_special_instructions = gr.Textbox(
-                            label="Special Instructions",
-                            placeholder="Give the LLM optional context, formatting instructions, etc.",
-                            value=saved_settings.get("batch_special_instructions", ""),
-                            lines=1,
-                            max_lines=10,
-                            elem_id="batch_special_instructions",
-                        )
+                        with gr.Accordion("Instructions & Terminology", open=True):
+                            batch_special_instructions = gr.Textbox(
+                                label="Special Instructions",
+                                placeholder="Give the LLM optional context, formatting instructions, etc.",
+                                value=saved_settings.get(
+                                    "batch_special_instructions", ""
+                                ),
+                                lines=1,
+                                max_lines=10,
+                                elem_id="batch_special_instructions",
+                            )
+                            batch_terminology_memory = gr.Checkbox(
+                                label="Terminology Memory",
+                                value=bool(
+                                    saved_settings.get("batch_terminology_memory", True)
+                                ),
+                                info=(
+                                    "Keeps character names, places, and other "
+                                    "recurring terms in a glossary so they're "
+                                    "translated the same way on every page."
+                                ),
+                            )
+                            batch_glossary_file = gr.Textbox(
+                                label="Glossary File",
+                                value=saved_settings.get("batch_glossary_file", ""),
+                                placeholder="Leave blank to start a new glossary",
+                                info=(
+                                    "To continue a series, paste the path of the "
+                                    "previous chapter's glossary, shown when a batch "
+                                    "finishes. New glossaries are saved in "
+                                    "output/.glossary."
+                                ),
+                                visible=bool(
+                                    saved_settings.get("batch_terminology_memory", True)
+                                ),
+                            )
                         batch_parallel_requests = gr.Slider(
                             minimum=1,
                             maximum=20,
@@ -2553,6 +2581,8 @@ def create_layout(
             batch_retry_failed_once,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
+            batch_terminology_memory,
+            batch_glossary_file,
         ]
 
         reset_outputs = [
@@ -2697,6 +2727,8 @@ def create_layout(
             batch_retry_failed_once,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
+            batch_terminology_memory,
+            batch_glossary_file,
         ]
 
         translate_inputs = [
@@ -2841,6 +2873,8 @@ def create_layout(
             batch_retry_failed_once,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
+            batch_terminology_memory,
+            batch_glossary_file,
         ]
 
         batch_inputs = [
@@ -2986,6 +3020,8 @@ def create_layout(
             batch_retry_failed_once,
             batch_previous_context_image_count,
             batch_previous_context_text_count,
+            batch_terminology_memory,
+            batch_glossary_file,
         ]
 
         # Config Tab Navigation & Updates
@@ -3606,6 +3642,13 @@ def create_layout(
             fn=lambda enabled: gr.update(interactive=enabled),
             inputs=use_panel_sorting_checkbox,
             outputs=panel_confidence,
+            queue=False,
+        )
+
+        batch_terminology_memory.change(
+            fn=lambda enabled: gr.update(visible=enabled),
+            inputs=batch_terminology_memory,
+            outputs=batch_glossary_file,
             queue=False,
         )
 

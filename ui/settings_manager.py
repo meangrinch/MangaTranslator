@@ -310,6 +310,8 @@ DEFAULT_BATCH_SETTINGS = {
     "batch_retry_failed_once": True,
     "batch_previous_context_image_count": 0,
     "batch_previous_context_text_count": 3,
+    "batch_terminology_memory": True,
+    "batch_glossary_file": "",
 }
 
 
@@ -459,6 +461,8 @@ CANONICAL_CONFIG_KEY_ORDER: list[str] = [
     "batch_retry_failed_once",
     "batch_previous_context_image_count",
     "batch_previous_context_text_count",
+    "batch_terminology_memory",
+    "batch_glossary_file",
     # Metadata
     "last_seen_version",
 ]

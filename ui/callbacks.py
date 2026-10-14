@@ -8,6 +8,7 @@ import torch
 from PIL import Image
 
 from core.config import MangaTranslatorConfig
+from core.terminology import load_terms
 from core.text.text_processing import text_layout_control_interactivity
 from core.validation import (
     validate_mutually_exclusive_modes,
@@ -236,6 +237,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_retry_failed_once_val,
         batch_previous_context_image_count_val,
         batch_previous_context_text_count_val,
+        batch_terminology_memory_val,
+        batch_glossary_file_val,
     ) = args
 
     final_input_language = batch_input_language if is_batch else input_language
@@ -432,6 +435,8 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         batch_retry_failed_once=bool(batch_retry_failed_once_val),
         batch_previous_context_image_count=int(batch_previous_context_image_count_val),
         batch_previous_context_text_count=int(batch_previous_context_text_count_val),
+        batch_terminology_memory=bool(batch_terminology_memory_val),
+        batch_glossary_file=str(batch_glossary_file_val or "").strip(),
     )
 
 
@@ -847,6 +852,12 @@ def _format_batch_success_message(
             f"• Saved to: {output_path}",
         ]
     )
+    glossary_path = results.get("glossary_path")
+    if glossary_path:
+        has_terms = bool(load_terms(glossary_path))
+        msg_parts.append(
+            f"\n• Glossary: {glossary_path}{'' if has_terms else ' (no terms found)'}"
+        )
     failed_paths_file = results.get("failed_paths_file")
     if failed_paths_file:
         msg_parts.append(f"\n• Failed paths list: {failed_paths_file}")
@@ -1234,6 +1245,8 @@ def handle_save_config_click(*args: Any) -> str:
         batch_retry_failed_once_val,
         batch_previous_context_image_count_val,
         batch_previous_context_text_count_val,
+        batch_terminology_memory_val,
+        batch_glossary_file_val,
     ) = args
     ui_state = UIConfigState(
         detection=UIDetectionSettings(
@@ -1418,6 +1431,8 @@ def handle_save_config_click(*args: Any) -> str:
         batch_retry_failed_once=bool(batch_retry_failed_once_val),
         batch_previous_context_image_count=int(batch_previous_context_image_count_val),
         batch_previous_context_text_count=int(batch_previous_context_text_count_val),
+        batch_terminology_memory=bool(batch_terminology_memory_val),
+        batch_glossary_file=str(batch_glossary_file_val or "").strip(),
     )
 
     # Convert UI state to dictionary for saving
@@ -1821,6 +1836,8 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         default_ui_state.batch_retry_failed_once,
         default_ui_state.batch_previous_context_image_count,
         default_ui_state.batch_previous_context_text_count,
+        default_ui_state.batch_terminology_memory,
+        default_ui_state.batch_glossary_file,
     ]
 
 

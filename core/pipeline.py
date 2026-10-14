@@ -22,6 +22,7 @@ from core.batch_coordinator import BatchRequestCoordinator
 from core.caching import get_cache
 from core.config import MangaTranslatorConfig, PreprocessingConfig, RenderingConfig
 from core.scaling import scale_font_size, scale_length, scale_scalar
+from core.terminology import default_glossary_path, load_terms
 from core.validation import validate_config
 from utils.exceptions import (
     CancellationError,
@@ -30,6 +31,7 @@ from utils.exceptions import (
     ImageProcessingError,
     RenderingError,
     TranslationError,
+    ValidationError,
 )
 from utils.logging import log_message
 from utils.path_list import resolve_source_path, write_failed_paths
@@ -2374,6 +2376,18 @@ def _resolve_output_path(
     return output_subdir / f"{output_filename}{output_ext}", display_path, error_key
 
 
+def _check_glossary_path(path: Path) -> None:
+    """Fail the batch once up front instead of on every page."""
+    if path.is_dir():
+        raise ValidationError(f"Glossary file '{path}' is a folder, not a file.")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch(exist_ok=True)
+        load_terms(path)
+    except (OSError, UnicodeDecodeError) as e:
+        raise ValidationError(f"Cannot use glossary file '{path}': {e}") from e
+
+
 def _should_run_failed_retry(
     config: MangaTranslatorConfig,
     failed_jobs: list[dict[str, Any]],
@@ -2796,6 +2810,7 @@ def batch_translate_images(
     preserve_structure: bool = False,
     cancellation_manager: Optional["CancellationManager"] = None,
     source_path_map: dict[str, str] | None = None,
+    glossary_name: str | None = None,
 ) -> dict[str, Any]:
     """
     Process all images in a directory using a configuration object.
@@ -2810,6 +2825,8 @@ def batch_translate_images(
                                    in the output. If False, only processes files in the root directory.
         source_path_map: Optional mapping from processing paths to original source paths
             (used when UI/CLI copies inputs into a temp directory).
+        glossary_name: Name for a new terminology memory file (the input folder or ZIP
+            name). Defaults to the first image's stem.
 
     Returns:
         dict: Processing results with keys:
@@ -2869,6 +2886,23 @@ def batch_translate_images(
     if not image_files:
         log_message(f"No image files found in '{input_dir}'", always_print=True)
         return empty_results
+
+    glossary_path = None
+    translation_cfg = config.translation
+    if translation_cfg.terminology_memory:
+        glossary_path = translation_cfg.terminology_memory_path
+        if not glossary_path:
+            glossary_path = str(
+                default_glossary_path(glossary_name or image_files[0].stem)
+            )
+            config = replace(
+                config,
+                translation=replace(
+                    translation_cfg, terminology_memory_path=glossary_path
+                ),
+            )
+        _check_glossary_path(Path(glossary_path))
+        log_message(f"Terminology memory: {glossary_path}", always_print=True)
 
     total_images = len(image_files)
     start_batch_time = time.time()
@@ -3029,6 +3063,9 @@ def batch_translate_images(
         log_message(f"Failed: {results['error_count']} images", always_print=True)
         for filename, error_msg in results["errors"].items():
             log_message(f"  - {filename}: {error_msg}", always_print=True)
+
+    if glossary_path:
+        results["glossary_path"] = glossary_path
 
     failed_paths = results.get("failed_image_paths") or []
     if failed_paths:

@@ -114,6 +114,7 @@
   - 「吹き出し/文脈リサイズ方法（Bubble/Context Resizing Method）」をより高品質な方法（例: "Model"）に切り替えてください。
   - バッチモードでは、「前文の OCR テキスト（Previous Context OCR Text）」を増やしてみてください。
   - バッチモードでは、「前文の画像（Previous Context Images）」を増やしてみてください（「ページ全体を LLM に送信」が必要です）。
+  - バッチモードでは、「用語集ファイル（Glossary File）」に前の章の用語集を指定すると、章をまたいで名前の訳を統一できます（新しい用語集は `output/.glossary` に保存されます）。
 
 - **ローカル LLM で空の応答・タイムアウト・リクエストの遅延が発生する:**
   - 考えすぎを防ぐため、サーバー側で推論（reasoning）を無効にしてください（例: llama.cpp の `--reasoning off`）。
