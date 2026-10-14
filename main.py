@@ -598,6 +598,11 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--cpu", action="store_true", help="Force CPU usage")
     parser.add_argument(
+        "--hf-cache",
+        action="store_true",
+        help="Store Hugging Face models in the default HF cache instead of ./models",
+    )
+    parser.add_argument(
         "--cleaning-only",
         action="store_true",
         help="Skip translation and text rendering, output only the cleaned speech bubbles",
@@ -1221,6 +1226,10 @@ def main():
         from core.ml.model_manager import get_model_manager
 
         get_model_manager().set_device(target_device)
+    if args.hf_cache:
+        from core.ml.model_manager import get_model_manager
+
+        get_model_manager().use_hf_cache = True
     log_message(
         f"Using {target_device.type.upper()} device.",
         always_print=True,

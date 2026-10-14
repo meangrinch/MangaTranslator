@@ -4,6 +4,8 @@
 
 必要なモデルはすべて初回使用時に自動的にダウンロードされます。
 
+デフォルトでは `models/` に保存されます。`--hf-cache` を付けて起動すると（例: `python app.py --hf-cache`）、代わりに Hugging Face のデフォルトキャッシュ（`~/.cache/huggingface/hub`、`HF_HOME` が設定されていればそのディレクトリ）を使用します。sd.cpp サーバーの実行ファイルは引き続き `models/` に保存されます。
+
 ---
 
 ## LLM設定

@@ -4,6 +4,8 @@
 
 所有必需的模型都会在首次使用时自动下载。
 
+默认保存在 `models/` 中。使用 `--hf-cache` 启动（例如 `python app.py --hf-cache`）可改为使用 Hugging Face 默认缓存（`~/.cache/huggingface/hub`，如已设置 `HF_HOME` 则使用该目录）。sd.cpp 服务器程序仍保存在 `models/` 中。
+
 ---
 
 ## 大语言模型设置

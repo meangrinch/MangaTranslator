@@ -55,6 +55,11 @@ def main():
     parser.add_argument(
         "--cpu", action="store_true", help="Force CPU usage even if CUDA is available"
     )
+    parser.add_argument(
+        "--hf-cache",
+        action="store_true",
+        help="Store Hugging Face models in the default HF cache instead of ./models",
+    )
     args = parser.parse_args()
     from utils.logging import init_file_logging, log_message
 
@@ -91,6 +96,10 @@ def main():
         from core.ml.model_manager import get_model_manager
 
         get_model_manager().set_device(target_device)
+    if args.hf_cache:
+        from core.ml.model_manager import get_model_manager
+
+        get_model_manager().use_hf_cache = True
 
     device_info_str = "CPU"
     if target_device.type == "cuda":

@@ -85,6 +85,7 @@ class ModelManager:
 
             # Flux-specific configuration
             self.flux_cache_dir = Path("./models/flux")
+            self.use_hf_cache = False
             self.hf_token = None
             self.flux_hf_token = None
             self.flux_residual_diff_threshold = 0.15
@@ -257,6 +258,10 @@ class ModelManager:
         if "HF_XET_HIGH_PERFORMANCE" not in os.environ:
             os.environ["HF_XET_HIGH_PERFORMANCE"] = "1"
 
+    def _hf_cache_dir(self, local_dir: Path | str) -> str | None:
+        """cache_dir for from_pretrained; None selects the default HF cache."""
+        return None if self.use_hf_cache else str(local_dir)
+
     def _ensure_file(self, path: Path, url: str, verbose: bool = False) -> None:
         """Download file from URL if it doesn't exist.
 
@@ -427,22 +432,20 @@ class ModelManager:
                 "server_model_key": f"{model_key}-{server_quant_key}",
             }
             for key, asset in spec["quant_assets"].items():
-                assets[key] = asset["path"]
-                self._ensure_hf_file(
+                assets[key] = self._ensure_hf_file(
                     asset["repo_id"],
                     asset["filename"],
-                    assets[key],
+                    asset["path"],
                     token=self.flux_hf_token,
                     verbose=verbose,
                 )
 
             for key, model_type in spec["fixed_model_types"].items():
-                assets[key] = self.model_paths[model_type]
                 hf_info = self.model_hf_repos[model_type]
-                self._ensure_hf_file(
+                assets[key] = self._ensure_hf_file(
                     hf_info["repo_id"],
                     hf_info["filename"],
-                    assets[key],
+                    self.model_paths[model_type],
                     token=self.flux_hf_token,
                     verbose=verbose,
                 )
@@ -497,7 +500,19 @@ class ModelManager:
             target: Path where file should be saved
             token: Optional Hugging Face token
             verbose: Whether to print verbose logging
+
+        Returns:
+            Path to the file (inside the HF cache when use_hf_cache is set)
         """
+        if self.use_hf_cache:
+            self._enable_hf_xet_high_performance()
+            return Path(
+                hf_hub_download(
+                    repo_id=repo_id,
+                    filename=filename,
+                    token=token or self.hf_token or os.environ.get("HF_TOKEN"),
+                )
+            )
         if target.exists():
             self._remove_empty_child_dirs(target.parent, verbose=verbose)
             return target
@@ -551,6 +566,15 @@ class ModelManager:
         Returns:
             Path to the downloaded repository directory
         """
+        if self.use_hf_cache:
+            self._enable_hf_xet_high_performance()
+            return Path(
+                snapshot_download(
+                    repo_id=repo_id,
+                    token=token or self.hf_token or os.environ.get("HF_TOKEN"),
+                    revision=revision,
+                )
+            )
         # Check for safetensors for transformers v5+
         safetensors_file = target_dir / "model.safetensors"
         bin_file = target_dir / "pytorch_model.bin"
@@ -626,7 +650,7 @@ class ModelManager:
             # Try HF download first, fallback to direct URL
             try:
                 hf_info = self.model_hf_repos[ModelType.UPSCALE]
-                self._ensure_hf_file(
+                path = self._ensure_hf_file(
                     hf_info["repo_id"], hf_info["filename"], path, verbose=verbose
                 )
             except Exception:
@@ -669,7 +693,7 @@ class ModelManager:
             # Try HF download first, fallback to direct URL
             try:
                 hf_info = self.model_hf_repos[ModelType.UPSCALE_LITE]
-                self._ensure_hf_file(
+                path = self._ensure_hf_file(
                     hf_info["repo_id"], hf_info["filename"], path, verbose=verbose
                 )
             except Exception:
@@ -734,7 +758,7 @@ class ModelManager:
 
             if path == self.model_paths[model_type]:
                 hf_info = self.model_hf_repos[model_type]
-                self._ensure_hf_file(
+                path = self._ensure_hf_file(
                     hf_info["repo_id"], hf_info["filename"], path, verbose=verbose
                 )
 
@@ -758,7 +782,7 @@ class ModelManager:
             )
             path = self.model_paths[ModelType.RTDETR_CONJOINED_BUBBLE]
             hf_info = self.model_hf_repos[ModelType.RTDETR_CONJOINED_BUBBLE]
-            self._ensure_hf_repo(hf_info["repo_id"], path, verbose=verbose)
+            path = self._ensure_hf_repo(hf_info["repo_id"], path, verbose=verbose)
 
             try:
                 processor = RTDetrImageProcessor.from_pretrained(str(path))
@@ -794,7 +818,7 @@ class ModelManager:
             path = self.model_paths[ModelType.YOLO_OSBTEXT]
             hf_info = self.model_hf_repos[ModelType.YOLO_OSBTEXT]
 
-            self._ensure_hf_file(
+            path = self._ensure_hf_file(
                 hf_info["repo_id"],
                 hf_info["filename"],
                 path,
@@ -821,7 +845,7 @@ class ModelManager:
             path = self.model_paths[ModelType.YOLO_PANEL]
             hf_info = self.model_hf_repos[ModelType.YOLO_PANEL]
 
-            self._ensure_hf_file(
+            path = self._ensure_hf_file(
                 hf_info["repo_id"],
                 hf_info["filename"],
                 path,
@@ -845,7 +869,7 @@ class ModelManager:
         with self._lock:
             model_path = self.model_paths[ModelType.MANGA_OCR]
             hf_info = self.model_hf_repos[ModelType.MANGA_OCR]
-            self._ensure_hf_repo(
+            model_path = self._ensure_hf_repo(
                 hf_info["repo_id"],
                 model_path,
                 revision=hf_info.get("revision"),
@@ -917,7 +941,7 @@ class ModelManager:
         with self._lock:
             model_path = self.model_paths[ModelType.PADDLE_OCR_VL]
             hf_info = self.model_hf_repos[ModelType.PADDLE_OCR_VL]
-            self._ensure_hf_repo(
+            model_path = self._ensure_hf_repo(
                 hf_info["repo_id"],
                 model_path,
                 revision=hf_info.get("revision"),
@@ -1013,7 +1037,7 @@ class ModelManager:
 
             log_message("Loading SAM 2.1 model...", verbose=verbose)
             hf_info = self.model_hf_repos[ModelType.SAM2]
-            cache_dir = "models/sam"
+            cache_dir = self._hf_cache_dir("models/sam")
 
             processor = Sam2Processor.from_pretrained(
                 hf_info["repo_id"], cache_dir=cache_dir, token=self.hf_token
@@ -1049,7 +1073,7 @@ class ModelManager:
 
             log_message("Loading SAM 3 Tracker model...", verbose=verbose)
             hf_info = self.model_hf_repos[ModelType.SAM3]
-            cache_dir = "models/sam"
+            cache_dir = self._hf_cache_dir("models/sam")
 
             effective_token = token if token is not None else self.hf_token
             processor = Sam3TrackerProcessor.from_pretrained(
@@ -1180,7 +1204,7 @@ class ModelManager:
                     transformer=transformer,
                     text_encoder_2=text_encoder,
                     dtype=self.dtype,
-                    cache_dir=str(self.flux_cache_dir),
+                    cache_dir=self._hf_cache_dir(self.flux_cache_dir),
                     token=effective_token,
                 ).to(self.device)
 
@@ -1238,7 +1262,7 @@ class ModelManager:
                 pipeline = FluxKontextPipeline.from_pretrained(
                     repo_id,
                     dtype=self.dtype,
-                    cache_dir=str(self.flux_cache_dir),
+                    cache_dir=self._hf_cache_dir(self.flux_cache_dir),
                 )
 
                 # Enable INT8 MatMul for GPU acceleration (AMD, Intel ARC, NVIDIA)
@@ -1332,7 +1356,7 @@ class ModelManager:
                 pipeline = Flux2KleinPipeline.from_pretrained(
                     repo_id,
                     dtype=self.dtype,
-                    cache_dir=str(self.flux_cache_dir),
+                    cache_dir=self._hf_cache_dir(self.flux_cache_dir),
                 )
 
                 # Enable INT8 MatMul for GPU acceleration (AMD, Intel ARC, NVIDIA)
