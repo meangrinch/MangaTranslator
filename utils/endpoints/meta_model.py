@@ -1,12 +1,10 @@
-import json
 from typing import Any
 
-from utils.exceptions import TranslationError, ValidationError
-from utils.logging import log_message
+from utils.exceptions import ValidationError
 from utils.model_metadata import supports_meta_reasoning_effort
 
 from ._http import COMMON_STATUS_HINTS, post_with_retries
-from .openai import extract_responses_text
+from .openai import build_responses_content, read_responses_reply
 
 
 def call_meta_model_endpoint(
@@ -48,39 +46,7 @@ def call_meta_model_endpoint(
         "Content-Type": "application/json",
     }
 
-    # The last text part is the prompt; earlier ones label the image after them
-    text_part = next((p for p in reversed(parts) if "text" in p), None)
-    image_parts = [p for p in parts if p is not text_part]
-
-    if not text_part:
-        raise ValidationError(
-            "Invalid 'parts' format for Meta Model API: No text prompt found."
-        )
-
-    content_list = []
-    for part in image_parts:
-        if "text" in part:
-            content_list.append({"type": "input_text", "text": part["text"]})
-            continue
-        if (
-            "inline_data" in part
-            and "data" in part["inline_data"]
-            and "mime_type" in part["inline_data"]
-        ):
-            mime_type = part["inline_data"]["mime_type"]
-            base64_image = part["inline_data"]["data"]
-            content_list.append(
-                {
-                    "type": "input_image",
-                    "image_url": f"data:{mime_type};base64,{base64_image}",
-                }
-            )
-        else:
-            log_message(
-                f"Invalid image part format for Meta Model API: {part}",
-                always_print=True,
-            )
-    content_list.append({"type": "input_text", "text": text_part["text"]})
+    content_list = build_responses_content(parts, "Meta Model API")
 
     payload: dict[str, Any] = {
         "model": model_name,
@@ -113,36 +79,11 @@ def call_meta_model_endpoint(
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    def parse(result: dict[str, Any]) -> str | None:
-        if result.get("error"):
-            error_obj = result["error"]
-            error_msg = (
-                error_obj.get("message", "Unknown error")
-                if isinstance(error_obj, dict)
-                else str(error_obj)
-            )
-            raise TranslationError(f"Meta Model API returned error: {error_msg}")
-
-        output_text = extract_responses_text(result)
-        if output_text:
-            return output_text
-
-        log_message(
-            f"No text content in Meta Model API response. Status: {result.get('status')}, "
-            f"details: {result.get('incomplete_details')}",
-            always_print=True,
-        )
-        log_message(
-            f"Full response: {json.dumps(result, indent=2)}",
-            verbose=debug,
-        )
-        return None
-
     return post_with_retries(
         url,
         headers,
         payload,
-        parse,
+        lambda result: read_responses_reply(result, "Meta Model", debug),
         label="Meta Model",
         debug=debug,
         timeout=timeout,

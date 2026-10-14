@@ -1,11 +1,12 @@
 import json
 from typing import Any
 
-from utils.exceptions import TranslationError, ValidationError
+from utils.exceptions import ValidationError
 from utils.logging import log_message
 from utils.model_metadata import is_zai_vision_model
 
-from ._http import COMMON_STATUS_HINTS, post_with_retries
+from ._http import COMMON_STATUS_HINTS, api_error, post_with_retries
+from .openai_compatible import build_chat_messages
 
 
 def call_zai_endpoint(
@@ -60,40 +61,13 @@ def call_zai_endpoint(
         "Accept-Language": "en-US,en",
     }
 
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-
-    # Check if this is a vision model
-    is_vision_model = is_zai_vision_model(model_name)
-
-    if image_parts and is_vision_model:
-        # Build multimodal content for vision models
-        user_content = []
-        for part in image_parts:
-            if "text" in part:
-                user_content.append({"type": "text", "text": part["text"]})
-                continue
-            if (
-                "inline_data" in part
-                and "data" in part["inline_data"]
-                and "mime_type" in part["inline_data"]
-            ):
-                mime_type = part["inline_data"]["mime_type"]
-                base64_image = part["inline_data"]["data"]
-                user_content.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime_type};base64,{base64_image}"},
-                    }
-                )
-            else:
-                log_message(f"Invalid image part format: {part}", always_print=True)
-
-        user_content.append({"type": "text", "text": text_part["text"]})
-        messages.append({"role": "user", "content": user_content})
+    if image_parts and is_zai_vision_model(model_name):
+        messages = build_chat_messages(parts, system_prompt, "Z.ai")
     else:
-        # Text-only content for non vision models
+        # Non-vision models, and a prompt with nothing else, get plain text content
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": text_part["text"]})
 
     payload = {
@@ -141,10 +115,7 @@ def call_zai_endpoint(
                 return content.strip()
 
         if "error" in result:
-            error_msg = result.get("error", {})
-            if isinstance(error_msg, dict):
-                error_msg = error_msg.get("message", "Unknown error")
-            raise TranslationError(f"Z.ai API returned error: {error_msg}")
+            raise api_error(result.get("error"), "Z.ai")
 
         log_message(
             f"No text content in Z.ai response. Finish reason: {finish_reason}",

@@ -2,14 +2,14 @@ import json
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-from utils.exceptions import TranslationError, ValidationError
+from utils.exceptions import ValidationError
 from utils.logging import log_message
 from utils.model_metadata import (
     is_azure_url,
     is_gemini_no_sampling_model,
 )
 
-from ._http import post_with_retries
+from ._http import api_error, post_with_retries
 
 
 def build_openai_compatible_url(base_url: str) -> str:
@@ -42,6 +42,144 @@ def build_openai_compatible_url(base_url: str) -> str:
     if url.endswith("/chat/completions"):
         return url
     return f"{url.rstrip('/')}/chat/completions"
+
+
+def build_chat_messages(
+    parts: list[dict[str, Any]],
+    system_prompt: str | None,
+    label: str,
+    image_detail: str | None = None,
+) -> list[dict[str, Any]]:
+    """Convert `parts` into Chat Completions `messages`.
+
+    Returns an optional system message followed by one user message. The last text part
+    is the prompt and goes last; earlier text parts label the image after them.
+
+    Args:
+        parts: Text parts (`{"text": ...}`) and image parts (`{"inline_data": ...}`).
+        system_prompt: System instruction, if any.
+        label: Provider name for the error raised when `parts` has no text.
+        image_detail: Sent as each image's `detail` when set.
+
+    Raises:
+        ValidationError: If `parts` has no text part.
+    """
+    text_part = next((p for p in reversed(parts) if "text" in p), None)
+    if not text_part:
+        raise ValidationError(
+            f"Invalid 'parts' format for {label}: No text prompt found."
+        )
+
+    user_content = []
+    for part in parts:
+        if part is text_part:
+            continue
+        if "text" in part:
+            user_content.append({"type": "text", "text": part["text"]})
+            continue
+        if (
+            "inline_data" in part
+            and "data" in part["inline_data"]
+            and "mime_type" in part["inline_data"]
+        ):
+            mime_type = part["inline_data"]["mime_type"]
+            base64_image = part["inline_data"]["data"]
+            image_url = {"url": f"data:{mime_type};base64,{base64_image}"}
+            if image_detail:
+                image_url["detail"] = image_detail
+            user_content.append({"type": "image_url", "image_url": image_url})
+        else:
+            log_message(f"Invalid image part format: {part}", always_print=True)
+    user_content.append({"type": "text", "text": text_part["text"]})
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": user_content})
+    return messages
+
+
+def read_chat_reply(
+    result: dict[str, Any], label: str, debug: bool = False
+) -> str | None:
+    """Read the answer text from a Chat Completions body.
+
+    Returns "" when the first choice has no content, and None when there are no choices.
+
+    Raises:
+        TranslationError: If there are no choices and the body carries an error.
+    """
+    if "choices" in result and len(result["choices"]) > 0:
+        choice = result["choices"][0]
+        finish_reason = choice.get("finish_reason")
+
+        message = choice.get("message")
+        if message and "content" in message:
+            content = message["content"]
+            return content.strip() if content else ""
+        log_message(
+            f"No message content in {label} response. Finish reason: {finish_reason}",
+            always_print=True,
+        )
+        log_message(f"Full response: {json.dumps(result, indent=2)}", verbose=debug)
+        return ""
+    log_message(f"No choices in {label} response", always_print=True)
+    if "error" in result:
+        raise api_error(result.get("error"), label)
+    return None
+
+
+def routed_sampling_params(
+    model_name: str, generation_config: dict[str, Any], cap_openai_temperature: bool
+) -> dict[str, Any]:
+    """Pick the sampling parameters a model routed through an aggregator accepts.
+
+    The model family comes from `generation_config["_metadata"]`. Claude takes no top_p
+    or top_k and a temperature of at most 1.0, OpenAI takes no top_k, and the Claude and
+    Gemini models that fix their own sampling take none of the three.
+
+    Args:
+        model_name: Model ID, used to spot Gemini models with fixed sampling.
+        generation_config: Holds `temperature`, `top_p`, `top_k` and `_metadata`.
+        cap_openai_temperature: Also cap an OpenAI model's temperature at 1.0.
+    """
+    metadata = generation_config.get("_metadata", {})
+    is_openai_model = metadata.get("is_openai_model", False)
+    is_anthropic_model = metadata.get("is_anthropic_model", False)
+    # Read from the name too, because callers may pass no `_metadata`
+    gemini_no_sampling = is_gemini_no_sampling_model(model_name)
+    no_sampling = (
+        gemini_no_sampling
+        or metadata.get("is_gemini_no_sampling", False)
+        or metadata.get("is_claude_effort_xhigh", False)
+        or metadata.get("is_claude_no_sampling", False)
+    )
+    params = {}
+
+    temperature = generation_config.get("temperature")
+    if (
+        temperature is not None
+        and not gemini_no_sampling
+        and not (is_anthropic_model and no_sampling)
+    ):
+        if is_anthropic_model or (cap_openai_temperature and is_openai_model):
+            temperature = min(temperature, 1.0)
+        params["temperature"] = temperature
+
+    top_p = generation_config.get("top_p")
+    if top_p is not None and not is_anthropic_model and not no_sampling:
+        params["top_p"] = top_p
+
+    top_k = generation_config.get("top_k")
+    if (
+        top_k is not None
+        and not is_openai_model
+        and not is_anthropic_model
+        and not no_sampling
+    ):
+        params["top_k"] = top_k
+
+    return params
 
 
 def call_openai_compatible_endpoint(
@@ -84,13 +222,13 @@ def call_openai_compatible_endpoint(
     """
     if not base_url:
         raise ValidationError("Base URL is required for OpenAI-Compatible endpoint")
-    # The last text part is the prompt; earlier ones label the image after them
-    text_part = next((p for p in reversed(parts) if "text" in p), None)
-    image_parts = [p for p in parts if p is not text_part]
-    if not text_part:
-        raise ValidationError(
-            "Invalid 'parts' format for OpenAI-Compatible: No text prompt found."
-        )
+
+    messages = build_chat_messages(
+        parts,
+        system_prompt,
+        "OpenAI-Compatible",
+        image_detail=generation_config.get("image_detail"),
+    )
 
     url = build_openai_compatible_url(base_url)
     headers = {
@@ -102,36 +240,6 @@ def call_openai_compatible_endpoint(
             headers["api-key"] = api_key
 
     metadata = generation_config.get("_metadata", {})
-    messages = []
-    user_content = []
-    image_detail = (
-        generation_config.get("image_detail")
-        if metadata.get("is_openai_model", False)
-        or generation_config.get("image_detail")
-        else None
-    )
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    for part in image_parts:
-        if "text" in part:
-            user_content.append({"type": "text", "text": part["text"]})
-            continue
-        if (
-            "inline_data" in part
-            and "data" in part["inline_data"]
-            and "mime_type" in part["inline_data"]
-        ):
-            mime_type = part["inline_data"]["mime_type"]
-            base64_image = part["inline_data"]["data"]
-            image_url = {"url": f"data:{mime_type};base64,{base64_image}"}
-            if image_detail:
-                image_url["detail"] = image_detail
-            user_content.append({"type": "image_url", "image_url": image_url})
-        else:
-            log_message(f"Invalid image part format: {part}", always_print=True)
-    user_content.append({"type": "text", "text": text_part["text"]})
-    messages.append({"role": "user", "content": user_content})
-
     # OpenAI reasoning models reject max_tokens on chat completions
     token_limit_key = (
         "max_completion_tokens"
@@ -144,48 +252,16 @@ def call_openai_compatible_endpoint(
         token_limit_key: generation_config.get("max_tokens", 4096),
     }
 
-    is_openai_model = metadata.get("is_openai_model", False)
-    is_anthropic_model = metadata.get("is_anthropic_model", False)
-
-    temp = generation_config.get("temperature")
-    no_sampling = (
-        metadata.get("is_claude_effort_xhigh", False)
-        or metadata.get("is_claude_no_sampling", False)
-        or metadata.get("is_gemini_no_sampling", False)
-        or is_gemini_no_sampling_model(model_name)
+    payload.update(
+        routed_sampling_params(
+            model_name, generation_config, cap_openai_temperature=False
+        )
     )
-    if (
-        temp is not None
-        and not is_gemini_no_sampling_model(model_name)
-        and not (is_anthropic_model and no_sampling)
-    ):
-        if is_anthropic_model:
-            payload["temperature"] = min(temp, 1.0)
-        else:
-            payload["temperature"] = temp
-
-    top_p = generation_config.get("top_p")
-    if top_p is not None and not is_anthropic_model and not no_sampling:
-        payload["top_p"] = top_p
-
-    top_k = generation_config.get("top_k")
-    if (
-        top_k is not None
-        and not is_openai_model
-        and not is_anthropic_model
-        and not no_sampling
-    ):
-        payload["top_k"] = top_k
 
     reasoning_effort = generation_config.get("reasoning_effort")
-    if is_anthropic_model and reasoning_effort:
-        reasoning_config = {}
-        if reasoning_effort == "none":
-            reasoning_config["enabled"] = False
-        elif reasoning_effort == "auto":
-            reasoning_config["enabled"] = True
-        else:
-            reasoning_config["enabled"] = True
+    if reasoning_effort and metadata.get("is_anthropic_model", False):
+        reasoning_config = {"enabled": reasoning_effort != "none"}
+        if reasoning_effort not in ("none", "auto"):
             reasoning_config["effort"] = reasoning_effort
         payload["reasoning"] = reasoning_config
     elif reasoning_effort and reasoning_effort != "none":
@@ -197,51 +273,17 @@ def call_openai_compatible_endpoint(
     if supports_verbosity and generation_config.get("verbosity"):
         payload["verbosity"] = generation_config["verbosity"]
 
-    claude_effort = metadata.get("is_claude_effort", False)
     effort = generation_config.get("effort")
-    if effort and claude_effort:
+    if effort and metadata.get("is_claude_effort", False):
         payload["effort"] = effort
 
     payload = {k: v for k, v in payload.items() if v is not None}
-
-    def parse(result: dict[str, Any]) -> str | None:
-        if "choices" in result and len(result["choices"]) > 0:
-            choice = result["choices"][0]
-            finish_reason = choice.get("finish_reason")
-
-            message = choice.get("message")
-            if message and "content" in message:
-                content = message["content"]
-                return content.strip() if content else ""
-            else:
-                log_message(
-                    f"No message content in response. Finish reason: {finish_reason}",
-                    always_print=True,
-                )
-                log_message(
-                    f"Full response: {json.dumps(result, indent=2)}",
-                    verbose=debug,
-                )
-                return ""
-        else:
-            log_message("No choices in OpenAI-Compatible response", always_print=True)
-            if "error" in result:
-                error_obj = result["error"]
-                error_msg = (
-                    error_obj.get("message", "Unknown error")
-                    if isinstance(error_obj, dict)
-                    else str(error_obj)
-                )
-                raise TranslationError(
-                    f"OpenAI-Compatible API returned error: {error_msg}"
-                )
-            return None
 
     return post_with_retries(
         url,
         headers,
         payload,
-        parse,
+        lambda result: read_chat_reply(result, "OpenAI-Compatible", debug),
         label="OpenAI-Compatible",
         debug=debug,
         timeout=timeout,

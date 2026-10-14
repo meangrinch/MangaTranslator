@@ -388,6 +388,27 @@ def is_openai_reasoning_model(model_name: str | None) -> bool:
     )
 
 
+def clamp_gpt6_reasoning_effort(model_name: str | None, effort: str) -> str:
+    """GPT-6 has no "minimal" effort, and Astra / 6.1 Sol have no "none"; both become "low"."""
+    if effort == "minimal" or (
+        effort == "none" and (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
+    ):
+        return "low"
+    return effort
+
+
+def clamp_openai_reasoning_effort(model_name: str | None, effort: str) -> str:
+    """Replace a reasoning effort an OpenAI model lacks with the nearest one it accepts."""
+    if is_gpt6_series(model_name):
+        return clamp_gpt6_reasoning_effort(model_name, effort)
+    # GPT-5: "max" needs 5.6+ and "xhigh" needs 5.2+
+    if effort == "max" and not supports_gpt5_max_effort(model_name):
+        effort = "xhigh"
+    if effort == "xhigh" and not supports_gpt5_xhigh_effort(model_name):
+        effort = "high"
+    return effort
+
+
 def is_azure_url(url: str | None) -> bool:
     """Check if a URL is an Azure OpenAI or Azure AI Services endpoint."""
     if not url:
@@ -471,15 +492,25 @@ def is_xai_reasoning_model(model_name: str | None) -> bool:
     )
 
 
+def xai_reasoning_efforts(model_name: str | None) -> tuple[str, ...]:
+    """Reasoning efforts a SpaceXAI model accepts, judged by its Grok generation alone.
+
+    Empty when the Responses API `reasoning` parameter does not apply.
+    """
+    lm = (model_name or "").lower()
+    if "multi-agent" in lm or lm.startswith(("grok-4.6", "grok-4.7")):
+        return ("low", "medium", "high", "xhigh")
+    if lm.startswith(("grok-4.3", "grok-4.5")):
+        return ("none", "low", "medium", "high")
+    return ()
+
+
 def supports_xai_reasoning_parameter(model_name: str | None) -> bool:
     """Whether SpaceXAI accepts the Responses API `reasoning` parameter."""
-    if not model_name:
-        return False
-    lm = model_name.lower()
     return (
-        lm.startswith(("grok-4.3", "grok-4.5", "grok-4.6", "grok-4.7"))
-        or "multi-agent" in lm
-    ) and "non-reasoning" not in lm
+        bool(xai_reasoning_efforts(model_name))
+        and "non-reasoning" not in model_name.lower()
+    )
 
 
 def is_anthropic_reasoning_model(model_name: str | None) -> bool:
@@ -614,6 +645,21 @@ def is_opencode_multimodal_model(model_name: str | None) -> bool:
 
     # Unlisted or temporary models default to vision-capable
     return True
+
+
+def is_opencode_reasoning_model(model_name: str | None) -> bool:
+    """Check if an OpenCode model is reasoning-capable (OpenCode serves other vendors' models)."""
+    return (
+        is_deepseek_reasoning_model(model_name)
+        or is_qwencloud_reasoning_model(model_name)
+        or is_zai_reasoning_model(model_name)
+        or is_openai_reasoning_model(model_name)
+        or is_moonshot_reasoning_model(model_name)
+        or is_mimo_reasoning_model(model_name)
+        or is_xai_reasoning_model(model_name)
+        or is_meta_reasoning_model(model_name)
+        or is_anthropic_reasoning_model(model_name)
+    )
 
 
 def is_mimo_reasoning_model(model_name: str | None) -> bool:

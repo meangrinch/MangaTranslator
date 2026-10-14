@@ -162,6 +162,26 @@ def test_meta_uses_responses_api(post):
     ]
 
 
+@pytest.mark.parametrize(
+    ("part_level", "request_wide", "detail"),
+    [
+        ("MEDIA_RESOLUTION_LOW", "high", "low"),
+        ("MEDIA_RESOLUTION_MEDIUM", "low", "high"),
+        (None, "low", "low"),
+        (None, "medium", "high"),
+    ],
+)
+def test_xai_image_detail_prefers_the_images_own_resolution(
+    post, part_level, request_wide, detail
+):
+    post.body = RESPONSES_BODY
+    image = {**IMAGE, "media_resolution": {"level": part_level}}
+    call_xai_endpoint(
+        "key", "grok-4.7", [image, {"text": "go"}], {"media_resolution": request_wide}
+    )
+    assert post.sent["input"][0]["content"][0]["detail"] == detail
+
+
 def test_anthropic_keeps_answer_text_after_tool_blocks(post):
     post.body = {
         "content": [
@@ -322,6 +342,20 @@ def test_moonshot_leaves_fixed_sampling_params_unset(post, model):
         "key", model, [{"text": "go"}], {"temperature": 0.1, "top_p": 1.0}
     )
     assert not {"temperature", "top_p", "tools"} & post.sent.keys()
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({"choices": [{"message": {"content": " 1: Hello "}}]}, "1: Hello"),
+        ({"choices": [{"message": {"content": None}}]}, ""),
+        ({"choices": [{"finish_reason": "content_filter"}]}, ""),
+        ({"choices": []}, None),
+    ],
+)
+def test_chat_reply_tells_an_empty_answer_from_no_answer(post, body, expected):
+    post.body = body
+    assert call_moonshot_endpoint("key", "kimi-k3", [{"text": "go"}], {}) == expected
 
 
 @pytest.mark.parametrize(

@@ -1,13 +1,16 @@
-import json
 from typing import Any
 
 import requests
 
-from utils.exceptions import TranslationError, ValidationError
+from utils.exceptions import ValidationError
 from utils.logging import log_message
-from utils.model_metadata import is_gemini_no_sampling_model
 
 from ._http import COMMON_STATUS_HINTS, post_with_retries
+from .openai_compatible import (
+    build_chat_messages,
+    read_chat_reply,
+    routed_sampling_params,
+)
 
 # OpenRouter model metadata cache & reasoning detection
 _OPENROUTER_MODELS_META: dict[str, dict[str, Any]] = {}
@@ -62,6 +65,30 @@ def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
     )
 
 
+def _reasoning_config(
+    reasoning_effort: str | None, metadata: dict[str, Any], is_reasoning_model: bool
+) -> dict[str, Any]:
+    """Build OpenRouter's `reasoning` object; empty leaves reasoning at the model default."""
+    if not reasoning_effort:
+        return {}
+    is_claude_max = metadata.get("is_claude_effort_max", False)
+    is_claude_xhigh = metadata.get("is_claude_effort_xhigh", False)
+    # Fable 5+ has always-on thinking, so it gets no reasoning config
+    omit_thinking = metadata.get("is_claude_omit_thinking", False)
+
+    if metadata.get("is_claude_adaptive_default", False) and not omit_thinking:
+        # Thinking is on by default, so "none" has to switch it off explicitly
+        return {"enabled": reasoning_effort != "none"}
+    if is_claude_xhigh and not omit_thinking:
+        return {"enabled": True} if reasoning_effort != "none" else {}
+    if is_claude_max and not is_claude_xhigh:
+        # Claude 4.6: `enabled` turns on adaptive thinking
+        return {"enabled": True} if reasoning_effort == "auto" else {}
+    if is_reasoning_model and not is_claude_max:
+        return {"effort": reasoning_effort}
+    return {}
+
+
 def call_openrouter_endpoint(
     api_key: str,
     model_name: str,
@@ -102,13 +129,15 @@ def call_openrouter_endpoint(
     """
     if not api_key:
         raise ValidationError("API key is required for OpenRouter endpoint")
-    # The last text part is the prompt; earlier ones label the image after them
-    text_part = next((p for p in reversed(parts) if "text" in p), None)
-    image_parts = [p for p in parts if p is not text_part]
-    if not text_part:
-        raise ValidationError(
-            "Invalid 'parts' format for OpenRouter: No text prompt found."
-        )
+
+    metadata = generation_config.get("_metadata", {})
+    is_openai_model = metadata.get("is_openai_model", False)
+    messages = build_chat_messages(
+        parts,
+        system_prompt,
+        "OpenRouter",
+        image_detail=generation_config.get("image_detail") if is_openai_model else None,
+    )
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -118,36 +147,6 @@ def call_openrouter_endpoint(
         "X-OpenRouter-Title": "MangaTranslator",
         "X-OpenRouter-Categories": "writing-assistant,image-gen",
     }
-
-    metadata = generation_config.get("_metadata", {})
-    messages = []
-    user_content = []
-    image_detail = (
-        generation_config.get("image_detail")
-        if metadata.get("is_openai_model", False)
-        else None
-    )
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    for part in image_parts:
-        if "text" in part:
-            user_content.append({"type": "text", "text": part["text"]})
-            continue
-        if (
-            "inline_data" in part
-            and "data" in part["inline_data"]
-            and "mime_type" in part["inline_data"]
-        ):
-            mime_type = part["inline_data"]["mime_type"]
-            base64_image = part["inline_data"]["data"]
-            image_url = {"url": f"data:{mime_type};base64,{base64_image}"}
-            if image_detail:
-                image_url["detail"] = image_detail
-            user_content.append({"type": "image_url", "image_url": image_url})
-        else:
-            log_message(f"Invalid image part format: {part}", always_print=True)
-    user_content.append({"type": "text", "text": text_part["text"]})
-    messages.append({"role": "user", "content": user_content})
 
     payload = {
         "model": model_name,
@@ -159,80 +158,30 @@ def call_openrouter_endpoint(
         payload["model"] = payload["model"].removesuffix(":online")
         payload["plugins"] = [{"id": "web", "engine": "native"}]
 
-    is_openai_model = metadata.get("is_openai_model", False)
-    is_anthropic_model = metadata.get("is_anthropic_model", False)
-
-    temp = generation_config.get("temperature")
-    no_sampling = (
-        metadata.get("is_claude_effort_xhigh", False)
-        or metadata.get("is_claude_no_sampling", False)
-        or metadata.get("is_gemini_no_sampling", False)
-        or is_gemini_no_sampling_model(model_name)
+    payload.update(
+        routed_sampling_params(
+            model_name, generation_config, cap_openai_temperature=True
+        )
     )
-    if (
-        temp is not None
-        and not is_gemini_no_sampling_model(model_name)
-        and not (is_anthropic_model and no_sampling)
-    ):
-        if is_anthropic_model or is_openai_model:
-            payload["temperature"] = min(temp, 1.0)
-        else:
-            payload["temperature"] = temp
-
-    top_p = generation_config.get("top_p")
-    if top_p is not None and not is_anthropic_model and not no_sampling:
-        payload["top_p"] = top_p
-
-    top_k = generation_config.get("top_k")
-    if (
-        top_k is not None
-        and not is_openai_model
-        and not is_anthropic_model
-        and not no_sampling
-    ):
-        payload["top_k"] = top_k
 
     # OpenRouter verbosity parameter: used by both Claude (effort) and GPT-5 (verbosity)
-    claude_effort = metadata.get("is_claude_effort", False)
     effort = generation_config.get("effort")
-
     supports_verbosity = metadata.get("supports_verbosity", False) or metadata.get(
         "is_gpt5_model", False
     )
-
-    if effort and claude_effort:
+    if effort and metadata.get("is_claude_effort", False):
         payload["verbosity"] = effort
     elif supports_verbosity and generation_config.get("verbosity"):
         payload["verbosity"] = generation_config["verbosity"]
 
-    reasoning_config = {}
-    reasoning_effort = generation_config.get("reasoning_effort")
-
-    is_reasoning_model = False
-    try:
-        is_reasoning_model = openrouter_is_reasoning_model(model_name, debug=debug)
-    except Exception:
-        is_reasoning_model = False
-
-    # Claude 4.6+: reasoning.enabled turns on adaptive thinking.
-    # Fable 5+ has always-on thinking; omit reasoning config entirely.
-    is_claude_max = metadata.get("is_claude_effort_max", False)
-    is_claude_xhigh = metadata.get("is_claude_effort_xhigh", False)
-    is_claude_adaptive_default = metadata.get("is_claude_adaptive_default", False)
-    omit_thinking = metadata.get("is_claude_omit_thinking", False)
-    if reasoning_effort and is_claude_adaptive_default and not omit_thinking:
-        reasoning_config["enabled"] = reasoning_effort != "none"
-    elif reasoning_effort and is_claude_xhigh and not omit_thinking:
-        if reasoning_effort != "none":
-            reasoning_config["enabled"] = True
-    elif reasoning_effort and is_claude_max and not is_claude_xhigh:
-        if reasoning_effort == "auto":
-            reasoning_config["enabled"] = True
-    elif reasoning_effort and is_reasoning_model and not is_claude_max:
-        reasoning_config["effort"] = reasoning_effort
+    reasoning_config = _reasoning_config(
+        generation_config.get("reasoning_effort"),
+        metadata,
+        openrouter_is_reasoning_model(model_name, debug=debug),
+    )
 
     # Claude rejects a custom temperature while thinking is on
-    if is_anthropic_model and (
+    if metadata.get("is_anthropic_model", False) and (
         reasoning_config.get("enabled")
         or reasoning_config.get("effort", "none") != "none"
     ):
@@ -244,41 +193,11 @@ def call_openrouter_endpoint(
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    def parse(result: dict[str, Any]) -> str | None:
-        if "choices" in result and len(result["choices"]) > 0:
-            choice = result["choices"][0]
-            finish_reason = choice.get("finish_reason")
-
-            message = choice.get("message")
-            if message and "content" in message:
-                content = message["content"]
-                return content.strip() if content else ""
-            else:
-                log_message(
-                    f"No message content in response. Finish reason: {finish_reason}",
-                    always_print=True,
-                )
-                log_message(
-                    f"Full response: {json.dumps(result, indent=2)}",
-                    verbose=debug,
-                )
-                return ""
-        else:
-            if "error" in result:
-                error_obj = result["error"]
-                error_msg = (
-                    error_obj.get("message", "Unknown error")
-                    if isinstance(error_obj, dict)
-                    else str(error_obj)
-                )
-                raise TranslationError(f"OpenRouter API returned error: {error_msg}")
-            return None
-
     return post_with_retries(
         url,
         headers,
         payload,
-        parse,
+        lambda result: read_chat_reply(result, "OpenRouter", debug),
         label="OpenRouter",
         debug=debug,
         timeout=timeout,

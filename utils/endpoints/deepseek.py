@@ -1,11 +1,9 @@
-import json
 from typing import Any
 
-from utils.exceptions import TranslationError, ValidationError
-from utils.logging import log_message
+from utils.exceptions import ValidationError
 
 from ._http import post_with_retries
-from .openai import extract_responses_text
+from .openai import build_responses_content, read_responses_reply
 
 
 def call_deepseek_endpoint(
@@ -47,14 +45,7 @@ def call_deepseek_endpoint(
     if not api_key:
         raise ValidationError("API key is required for DeepSeek endpoint")
 
-    # The last text part is the prompt; earlier ones label the image after them
-    text_part = next((p for p in reversed(parts) if "text" in p), None)
-    image_parts = [p for p in parts if p is not text_part]
-
-    if not text_part:
-        raise ValidationError(
-            "Invalid 'parts' format for DeepSeek: No text prompt found."
-        )
+    content_list = build_responses_content(parts, "DeepSeek")
 
     url = "https://api.deepseek.com/responses"
     headers = {
@@ -62,47 +53,13 @@ def call_deepseek_endpoint(
         "Content-Type": "application/json",
     }
 
-    if image_parts:
-        content_list = []
-        for part in image_parts:
-            if "text" in part:
-                content_list.append({"type": "input_text", "text": part["text"]})
-                continue
-            if (
-                "inline_data" in part
-                and "data" in part["inline_data"]
-                and "mime_type" in part["inline_data"]
-            ):
-                mime_type = part["inline_data"]["mime_type"]
-                base64_image = part["inline_data"]["data"]
-                content_list.append(
-                    {
-                        "type": "input_image",
-                        "image_url": f"data:{mime_type};base64,{base64_image}",
-                    }
-                )
-            else:
-                log_message(
-                    f"Invalid image part format for DeepSeek: {part}",
-                    always_print=True,
-                )
-        content_list.append({"type": "input_text", "text": text_part["text"]})
-        input_messages = [{"role": "user", "content": content_list}]
-    else:
-        input_messages = [
-            {
-                "role": "user",
-                "content": [{"type": "input_text", "text": text_part["text"]}],
-            }
-        ]
-
     max_output_tokens = generation_config.get(
         "max_output_tokens"
     ) or generation_config.get("max_tokens", 4096)
 
     payload: dict[str, Any] = {
         "model": model_name,
-        "input": input_messages,
+        "input": [{"role": "user", "content": content_list}],
         "max_output_tokens": max_output_tokens,
     }
 
@@ -111,15 +68,15 @@ def call_deepseek_endpoint(
 
     # The Responses API takes reasoning.effort; "none" turns thinking off
     thinking_config = generation_config.get("thinking")
-    thinking_enabled = thinking_config and thinking_config.get("type") == "enabled"
-    reasoning_effort = (
-        generation_config.get("reasoning_effort") if thinking_enabled else "none"
-    )
-    if thinking_config and reasoning_effort:
-        payload["reasoning"] = {"effort": reasoning_effort}
+    if thinking_config and thinking_config.get("type") == "enabled":
+        # Thinking mode ignores temperature/top_p, so they are left out
+        reasoning_effort = generation_config.get("reasoning_effort")
+        if reasoning_effort:
+            payload["reasoning"] = {"effort": reasoning_effort}
+    else:
+        if thinking_config:
+            payload["reasoning"] = {"effort": "none"}
 
-    # Thinking mode does not support temperature/top_p (no error, but no effect)
-    if not thinking_enabled:
         temp = generation_config.get("temperature")
         if temp is not None:
             payload["temperature"] = min(temp, 2.0)
@@ -130,36 +87,11 @@ def call_deepseek_endpoint(
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    def parse(result: dict[str, Any]) -> str | None:
-        if result.get("error"):
-            error_obj = result["error"]
-            error_msg = (
-                error_obj.get("message", "Unknown error")
-                if isinstance(error_obj, dict)
-                else str(error_obj)
-            )
-            raise TranslationError(f"DeepSeek API returned error: {error_msg}")
-
-        output_text = extract_responses_text(result)
-        if output_text:
-            return output_text
-
-        log_message(
-            f"No text content in DeepSeek response. Status: {result.get('status')}, "
-            f"details: {result.get('incomplete_details')}",
-            always_print=True,
-        )
-        log_message(
-            f"Full response: {json.dumps(result, indent=2)}",
-            verbose=debug,
-        )
-        return None
-
     return post_with_retries(
         url,
         headers,
         payload,
-        parse,
+        lambda result: read_responses_reply(result, "DeepSeek", debug),
         label="DeepSeek",
         debug=debug,
         timeout=timeout,

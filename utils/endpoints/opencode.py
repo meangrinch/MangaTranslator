@@ -1,10 +1,10 @@
 import json
 from typing import Any
 
-from utils.exceptions import TranslationError, ValidationError
+from utils.exceptions import ValidationError
 from utils.logging import log_message
 
-from ._http import post_with_retries
+from ._http import api_error, post_with_retries
 
 
 def get_opencode_endpoint_url(tier: str = "zen") -> str:
@@ -117,15 +117,7 @@ def call_opencode_endpoint(
 
     def parse(result: dict[str, Any]) -> str | None:
         if "error" in result:
-            error_obj = result.get("error", {})
-            error_msg = (
-                error_obj.get("message", "Unknown error")
-                if isinstance(error_obj, dict)
-                else str(error_obj)
-            )
-            raise TranslationError(
-                f"OpenCode ({tier_label}) API returned error: {error_msg}"
-            )
+            raise api_error(result.get("error"), f"OpenCode ({tier_label})")
 
         if "choices" in result and len(result["choices"]) > 0:
             choice = result["choices"][0]

@@ -4,6 +4,7 @@ from utils.model_metadata import (
     anthropic_effort_config,
     anthropic_model_flags,
     anthropic_reasoning_effort_config,
+    clamp_openai_reasoning_effort,
     flux_sdcpp_valid_text_encoder_quant,
     flux_valid_backend,
     get_max_tokens_cap,
@@ -23,6 +24,8 @@ from utils.model_metadata import (
     supports_gpt5_xhigh_effort,
     supports_meta_max_effort,
     supports_openai_original_image_detail,
+    supports_xai_reasoning_parameter,
+    xai_reasoning_efforts,
 )
 
 
@@ -62,6 +65,25 @@ def test_get_max_tokens_cap(provider, model, expected):
 def test_gpt5_effort_support(model, xhigh, max_):
     assert supports_gpt5_xhigh_effort(model) is xhigh
     assert supports_gpt5_max_effort(model) is max_
+
+
+@pytest.mark.parametrize(
+    ("model", "effort", "expected"),
+    [
+        ("gpt-5.1", "max", "high"),
+        ("gpt-5.2", "max", "xhigh"),
+        ("gpt-5.1", "xhigh", "high"),
+        ("gpt-5.6-sol", "max", "max"),
+        ("gpt-5.1", "none", "none"),
+        ("gpt-6-sol", "minimal", "low"),
+        ("gpt-6-sol", "none", "none"),
+        ("gpt-6-astra", "none", "low"),
+        ("gpt-6.1-sol", "none", "low"),
+        ("gpt-6-sol", "max", "max"),
+    ],
+)
+def test_clamp_openai_reasoning_effort(model, effort, expected):
+    assert clamp_openai_reasoning_effort(model, effort) == expected
 
 
 @pytest.mark.parametrize(
@@ -184,6 +206,23 @@ def test_anthropic_effort_config(model, expected):
 )
 def test_is_xai_reasoning_model(model, expected):
     assert is_xai_reasoning_model(model) is expected
+
+
+@pytest.mark.parametrize(
+    ("model", "efforts", "takes_parameter"),
+    [
+        ("grok-4.7", ("low", "medium", "high", "xhigh"), True),
+        ("grok-4-multi-agent", ("low", "medium", "high", "xhigh"), True),
+        ("grok-4.5-fast", ("none", "low", "medium", "high"), True),
+        # The efforts go by generation alone; only the parameter check sees the suffix
+        ("grok-4.5-non-reasoning", ("none", "low", "medium", "high"), False),
+        ("grok-4.20-reasoning", (), False),
+        (None, (), False),
+    ],
+)
+def test_xai_reasoning_efforts(model, efforts, takes_parameter):
+    assert xai_reasoning_efforts(model) == efforts
+    assert supports_xai_reasoning_parameter(model) is takes_parameter
 
 
 @pytest.mark.parametrize(

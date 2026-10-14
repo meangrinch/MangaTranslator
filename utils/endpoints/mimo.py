@@ -1,11 +1,10 @@
-import json
 from typing import Any
 
-from utils.exceptions import TranslationError, ValidationError
-from utils.logging import log_message
+from utils.exceptions import ValidationError
 from utils.model_metadata import is_mimo_multimodal_model
 
 from ._http import COMMON_STATUS_HINTS, post_with_retries
+from .openai_compatible import read_chat_reply
 
 
 def call_mimo_endpoint(
@@ -110,40 +109,11 @@ def call_mimo_endpoint(
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    def parse(result: dict[str, Any]) -> str | None:
-        if "choices" in result and len(result["choices"]) > 0:
-            choice = result["choices"][0]
-            finish_reason = choice.get("finish_reason")
-
-            message = choice.get("message")
-            if message and "content" in message:
-                content = message["content"]
-                return content.strip() if content else ""
-            log_message(
-                f"No message content in MiMo response. Finish reason: {finish_reason}",
-                always_print=True,
-            )
-            log_message(
-                f"Full response: {json.dumps(result, indent=2)}",
-                verbose=debug,
-            )
-            return ""
-        log_message("No choices in MiMo response", always_print=True)
-        if "error" in result:
-            error_obj = result.get("error", {})
-            error_msg = (
-                error_obj.get("message", "Unknown error")
-                if isinstance(error_obj, dict)
-                else str(error_obj)
-            )
-            raise TranslationError(f"MiMo API returned error: {error_msg}")
-        return None
-
     return post_with_retries(
         url,
         headers,
         payload,
-        parse,
+        lambda result: read_chat_reply(result, "MiMo", debug),
         label="MiMo",
         debug=debug,
         timeout=timeout,

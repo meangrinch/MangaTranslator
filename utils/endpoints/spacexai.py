@@ -1,11 +1,27 @@
-import json
 from typing import Any
 
-from utils.exceptions import TranslationError, ValidationError
-from utils.logging import log_message
+from utils.exceptions import ValidationError
+from utils.model_metadata import xai_reasoning_efforts
 
 from ._http import COMMON_STATUS_HINTS, post_with_retries
-from .openai import extract_responses_text
+from .openai import build_responses_content, read_responses_reply
+
+# `detail` is auto, low, or high, so a medium resolution is sent as high
+_DETAIL_BY_MEDIA_RESOLUTION_LEVEL = {
+    "MEDIA_RESOLUTION_UNSPECIFIED": "auto",
+    "MEDIA_RESOLUTION_LOW": "low",
+    "MEDIA_RESOLUTION_MEDIUM": "high",
+    "MEDIA_RESOLUTION_HIGH": "high",
+}
+
+
+def _image_detail(part: dict[str, Any], generation_config: dict[str, Any]) -> str:
+    """Pick an image's `detail` from its own media resolution, else the request-wide one."""
+    level = part.get("media_resolution", {}).get("level")
+    if level:
+        return _DETAIL_BY_MEDIA_RESOLUTION_LEVEL.get(level, "high")
+    media_resolution = (generation_config.get("media_resolution") or "auto").lower()
+    return media_resolution if media_resolution in ("auto", "high", "low") else "high"
 
 
 def call_xai_endpoint(
@@ -46,13 +62,11 @@ def call_xai_endpoint(
     if not api_key:
         raise ValidationError("API key is required for SpaceXAI endpoint")
 
-    # The last text part is the prompt; earlier ones label the image after them
-    text_part = next((p for p in reversed(parts) if "text" in p), None)
-    image_parts = [p for p in parts if p is not text_part]
-    if not text_part:
-        raise ValidationError(
-            "Invalid 'parts' format for SpaceXAI: No text prompt found."
-        )
+    user_content = build_responses_content(
+        parts,
+        "SpaceXAI",
+        image_detail=lambda part: _image_detail(part, generation_config),
+    )
 
     url = "https://api.x.ai/v1/responses"
     headers = {
@@ -63,58 +77,7 @@ def call_xai_endpoint(
     input_messages = []
     if system_prompt:
         input_messages.append({"role": "system", "content": system_prompt})
-
-    if image_parts:
-        user_content = []
-        for part in image_parts:
-            if "text" in part:
-                user_content.append({"type": "input_text", "text": part["text"]})
-                continue
-            if (
-                "inline_data" in part
-                and "data" in part["inline_data"]
-                and "mime_type" in part["inline_data"]
-            ):
-                mime_type = part["inline_data"]["mime_type"]
-                base64_image = part["inline_data"]["data"]
-
-                # Check for per-image resolution first (from media_resolution metadata)
-                part_res = part.get("media_resolution", {}).get("level")
-                if part_res:
-                    res_map = {
-                        "MEDIA_RESOLUTION_UNSPECIFIED": "auto",
-                        "MEDIA_RESOLUTION_LOW": "low",
-                        "MEDIA_RESOLUTION_MEDIUM": "high",
-                        "MEDIA_RESOLUTION_HIGH": "high",
-                    }
-                    detail = res_map.get(part_res, "high")
-                else:
-                    media_res = (
-                        generation_config.get("media_resolution") or "auto"
-                    ).lower()
-                    detail = (
-                        media_res if media_res in ["auto", "high", "low"] else "high"
-                    )
-
-                user_content.append(
-                    {
-                        "type": "input_image",
-                        "image_url": f"data:{mime_type};base64,{base64_image}",
-                        "detail": detail,
-                    }
-                )
-            else:
-                log_message(f"Invalid image part format: {part}", always_print=True)
-
-        user_content.append({"type": "input_text", "text": text_part["text"]})
-        input_messages.append({"role": "user", "content": user_content})
-    else:
-        input_messages.append(
-            {
-                "role": "user",
-                "content": [{"type": "input_text", "text": text_part["text"]}],
-            }
-        )
+    input_messages.append({"role": "user", "content": user_content})
 
     payload = {
         "model": model_name,
@@ -129,50 +92,19 @@ def call_xai_endpoint(
     if prompt_cache_key:
         payload["prompt_cache_key"] = prompt_cache_key
 
-    model_lower = (model_name or "").lower()
     reasoning_effort = generation_config.get("reasoning_effort")
-    if "multi-agent" in model_lower or model_lower.startswith(("grok-4.6", "grok-4.7")):
-        if reasoning_effort in ("low", "medium", "high", "xhigh"):
-            payload["reasoning"] = {"effort": reasoning_effort}
-    elif (model_lower.startswith(("grok-4.3", "grok-4.5"))) and reasoning_effort in (
-        "none",
-        "low",
-        "medium",
-        "high",
-    ):
+    if reasoning_effort in xai_reasoning_efforts(model_name):
         payload["reasoning"] = {"effort": reasoning_effort}
 
     if enable_web_search:
         payload["tools"] = [{"type": "web_search"}]
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    def parse(result: dict[str, Any]) -> str | None:
-        if result.get("error"):
-            error_obj = result["error"]
-            error_msg = (
-                error_obj.get("message", "Unknown error")
-                if isinstance(error_obj, dict)
-                else str(error_obj)
-            )
-            raise TranslationError(f"SpaceXAI API returned error: {error_msg}")
-
-        output_text = extract_responses_text(result)
-        if output_text:
-            return output_text
-
-        log_message(
-            f"No text content in SpaceXAI response. Status: {result.get('status')}, "
-            f"details: {result.get('incomplete_details')}",
-            always_print=True,
-        )
-        log_message(f"Full response: {json.dumps(result, indent=2)}", verbose=debug)
-        return None
-
     return post_with_retries(
         url,
         headers,
         payload,
-        parse,
+        lambda result: read_responses_reply(result, "SpaceXAI", debug),
         label="SpaceXAI",
         debug=debug,
         timeout=timeout,

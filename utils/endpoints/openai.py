@@ -1,20 +1,18 @@
 import json
+from collections.abc import Callable
 from typing import Any
 
 from utils.exceptions import ValidationError
 from utils.logging import log_message
 from utils.model_metadata import (
+    clamp_openai_reasoning_effort,
     is_gpt5_series,
-    is_gpt6_astra,
     is_gpt6_series,
-    is_gpt61_sol,
     is_openai_reasoning_model,
     resolve_openai_api_model_name,
-    supports_gpt5_max_effort,
-    supports_gpt5_xhigh_effort,
 )
 
-from ._http import post_with_retries
+from ._http import api_error, post_with_retries
 
 
 def extract_responses_text(result: dict[str, Any]) -> str | None:
@@ -40,6 +38,85 @@ def extract_responses_text(result: dict[str, Any]) -> str | None:
     if not text and isinstance(result.get("output_text"), str):
         text = result["output_text"].strip()
     return text or None
+
+
+def read_responses_text(
+    result: dict[str, Any], label: str, debug: bool = False
+) -> str | None:
+    """Return a Responses API body's answer text, or log that it has none and return None."""
+    output_text = extract_responses_text(result)
+    if output_text:
+        return output_text
+
+    log_message(
+        f"No text content in {label} response. Status: {result.get('status')}, "
+        f"details: {result.get('incomplete_details')}",
+        always_print=True,
+    )
+    log_message(f"Full response: {json.dumps(result, indent=2)}", verbose=debug)
+    return None
+
+
+def read_responses_reply(
+    result: dict[str, Any], label: str, debug: bool = False
+) -> str | None:
+    """Read a Responses API body like `read_responses_text`, raising if it carries an error."""
+    if result.get("error"):
+        raise api_error(result["error"], label)
+    return read_responses_text(result, label, debug)
+
+
+def build_responses_content(
+    parts: list[dict[str, Any]],
+    label: str,
+    image_detail: str | Callable[[dict[str, Any]], str] | None = None,
+) -> list[dict[str, Any]]:
+    """Convert `parts` into the user message content of a Responses API request.
+
+    The last text part is the prompt and goes last; earlier text parts label the image
+    after them.
+
+    Args:
+        parts: Text parts (`{"text": ...}`) and image parts (`{"inline_data": ...}`).
+        label: Provider name for the error raised when `parts` has no text.
+        image_detail: Sent as each image's `detail` when set. A function is called with
+            the image part, to pick the detail per image.
+
+    Raises:
+        ValidationError: If `parts` has no text part.
+    """
+    text_part = next((p for p in reversed(parts) if "text" in p), None)
+    if not text_part:
+        raise ValidationError(
+            f"Invalid 'parts' format for {label}: No text prompt found."
+        )
+
+    content = []
+    for part in parts:
+        if part is text_part:
+            continue
+        if "text" in part:
+            content.append({"type": "input_text", "text": part["text"]})
+            continue
+        if (
+            "inline_data" in part
+            and "data" in part["inline_data"]
+            and "mime_type" in part["inline_data"]
+        ):
+            mime_type = part["inline_data"]["mime_type"]
+            base64_image = part["inline_data"]["data"]
+            image_item = {
+                "type": "input_image",
+                "image_url": f"data:{mime_type};base64,{base64_image}",
+            }
+            detail = image_detail(part) if callable(image_detail) else image_detail
+            if detail:
+                image_item["detail"] = detail
+            content.append(image_item)
+        else:
+            log_message(f"Invalid image part format: {part}", always_print=True)
+    content.append({"type": "input_text", "text": text_part["text"]})
+    return content
 
 
 def call_openai_endpoint(
@@ -80,40 +157,12 @@ def call_openai_endpoint(
     """
     if not api_key:
         raise ValidationError("API key is required for OpenAI endpoint")
-    # The last text part is the prompt; earlier ones label the image after them
-    text_part = next((p for p in reversed(parts) if "text" in p), None)
-    image_parts = [p for p in parts if p is not text_part]
-    if not text_part:
-        raise ValidationError(
-            "Invalid 'parts' format for OpenAI: No text prompt found."
-        )
+    input_content = build_responses_content(
+        parts, "OpenAI", image_detail=generation_config.get("image_detail")
+    )
 
     url = "https://api.openai.com/v1/responses"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-    input_content = []
-    image_detail = generation_config.get("image_detail")
-    for part in image_parts:
-        if "text" in part:
-            input_content.append({"type": "input_text", "text": part["text"]})
-            continue
-        if (
-            "inline_data" in part
-            and "data" in part["inline_data"]
-            and "mime_type" in part["inline_data"]
-        ):
-            mime_type = part["inline_data"]["mime_type"]
-            base64_image = part["inline_data"]["data"]
-            image_item = {
-                "type": "input_image",
-                "image_url": f"data:{mime_type};base64,{base64_image}",
-            }
-            if image_detail:
-                image_item["detail"] = image_detail
-            input_content.append(image_item)
-        else:
-            log_message(f"Invalid image part format: {part}", always_print=True)
-    input_content.append({"type": "input_text", "text": text_part["text"]})
 
     api_model_name = resolve_openai_api_model_name(model_name) or model_name
     payload = {
@@ -129,85 +178,32 @@ def call_openai_endpoint(
         payload["tools"] = [{"type": "web_search"}]
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    try:
-        lower_model = (model_name or "").lower()
-        is_chat_variant = "chat" in lower_model
-        is_gpt5 = is_gpt5_series(model_name)
-        is_gpt6 = is_gpt6_series(model_name)
-        is_reasoning_capable = is_openai_reasoning_model(model_name)
-        reasoning_mode = generation_config.get("reasoning_mode")
+    is_chat_variant = "chat" in (model_name or "").lower()
+    is_gpt5_or_gpt6 = is_gpt5_series(model_name) or is_gpt6_series(model_name)
 
-        if is_reasoning_capable and not is_chat_variant:
-            effort = generation_config.get("reasoning_effort")
-            reasoning_payload: dict[str, Any] = {}
-            if effort:
-                if is_gpt6:
-                    effort_to_send = (
-                        "low"
-                        if effort == "minimal"
-                        or (
-                            (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
-                            and effort == "none"
-                        )
-                        else effort
-                    )
-                    reasoning_payload["effort"] = effort_to_send
-                else:
-                    if effort == "none":
-                        reasoning_payload["effort"] = "none"
-                    else:
-                        effort_to_send = effort
-                        if effort_to_send == "max" and not supports_gpt5_max_effort(
-                            model_name
-                        ):
-                            effort_to_send = (
-                                "xhigh"
-                                if supports_gpt5_xhigh_effort(model_name)
-                                else "high"
-                            )
-                        if effort_to_send == "xhigh" and not supports_gpt5_xhigh_effort(
-                            model_name
-                        ):
-                            effort_to_send = "high"
-                        reasoning_payload["effort"] = effort_to_send
+    if is_openai_reasoning_model(model_name) and not is_chat_variant:
+        reasoning: dict[str, Any] = {}
+        effort = generation_config.get("reasoning_effort")
+        if effort:
+            reasoning["effort"] = clamp_openai_reasoning_effort(model_name, effort)
+        if generation_config.get("reasoning_mode") == "pro":
+            reasoning["mode"] = "pro"
+        if reasoning:
+            payload["reasoning"] = reasoning
 
-            if reasoning_mode == "pro":
-                reasoning_payload["mode"] = "pro"
-
-            if reasoning_payload:
-                payload["reasoning"] = reasoning_payload
-
-        if (is_gpt5 or is_gpt6) and not is_chat_variant:
-            verbosity = generation_config.get("verbosity", "low")
-            payload["text"] = {"verbosity": verbosity}
-
-            # temp/top_p only allowed when effort is "none"
-            current_effort = payload.get("reasoning", {}).get("effort")
-            allow_sampling = current_effort == "none"
-            if not allow_sampling:
-                payload.pop("temperature", None)
-                payload.pop("top_p", None)
-    except Exception:
-        pass
-
-    def parse(result: dict[str, Any]) -> str | None:
-        output_text = extract_responses_text(result)
-        if output_text:
-            return output_text
-
-        log_message(
-            f"No text content in OpenAI response. Status: {result.get('status')}, "
-            f"details: {result.get('incomplete_details')}",
-            always_print=True,
-        )
-        log_message(f"Full response: {json.dumps(result, indent=2)}", verbose=debug)
-        return None
+    if is_gpt5_or_gpt6 and not is_chat_variant:
+        payload["text"] = {"verbosity": generation_config.get("verbosity", "low")}
+        # temp/top_p only allowed when effort is "none"
+        if payload.get("reasoning", {}).get("effort") != "none":
+            payload.pop("temperature", None)
+            payload.pop("top_p", None)
 
     return post_with_retries(
         url,
         headers,
         payload,
-        parse,
+        # Unlike its siblings, a body with an `error` is still read for text
+        lambda result: read_responses_text(result, "OpenAI", debug),
         label="OpenAI",
         debug=debug,
         timeout=timeout,

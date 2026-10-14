@@ -41,10 +41,11 @@ from utils.logging import log_message
 from utils.model_metadata import (
     NO_WEB_SEARCH_PROVIDERS,
     anthropic_model_flags,
+    clamp_gpt6_reasoning_effort,
+    clamp_openai_reasoning_effort,
     get_max_tokens_cap,
     is_anthropic_model_family,
     is_anthropic_reasoning_model,
-    is_azure_url,
     is_deepseek_reasoning_model,
     is_gemini_3_plus_model,
     is_gemini_4_model,
@@ -57,9 +58,7 @@ from utils.model_metadata import (
     is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
-    is_gpt6_astra,
     is_gpt6_series,
-    is_gpt61_sol,
     is_hy_mt2_model,
     is_meta_reasoning_model,
     is_mimo_reasoning_model,
@@ -68,12 +67,11 @@ from utils.model_metadata import (
     is_openai_model_family,
     is_openai_reasoning_model,
     is_openai_virtual_pro,
+    is_opencode_reasoning_model,
     is_qwencloud_reasoning_model,
     is_rosetta_model,
     is_xai_reasoning_model,
     is_zai_reasoning_model,
-    supports_gpt5_max_effort,
-    supports_gpt5_xhigh_effort,
     supports_meta_reasoning_effort,
     supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
@@ -82,7 +80,6 @@ from utils.model_metadata import (
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
 )
-from utils.model_metadata import is_openai_reasoning_model as _is_openai_reasoning_meta
 
 _FULL_PAGE_LABEL = "Full page (context only):"
 _PREVIOUS_PAGE_LABEL = "Previous page, {} back (context only):"
@@ -299,16 +296,6 @@ Example{example_note}:
     return "\n\n".join(sections)
 
 
-def _is_reasoning_model_openai(model_name: str) -> bool:
-    """Check if an OpenAI model is reasoning-capable."""
-    return _is_openai_reasoning_meta(model_name)
-
-
-def _is_reasoning_model_anthropic(model_name: str) -> bool:
-    """Check if an Anthropic model is reasoning-capable."""
-    return is_anthropic_reasoning_model(model_name)
-
-
 _GEMINI_MEDIA_RESOLUTIONS = {
     "auto": "MEDIA_RESOLUTION_UNSPECIFIED",
     "high": "MEDIA_RESOLUTION_HIGH",
@@ -379,6 +366,82 @@ def _gemini_thinking_config(
     return {"thinkingBudget": calculate_reasoning_budget(max_tokens, effort)}
 
 
+def _claude_thinking_type(flags: dict[str, bool], reasoning_effort: str) -> str | None:
+    """Pick the Claude thinking type for a reasoning effort, or None to send no thinking config."""
+    if flags.get("is_claude_omit_thinking"):
+        return None
+    if flags.get("is_claude_adaptive_default"):
+        # Thinking is on by default, so "none" has to switch it off explicitly
+        if reasoning_effort != "none":
+            return "adaptive"
+        return "between_tools" if flags.get("is_claude_between_tools") else "disabled"
+    if flags.get("is_claude_effort_max"):
+        return "adaptive" if reasoning_effort == "auto" else None
+    # Older models think on a token budget
+    return "enabled" if reasoning_effort != "none" else None
+
+
+def _openrouter_reasoning_effort(
+    model_name: str, reasoning_effort: str | None
+) -> str | None:
+    """Pick the reasoning effort to send through OpenRouter, or None to send none."""
+    if is_anthropic_reasoning_model(model_name):
+        flags = anthropic_model_flags(model_name)
+        # Unlike the native Anthropic default, Claude 4.6 also thinks unless told not to
+        is_claude_46 = flags.get("is_claude_effort_max") and not flags.get(
+            "is_claude_effort_xhigh"
+        )
+        thinks_by_default = is_claude_46 or flags.get("is_claude_adaptive_default")
+        return reasoning_effort or ("auto" if thinks_by_default else "none")
+    if is_openai_model_family(model_name):
+        if is_gpt6_series(model_name):
+            return clamp_gpt6_reasoning_effort(model_name, reasoning_effort or "high")
+        if is_gpt5_series(model_name):
+            return reasoning_effort
+    model_lower = (model_name or "").lower()
+    # Grok 4 reasoning models take no effort setting
+    if "grok-4" in model_lower and "non-reasoning" not in model_lower:
+        return None
+    if is_google_model_family(model_name) and reasoning_effort:
+        return _gemini_thinking_level(model_name, reasoning_effort)
+    return None
+
+
+def _sampling_config(
+    config: TranslationConfig, max_tokens: int, max_temperature: float | None = None
+) -> dict[str, Any]:
+    """Start a config with max_tokens plus, when custom sampling is on, temperature and top_p."""
+    generation_config: dict[str, Any] = {"max_tokens": max_tokens}
+    if config.use_custom_sampling:
+        temperature = config.temperature
+        if max_temperature is not None:
+            temperature = min(temperature, max_temperature)
+        generation_config.update({"temperature": temperature, "top_p": config.top_p})
+    return generation_config
+
+
+def _thinking_toggle(reasoning_effort: str | None) -> dict[str, str]:
+    """Build the `thinking` on/off switch: every effort except "none" leaves thinking on."""
+    return {"type": "disabled" if reasoning_effort == "none" else "enabled"}
+
+
+# Reasoning models get a larger default max_tokens; OpenRouter is asked separately
+_IS_REASONING_MODEL = {
+    "Google": is_google_reasoning_model,
+    "OpenAI": is_openai_reasoning_model,
+    "Anthropic": is_anthropic_reasoning_model,
+    "SpaceXAI": is_xai_reasoning_model,
+    "Meta Model": is_meta_reasoning_model,
+    "OpenAI-Compatible": is_openai_compatible_reasoning_model,
+    "DeepSeek": is_deepseek_reasoning_model,
+    "Z.ai": is_zai_reasoning_model,
+    "Moonshot AI": is_moonshot_reasoning_model,
+    "Xiaomi MiMo": is_mimo_reasoning_model,
+    "QwenCloud": is_qwencloud_reasoning_model,
+    "OpenCode": is_opencode_reasoning_model,
+}
+
+
 def _build_generation_config(
     provider: str,
     model_name: str,
@@ -419,46 +482,42 @@ def _build_generation_config(
             image_detail = "high"
         return image_detail
 
+    def routed_model_config(max_tokens: int) -> dict[str, Any]:
+        """Start the config for OpenRouter or OpenAI-Compatible, which route other vendors' models.
+
+        `_metadata` holds the model-family flags their endpoints adapt the request to.
+        """
+        is_openai_model = is_openai_model_family(model_name)
+        supports_verbosity = is_openai_model and supports_openai_verbosity(model_name)
+        claude_flags = anthropic_model_flags(model_name)
+        generation_config = {
+            "max_tokens": max_tokens,
+            "_metadata": {
+                "is_openai_model": is_openai_model,
+                "is_anthropic_model": is_anthropic_model_family(model_name),
+                "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
+                "is_gpt5_model": is_openai_model and is_gpt5_series(model_name),
+                "supports_verbosity": supports_verbosity,
+                **claude_flags,
+            },
+        }
+        if is_openai_model:
+            generation_config["image_detail"] = normalize_image_detail()
+        if supports_verbosity:
+            generation_config["verbosity"] = config.verbosity or "low"
+        if claude_flags and config.effort:
+            generation_config["effort"] = config.effort
+        return generation_config
+
     if config.max_tokens is not None:
         max_tokens_value = config.max_tokens
     else:
         is_reasoning = False
-        if provider == "Google":
-            is_reasoning = is_google_reasoning_model(model_name)
-        elif provider == "OpenAI":
-            is_reasoning = _is_reasoning_model_openai(model_name)
-        elif provider == "Anthropic":
-            is_reasoning = _is_reasoning_model_anthropic(model_name)
-        elif provider == "SpaceXAI":
-            is_reasoning = is_xai_reasoning_model(model_name)
-        elif provider == "Meta Model":
-            is_reasoning = is_meta_reasoning_model(model_name)
-        elif provider == "OpenRouter":
+        if provider == "OpenRouter":
+            # Read from OpenRouter's model list rather than from the model name
             is_reasoning = openrouter_is_reasoning_model(model_name, debug)
-        elif provider == "OpenAI-Compatible":
-            is_reasoning = is_openai_compatible_reasoning_model(model_name)
-        elif provider == "DeepSeek":
-            is_reasoning = is_deepseek_reasoning_model(model_name)
-        elif provider == "Z.ai":
-            is_reasoning = is_zai_reasoning_model(model_name)
-        elif provider == "Moonshot AI":
-            is_reasoning = is_moonshot_reasoning_model(model_name)
-        elif provider == "Xiaomi MiMo":
-            is_reasoning = is_mimo_reasoning_model(model_name)
-        elif provider == "QwenCloud":
-            is_reasoning = is_qwencloud_reasoning_model(model_name)
-        elif provider == "OpenCode":
-            is_reasoning = (
-                is_deepseek_reasoning_model(model_name)
-                or is_qwencloud_reasoning_model(model_name)
-                or is_zai_reasoning_model(model_name)
-                or is_openai_reasoning_model(model_name)
-                or is_moonshot_reasoning_model(model_name)
-                or is_mimo_reasoning_model(model_name)
-                or is_xai_reasoning_model(model_name)
-                or is_meta_reasoning_model(model_name)
-                or is_anthropic_reasoning_model(model_name)
-            )
+        elif provider in _IS_REASONING_MODEL:
+            is_reasoning = _IS_REASONING_MODEL[provider](model_name)
         max_tokens_value = 32768 if is_reasoning else 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, model_name)
@@ -503,24 +562,10 @@ def _build_generation_config(
             )  # top_k not supported by OpenAI
         generation_config["image_detail"] = normalize_image_detail()
         is_chat = is_gpt5_chat_variant(model_name)
-        if _is_reasoning_model_openai(model_name) and not is_chat:
-            reasoning_effort = config.reasoning_effort or "high"
-            effort = reasoning_effort
-            if is_gpt6_series(model_name):
-                if effort == "minimal" or (
-                    (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
-                    and effort == "none"
-                ):
-                    effort = "low"
-                generation_config["reasoning_effort"] = effort
-            else:
-                if effort == "max" and not supports_gpt5_max_effort(model_name):
-                    effort = (
-                        "xhigh" if supports_gpt5_xhigh_effort(model_name) else "high"
-                    )
-                if effort == "xhigh" and not supports_gpt5_xhigh_effort(model_name):
-                    effort = "high"
-                generation_config["reasoning_effort"] = effort
+        if is_openai_reasoning_model(model_name) and not is_chat:
+            generation_config["reasoning_effort"] = clamp_openai_reasoning_effort(
+                model_name, config.reasoning_effort or "high"
+            )
             if is_openai_virtual_pro(model_name):
                 generation_config["reasoning_mode"] = "pro"
         if supports_openai_verbosity(model_name):
@@ -528,7 +573,6 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "Anthropic":
-        is_reasoning = _is_reasoning_model_anthropic(model_name)
         anthropic_flags = anthropic_model_flags(model_name)
         generation_config = {
             "max_tokens": max_tokens_value,
@@ -541,227 +585,104 @@ def _build_generation_config(
                     "top_k": top_k,
                 }
             )
-        if is_reasoning:
-            omit_thinking = anthropic_flags.get("is_claude_omit_thinking", False)
-            adaptive_default = anthropic_flags.get("is_claude_adaptive_default", False)
+        if is_anthropic_reasoning_model(model_name):
             reasoning_effort = config.reasoning_effort or (
-                "auto" if adaptive_default else "none"
+                "auto" if anthropic_flags.get("is_claude_adaptive_default") else "none"
             )
             generation_config["reasoning_effort"] = reasoning_effort
-            if adaptive_default and not omit_thinking:
-                if reasoning_effort == "none":
-                    generation_config["thinking_type"] = (
-                        "between_tools"
-                        if anthropic_flags.get("is_claude_between_tools")
-                        else "disabled"
-                    )
-                else:
-                    generation_config["thinking_type"] = "adaptive"
-            elif anthropic_flags.get("is_claude_effort_max") and not omit_thinking:
-                if reasoning_effort == "auto":
-                    generation_config["thinking_type"] = "adaptive"
-            elif not omit_thinking and reasoning_effort != "none":
-                generation_config["thinking_type"] = "enabled"
+            thinking_type = _claude_thinking_type(anthropic_flags, reasoning_effort)
+            if thinking_type:
+                generation_config["thinking_type"] = thinking_type
         if anthropic_flags and config.effort:
             generation_config["effort"] = config.effort
         return generation_config
 
     elif provider == "SpaceXAI":
-        generation_config = {
-            "max_tokens": max_tokens_value,
-            "media_resolution": config.media_resolution,
-        }
+        generation_config = _sampling_config(config, max_tokens_value)
+        generation_config["media_resolution"] = config.media_resolution
         if prompt_cache_key:
             generation_config["prompt_cache_key"] = prompt_cache_key
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": temperature,
-                    "top_p": top_p,
-                }
-            )
         if supports_xai_reasoning_parameter(model_name):
-            reasoning_effort = config.reasoning_effort or "high"
-            generation_config["reasoning_effort"] = reasoning_effort
+            generation_config["reasoning_effort"] = config.reasoning_effort or "high"
         return generation_config
 
     elif provider == "DeepSeek":
-        is_reasoning = is_deepseek_reasoning_model(model_name)
-        generation_config = {
-            "max_tokens": max_tokens_value,
-        }
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": temperature,
-                    "top_p": top_p,
-                }
-            )
-        if is_reasoning:
+        generation_config = _sampling_config(config, max_tokens_value)
+        if is_deepseek_reasoning_model(model_name):
             reasoning_effort = config.reasoning_effort or "high"
-            thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
-            generation_config["thinking"] = {"type": thinking_type}
-            if thinking_type == "enabled":
+            generation_config["thinking"] = _thinking_toggle(reasoning_effort)
+            if reasoning_effort != "none":
                 generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     elif provider == "Z.ai":
-        is_reasoning = is_zai_reasoning_model(model_name)
-        generation_config = {
-            "max_tokens": max_tokens_value,
-        }
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": min(temperature, 1.0),
-                    "top_p": top_p,
-                }
-            )
-        if is_reasoning:
-            lm = (model_name or "").lower()
-            if "glm-5.3" in lm:
-                reasoning_effort = config.reasoning_effort or "high"
+        generation_config = _sampling_config(config, max_tokens_value, 1.0)
+        if is_zai_reasoning_model(model_name):
+            if "glm-5.3" in model_name.lower():
+                # GLM-5.3 keeps thinking on and takes every effort, "none" included
                 generation_config["thinking"] = {"type": "enabled"}
-                generation_config["reasoning_effort"] = reasoning_effort
-            else:
-                reasoning_effort = config.reasoning_effort or (
-                    "high" if supports_zai_reasoning_effort(model_name) else "auto"
+                generation_config["reasoning_effort"] = (
+                    config.reasoning_effort or "high"
                 )
-                thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
-                generation_config["thinking"] = {"type": thinking_type}
-                if thinking_type == "enabled" and supports_zai_reasoning_effort(
-                    model_name
-                ):
+            else:
+                takes_effort = supports_zai_reasoning_effort(model_name)
+                reasoning_effort = config.reasoning_effort or (
+                    "high" if takes_effort else "auto"
+                )
+                generation_config["thinking"] = _thinking_toggle(reasoning_effort)
+                if takes_effort and reasoning_effort != "none":
                     generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     elif provider == "Moonshot AI":
-        is_reasoning = is_moonshot_reasoning_model(model_name)
-
-        generation_config = {
-            "max_tokens": max_tokens_value,
-        }
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": min(temperature, 1.0),
-                    "top_p": top_p,
-                }
+        generation_config = _sampling_config(config, max_tokens_value, 1.0)
+        if supports_moonshot_reasoning_effort(model_name):
+            # Kimi K3 takes an effort instead of the thinking switch
+            reasoning_effort = config.reasoning_effort
+            if reasoning_effort not in ("low", "high", "max"):
+                reasoning_effort = "high"
+            generation_config["reasoning_effort"] = reasoning_effort
+            log_message(
+                f"Using reasoning effort '{reasoning_effort}' for {model_name}",
+                verbose=debug,
             )
-
-        if is_reasoning:
-            if supports_moonshot_reasoning_effort(model_name):
-                reasoning_effort = config.reasoning_effort or "high"
-                if reasoning_effort not in ("low", "high", "max"):
-                    reasoning_effort = "high"
-                generation_config["reasoning_effort"] = reasoning_effort
-                log_message(
-                    f"Using reasoning effort '{reasoning_effort}' for {model_name}",
-                    verbose=debug,
-                )
-            else:
-                reasoning_effort = config.reasoning_effort or "auto"
-                thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
-                generation_config["thinking"] = {"type": thinking_type}
+        elif is_moonshot_reasoning_model(model_name):
+            generation_config["thinking"] = _thinking_toggle(config.reasoning_effort)
         return generation_config
 
     elif provider == "Xiaomi MiMo":
-        is_reasoning = is_mimo_reasoning_model(model_name)
-
-        generation_config = {
-            "max_tokens": max_tokens_value,
-        }
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": min(temperature, 1.0),
-                    "top_p": top_p,
-                }
-            )
-
-        if is_reasoning:
-            reasoning_effort = config.reasoning_effort or "auto"
-            thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
-            generation_config["thinking"] = {"type": thinking_type}
+        generation_config = _sampling_config(config, max_tokens_value, 1.0)
+        if is_mimo_reasoning_model(model_name):
+            generation_config["thinking"] = _thinking_toggle(config.reasoning_effort)
         return generation_config
 
     elif provider == "QwenCloud":
-        is_reasoning = is_qwencloud_reasoning_model(model_name)
-
-        generation_config = {
-            "max_tokens": max_tokens_value,
-        }
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": min(temperature, 1.0),
-                    "top_p": top_p,
-                }
-            )
-
-        if is_reasoning:
+        generation_config = _sampling_config(config, max_tokens_value, 1.0)
+        if is_qwencloud_reasoning_model(model_name):
+            takes_effort = supports_qwencloud_reasoning_effort(model_name)
             reasoning_effort = config.reasoning_effort or (
-                "xhigh" if supports_qwencloud_reasoning_effort(model_name) else "auto"
+                "xhigh" if takes_effort else "auto"
             )
-            thinking_type = "enabled" if reasoning_effort != "none" else "disabled"
-            generation_config["thinking"] = {"type": thinking_type}
-            if (
-                thinking_type == "enabled"
-                and reasoning_effort not in ("auto", "none")
-                and supports_qwencloud_reasoning_effort(model_name)
-            ):
+            generation_config["thinking"] = _thinking_toggle(reasoning_effort)
+            if takes_effort and reasoning_effort not in ("auto", "none"):
                 generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     elif provider == "Meta Model":
-        is_reasoning = is_meta_reasoning_model(model_name)
-
-        generation_config = {
-            "max_tokens": max_tokens_value,
-        }
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": min(temperature, 1.0),
-                    "top_p": top_p,
-                }
-            )
-
-        if is_reasoning:
-            reasoning_effort = config.reasoning_effort or "auto"
-            if reasoning_effort not in (
-                "auto",
-                "none",
-            ) and supports_meta_reasoning_effort(model_name):
-                generation_config["reasoning_effort"] = reasoning_effort
+        generation_config = _sampling_config(config, max_tokens_value, 1.0)
+        reasoning_effort = config.reasoning_effort or "auto"
+        # Meta has no thinking switch, so "auto" and "none" both send no effort
+        if supports_meta_reasoning_effort(model_name) and reasoning_effort not in (
+            "auto",
+            "none",
+        ):
+            generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     elif provider == "OpenCode":
-        is_reasoning = (
-            is_deepseek_reasoning_model(model_name)
-            or is_qwencloud_reasoning_model(model_name)
-            or is_zai_reasoning_model(model_name)
-            or is_openai_reasoning_model(model_name)
-            or is_moonshot_reasoning_model(model_name)
-            or is_mimo_reasoning_model(model_name)
-            or is_xai_reasoning_model(model_name)
-            or is_meta_reasoning_model(model_name)
-            or is_anthropic_reasoning_model(model_name)
-        )
-
-        generation_config = {
-            "max_tokens": max_tokens_value,
-        }
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": temperature,
-                    "top_p": top_p,
-                }
-            )
-
+        generation_config = _sampling_config(config, max_tokens_value)
         if (
-            is_reasoning
+            is_opencode_reasoning_model(model_name)
             and config.reasoning_effort
             and config.reasoning_effort != "none"
         ):
@@ -769,157 +690,58 @@ def _build_generation_config(
         return generation_config
 
     elif provider == "OpenRouter":
-        model_lower = (model_name or "").lower()
-        is_openai_model = is_openai_model_family(model_name)
-        is_anthropic_model = is_anthropic_model_family(model_name)
-        is_grok_model = "grok-4" in model_lower
-        is_google_model = is_google_model_family(model_name)
-
-        generation_config = {"max_tokens": max_tokens_value}
-        if use_sampling and not is_gemini_no_sampling_model(model_name):
+        generation_config = routed_model_config(max_tokens_value)
+        # The endpoint leaves out the sampling parameters the model's family rejects
+        if use_sampling:
             generation_config.update(
-                {
-                    "temperature": temperature,
-                    "top_p": top_p if not is_anthropic_model else None,
-                    "top_k": top_k,
-                }
+                {"temperature": temperature, "top_p": top_p, "top_k": top_k}
             )
-        if is_openai_model:
-            generation_config["image_detail"] = normalize_image_detail()
-
-        is_openai_reasoning = is_openai_model and is_openai_reasoning_model(model_name)
-        is_gpt5_model = is_openai_model and is_gpt5_series(model_name)
-        is_gpt6_model = is_openai_model and is_gpt6_series(model_name)
-        is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
-        # OpenRouter Grok metadata omit explicit reasoning tags in name
-        is_grok_reasoning = is_grok_model and "non-reasoning" not in model_lower
-
-        anthropic_flags = anthropic_model_flags(model_name)
-        generation_config["_metadata"] = {
-            "is_openai_model": is_openai_model,
-            "is_anthropic_model": is_anthropic_model,
-            "is_grok_model": is_grok_model,
-            "is_google_model": is_google_model,
-            "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
-            "is_openai_reasoning": is_openai_reasoning,
-            "is_anthropic_reasoning": is_anthropic_reasoning,
-            "is_grok_reasoning": is_grok_reasoning,
-            "is_gpt5_model": is_gpt5_model,
-            "is_gpt6_astra": is_openai_model and is_gpt6_astra(model_name),
-            "is_gpt6_model": is_gpt6_model,
-            "supports_verbosity": is_openai_model
-            and supports_openai_verbosity(model_name),
-            **anthropic_flags,
-        }
-
-        if is_openai_reasoning or is_anthropic_reasoning or is_grok_reasoning:
-            if is_anthropic_reasoning:
-                is_claude_adaptive_default = anthropic_flags.get(
-                    "is_claude_adaptive_default", False
-                )
-                is_claude_46 = (
-                    anthropic_flags.get("is_claude_effort_max")
-                    and not anthropic_flags.get("is_claude_effort_xhigh")
-                    and not is_claude_adaptive_default
-                )
-                reasoning_effort = config.reasoning_effort or (
-                    "auto" if (is_claude_46 or is_claude_adaptive_default) else "none"
-                )
-                generation_config["reasoning_effort"] = reasoning_effort
-            elif is_gpt6_model:
-                effort = config.reasoning_effort or "high"
-                if effort == "minimal" or (
-                    (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
-                    and effort == "none"
-                ):
-                    effort = "low"
-                generation_config["reasoning_effort"] = effort
-            elif is_gpt5_model:
-                generation_config["reasoning_effort"] = config.reasoning_effort
-        elif is_google_model and config.reasoning_effort:
-            generation_config["reasoning_effort"] = _gemini_thinking_level(
-                model_name, config.reasoning_effort
-            )
-
-        if anthropic_flags and config.effort:
-            generation_config["effort"] = config.effort
-
-        if is_openai_model and supports_openai_verbosity(model_name):
-            generation_config["verbosity"] = config.verbosity or "low"
-
+        reasoning_effort = _openrouter_reasoning_effort(
+            model_name, config.reasoning_effort
+        )
+        if reasoning_effort:
+            generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     elif provider == "OpenAI-Compatible":
-        is_openai_model = is_openai_model_family(model_name)
-        is_anthropic_model = is_anthropic_model_family(model_name)
-        is_azure = is_azure_url(config.openai_compatible_url)
-
-        is_openai_reasoning = is_openai_model and _is_openai_reasoning_meta(model_name)
-        is_gpt6_model = is_openai_model and is_gpt6_series(model_name)
-        is_anthropic_reasoning = is_anthropic_reasoning_model(model_name)
-        anthropic_flags = anthropic_model_flags(model_name)
-
-        generation_config = {"max_tokens": max_tokens_value}
-        if (
-            use_sampling
-            and not is_gemini_no_sampling_model(model_name)
-            and not is_openai_reasoning
-        ):
+        generation_config = routed_model_config(max_tokens_value)
+        metadata = generation_config["_metadata"]
+        is_openai_model = metadata["is_openai_model"]
+        is_openai_reasoning = is_openai_model and is_openai_reasoning_model(model_name)
+        metadata["is_openai_reasoning"] = is_openai_reasoning
+        # The endpoint leaves out the sampling parameters the model's family rejects
+        if use_sampling and not is_openai_reasoning:
             generation_config.update(
-                {
-                    "temperature": min(temperature, 1.0)
-                    if is_anthropic_model
-                    else temperature,
-                    "top_p": top_p if not is_anthropic_model else None,
-                }
+                {"temperature": temperature, "top_p": top_p, "top_k": top_k}
             )
-            if top_k is not None and not is_openai_model and not is_anthropic_model:
-                generation_config["top_k"] = top_k
-
-        if is_openai_model:
-            generation_config["image_detail"] = normalize_image_detail()
-
-        generation_config["_metadata"] = {
-            "is_openai_model": is_openai_model,
-            "is_anthropic_model": is_anthropic_model,
-            "is_azure": is_azure,
-            "is_openai_reasoning": is_openai_reasoning,
-            "is_anthropic_reasoning": is_anthropic_reasoning,
-            "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
-            "is_gpt5_model": is_openai_model and is_gpt5_series(model_name),
-            "is_gpt6_astra": is_openai_model and is_gpt6_astra(model_name),
-            "is_gpt6_model": is_gpt6_model,
-            "supports_verbosity": is_openai_model
-            and supports_openai_verbosity(model_name),
-            **anthropic_flags,
-        }
-
-        if (
-            is_openai_reasoning
-            or is_anthropic_reasoning
-            or is_openai_compatible_reasoning_model(model_name)
-        ) and config.reasoning_effort:
-            effort = config.reasoning_effort
-            if is_gpt6_model and (
-                effort == "minimal"
-                or (
-                    (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
-                    and effort == "none"
+        reasoning_effort = config.reasoning_effort
+        if reasoning_effort and is_openai_compatible_reasoning_model(model_name):
+            if is_openai_model and is_gpt6_series(model_name):
+                reasoning_effort = clamp_gpt6_reasoning_effort(
+                    model_name, reasoning_effort
                 )
-            ):
-                effort = "low"
-            generation_config["reasoning_effort"] = effort
-
-        if anthropic_flags and config.effort:
-            generation_config["effort"] = config.effort
-
-        if is_openai_model and supports_openai_verbosity(model_name):
-            generation_config["verbosity"] = config.verbosity or "low"
-
+            generation_config["reasoning_effort"] = reasoning_effort
         return generation_config
 
     else:
         raise TranslationError(f"Unknown provider for generation config: {provider}")
+
+
+# provider: (config field holding its API key, name in the missing-key error, endpoint)
+_PROVIDER_ENDPOINTS = {
+    "Google": ("google_api_key", "Google", call_gemini_endpoint),
+    "OpenAI": ("openai_api_key", "OpenAI", call_openai_endpoint),
+    "Anthropic": ("anthropic_api_key", "Anthropic", call_anthropic_endpoint),
+    "SpaceXAI": ("xai_api_key", "SpaceXAI", call_xai_endpoint),
+    "DeepSeek": ("deepseek_api_key", "DeepSeek", call_deepseek_endpoint),
+    "Z.ai": ("zai_api_key", "Z.ai", call_zai_endpoint),
+    "Moonshot AI": ("moonshot_api_key", "Moonshot", call_moonshot_endpoint),
+    "Xiaomi MiMo": ("mimo_api_key", "MiMo", call_mimo_endpoint),
+    "QwenCloud": ("qwencloud_api_key", "QwenCloud", call_qwencloud_endpoint),
+    "Meta Model": ("meta_api_key", "Meta Model", call_meta_model_endpoint),
+    "OpenCode": ("opencode_api_key", "OpenCode", call_opencode_endpoint),
+    "OpenRouter": ("openrouter_api_key", "OpenRouter", call_openrouter_endpoint),
+}
 
 
 def _call_llm_endpoint(
@@ -946,223 +768,43 @@ def _call_llm_endpoint(
             prompt_cache_key,
         )
 
-    try:
-        if provider == "Google":
-            api_key = config.google_api_key
-            if not api_key:
-                raise TranslationError("Google API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_gemini_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-                enable_web_search=config.enable_web_search,
-                enable_code_execution=config.enable_code_execution,
-            )
-        elif provider == "OpenAI":
-            api_key = config.openai_api_key
-            if not api_key:
-                raise TranslationError("OpenAI API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_openai_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-                enable_web_search=config.enable_web_search,
-            )
-        elif provider == "Anthropic":
-            api_key = config.anthropic_api_key
-            if not api_key:
-                raise TranslationError("Anthropic API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_anthropic_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-                enable_web_search=config.enable_web_search,
-            )
-        elif provider == "SpaceXAI":
-            api_key = config.xai_api_key
-            if not api_key:
-                raise TranslationError("SpaceXAI API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug, prompt_cache_key=prompt_cache_key
-            )
-            return call_xai_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-                enable_web_search=config.enable_web_search,
-            )
-        elif provider == "DeepSeek":
-            api_key = config.deepseek_api_key
-            if not api_key:
-                raise TranslationError("DeepSeek API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_deepseek_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-            )
-        elif provider == "Z.ai":
-            api_key = config.zai_api_key
-            if not api_key:
-                raise TranslationError("Z.ai API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_zai_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-                enable_web_search=config.enable_web_search,
-            )
-        elif provider == "Moonshot AI":
-            api_key = config.moonshot_api_key
-            if not api_key:
-                raise TranslationError("Moonshot API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_moonshot_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-            )
-        elif provider == "Xiaomi MiMo":
-            api_key = config.mimo_api_key
-            if not api_key:
-                raise TranslationError("MiMo API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_mimo_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-                enable_web_search=config.enable_web_search,
-            )
-        elif provider == "QwenCloud":
-            api_key = config.qwencloud_api_key
-            if not api_key:
-                raise TranslationError("QwenCloud API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_qwencloud_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-                enable_web_search=config.enable_web_search,
-            )
-        elif provider == "Meta Model":
-            api_key = config.meta_api_key
-            if not api_key:
-                raise TranslationError("Meta Model API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_meta_model_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-                enable_web_search=config.enable_web_search,
-            )
-        elif provider == "OpenCode":
-            api_key = config.opencode_api_key
-            if not api_key:
-                raise TranslationError("OpenCode API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            tier = getattr(config, "opencode_tier", "zen") or "zen"
-            return call_opencode_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                tier=tier,
-                debug=debug,
-            )
-        elif provider == "OpenRouter":
-            api_key = config.openrouter_api_key
-            if not api_key:
-                raise TranslationError("OpenRouter API key is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_openrouter_endpoint(
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-                enable_web_search=config.enable_web_search,
-            )
-        elif provider == "OpenAI-Compatible":
-            base_url = config.openai_compatible_url
-            api_key = config.openai_compatible_api_key  # Optional
-            if not base_url:
-                raise TranslationError("OpenAI-Compatible URL is missing.")
-            generation_config = _build_generation_config(
-                provider, model_name, config, debug
-            )
-            return call_openai_compatible_endpoint(
-                base_url=base_url,
-                api_key=api_key,
-                model_name=model_name,
-                parts=api_parts,
-                generation_config=generation_config,
-                system_prompt=system_prompt,
-                debug=debug,
-            )
-        else:
-            raise TranslationError(
-                f"Unknown translation provider specified: {provider}"
-            )
+    if provider == "OpenAI-Compatible":
+        # Reached by URL rather than by key, which is optional
+        if not config.openai_compatible_url:
+            raise TranslationError("OpenAI-Compatible URL is missing.")
+        endpoint = call_openai_compatible_endpoint
+        provider_args = {
+            "base_url": config.openai_compatible_url,
+            "api_key": config.openai_compatible_api_key,
+        }
+    elif provider in _PROVIDER_ENDPOINTS:
+        key_field, key_label, endpoint = _PROVIDER_ENDPOINTS[provider]
+        api_key = getattr(config, key_field)
+        if not api_key:
+            raise TranslationError(f"{key_label} API key is missing.")
+        provider_args = {"api_key": api_key}
+    else:
+        raise TranslationError(f"Unknown translation provider specified: {provider}")
 
-    except (ValueError, RuntimeError):  # noqa: TRY203
-        raise
+    # Only the SpaceXAI config uses the prompt cache key
+    generation_config = _build_generation_config(
+        provider, model_name, config, debug, prompt_cache_key=prompt_cache_key
+    )
+    if provider not in NO_WEB_SEARCH_PROVIDERS:
+        provider_args["enable_web_search"] = config.enable_web_search
+    if provider == "Google":
+        provider_args["enable_code_execution"] = config.enable_code_execution
+    elif provider == "OpenCode":
+        provider_args["tier"] = getattr(config, "opencode_tier", "zen") or "zen"
+
+    return endpoint(
+        model_name=model_name,
+        parts=api_parts,
+        generation_config=generation_config,
+        system_prompt=system_prompt,
+        debug=debug,
+        **provider_args,
+    )
 
 
 def _strip_code_fences(text: str) -> str:

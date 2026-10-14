@@ -14,6 +14,47 @@ def _claude_capability_flag(generation_config: dict[str, Any], key: str) -> bool
     return bool(generation_config.get(key))
 
 
+def _thinking_payload(generation_config: dict[str, Any]) -> dict[str, Any] | None:
+    """Build the `thinking` block for the config's `thinking_type`, or None to send none."""
+    if _claude_capability_flag(generation_config, "is_claude_omit_thinking"):
+        return None
+    thinking_type = generation_config.get("thinking_type")
+    if thinking_type == "adaptive":
+        # Opus 4.6+: Claude decides reasoning depth
+        return {"type": "adaptive"}
+    if thinking_type == "between_tools" or (
+        thinking_type == "disabled"
+        and _claude_capability_flag(generation_config, "is_claude_between_tools")
+    ):
+        # Sonnet 5.5: Turn off up-front thinking
+        return {"type": "between_tools"}
+    if thinking_type == "disabled":
+        # Sonnet 5: Explicitly turn off adaptive thinking (on by default)
+        return {"type": "disabled"}
+    if thinking_type != "enabled":
+        return None
+
+    # Older models: Budget-based thinking
+    reasoning_effort = generation_config.get("reasoning_effort")
+    if reasoning_effort == "none":
+        return {"type": "enabled", "budget_tokens": 0}
+    if not reasoning_effort:
+        return None
+    from core.config import calculate_reasoning_budget
+
+    max_tokens = generation_config.get("max_tokens", 4096)
+    # The API rejects budgets under 1024, or not below max_tokens
+    budget_tokens = max(1024, calculate_reasoning_budget(max_tokens, reasoning_effort))
+    if budget_tokens < max_tokens:
+        return {"type": "enabled", "budget_tokens": budget_tokens}
+    log_message(
+        f"max_tokens {max_tokens} leaves no room for a "
+        "thinking budget; sending without thinking",
+        always_print=True,
+    )
+    return None
+
+
 def call_anthropic_endpoint(
     api_key: str,
     model_name: str,
@@ -109,100 +150,46 @@ def call_anthropic_endpoint(
 
     messages.append({"role": "user", "content": user_content})
 
-    temp = generation_config.get("temperature")
-    clamped_temp = min(temp, 1.0) if temp is not None else None
+    effort_max = _claude_capability_flag(generation_config, "is_claude_effort_max")
+    effort_xhigh = _claude_capability_flag(generation_config, "is_claude_effort_xhigh")
+    thinking = _thinking_payload(generation_config)
+    thinking_type = thinking["type"] if thinking else None
 
+    temp = generation_config.get("temperature")
     payload = {
         "model": model_name,
         "system": system_prompt,
         "messages": messages,
-        "temperature": clamped_temp,
+        "temperature": min(temp, 1.0) if temp is not None else None,
         "top_k": generation_config.get("top_k"),
         "max_tokens": generation_config.get("max_tokens", 4096),
+        "thinking": thinking,
     }
 
-    if _claude_capability_flag(generation_config, "is_claude_effort_xhigh") or (
-        _claude_capability_flag(generation_config, "is_claude_no_sampling")
+    # Newer models reject sampling params outright; the rest only while thinking is on
+    if (
+        effort_xhigh
+        or _claude_capability_flag(generation_config, "is_claude_no_sampling")
+        or thinking_type in ("adaptive", "enabled")
     ):
-        payload.pop("temperature", None)
-        payload.pop("top_k", None)
+        del payload["temperature"], payload["top_k"]
 
-    if not _claude_capability_flag(generation_config, "is_claude_omit_thinking"):
-        try:
-            thinking_type = generation_config.get("thinking_type")
-            reasoning_effort = generation_config.get("reasoning_effort")
-            if thinking_type == "adaptive":
-                # Opus 4.6+: Adaptive thinking - Claude decides reasoning depth
-                payload["thinking"] = {"type": "adaptive"}
-            elif thinking_type == "between_tools" or (
-                thinking_type == "disabled"
-                and _claude_capability_flag(
-                    generation_config, "is_claude_between_tools"
-                )
-            ):
-                # Sonnet 5.5: Turn off up-front thinking
-                payload["thinking"] = {"type": "between_tools"}
-            elif thinking_type == "disabled":
-                # Sonnet 5: Explicitly turn off adaptive thinking (on by default)
-                payload["thinking"] = {"type": "disabled"}
-            elif thinking_type == "enabled":
-                # Older models: Budget-based thinking
-                if reasoning_effort and reasoning_effort != "none":
-                    from core.config import calculate_reasoning_budget
-
-                    max_tokens_value = generation_config.get("max_tokens", 4096)
-                    # The API rejects budgets under 1024, or not below max_tokens
-                    budget_tokens = max(
-                        1024,
-                        calculate_reasoning_budget(max_tokens_value, reasoning_effort),
-                    )
-                    if budget_tokens < max_tokens_value:
-                        payload["thinking"] = {
-                            "type": "enabled",
-                            "budget_tokens": budget_tokens,
-                        }
-                    else:
-                        log_message(
-                            f"max_tokens {max_tokens_value} leaves no room for a "
-                            "thinking budget; sending without thinking",
-                            always_print=True,
-                        )
-                elif reasoning_effort == "none":
-                    payload["thinking"] = {"type": "enabled", "budget_tokens": 0}
-        except Exception:
-            pass
-
-    # Models that still accept sampling params reject them while thinking is on
-    if payload.get("thinking", {}).get("type") in ("adaptive", "enabled"):
-        payload.pop("temperature", None)
-        payload.pop("top_k", None)
-
-    try:
-        effort = generation_config.get("effort")
-        if _claude_capability_flag(generation_config, "is_claude_effort_xhigh"):
-            valid_efforts = ("max", "xhigh", "high", "medium", "low")
-        elif _claude_capability_flag(generation_config, "is_claude_effort_max"):
-            valid_efforts = ("max", "high", "medium", "low")
-        else:
-            valid_efforts = ("high", "medium", "low")
-        if effort and effort in valid_efforts:
-            payload["output_config"] = {"effort": effort}
-    except Exception:
-        pass
-
-    if payload.get("thinking") in (
-        {"type": "disabled"},
-        {"type": "between_tools"},
-    ) and payload.get("output_config", {}).get("effort") in ("xhigh", "max"):
-        payload["output_config"]["effort"] = "high"
+    effort = generation_config.get("effort")
+    if effort_xhigh:
+        valid_efforts = ("max", "xhigh", "high", "medium", "low")
+    elif effort_max:
+        valid_efforts = ("max", "high", "medium", "low")
+    else:
+        valid_efforts = ("high", "medium", "low")
+    if effort and effort in valid_efforts:
+        thinking_off = thinking_type in ("disabled", "between_tools")
+        if thinking_off and effort in ("xhigh", "max"):
+            effort = "high"
+        payload["output_config"] = {"effort": effort}
 
     if enable_web_search:
         # 4.6+ models (the max-effort tier) filter results in code execution first
-        web_search_type = (
-            "web_search_20260209"
-            if _claude_capability_flag(generation_config, "is_claude_effort_max")
-            else "web_search_20250305"
-        )
+        web_search_type = "web_search_20260209" if effort_max else "web_search_20250305"
         payload["tools"] = [{"type": web_search_type, "name": "web_search"}]
     payload = {k: v for k, v in payload.items() if v is not None}
 

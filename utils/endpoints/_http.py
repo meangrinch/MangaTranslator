@@ -17,6 +17,14 @@ COMMON_STATUS_HINTS = {
 }
 
 
+def api_error(error: Any, label: str) -> TranslationError:
+    """Build the error to raise for the `error` a response body carries."""
+    message = (
+        error.get("message", "Unknown error") if isinstance(error, dict) else str(error)
+    )
+    return TranslationError(f"{label} API returned error: {message}")
+
+
 def post_with_retries(
     url: str,
     headers: dict[str, str],

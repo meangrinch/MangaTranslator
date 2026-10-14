@@ -1,12 +1,10 @@
-import json
 from typing import Any
 
-from utils.exceptions import TranslationError, ValidationError
-from utils.logging import log_message
+from utils.exceptions import ValidationError
 from utils.model_metadata import supports_qwencloud_reasoning_effort
 
 from ._http import COMMON_STATUS_HINTS, post_with_retries
-from .openai import extract_responses_text
+from .openai import build_responses_content, read_responses_reply
 
 
 def call_qwencloud_endpoint(
@@ -48,14 +46,7 @@ def call_qwencloud_endpoint(
     if not api_key:
         raise ValidationError("API key is required for QwenCloud endpoint")
 
-    # The last text part is the prompt; earlier ones label the image after them
-    text_part = next((p for p in reversed(parts) if "text" in p), None)
-    image_parts = [p for p in parts if p is not text_part]
-
-    if not text_part:
-        raise ValidationError(
-            "Invalid 'parts' format for QwenCloud: No text prompt found."
-        )
+    content_list = build_responses_content(parts, "QwenCloud")
 
     url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/responses"
     headers = {
@@ -63,40 +54,9 @@ def call_qwencloud_endpoint(
         "Content-Type": "application/json",
     }
 
-    if image_parts:
-        content_list = []
-        for part in image_parts:
-            if "text" in part:
-                content_list.append({"type": "input_text", "text": part["text"]})
-                continue
-            if (
-                "inline_data" in part
-                and "data" in part["inline_data"]
-                and "mime_type" in part["inline_data"]
-            ):
-                mime_type = part["inline_data"]["mime_type"]
-                base64_image = part["inline_data"]["data"]
-                content_list.append(
-                    {
-                        "type": "input_image",
-                        "image_url": f"data:{mime_type};base64,{base64_image}",
-                    }
-                )
-            else:
-                log_message(f"Invalid image part format: {part}", always_print=True)
-        content_list.append({"type": "input_text", "text": text_part["text"]})
-        input_messages = [{"role": "user", "content": content_list}]
-    else:
-        input_messages = [
-            {
-                "role": "user",
-                "content": [{"type": "input_text", "text": text_part["text"]}],
-            }
-        ]
-
     payload: dict[str, Any] = {
         "model": model_name,
-        "input": input_messages,
+        "input": [{"role": "user", "content": content_list}],
         "max_output_tokens": generation_config.get("max_tokens", 4096),
     }
 
@@ -111,73 +71,31 @@ def call_qwencloud_endpoint(
     if top_p is not None:
         payload["top_p"] = top_p
 
+    # The Responses API has no thinking switch; reasoning.effort "none" turns it off
     thinking = generation_config.get("thinking")
     reasoning_effort = generation_config.get("reasoning_effort")
     if thinking:
-        thinking_enabled = (
-            thinking.get("type") == "enabled"
-            if isinstance(thinking, dict)
-            else bool(thinking)
-        )
-        if not thinking_enabled:
-            payload["reasoning"] = {"effort": "none"}
-        else:
-            if reasoning_effort and reasoning_effort != "auto":
-                if reasoning_effort in ("xhigh", "max", "high"):
-                    payload["reasoning"] = {"effort": "high"}
-                elif reasoning_effort in ("medium", "low", "minimal", "none"):
-                    payload["reasoning"] = {"effort": reasoning_effort}
-            else:
-                payload["reasoning"] = {
-                    "effort": (
-                        "high"
-                        if supports_qwencloud_reasoning_effort(model_name)
-                        else "medium"
-                    )
-                }
-    elif reasoning_effort:
-        if reasoning_effort == "none":
-            payload["reasoning"] = {"effort": "none"}
-        elif reasoning_effort in ("xhigh", "max", "high"):
-            payload["reasoning"] = {"effort": "high"}
-        elif reasoning_effort in ("medium", "low", "minimal"):
-            payload["reasoning"] = {"effort": reasoning_effort}
+        if isinstance(thinking, dict) and thinking.get("type") != "enabled":
+            reasoning_effort = "none"
+        elif not reasoning_effort or reasoning_effort == "auto":
+            reasoning_effort = (
+                "high" if supports_qwencloud_reasoning_effort(model_name) else "medium"
+            )
+    if reasoning_effort in ("xhigh", "max"):
+        reasoning_effort = "high"
+    if reasoning_effort in ("high", "medium", "low", "minimal", "none"):
+        payload["reasoning"] = {"effort": reasoning_effort}
 
     if enable_web_search:
         payload["tools"] = [{"type": "web_search"}]
 
     payload = {k: v for k, v in payload.items() if v is not None}
 
-    def parse(result: dict[str, Any]) -> str | None:
-        if result.get("error"):
-            error_obj = result.get("error", {})
-            error_msg = (
-                error_obj.get("message", "Unknown error")
-                if isinstance(error_obj, dict)
-                else str(error_obj)
-            )
-            raise TranslationError(f"QwenCloud API returned error: {error_msg}")
-
-        output_text = extract_responses_text(result)
-        if output_text:
-            return output_text
-
-        log_message(
-            f"No text content in QwenCloud response. Status: {result.get('status')}, "
-            f"details: {result.get('incomplete_details')}",
-            always_print=True,
-        )
-        log_message(
-            f"Full response: {json.dumps(result, indent=2)}",
-            verbose=debug,
-        )
-        return None
-
     return post_with_retries(
         url,
         headers,
         payload,
-        parse,
+        lambda result: read_responses_reply(result, "QwenCloud", debug),
         label="QwenCloud",
         debug=debug,
         timeout=timeout,

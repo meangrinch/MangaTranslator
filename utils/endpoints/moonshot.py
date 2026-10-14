@@ -1,11 +1,10 @@
-import json
 from typing import Any
 
-from utils.exceptions import TranslationError, ValidationError
-from utils.logging import log_message
+from utils.exceptions import ValidationError
 from utils.model_metadata import is_moonshot_k3_model, is_moonshot_reasoning_model
 
 from ._http import COMMON_STATUS_HINTS, post_with_retries
+from .openai_compatible import read_chat_reply
 
 
 def call_moonshot_endpoint(
@@ -86,27 +85,24 @@ def call_moonshot_endpoint(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_content})
 
-    max_tokens_value = generation_config.get("max_tokens", 4096)
-    if is_moonshot_k3_model(model_name):
-        payload = {
-            "model": model_name,
-            "messages": messages,
-            "max_completion_tokens": max_tokens_value,
-        }
-    else:
-        payload = {
-            "model": model_name,
-            "messages": messages,
-            "max_tokens": max_tokens_value,
-        }
+    max_tokens_key = (
+        "max_completion_tokens" if is_moonshot_k3_model(model_name) else "max_tokens"
+    )
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        max_tokens_key: generation_config.get("max_tokens", 4096),
+    }
 
-    temp = generation_config.get("temperature")
-    if temp is not None:
-        payload["temperature"] = min(temp, 1.0)
+    # Kimi K2.x and K3 use fixed sampling values and reject any others
+    if not is_moonshot_reasoning_model(model_name):
+        temp = generation_config.get("temperature")
+        if temp is not None:
+            payload["temperature"] = min(temp, 1.0)
 
-    top_p = generation_config.get("top_p")
-    if top_p is not None:
-        payload["top_p"] = top_p
+        top_p = generation_config.get("top_p")
+        if top_p is not None:
+            payload["top_p"] = top_p
 
     thinking = generation_config.get("thinking")
     if thinking:
@@ -116,49 +112,13 @@ def call_moonshot_endpoint(
     if reasoning_effort:
         payload["reasoning_effort"] = reasoning_effort
 
-    # Kimi K2.x and K3 use fixed sampling values and reject any others
-    if is_moonshot_reasoning_model(model_name):
-        payload.pop("temperature", None)
-        payload.pop("top_p", None)
-
     payload = {k: v for k, v in payload.items() if v is not None}
-
-    def parse(result: dict[str, Any]) -> str | None:
-        if "choices" in result and len(result["choices"]) > 0:
-            choice = result["choices"][0]
-            finish_reason = choice.get("finish_reason")
-
-            message = choice.get("message")
-            if message and "content" in message:
-                content = message["content"]
-                return content.strip() if content else ""
-            else:
-                log_message(
-                    f"No message content in Moonshot response. Finish reason: {finish_reason}",
-                    always_print=True,
-                )
-                log_message(
-                    f"Full response: {json.dumps(result, indent=2)}",
-                    verbose=debug,
-                )
-                return ""
-        else:
-            log_message("No choices in Moonshot response", always_print=True)
-            if "error" in result:
-                error_obj = result.get("error", {})
-                error_msg = (
-                    error_obj.get("message", "Unknown error")
-                    if isinstance(error_obj, dict)
-                    else str(error_obj)
-                )
-                raise TranslationError(f"Moonshot API returned error: {error_msg}")
-            return None
 
     return post_with_retries(
         url,
         headers,
         payload,
-        parse,
+        lambda result: read_chat_reply(result, "Moonshot", debug),
         label="Moonshot",
         debug=debug,
         timeout=timeout,
