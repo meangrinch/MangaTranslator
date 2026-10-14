@@ -826,7 +826,7 @@ def is_sonnet_55_model(model_name: str | None) -> bool:
 
 
 def is_haiku_55_model(model_name: str | None) -> bool:
-    """Check if a model is Claude Haiku 5.5 (always-on adaptive thinking, no sampling params)."""
+    """Check if a model is Claude Haiku 5.5 (adaptive thinking on by default, no sampling params)."""
     if not model_name:
         return False
     lm = model_name.lower()
@@ -840,16 +840,12 @@ def anthropic_model_flags(model_name: str | None) -> dict[str, bool]:
     - Opus 4.5: is_claude_effort
     - Sonnet/Opus 4.6: + is_claude_effort_max
     - Sonnet/Opus 4.7/4.8/5: + is_claude_effort_xhigh (also strips sampling params)
-    - Sonnet/Opus 5: + is_claude_adaptive_default
-    - Fable 5/5.1, Opus 5.5, Haiku 5.5: same as 4.7+ plus is_claude_omit_thinking
+    - Sonnet/Opus 5, Haiku 5.5: + is_claude_adaptive_default
+    - Fable 5/5.1, Opus 5.5: same as 4.7+ plus is_claude_omit_thinking
     """
     if not model_name:
         return {}
-    if (
-        is_fable_5_model(model_name)
-        or is_opus_55_model(model_name)
-        or is_haiku_55_model(model_name)
-    ):
+    if is_fable_5_model(model_name) or is_opus_55_model(model_name):
         return {
             "is_claude_effort": True,
             "is_claude_effort_max": True,
@@ -864,7 +860,11 @@ def anthropic_model_flags(model_name: str | None) -> dict[str, bool]:
             "is_claude_adaptive_default": True,
             "is_claude_between_tools": True,
         }
-    if is_sonnet_5_model(model_name) or is_opus_5_model(model_name):
+    if (
+        is_sonnet_5_model(model_name)
+        or is_opus_5_model(model_name)
+        or is_haiku_55_model(model_name)
+    ):
         return {
             "is_claude_effort": True,
             "is_claude_effort_max": True,

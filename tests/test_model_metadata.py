@@ -136,7 +136,7 @@ def test_supports_openai_original_image_detail(model, expected):
                 "is_claude_effort": True,
                 "is_claude_effort_max": True,
                 "is_claude_effort_xhigh": True,
-                "is_claude_omit_thinking": True,
+                "is_claude_adaptive_default": True,
             },
         ),
         ("claude-sonnet-4-5", {}),
@@ -170,6 +170,7 @@ def test_is_anthropic_no_sampling_model(model, expected):
     ("model", "expected"),
     [
         ("claude-fable-5-1", (False, [], None)),
+        ("claude-haiku-5-5", (True, ["auto", "none"], "auto")),
         ("claude-sonnet-4-6", (True, ["auto", "none"], "auto")),
         ("claude-sonnet-4-5", (True, ["high", "medium", "low", "none"], "low")),
         ("gpt-5.5", (False, [], None)),
