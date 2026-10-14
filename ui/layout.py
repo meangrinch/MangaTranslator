@@ -7,6 +7,7 @@ from typing import Any
 import gradio as gr
 from PIL import Image
 
+from core.terminology import GLOSSARY_DIR
 from core.text.text_processing import text_layout_control_interactivity
 from utils.model_metadata import (
     FLUX_SDCPP_DIFFUSION_QUANTS,
@@ -29,6 +30,13 @@ _FLUX_BACKEND_CHOICES_KONTEXT = [
     ("Nunchaku (CUDA)", "nunchaku"),
 ]
 _FLUX_BACKEND_CHOICES_DEFAULT = [("SDNQ", "sdnq")]
+
+
+def _glossary_choices() -> list[tuple[str, str]]:
+    files = sorted(
+        GLOSSARY_DIR.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
+    return [("New", ""), *((p.name, str(p)) for p in files)]
 
 
 def _flux_backend_choices(method: str):
@@ -496,15 +504,15 @@ def create_layout(
                                     "translated the same way on every page."
                                 ),
                             )
-                            batch_glossary_file = gr.Textbox(
+                            batch_glossary_file = gr.Dropdown(
+                                _glossary_choices(),
                                 label="Glossary File",
                                 value=saved_settings.get("batch_glossary_file", ""),
-                                placeholder="Leave blank to start a new glossary",
+                                allow_custom_value=True,
                                 info=(
-                                    "To continue a series, paste the path of the "
-                                    "previous chapter's glossary, shown when a batch "
-                                    "finishes. New glossaries are saved in "
-                                    "output/.glossary."
+                                    "To continue a series, pick the previous "
+                                    "chapter's glossary or paste a path. New "
+                                    "glossaries are saved in output/.glossary."
                                 ),
                                 visible=bool(
                                     saved_settings.get("batch_terminology_memory", True)
@@ -3648,6 +3656,12 @@ def create_layout(
         batch_terminology_memory.change(
             fn=lambda enabled: gr.update(visible=enabled),
             inputs=batch_terminology_memory,
+            outputs=batch_glossary_file,
+            queue=False,
+        )
+        # Pick up glossaries created by batches since the page loaded
+        batch_glossary_file.focus(
+            fn=lambda: gr.update(choices=_glossary_choices()),
             outputs=batch_glossary_file,
             queue=False,
         )
