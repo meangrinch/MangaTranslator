@@ -169,8 +169,11 @@ def save_image_with_compression(
         raise ImageProcessingError(f"Failed to save image to {output_path}") from e
 
 
-# How far from the paper level a pixel must be to count as ink
+# How far from the paper level a pixel must be to count as ink. Full-width glyphs use a
+# fainter level so light gray thin strokes (e.g. Mincho on small JPEGs) don't split them;
+# letters don't split, so for them it would only add anti-aliased fringe.
 GLYPH_INK_CONTRAST = 0.55
+GLYPH_INK_CONTRAST_FULL_WIDTH = 0.25
 GLYPH_MIN_PART_AREA = 6  # Smaller ink specks are noise
 
 
@@ -202,10 +205,11 @@ def estimate_glyph_size(
 
     crop = gray[y1:y2, x1:x2]
     paper = float(np.median(crop[interior]))
+    contrast = GLYPH_INK_CONTRAST_FULL_WIDTH if full_width else GLYPH_INK_CONTRAST
     if paper < 128:
-        ink = crop > paper + GLYPH_INK_CONTRAST * (255 - paper)
+        ink = crop > paper + contrast * (255 - paper)
     else:
-        ink = crop < paper * (1 - GLYPH_INK_CONTRAST)
+        ink = crop < paper * (1 - contrast)
 
     _, _, stats, _ = cv2.connectedComponentsWithStats(
         (ink & interior).astype(np.uint8), 8

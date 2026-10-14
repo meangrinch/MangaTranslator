@@ -74,9 +74,9 @@ ENABLE_COMPONENT_ORDER_DEBUG = False
 PREVIOUS_CONTEXT_CACHE_MAX_SIZE = 32
 NATURAL_SORT_TOKEN_RE = re.compile(r"(\d+)")
 # Translated cap height relative to the measured original lettering. CJK glyphs fill the em
-# box and their translations run longer, so professional lettering sits near 0.75 of it.
+# box and their translations run longer, so professional lettering sits near 0.71 of it.
 # Other scripts are measured at about cap height already, so they are matched as is.
-AUTO_FONT_CJK_GLYPH_RATIO = 0.75
+AUTO_FONT_CJK_GLYPH_RATIO = 0.71
 AUTO_FONT_CJK_LANGUAGE_PREFIXES = ("japanese", "korean", "chinese")
 # Typical translated cap height on a 1 MP page, assumed when a page has no measurable text
 AUTO_FONT_TYPICAL_CAP_HEIGHT = 13.0

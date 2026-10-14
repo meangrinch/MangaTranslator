@@ -87,6 +87,36 @@ def test_estimate_glyph_size_ignores_width_unless_glyphs_are_full_width():
     assert estimate_glyph_size(gray, bbox, mask, True)[0] == pytest.approx(40, abs=1)
 
 
+def _faint_strokes_page(full_width: bool):
+    """Glyphs drawn in solid ink apart from a light gray stroke, as in thin JPEG lettering."""
+    gray, bbox, mask = _bubble_page(24)
+    gray[mask == 255] = 255
+    for i in range(5):
+        y = 20 + i * 30
+        if full_width:
+            # Four solid quarters held together only by a faint hairline cross
+            gray[y : y + 24, 60:84] = 0
+            gray[y + 11 : y + 13, 60:84] = 160
+            gray[y : y + 24, 71:73] = 160
+        else:
+            # A solid letter with a faint anti-aliasing fringe above and below
+            gray[y : y + 24, 60:76] = 0
+            gray[[y - 1, y + 24], 60:76] = 160
+    return gray, bbox, mask
+
+
+def test_estimate_glyph_size_keeps_faint_strokes_of_full_width_glyphs():
+    gray, bbox, mask = _faint_strokes_page(True)
+
+    assert estimate_glyph_size(gray, bbox, mask, True)[0] == pytest.approx(24, abs=1)
+
+
+def test_estimate_glyph_size_ignores_faint_fringe_around_letters():
+    gray, bbox, mask = _faint_strokes_page(False)
+
+    assert estimate_glyph_size(gray, bbox, mask, False)[0] == pytest.approx(24, abs=0.5)
+
+
 def _page_glyph_size(monkeypatch, *bubbles: tuple[float, int]) -> float | None:
     measured = iter(bubbles)
     monkeypatch.setattr(pipeline, "estimate_glyph_size", lambda *a: next(measured))
