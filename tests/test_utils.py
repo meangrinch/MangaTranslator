@@ -205,6 +205,35 @@ def test_failed_images_retry_back_into_original_run(monkeypatch, tmp_path):
     assert set(glossaries) == {glossary}
 
 
+@pytest.mark.parametrize("parallel_requests", [1, 2])
+def test_page_with_an_empty_bubble_counts_as_failed(
+    monkeypatch, tmp_path, parallel_requests
+):
+    source = tmp_path / "pages"
+    source.mkdir()
+    for name in ("001.png", "002.png", "003.png"):
+        Image.new("RGB", (8, 8), "white").save(source / name)
+
+    def fake_translate_and_render(image_path, config, output_path, **kwargs):
+        if Path(image_path).name == "002.png":
+            kwargs.get("empty_bubbles_out", []).append((0, 0, 4, 4))
+
+    monkeypatch.setattr(pipeline, "translate_and_render", fake_translate_and_render)
+    config = MangaTranslatorConfig(
+        yolo_model_path="model.pt",
+        device=torch.device("cpu"),
+        parallel_requests=parallel_requests,
+    )
+    config.translation = replace(config.translation, terminology_memory=False)
+
+    results = pipeline.batch_translate_images(source, config, tmp_path / "run")
+    assert results["success_count"] == 2
+    assert list(results["errors"]) == ["002.png"]
+    assert read_image_paths_from_txt(results["failed_paths_file"]) == [
+        (tmp_path / "run" / "failed" / "002.png").resolve()
+    ]
+
+
 @pytest.mark.parametrize(
     ("kernel", "scale", "expected"),
     [

@@ -136,6 +136,7 @@
 
 - **Batch translation failed for some files:**
   - Failed images are copied into a `failed` folder in the output directory and listed in `failed_paths.txt` next to it. Upload this file to the ZIP archive upload area in the web UI, or pass it via `--input` in the CLI, to retry only the failed files. The retry writes its results into the original output directory with the same folder structure (in the CLI, `--output` overrides this) and reuses that run's terminology memory file.
+  - A page also counts as failed if any of its bubbles is left empty (no valid translation, or the text could not be rendered). Its partial translation is still saved to the output directory, and a retry of the page overwrites it.
   - Copies that translate successfully on retry are removed from the `failed` folder, and `failed_paths.txt` is rewritten to list only what still fails.
   - *Note:* If you add images to the web UI uploader together with the list, they are processed as a new batch in a new output directory.
 

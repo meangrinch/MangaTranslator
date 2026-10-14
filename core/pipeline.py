@@ -761,6 +761,7 @@ def _translate_strip(
     previous_context_texts: list[list[str]],
     previous_context_texts_provider: Callable[[], list[list[str]]] | None,
     ocr_texts_out: list[str] | None,
+    empty_bubbles_out: list | None = None,
 ) -> Image.Image:
     """Translate a long strip section by section and stitch the results back together."""
     start_time = time.time()
@@ -819,6 +820,7 @@ def _translate_strip(
                 previous_context_texts_provider=context_texts,
                 ocr_texts_out=texts,
                 strip_glyph_size=strip_glyph_size,
+                empty_bubbles_out=empty_bubbles_out,
             )
             sections.append(
                 section if section.mode == target_mode else section.convert(target_mode)
@@ -862,6 +864,7 @@ def translate_and_render(
     previous_context_texts_provider: Callable[[], list[list[str]]] | None = None,
     ocr_texts_out: list[str] | None = None,
     strip_glyph_size: list[float] | None = None,
+    empty_bubbles_out: list | None = None,
 ):
     """
     Main function to translate manga speech bubbles and render translations using a config object.
@@ -882,6 +885,8 @@ def translate_and_render(
         strip_glyph_size: Optional mutable list shared by the sections of one long strip. The
             first section with measurable lettering stores its glyph size, and later sections
             reuse it so auto font size stays the same along the strip.
+        empty_bubbles_out: Optional mutable list. The bbox of every bubble that was cleaned
+            but left without rendered text is appended, so batch runs can fail the page.
 
     Returns:
         PIL.Image: Final translated image
@@ -893,6 +898,7 @@ def translate_and_render(
     device = config.device
     previous_context_images = previous_context_images or []
     previous_context_texts = previous_context_texts or []
+    empty_bubbles = empty_bubbles_out if empty_bubbles_out is not None else []
     config.translation.request_coordinator = getattr(
         config, "request_coordinator", None
     )
@@ -956,6 +962,7 @@ def translate_and_render(
                 previous_context_texts,
                 previous_context_texts_provider,
                 ocr_texts_out,
+                empty_bubbles_out,
             )
 
     pil_image_processed, _ = _apply_pre_upscale_if_needed(
@@ -1791,6 +1798,7 @@ def translate_and_render(
                                     f"Skipping {entry_type} {bbox} - OCR failed and no original crop available",
                                     verbose=verbose,
                                 )
+                                empty_bubbles.append(bbox)
                             continue
 
                         if (
@@ -1809,6 +1817,7 @@ def translate_and_render(
                                 f"Skipping {entry_type} {bbox} - invalid translation",
                                 verbose=verbose,
                             )
+                            empty_bubbles.append(bbox)
                             continue
 
                         if is_outside_text:
@@ -2295,12 +2304,14 @@ def translate_and_render(
                             log_message(
                                 f"Failed to render bubble {bbox}", verbose=verbose
                             )
+                            empty_bubbles.append(bbox)
                 else:
                     log_message(
                         f"Warning: Bubble/translation count mismatch "
                         f"({len(sorted_bubble_data)}/{len(translated_texts)})",
                         always_print=True,
                     )
+                    empty_bubbles.extend(b["bbox"] for b in sorted_bubble_data)
 
     # Final Image Upscaling (optional)
     if config.output.upscale_final_image:
@@ -2387,6 +2398,17 @@ def _check_glossary_path(path: Path) -> None:
         load_terms(path)
     except (OSError, UnicodeDecodeError) as e:
         raise ValidationError(f"Cannot use glossary file '{path}': {e}") from e
+
+
+def _translate_batch_page(*args, **kwargs) -> None:
+    """Translate one batch page, failing it if any bubble was left empty.
+
+    The partial result is still saved; a later retry of the page overwrites it.
+    """
+    empty_bubbles: list = []
+    translate_and_render(*args, empty_bubbles_out=empty_bubbles, **kwargs)
+    if empty_bubbles:
+        raise TranslationError(f"{len(empty_bubbles)} bubble(s) left empty")
 
 
 def _should_run_failed_retry(
@@ -2479,7 +2501,7 @@ def _retry_failed_batch_images(
             if cancellation_manager is not None and cancellation_manager.is_cancelled():
                 attempted -= 1
                 break
-            translate_and_render(
+            _translate_batch_page(
                 img_path,
                 config,
                 output_path,
@@ -2618,7 +2640,7 @@ async def _batch_translate_parallel(
             ocr_text_history_lock,
         )
         first_ocr_texts: list[str] = []
-        translate_and_render(
+        _translate_batch_page(
             first_img,
             config,
             first_output,
@@ -2710,7 +2732,7 @@ async def _batch_translate_parallel(
             )
 
         captured_ocr_texts: list[str] = []
-        translate_and_render(
+        _translate_batch_page(
             img_path,
             config,
             output_path,
@@ -2981,7 +3003,7 @@ def batch_translate_images(
                     ocr_text_history_lock,
                 )
                 captured_ocr_texts: list[str] = []
-                translate_and_render(
+                _translate_batch_page(
                     img_path,
                     config,
                     output_path,
