@@ -413,9 +413,10 @@ def main():
         "--effort",
         type=str,
         default="medium",
-        choices=["high", "medium", "low"],
+        choices=["max", "xhigh", "high", "medium", "low"],
         help=(
             "Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+ only: Controls token spending eagerness when responding. "
+            "'max' and 'xhigh' apply only to models that support them. "
             "Separate from 'max_tokens' and 'reasoning_effort'."
         ),
     )

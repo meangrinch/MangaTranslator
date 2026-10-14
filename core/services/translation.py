@@ -49,6 +49,7 @@ from utils.model_metadata import (
     NO_WEB_SEARCH_PROVIDERS,
     REASONING_MODEL_CHECKS,
     anthropic_model_flags,
+    clamp_claude_effort,
     clamp_gemini_reasoning_effort,
     clamp_gpt6_reasoning_effort,
     clamp_moonshot_reasoning_effort,
@@ -598,7 +599,7 @@ def _build_generation_config(
             if thinking_type:
                 generation_config["thinking_type"] = thinking_type
         if anthropic_flags and config.effort:
-            generation_config["effort"] = config.effort
+            generation_config["effort"] = clamp_claude_effort(model_name, config.effort)
         return generation_config
 
     elif provider == "SpaceXAI":

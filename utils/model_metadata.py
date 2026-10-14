@@ -938,6 +938,11 @@ def anthropic_effort_config(
     return True, ["high", "medium", "low"], "high"
 
 
+def clamp_claude_effort(model_name: str | None, effort: str) -> str:
+    """Replace an effort a Claude model lacks with the nearest one it accepts."""
+    return _nearest_effort(effort, tuple(anthropic_effort_config(model_name)[1]))
+
+
 def is_sonnet_46_model(model_name: str | None) -> bool:
     """Check if a model is Claude Sonnet 4.6 (adaptive thinking, max effort)."""
     if not model_name:

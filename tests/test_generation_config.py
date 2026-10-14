@@ -51,3 +51,20 @@ def test_reasoning_effort_becomes_one_the_model_accepts(
     # Gemini nests its level one deeper than the other providers' top-level keys
     sent = generation_config.get("thinkingConfig", generation_config)
     assert sent.get(key) == expected
+
+
+@pytest.mark.parametrize(
+    ("provider", "model", "effort", "expected"),
+    [
+        ("Anthropic", "claude-opus-4-5", "max", "high"),
+        ("Anthropic", "claude-opus-4-5", "xhigh", "high"),
+        ("Anthropic", "claude-sonnet-4-6", "xhigh", "max"),
+        ("Anthropic", "claude-opus-4-8", "xhigh", "xhigh"),
+        ("Anthropic", "claude-opus-4-5", "low", "low"),
+        # OpenRouter maps efforts itself, so they go out as given
+        ("OpenRouter", "anthropic/claude-opus-4-5", "max", "max"),
+    ],
+)
+def test_claude_effort_becomes_one_the_model_accepts(provider, model, effort, expected):
+    config = TranslationConfig(effort=effort, max_tokens=4096)
+    assert _build_generation_config(provider, model, config)["effort"] == expected
