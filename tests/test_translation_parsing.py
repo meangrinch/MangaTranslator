@@ -1,8 +1,11 @@
+from types import SimpleNamespace
+
 import pytest
 
 from core.services.translation import (
     _build_rosetta_instruction,
     _build_system_prompt_hy_mt2,
+    _build_system_prompt_ocr,
     _build_system_prompt_translation,
     _check_ocr_failure,
     _format_previous_context_texts,
@@ -10,6 +13,7 @@ from core.services.translation import (
     _pair_context_lines,
     _parse_llm_response_unified,
     _parse_rosetta_response,
+    _uses_code_execution,
 )
 from utils.exceptions import TranslationError
 
@@ -192,6 +196,38 @@ def test_system_prompt_glossary_rules_drop_english_examples_for_other_languages(
     )
     assert "official French name" in prompt
     assert "Chunhua" not in prompt and "Imperial Household" not in prompt
+
+
+@pytest.mark.parametrize(
+    ("provider", "model", "expected"),
+    [
+        ("Google", "gemini-3.5-flash-lite", True),
+        ("Google", "gemini-4-argon", True),
+        ("Google", "gemini-2.5-pro", False),
+        ("Google", "gemma-4-31b-it", False),
+        ("OpenRouter", "google/gemini-3.8-flash", False),
+    ],
+)
+def test_code_execution_only_reaches_gemini_on_google(provider, model, expected):
+    config = SimpleNamespace(
+        provider=provider, model_name=model, enable_code_execution=True
+    )
+    assert _uses_code_execution(config) is expected
+
+
+def test_code_execution_section_only_where_crops_are_read():
+    assert "## CODE EXECUTION" in _build_system_prompt_ocr(None, code_execution=True)
+    assert "## CODE EXECUTION" not in _build_system_prompt_ocr(None)
+    one_step = _build_system_prompt_translation(
+        "English", "one-step", code_execution=True
+    )
+    assert one_step.index("## TRANSCRIPTION RULES") < one_step.index(
+        "## CODE EXECUTION"
+    )
+    two_step = _build_system_prompt_translation(
+        "English", "two-step", code_execution=True
+    )
+    assert "## CODE EXECUTION" not in two_step
 
 
 def test_hy_mt2_prompt_mentions_glossary_only_when_given():

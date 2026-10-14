@@ -271,6 +271,7 @@ class UnifiedCache:
                 config, "media_resolution_context", None
             ),
             "enable_web_search": getattr(config, "enable_web_search", None),
+            "enable_code_execution": getattr(config, "enable_code_execution", None),
             "upscale_method": getattr(config, "upscale_method", None),
             "bubble_min_side_pixels": getattr(config, "bubble_min_side_pixels", None),
             "context_image_max_side_pixels": getattr(

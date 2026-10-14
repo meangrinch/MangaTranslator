@@ -624,7 +624,7 @@ def main():
     parser.add_argument(
         "--enable-code-execution",
         action="store_true",
-        help="Enable Gemini's code execution tool for image zoom/inspection (Gemini 3 Flash only)",
+        help="Enable Gemini's code execution tool for image zoom/inspection (Gemini 3+ only)",
     )
     parser.add_argument(
         "--no-custom-sampling",

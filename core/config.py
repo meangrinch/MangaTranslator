@@ -81,7 +81,7 @@ class TranslationConfig:
     whiteout_conjoined_bubbles: bool = True
     upscale_method: str = "model_lite"  # "model", "model_lite", "lanczos", or "none"
     enable_web_search: bool = False  # Enable model's built-in web search for up-to-date information. OpenRouter uses its own web search tool.
-    enable_code_execution: bool = False  # Enable Gemini's code execution tool for image zoom/inspection (Gemini 3 Flash only)
+    enable_code_execution: bool = False  # Enable Gemini's code execution tool for image zoom/inspection (Gemini 3+ only)
     use_custom_sampling: bool = True
     image_detail: str = "auto"  # OpenAI image detail (auto/high/low/original)
     media_resolution: str = (

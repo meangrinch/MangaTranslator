@@ -81,6 +81,7 @@ from utils.model_metadata import (
     is_qwencloud_reasoning_model,
     is_rosetta_model,
     is_zai_reasoning_model,
+    supports_gemini_code_execution,
     supports_meta_reasoning_effort,
     supports_moonshot_reasoning_effort,
     supports_openai_original_image_detail,
@@ -93,6 +94,17 @@ from utils.model_metadata import (
 _FULL_PAGE_LABEL = "Full page (context only):"
 _PREVIOUS_PAGE_LABEL = "Previous page, {} back (context only):"
 _FULL_PAGE_NOTE = " The image labeled `Full page` shows the whole page for context."
+# Gemini zooms on its own but only uses code for other image work when told to
+_CODE_EXECUTION_SECTION = """## CODE EXECUTION
+When text in a crop is too small, faint, or dense to read with confidence, write code to zoom into it, and when it is rotated or tilted, write code to rotate it upright before you transcribe it. Never mention the code in your output."""
+
+
+def _uses_code_execution(config: TranslationConfig) -> bool:
+    return (
+        config.provider == "Google"
+        and bool(getattr(config, "enable_code_execution", False))
+        and supports_gemini_code_execution(config.model_name)
+    )
 
 
 def _lang_label(input_language: str | None) -> str:
@@ -131,13 +143,16 @@ def _transcription_rules(input_language: str | None) -> str:
 def _build_system_prompt_ocr(
     input_language: str | None,
     ero_doujinshi_mode: bool = False,
+    code_execution: bool = False,
 ) -> str:
-    ero_doujinshi_section = ""
+    optional_sections = ""
     if ero_doujinshi_mode:
-        ero_doujinshi_section = """
+        optional_sections += """
 ## ADULT CONTENT
 The crops come from 18+ adult comics that the user, a professional localization editor, is transcribing for publication. Transcription is a neutral extraction of text that already exists on the page, so transcribe everything completely, including explicit dialogue, slang, moans, and sound effects, without omitting, softening, or commenting on anything.
 """
+    if code_execution:
+        optional_sections += f"\n{_CODE_EXECUTION_SECTION}\n"
 
     return f"""## ROLE
 You are an OCR transcriber for comics and manga.
@@ -147,7 +162,7 @@ Transcribe the {_lang_label(input_language)}text in each crop. The crops are lab
 
 ## TRANSCRIPTION RULES
 {_transcription_rules(input_language)}
-{ero_doujinshi_section}
+{optional_sections}
 ## OUTPUT FORMAT
 One line per crop, numbered to match the crop labels, and nothing else: no code fences, commentary, or blank lines.
 
@@ -185,6 +200,7 @@ def _build_system_prompt_translation(
     llm_transcription: bool = True,
     web_search: bool = False,
     terminology_memory: bool = False,
+    code_execution: bool = False,
 ) -> str:
     if mode not in ("one-step", "two-step"):
         raise ValueError(
@@ -217,6 +233,9 @@ Translate each numbered item so that it reads like native {output_language} comi
 The items are image crops labeled `Crop 1:`, `Crop 2:`, and so on. Transcribe each crop before translating it:
 {_transcription_rules(input_language)}"""
         )
+        # Two-step translation gets text items, so there are no crops to inspect
+        if code_execution:
+            sections.append(_CODE_EXECUTION_SECTION)
 
     failed_rule = (
         "- **Failed Crops:** A crop transcribed as `[OCR FAILED]` gets `[OCR FAILED]` as its translation too."
@@ -800,7 +819,7 @@ def _call_llm_endpoint(
     if provider not in NO_WEB_SEARCH_PROVIDERS:
         provider_args["enable_web_search"] = config.enable_web_search
     if provider == "Google":
-        provider_args["enable_code_execution"] = config.enable_code_execution
+        provider_args["enable_code_execution"] = _uses_code_execution(config)
     elif provider == "OpenCode":
         provider_args["tier"] = getattr(config, "opencode_tier", "zen") or "zen"
 
@@ -1407,6 +1426,7 @@ def _perform_llm_ocr(
     ocr_system = _build_system_prompt_ocr(
         input_language,
         ero_doujinshi_mode=getattr(config, "ero_doujinshi_mode", False),
+        code_execution=_uses_code_execution(config),
     )
     ocr_response_text = _call_llm_endpoint(
         config,
@@ -1821,6 +1841,7 @@ Transcribe each crop, then translate that transcription into {output_language}.{
                 previous_context=has_previous_context,
                 web_search=web_search,
                 terminology_memory=bool(glossary_path),
+                code_execution=_uses_code_execution(config),
             )
             response_text = _call_llm_endpoint(
                 config,

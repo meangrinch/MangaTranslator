@@ -1201,7 +1201,7 @@ def create_layout(
                                 value=saved_settings.get(
                                     "enable_code_execution", False
                                 ),
-                                info="Allow Gemini 3 Flash to zoom and inspect image details using code execution.",
+                                info="Allow Gemini 3+ to zoom and inspect image details using code execution.",
                                 visible=_initial_enable_code_execution_visible,
                                 interactive=initial_ocr_method
                                 not in ("manga-ocr", "paddleocr-vl-1.6"),

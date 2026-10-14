@@ -982,12 +982,9 @@ def is_gemini_3_plus_model(model_name: str | None) -> bool:
     return "gemini-3" in model_name.lower() or is_gemini_4_model(model_name)
 
 
-def is_gemini_3_flash_model(model_name: str | None) -> bool:
-    """Check if a model is Gemini 3 Flash (not Flash Lite)."""
-    if not model_name:
-        return False
-    lm = model_name.lower()
-    return "gemini-3" in lm and "flash" in lm and "lite" not in lm
+def supports_gemini_code_execution(model_name: str | None) -> bool:
+    """Check if a Google model gets the code execution tool (Gemini 3+, not 2.5 or Gemma)."""
+    return is_gemini_3_plus_model(model_name)
 
 
 def is_gemini_38_flash_model(model_name: str | None) -> bool:

@@ -2178,7 +2178,7 @@ def handle_ocr_method_change(
         updates.append(gr.update(value=False, interactive=False))
         updates.append(gr.update(value=0, interactive=False))
         updates.append(gr.update())
-        # Disable code execution checkbox (Gemini Flash only, disabled in text-only mode)
+        # Disable code execution checkbox (Gemini 3+ only, disabled in text-only mode)
         updates.append(gr.update(value=False, interactive=False))
         updates.append(gr.update(interactive=False))
         # Disable media resolution dropdowns (no images sent to LLM in text-only mode)

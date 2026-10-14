@@ -29,7 +29,6 @@ from utils.model_metadata import (
     is_azure_url,
     is_deepseek_reasoning_model,
     is_deepseek_vision_model,
-    is_gemini_3_flash_model,
     is_gemini_3_plus_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
@@ -56,6 +55,7 @@ from utils.model_metadata import (
     is_xai_reasoning_model,
     is_zai_reasoning_model,
     is_zai_vision_model,
+    supports_gemini_code_execution,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
     supports_meta_max_effort,
@@ -985,8 +985,8 @@ def get_image_detail_config(
 
 
 def is_code_execution_visible(provider: str, model_name: str | None) -> bool:
-    """Check if code execution checkbox should be visible (Gemini 3 Flash on Google only)."""
-    return provider == "Google" and is_gemini_3_flash_model(model_name)
+    """Check if code execution checkbox should be visible (Gemini 3+ on Google only)."""
+    return provider == "Google" and supports_gemini_code_execution(model_name)
 
 
 def update_translation_ui(
