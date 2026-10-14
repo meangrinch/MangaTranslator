@@ -40,10 +40,16 @@ def extract_responses_text(result: dict[str, Any]) -> str | None:
     return text or None
 
 
-def read_responses_text(
+def read_responses_reply(
     result: dict[str, Any], label: str, debug: bool = False
 ) -> str | None:
-    """Return a Responses API body's answer text, or log that it has none and return None."""
+    """Return a Responses API body's answer text, or log that it has none and return None.
+
+    Raises:
+        TranslationError: If the body carries an error.
+    """
+    if result.get("error"):
+        raise api_error(result["error"], label)
     output_text = extract_responses_text(result)
     if output_text:
         return output_text
@@ -55,15 +61,6 @@ def read_responses_text(
     )
     log_message(f"Full response: {json.dumps(result, indent=2)}", verbose=debug)
     return None
-
-
-def read_responses_reply(
-    result: dict[str, Any], label: str, debug: bool = False
-) -> str | None:
-    """Read a Responses API body like `read_responses_text`, raising if it carries an error."""
-    if result.get("error"):
-        raise api_error(result["error"], label)
-    return read_responses_text(result, label, debug)
 
 
 def build_responses_content(
@@ -98,23 +95,16 @@ def build_responses_content(
         if "text" in part:
             content.append({"type": "input_text", "text": part["text"]})
             continue
-        if (
-            "inline_data" in part
-            and "data" in part["inline_data"]
-            and "mime_type" in part["inline_data"]
-        ):
-            mime_type = part["inline_data"]["mime_type"]
-            base64_image = part["inline_data"]["data"]
-            image_item = {
-                "type": "input_image",
-                "image_url": f"data:{mime_type};base64,{base64_image}",
-            }
-            detail = image_detail(part) if callable(image_detail) else image_detail
-            if detail:
-                image_item["detail"] = detail
-            content.append(image_item)
-        else:
-            log_message(f"Invalid image part format: {part}", always_print=True)
+        mime_type = part["inline_data"]["mime_type"]
+        base64_image = part["inline_data"]["data"]
+        image_item = {
+            "type": "input_image",
+            "image_url": f"data:{mime_type};base64,{base64_image}",
+        }
+        detail = image_detail(part) if callable(image_detail) else image_detail
+        if detail:
+            image_item["detail"] = detail
+        content.append(image_item)
     content.append({"type": "input_text", "text": text_part["text"]})
     return content
 
@@ -202,8 +192,7 @@ def call_openai_endpoint(
         url,
         headers,
         payload,
-        # Unlike its siblings, a body with an `error` is still read for text
-        lambda result: read_responses_text(result, "OpenAI", debug),
+        lambda result: read_responses_reply(result, "OpenAI", debug),
         label="OpenAI",
         debug=debug,
         timeout=timeout,

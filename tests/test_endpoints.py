@@ -82,7 +82,11 @@ def test_responses_api_text_is_read_from_output_items(post, call, model):
 
 @pytest.mark.parametrize(
     ("call", "model"),
-    [(call_deepseek_endpoint, "deepseek-flash"), (call_xai_endpoint, "grok-4.7")],
+    [
+        (call_openai_endpoint, "gpt-5.5"),
+        (call_deepseek_endpoint, "deepseek-flash"),
+        (call_xai_endpoint, "grok-4.7"),
+    ],
 )
 def test_string_error_field_is_reported(post, call, model):
     post.body = {"error": "boom"}
@@ -315,6 +319,7 @@ def test_gemini_keeps_answer_text_after_code_execution(post):
         ("anthropic/claude-sonnet-4.5", "low", False),
         ("anthropic/claude-sonnet-4.5", "none", True),
         ("anthropic/claude-sonnet-4.6", "auto", False),
+        ("anthropic/claude-sonnet-4.6", "high", False),
         ("anthropic/claude-sonnet-4.6", "none", True),
     ],
 )

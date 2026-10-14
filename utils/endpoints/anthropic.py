@@ -122,25 +122,18 @@ def call_anthropic_endpoint(
         if "text" in part:
             user_content.append({"type": "text", "text": part["text"]})
             continue
-        if (
-            "inline_data" in part
-            and "data" in part["inline_data"]
-            and "mime_type" in part["inline_data"]
-        ):
-            mime_type = part["inline_data"]["mime_type"]
-            base64_image = part["inline_data"]["data"]
-            user_content.append(
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": mime_type,
-                        "data": base64_image,
-                    },
-                }
-            )
-        else:
-            log_message(f"Invalid image part format: {part}", always_print=True)
+        mime_type = part["inline_data"]["mime_type"]
+        base64_image = part["inline_data"]["data"]
+        user_content.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime_type,
+                    "data": base64_image,
+                },
+            }
+        )
 
     user_content.append({"type": "text", "text": user_prompt_text})
     if not user_content:

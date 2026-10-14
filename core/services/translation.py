@@ -42,8 +42,12 @@ from utils.model_metadata import (
     NO_WEB_SEARCH_PROVIDERS,
     REASONING_MODEL_CHECKS,
     anthropic_model_flags,
+    clamp_gemini_reasoning_effort,
     clamp_gpt6_reasoning_effort,
+    clamp_moonshot_reasoning_effort,
     clamp_openai_reasoning_effort,
+    clamp_xai_reasoning_effort,
+    clamp_zai_reasoning_effort,
     get_max_tokens_cap,
     is_anthropic_model_family,
     is_anthropic_reasoning_model,
@@ -51,7 +55,6 @@ from utils.model_metadata import (
     is_gemini_3_plus_model,
     is_gemini_25_flash_model,
     is_gemini_25_pro_model,
-    is_gemini_no_minimal_thinking_model,
     is_gemini_no_sampling_model,
     is_gemma_model,
     is_google_model_family,
@@ -328,20 +331,13 @@ def _image_part(
     return part
 
 
-def _gemini_thinking_level(model_name: str, effort: str) -> str:
-    """Fall back to "high" on Gemini models that have no "minimal" thinking level."""
-    if effort == "minimal" and is_gemini_no_minimal_thinking_model(model_name):
-        return "high"
-    return effort
-
-
 def _gemini_thinking_config(
     model_name: str, reasoning_effort: str | None, max_tokens: int
 ) -> dict[str, Any] | None:
     """Build Gemini's thinkingConfig, or None to leave thinking at the model default."""
     if is_gemini_3_plus_model(model_name) or is_gemma_model(model_name):
         return {
-            "thinkingLevel": _gemini_thinking_level(
+            "thinkingLevel": clamp_gemini_reasoning_effort(
                 model_name, reasoning_effort or "high"
             )
         }
@@ -372,7 +368,7 @@ def _claude_thinking_type(flags: dict[str, bool], reasoning_effort: str) -> str 
             return "adaptive"
         return "between_tools" if flags.get("is_claude_between_tools") else "disabled"
     if flags.get("is_claude_effort_max"):
-        return "adaptive" if reasoning_effort == "auto" else None
+        return "adaptive" if reasoning_effort != "none" else None
     # Older models think on a token budget
     return "enabled" if reasoning_effort != "none" else None
 
@@ -380,7 +376,10 @@ def _claude_thinking_type(flags: dict[str, bool], reasoning_effort: str) -> str 
 def _openrouter_reasoning_effort(
     model_name: str, reasoning_effort: str | None
 ) -> str | None:
-    """Pick the reasoning effort to send through OpenRouter, or None to send none."""
+    """Pick the reasoning effort to send through OpenRouter, or None to send none.
+
+    Efforts go out unclamped, because OpenRouter maps them onto what each model accepts.
+    """
     if is_anthropic_reasoning_model(model_name):
         flags = anthropic_model_flags(model_name)
         # Unlike the native Anthropic default, Claude 4.6 also thinks unless told not to
@@ -391,15 +390,15 @@ def _openrouter_reasoning_effort(
         return reasoning_effort or ("auto" if thinks_by_default else "none")
     if is_openai_model_family(model_name):
         if is_gpt6_series(model_name):
-            return clamp_gpt6_reasoning_effort(model_name, reasoning_effort or "high")
+            return reasoning_effort or "high"
         if is_gpt5_series(model_name):
             return reasoning_effort
     model_lower = (model_name or "").lower()
     # Grok 4 reasoning models take no effort setting
     if "grok-4" in model_lower and "non-reasoning" not in model_lower:
         return None
-    if is_google_model_family(model_name) and reasoning_effort:
-        return _gemini_thinking_level(model_name, reasoning_effort)
+    if is_google_model_family(model_name):
+        return reasoning_effort
     return None
 
 
@@ -582,7 +581,9 @@ def _build_generation_config(
         if prompt_cache_key:
             generation_config["prompt_cache_key"] = prompt_cache_key
         if supports_xai_reasoning_parameter(model_name):
-            generation_config["reasoning_effort"] = config.reasoning_effort or "high"
+            generation_config["reasoning_effort"] = clamp_xai_reasoning_effort(
+                model_name, config.reasoning_effort or "high"
+            )
         return generation_config
 
     elif provider == "DeepSeek":
@@ -598,10 +599,10 @@ def _build_generation_config(
         generation_config = _sampling_config(config, max_tokens_value, 1.0)
         if is_zai_reasoning_model(model_name):
             if "glm-5.3" in model_name.lower():
-                # GLM-5.3 keeps thinking on and takes every effort, "none" included
+                # GLM-5.3 keeps thinking on and takes only "low", "high" and "max"
                 generation_config["thinking"] = {"type": "enabled"}
-                generation_config["reasoning_effort"] = (
-                    config.reasoning_effort or "high"
+                generation_config["reasoning_effort"] = clamp_zai_reasoning_effort(
+                    model_name, config.reasoning_effort or "high"
                 )
             else:
                 takes_effort = supports_zai_reasoning_effort(model_name)
@@ -617,9 +618,9 @@ def _build_generation_config(
         generation_config = _sampling_config(config, max_tokens_value, 1.0)
         if supports_moonshot_reasoning_effort(model_name):
             # Kimi K3 takes an effort instead of the thinking switch
-            reasoning_effort = config.reasoning_effort
-            if reasoning_effort not in ("low", "high", "max"):
-                reasoning_effort = "high"
+            reasoning_effort = clamp_moonshot_reasoning_effort(
+                model_name, config.reasoning_effort or "high"
+            )
             generation_config["reasoning_effort"] = reasoning_effort
             log_message(
                 f"Using reasoning effort '{reasoning_effort}' for {model_name}",

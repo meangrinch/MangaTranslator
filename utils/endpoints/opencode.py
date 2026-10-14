@@ -79,16 +79,14 @@ def call_opencode_endpoint(
         if "text" in img:
             user_content.append({"type": "text", "text": img["text"]})
             continue
-        inline = img.get("inline_data", {})
-        mime = inline.get("mime_type", "image/png")
-        data = inline.get("data", "")
-        if data:
-            user_content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime};base64,{data}"},
-                }
-            )
+        mime = img["inline_data"]["mime_type"]
+        data = img["inline_data"]["data"]
+        user_content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{data}"},
+            }
+        )
 
     user_content.append({"type": "text", "text": text_part["text"]})
     messages.append({"role": "user", "content": user_content})

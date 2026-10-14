@@ -77,19 +77,12 @@ def build_chat_messages(
         if "text" in part:
             user_content.append({"type": "text", "text": part["text"]})
             continue
-        if (
-            "inline_data" in part
-            and "data" in part["inline_data"]
-            and "mime_type" in part["inline_data"]
-        ):
-            mime_type = part["inline_data"]["mime_type"]
-            base64_image = part["inline_data"]["data"]
-            image_url = {"url": f"data:{mime_type};base64,{base64_image}"}
-            if image_detail:
-                image_url["detail"] = image_detail
-            user_content.append({"type": "image_url", "image_url": image_url})
-        else:
-            log_message(f"Invalid image part format: {part}", always_print=True)
+        mime_type = part["inline_data"]["mime_type"]
+        base64_image = part["inline_data"]["data"]
+        image_url = {"url": f"data:{mime_type};base64,{base64_image}"}
+        if image_detail:
+            image_url["detail"] = image_detail
+        user_content.append({"type": "image_url", "image_url": image_url})
     user_content.append({"type": "text", "text": text_part["text"]})
 
     messages = []

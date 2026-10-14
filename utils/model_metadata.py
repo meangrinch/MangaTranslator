@@ -461,6 +461,29 @@ def supports_zai_reasoning_effort(model_name: str | None) -> bool:
     return lm == "glm-5.2" or lm.startswith(("glm-5.2-", "glm-5.3-")) or lm == "glm-5.3"
 
 
+_EFFORT_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+
+
+def _nearest_effort(effort: str, accepted: tuple[str, ...]) -> str:
+    """Pick the accepted reasoning effort nearest to `effort`, the stronger one on a tie.
+
+    An effort outside the scale, such as "auto", counts as "high". With nothing
+    accepted, the effort is returned as it is.
+    """
+    if not accepted or effort in accepted:
+        return effort
+    rank = _EFFORT_ORDER.index
+    target = rank(effort if effort in _EFFORT_ORDER else "high")
+    return max(accepted, key=lambda e: (-abs(rank(e) - target), rank(e)))
+
+
+def clamp_zai_reasoning_effort(model_name: str | None, effort: str) -> str:
+    """Replace a reasoning effort GLM-5.3 lacks with the nearest one it accepts."""
+    if "glm-5.3" in (model_name or "").lower():
+        return _nearest_effort(effort, ("low", "high", "max"))
+    return effort
+
+
 def is_zai_vision_model(model_name: str | None) -> bool:
     """Check if a Z.ai model supports vision/multimodal input."""
     if not model_name:
@@ -503,6 +526,11 @@ def xai_reasoning_efforts(model_name: str | None) -> tuple[str, ...]:
     if lm.startswith(("grok-4.3", "grok-4.5")):
         return ("none", "low", "medium", "high")
     return ()
+
+
+def clamp_xai_reasoning_effort(model_name: str | None, effort: str) -> str:
+    """Replace a reasoning effort a SpaceXAI model lacks with the nearest one it accepts."""
+    return _nearest_effort(effort, xai_reasoning_efforts(model_name))
 
 
 def supports_xai_reasoning_parameter(model_name: str | None) -> bool:
@@ -555,6 +583,13 @@ def is_moonshot_reasoning_model(model_name: str | None) -> bool:
 def supports_moonshot_reasoning_effort(model_name: str | None) -> bool:
     """Check if a Moonshot model supports the reasoning_effort API parameter."""
     return is_moonshot_k3_model(model_name)
+
+
+def clamp_moonshot_reasoning_effort(model_name: str | None, effort: str) -> str:
+    """Replace a reasoning effort Kimi K3 lacks with the nearest one it accepts."""
+    if supports_moonshot_reasoning_effort(model_name):
+        return _nearest_effort(effort, ("low", "high", "max"))
+    return effort
 
 
 def is_mimo_multimodal_model(model_name: str | None) -> bool:
@@ -992,6 +1027,27 @@ def is_gemini_no_sampling_model(model_name: str | None) -> bool:
 def is_gemini_no_minimal_thinking_model(model_name: str | None) -> bool:
     """Check if a Gemini model has no "minimal" thinking level (3.8 Flash and Gemini 4)."""
     return is_gemini_38_flash_model(model_name) or is_gemini_4_model(model_name)
+
+
+def gemini_thinking_levels(model_name: str | None) -> tuple[str, ...]:
+    """Thinking levels a Gemini 3+ or Gemma model accepts.
+
+    Empty for models without thinking levels, such as Gemini 2.5 with its token budget.
+    """
+    if is_gemma_model(model_name):
+        return ("minimal", "high")
+    if not is_gemini_3_plus_model(model_name):
+        return ()
+    if "flash" in model_name.lower() and not is_gemini_no_minimal_thinking_model(
+        model_name
+    ):
+        return ("minimal", "low", "medium", "high")
+    return ("low", "medium", "high")
+
+
+def clamp_gemini_reasoning_effort(model_name: str | None, effort: str) -> str:
+    """Replace a thinking level a Gemini model lacks with the nearest one it accepts."""
+    return _nearest_effort(effort, gemini_thinking_levels(model_name))
 
 
 def is_gemini_25_flash_model(model_name: str | None) -> bool:

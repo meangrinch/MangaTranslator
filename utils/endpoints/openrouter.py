@@ -72,19 +72,17 @@ def _reasoning_config(
     if not reasoning_effort:
         return {}
     is_claude_max = metadata.get("is_claude_effort_max", False)
-    is_claude_xhigh = metadata.get("is_claude_effort_xhigh", False)
     # Fable 5+ has always-on thinking, so it gets no reasoning config
     omit_thinking = metadata.get("is_claude_omit_thinking", False)
 
     if metadata.get("is_claude_adaptive_default", False) and not omit_thinking:
         # Thinking is on by default, so "none" has to switch it off explicitly
         return {"enabled": reasoning_effort != "none"}
-    if is_claude_xhigh and not omit_thinking:
-        return {"enabled": True} if reasoning_effort != "none" else {}
-    if is_claude_max and not is_claude_xhigh:
-        # Claude 4.6: `enabled` turns on adaptive thinking
-        return {"enabled": True} if reasoning_effort == "auto" else {}
-    if is_reasoning_model and not is_claude_max:
+    if is_claude_max:
+        # Claude 4.6+: `enabled` turns on adaptive thinking
+        on = reasoning_effort != "none" and not omit_thinking
+        return {"enabled": True} if on else {}
+    if is_reasoning_model:
         return {"effort": reasoning_effort}
     return {}
 

@@ -19,6 +19,7 @@ from utils.model_metadata import (
     anthropic_omits_thinking_config,
     anthropic_reasoning_effort_config,
     anthropic_uses_adaptive_thinking_info,
+    gemini_thinking_levels,
     get_gpt5_generation,
     get_hy_mt2_sampling_defaults,
     get_max_tokens_cap,
@@ -600,17 +601,10 @@ def get_reasoning_effort_config(
         if not is_reasoning:
             return False, [], None
 
-        if is_gemma_model(model_name):
-            return True, ["high", "minimal"], "high"
-
-        if is_gemini_3_plus_model(model_name):
-            if is_gemini_no_minimal_thinking_model(model_name):
-                return True, ["high", "medium", "low"], "high"
-            if "flash" in lm:
-                return True, ["high", "medium", "low", "minimal"], "high"
-            if "gemini-3.1" in lm:
-                return True, ["high", "medium", "low"], "high"
-            return True, ["high", "medium", "low"], "high"
+        thinking_levels = gemini_thinking_levels(model_name)
+        if thinking_levels:
+            # Listed strongest first
+            return True, list(reversed(thinking_levels)), "high"
 
         if is_gemini_25_flash_model(model_name) or is_gemini_25_pro_model(model_name):
             return True, ["auto", "high", "medium", "low", "minimal", "none"], "auto"
