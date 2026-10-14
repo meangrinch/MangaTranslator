@@ -40,6 +40,7 @@ from utils.exceptions import TranslationError
 from utils.logging import log_message
 from utils.model_metadata import (
     NO_WEB_SEARCH_PROVIDERS,
+    REASONING_MODEL_CHECKS,
     anthropic_model_flags,
     clamp_gpt6_reasoning_effort,
     clamp_openai_reasoning_effort,
@@ -59,7 +60,6 @@ from utils.model_metadata import (
     is_gpt5_series,
     is_gpt6_series,
     is_hy_mt2_model,
-    is_meta_reasoning_model,
     is_mimo_reasoning_model,
     is_moonshot_reasoning_model,
     is_openai_compatible_reasoning_model,
@@ -69,7 +69,6 @@ from utils.model_metadata import (
     is_opencode_reasoning_model,
     is_qwencloud_reasoning_model,
     is_rosetta_model,
-    is_xai_reasoning_model,
     is_zai_reasoning_model,
     supports_meta_reasoning_effort,
     supports_moonshot_reasoning_effort,
@@ -422,23 +421,6 @@ def _thinking_toggle(reasoning_effort: str | None) -> dict[str, str]:
     return {"type": "disabled" if reasoning_effort == "none" else "enabled"}
 
 
-# Reasoning models get a larger default max_tokens; OpenRouter is asked separately
-_IS_REASONING_MODEL = {
-    "Google": is_google_reasoning_model,
-    "OpenAI": is_openai_reasoning_model,
-    "Anthropic": is_anthropic_reasoning_model,
-    "SpaceXAI": is_xai_reasoning_model,
-    "Meta Model": is_meta_reasoning_model,
-    "OpenAI-Compatible": is_openai_compatible_reasoning_model,
-    "DeepSeek": is_deepseek_reasoning_model,
-    "Z.ai": is_zai_reasoning_model,
-    "Moonshot AI": is_moonshot_reasoning_model,
-    "Xiaomi MiMo": is_mimo_reasoning_model,
-    "QwenCloud": is_qwencloud_reasoning_model,
-    "OpenCode": is_opencode_reasoning_model,
-}
-
-
 def _build_generation_config(
     provider: str,
     model_name: str,
@@ -513,8 +495,8 @@ def _build_generation_config(
         if provider == "OpenRouter":
             # Read from OpenRouter's model list rather than from the model name
             is_reasoning = openrouter_is_reasoning_model(model_name, debug)
-        elif provider in _IS_REASONING_MODEL:
-            is_reasoning = _IS_REASONING_MODEL[provider](model_name)
+        elif provider in REASONING_MODEL_CHECKS:
+            is_reasoning = REASONING_MODEL_CHECKS[provider](model_name)
         max_tokens_value = 32768 if is_reasoning else 4096
 
     max_tokens_cap = get_max_tokens_cap(provider, model_name)

@@ -1054,3 +1054,21 @@ def get_hy_mt2_sampling_defaults(
         "top_k": 20,
         "max_tokens": 4096,
     }
+
+
+# provider -> check for whether a model reasons. OpenRouter is absent because its
+# model list answers that, not the model name (see openrouter_is_reasoning_model).
+REASONING_MODEL_CHECKS = {
+    "Google": is_google_reasoning_model,
+    "OpenAI": is_openai_reasoning_model,
+    "Anthropic": is_anthropic_reasoning_model,
+    "SpaceXAI": is_xai_reasoning_model,
+    "Meta Model": is_meta_reasoning_model,
+    "OpenAI-Compatible": is_openai_compatible_reasoning_model,
+    "DeepSeek": is_deepseek_reasoning_model,
+    "Z.ai": is_zai_reasoning_model,
+    "Moonshot AI": is_moonshot_reasoning_model,
+    "Xiaomi MiMo": is_mimo_reasoning_model,
+    "QwenCloud": is_qwencloud_reasoning_model,
+    "OpenCode": is_opencode_reasoning_model,
+}

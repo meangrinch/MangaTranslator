@@ -13,6 +13,7 @@ from utils.endpoints.openai_compatible import build_openai_compatible_url
 from utils.logging import log_message
 from utils.model_metadata import (
     NO_WEB_SEARCH_PROVIDERS,
+    REASONING_MODEL_CHECKS,
     anthropic_effort_config,
     anthropic_model_flags,
     anthropic_omits_thinking_config,
@@ -35,7 +36,6 @@ from utils.model_metadata import (
     is_gemini_no_sampling_model,
     is_gemma_model,
     is_google_model_family,
-    is_google_reasoning_model,
     is_gpt5_chat_variant,
     is_gpt5_series,
     is_gpt6_astra,
@@ -43,7 +43,6 @@ from utils.model_metadata import (
     is_gpt56_virtual_pro,
     is_gpt61_sol,
     is_hy_mt2_model,
-    is_meta_reasoning_model,
     is_mimo_multimodal_model,
     is_mimo_reasoning_model,
     is_moonshot_reasoning_model,
@@ -66,6 +65,7 @@ from utils.model_metadata import (
     supports_qwencloud_reasoning_effort,
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
+    xai_reasoning_efforts,
 )
 
 from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_settings
@@ -358,58 +358,19 @@ def refresh_models_and_fonts(fonts_base_dir: Path):
         )
 
 
-def _is_moonshot_reasoning_model(model_name: str | None) -> bool:
-    """Check if a Moonshot model is reasoning-capable."""
-    return is_moonshot_reasoning_model(model_name)
-
-
 def is_reasoning_model(provider: str, model_name: str | None) -> bool:
     """Check if a model is reasoning-capable based on provider and model name."""
     if not model_name:
         return False
 
-    if provider == "Google":
-        return is_google_reasoning_model(model_name)
-    elif provider == "OpenAI":
-        return _is_openai_reasoning_model(model_name)
-    elif provider == "Anthropic":
-        return _is_anthropic_reasoning_model(model_name)
-    elif provider == "SpaceXAI":
-        return is_xai_reasoning_model(model_name)
-    elif provider == "DeepSeek":
-        return is_deepseek_reasoning_model(model_name)
-    elif provider == "Z.ai":
-        return is_zai_reasoning_model(model_name)
-    elif provider == "Moonshot AI":
-        return _is_moonshot_reasoning_model(model_name)
-    elif provider == "Xiaomi MiMo":
-        return is_mimo_reasoning_model(model_name)
-    elif provider == "QwenCloud":
-        return is_qwencloud_reasoning_model(model_name)
-    elif provider == "OpenCode":
-        return (
-            is_deepseek_reasoning_model(model_name)
-            or is_qwencloud_reasoning_model(model_name)
-            or is_zai_reasoning_model(model_name)
-            or is_openai_reasoning_model(model_name)
-            or is_moonshot_reasoning_model(model_name)
-            or is_mimo_reasoning_model(model_name)
-            or is_xai_reasoning_model(model_name)
-            or is_meta_reasoning_model(model_name)
-            or is_anthropic_reasoning_model(model_name)
-        )
-    elif provider == "Meta Model":
-        return is_meta_reasoning_model(model_name)
-    elif provider == "OpenRouter":
+    if provider == "OpenRouter":
         try:
             return openrouter_is_reasoning_model(model_name, debug=False)
         except Exception:
             # Fallback to False if detection fails
             return False
-    elif provider == "OpenAI-Compatible":
-        return is_openai_compatible_reasoning_model(model_name)
-    else:
-        return False
+    check = REASONING_MODEL_CHECKS.get(provider)
+    return check(model_name) if check else False
 
 
 def get_enable_web_search_label_and_info(provider: str) -> tuple[str, str]:
@@ -512,11 +473,11 @@ def get_reasoning_effort_label(provider: str, model_name: str | None = None) -> 
             and not gemini3
         ):
             return "Thinking Budget"
-        elif is_anthropic_model_family(model_name) and _is_anthropic_reasoning_model(
+        elif is_anthropic_model_family(model_name) and is_anthropic_reasoning_model(
             model_name
         ):
             return "Extended Thinking"
-    elif provider == "Anthropic" and _is_anthropic_reasoning_model(model_name):
+    elif provider == "Anthropic" and is_anthropic_reasoning_model(model_name):
         return "Extended Thinking"
     else:
         return "Reasoning Effort"
@@ -620,19 +581,6 @@ def get_reasoning_effort_info_text(
         return base_text + "."
 
 
-def _is_openai_reasoning_model(model_name: str | None) -> bool:
-    """Check if an OpenAI model is reasoning-capable.
-
-    Delegates to the centralized helper in model_metadata.
-    """
-    return is_openai_reasoning_model(model_name)
-
-
-def _is_anthropic_reasoning_model(model_name: str | None) -> bool:
-    """Check if an Anthropic model is reasoning-capable."""
-    return is_anthropic_reasoning_model(model_name)
-
-
 def get_reasoning_effort_config(
     provider: str, model_name: str | None
 ) -> tuple[bool, list[str], str | None]:
@@ -708,9 +656,8 @@ def get_reasoning_effort_config(
     elif provider == "SpaceXAI":
         if not supports_xai_reasoning_parameter(model_name):
             return False, [], None
-        if "multi-agent" in lm or lm.startswith(("grok-4.6", "grok-4.7")):
-            return True, ["xhigh", "high", "medium", "low"], "high"
-        return True, ["high", "medium", "low", "none"], "high"
+        # Listed strongest first
+        return True, list(reversed(xai_reasoning_efforts(model_name))), "high"
 
     elif provider == "DeepSeek":
         if is_deepseek_reasoning_model(model_name):
@@ -823,9 +770,7 @@ def get_reasoning_effort_config(
             return False, [], None
         if is_anthropic_model_family(model_name):
             return anthropic_reasoning_effort_config(model_name)
-        if is_openai_model_family(model_name) and _is_openai_reasoning_model(
-            model_name
-        ):
+        if is_openai_model_family(model_name) and is_openai_reasoning_model(model_name):
             if is_gpt6_astra(model_name) or is_gpt61_sol(model_name):
                 return True, ["max", "xhigh", "high", "medium", "low"], "high"
             if is_gpt6_series(model_name):
