@@ -313,6 +313,27 @@ def test_gemini_keeps_answer_text_after_code_execution(post):
     assert text == "Let me zoom in.\n\n1: Hello"
 
 
+def test_gemini_resumes_response_capped_per_request(post):
+    def hop(text, **candidate):
+        return {"candidates": [{"content": {"parts": [{"text": text}]}, **candidate}]}
+
+    post.queue = [
+        # A hop spent entirely on thinking carries an empty text part
+        hop("", finishReason="CONTINUATION", continuationToken="t1"),
+        hop("1: Hel", finishReason="CONTINUATION", continuationToken="t2"),
+        hop("lo", finishReason="STOP"),
+    ]
+    text = call_gemini_endpoint(
+        "key", "gemini-4-argon", [{"text": "go"}], {"maxOutputTokens": 63488}
+    )
+    assert text == "1: Hello"
+    assert post.queue == []
+    # The original request goes back unchanged, plus the latest token
+    assert post.sent["continuationToken"] == "t2"
+    assert post.sent["contents"] == [{"parts": [{"text": "go"}]}]
+    assert post.sent["generationConfig"] == {"maxOutputTokens": 63488}
+
+
 @pytest.mark.parametrize(
     ("model", "effort", "sends_temperature"),
     [

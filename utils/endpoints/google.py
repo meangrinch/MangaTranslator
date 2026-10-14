@@ -14,8 +14,13 @@ _SAFETY_SETTINGS = [
 ]
 
 
-def _extract_text(result: dict[str, Any], debug: bool) -> str | None:
-    """Return the answer text, "" if the candidate has none, or None if the prompt was blocked."""
+def _extract_text(
+    result: dict[str, Any], debug: bool, earlier_parts: list[dict[str, Any]]
+) -> str | None:
+    """Return the answer text, "" if the candidate has none, or None if the prompt was blocked.
+
+    `earlier_parts` are the parts of the responses this one continues.
+    """
     block_reason = (result.get("promptFeedback") or {}).get("blockReason")
     candidates = result.get("candidates")
     if block_reason or not candidates:
@@ -27,7 +32,7 @@ def _extract_text(result: dict[str, Any], debug: bool) -> str | None:
         return None
 
     candidate = candidates[0]
-    parts = candidate.get("content", {}).get("parts") or []
+    parts = [*earlier_parts, *(candidate.get("content", {}).get("parts") or [])]
     # Skip thought parts (gemma-4); code execution parts separate
     # a preamble from the answer that follows them
     text = "".join(
@@ -106,14 +111,32 @@ def call_gemini_endpoint(
     if tools:
         payload["tools"] = tools
 
-    return post_with_retries(
-        url,
-        headers,
-        payload,
-        lambda result: _extract_text(result, debug),
-        label="Google",
-        debug=debug,
-        timeout=timeout,
-        max_retries=max_retries,
-        base_delay=base_delay,
-    )
+    earlier_parts: list[dict[str, Any]] = []
+
+    def parse(result: dict[str, Any]) -> tuple[str | None, str | None]:
+        """Return the answer text and the token that resumes a capped response."""
+        candidate = (result.get("candidates") or [{}])[0]
+        token = candidate.get("continuationToken")
+        if candidate.get("finishReason") == "CONTINUATION" and token:
+            earlier_parts.extend(candidate.get("content", {}).get("parts") or [])
+            return None, token
+        return _extract_text(result, debug, earlier_parts), None
+
+    # One request stops at a per-request share of maxOutputTokens (32768 on
+    # Gemini 4); resending it unchanged with the returned token resumes it
+    while True:
+        text, token = post_with_retries(
+            url,
+            headers,
+            payload,
+            parse,
+            label="Google",
+            debug=debug,
+            timeout=timeout,
+            max_retries=max_retries,
+            base_delay=base_delay,
+        )
+        if not token:
+            return text
+        log_message("Continuing capped Google response", verbose=debug)
+        payload["continuationToken"] = token

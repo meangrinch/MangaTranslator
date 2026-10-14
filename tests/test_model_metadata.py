@@ -39,7 +39,7 @@ from utils.model_metadata import (
         ("OpenRouter", "openai/gpt-4o", 16384),
         ("OpenRouter", "anthropic/claude-sonnet-4-6", None),
         ("Moonshot AI", "kimi-k2.5", 32768),
-        ("Google", "gemini-4-argon", 32768),
+        ("Google", "gemini-4-argon", None),
         ("Google", "gemini-3.8-flash", None),
         ("OpenRouter", "google/gemini-4-argon", None),
         ("OpenAI", None, None),

@@ -150,7 +150,6 @@ def get_max_tokens_cap(provider: str, model_name: str | None) -> int | None:
     Returns:
         - 32768 for OpenAI GPT 4.1 models
         - 16384 for OpenAI GPT 4o models and models with "chat" in the name
-        - 32768 for Gemini 4 models on the Google provider
         - None for all other models (no cap, use existing 63488 max)
     """
     if not model_name:
@@ -177,10 +176,6 @@ def get_max_tokens_cap(provider: str, model_name: str | None) -> int | None:
                 return 16384
     elif provider == "Moonshot AI":
         if "kimi-k2." in model_lower:
-            return 32768
-    elif provider == "Google":
-        # Non-streaming requests stop at 32768 thinking+output tokens on Gemini 4
-        if is_gemini_4_model(model_name):
             return 32768
 
     return None
