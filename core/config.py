@@ -72,7 +72,7 @@ class TranslationConfig:
         None  # None = per-provider fallback in translation._build_generation_config
     )
     effort: str | None = (
-        None  # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: token spending eagerness (max/xhigh/high/medium/low)
+        "high"  # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: token spending eagerness (max/xhigh/high/medium/low)
     )
     verbosity: str | None = (
         None  # GPT-5 and GPT-6 series: controls response verbosity (high/medium/low)

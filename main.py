@@ -412,7 +412,7 @@ def main():
     parser.add_argument(
         "--effort",
         type=str,
-        default="medium",
+        default="high",
         choices=["max", "xhigh", "high", "medium", "low"],
         help=(
             "Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+ only: Controls token spending eagerness when responding. "
