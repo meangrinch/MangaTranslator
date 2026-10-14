@@ -36,3 +36,58 @@ def test_auto_threshold_scales_fixed_value_to_a_gray_bubble_background():
 
     assert mask[100, 100] == 255
     assert mask[100, 50] == 255
+
+
+def _bubble_page(height, width, ox, oy):
+    """Gray page with a lettered, slightly shaded bubble and a conjoined neighbor."""
+    gray = np.full((height, width), 120, np.uint8)
+    base = np.zeros_like(gray)
+    cv2.ellipse(base, (ox + 90, oy + 110), (80, 100), 0, 0, 360, 255, -1)
+    cv2.rectangle(base, (ox + 160, oy + 60), (ox + 200, oy + 160), 255, -1)
+    gray[base == 255] = 245
+    gray[oy + 40 : oy + 180, ox + 40 : ox + 140] -= (
+        np.arange(140, dtype=np.uint8)[:, None] // 10
+    )
+    for i, text in enumerate(("ABC", "DEFG", "HI")):
+        cv2.putText(
+            gray, text, (ox + 45, oy + 80 + 40 * i), cv2.FONT_HERSHEY_SIMPLEX, 1, 20, 3
+        )
+    bbox = (ox + 10, oy + 10, ox + 200, oy + 210)
+    neighbors = [(ox + 190, oy + 50, ox + 260, oy + 170)]
+    return gray, base, bbox, neighbors
+
+
+@pytest.mark.parametrize("use_otsu", [False, True])
+def test_cleaning_a_bubble_does_not_depend_on_its_position_on_the_page(use_otsu):
+    ox, oy = 700, 900
+    small = _bubble_page(240, 280, 0, 0)
+    large = _bubble_page(1600, 1200, ox, oy)
+
+    def clean(page):
+        gray, base, bbox, neighbors = page
+        return process_single_bubble(
+            base,
+            gray,
+            *gray.shape,
+            200,
+            use_otsu,
+            4,
+            False,
+            detection_bbox=bbox,
+            classify_colored=True,
+            neighbor_bboxes=neighbors,
+            image_bgr=cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR),
+            auto_threshold=True,
+        )
+
+    s_mask, *s_rest, s_text_bbox, s_text_color = clean(small)
+    l_mask, *l_rest, l_text_bbox, l_text_color = clean(large)
+
+    assert s_mask.any()
+    assert np.array_equal(l_mask[oy : oy + 240, ox : ox + 280], s_mask)
+    assert np.count_nonzero(l_mask) == np.count_nonzero(s_mask)
+    assert l_rest == s_rest
+    assert l_text_bbox == tuple(
+        v + (ox if i % 2 == 0 else oy) for i, v in enumerate(s_text_bbox)
+    )
+    assert l_text_color == s_text_color

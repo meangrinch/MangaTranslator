@@ -1,7 +1,4 @@
-import gc
-import os
 import random
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -152,6 +149,11 @@ def _inpaint_colored_bubbles_with_coordinator(
     return pil_working
 
 
+def _shift_bbox(bbox, dx: int, dy: int) -> tuple:
+    x1, y1, x2, y2 = bbox
+    return (x1 - dx, y1 - dy, x2 - dx, y2 - dy)
+
+
 def _build_adaptive_shrink_mask(
     roi_mask: np.ndarray,
     roi_shrink_px: float,
@@ -268,6 +270,27 @@ def process_single_bubble(
             constraint_erosion_kernel = cv2.getStructuringElement(
                 cv2.MORPH_ELLIPSE, EROSION_KERNEL_SIZE
             )
+
+        # Work on a crop around the bubble instead of the whole page. The margin covers
+        # the dilation, the double erosion and a zero ring for the distance transform,
+        # so the results match full-page processing exactly.
+        bx, by, bw, bh = cv2.boundingRect(base_mask)
+        margin = (
+            max(dilation_kernel.shape) // 2
+            + 2 * (max(constraint_erosion_kernel.shape) // 2)
+            + 2
+        )
+        ox, oy = max(0, bx - margin), max(0, by - margin)
+        crop = (
+            slice(oy, min(img_height, by + bh + margin)),
+            slice(ox, min(img_width, bx + bw + margin)),
+        )
+        base_mask = base_mask[crop]
+        img_gray = img_gray[crop]
+        if image_bgr is not None:
+            image_bgr = image_bgr[crop]
+        crop_height, crop_width = base_mask.shape
+
         masked_pixels = img_gray[base_mask == 255]
         if masked_pixels.size == 0:
             log_message(
@@ -337,8 +360,8 @@ def process_single_bubble(
             shrunk_roi_mask = _build_adaptive_shrink_mask(
                 roi_mask,
                 float(roi_shrink_px),
-                detection_bbox,
-                neighbor_bboxes,
+                _shift_bbox(detection_bbox, ox, oy),
+                [_shift_bbox(b, ox, oy) for b in neighbor_bboxes],
                 processing_scale=processing_scale,
             )
         else:
@@ -369,8 +392,8 @@ def process_single_bubble(
             cx = int(m["m10"] / m["m00"])
             cy = int(m["m01"] / m["m00"])
             if (
-                0 <= cx < img_width
-                and 0 <= cy < img_height
+                0 <= cx < crop_width
+                and 0 <= cy < crop_height
                 and eroded_constraint_mask[cy, cx] == 255
             ):
                 valid_contours.append(cnt)
@@ -382,7 +405,7 @@ def process_single_bubble(
 
         text_bbox = None
         if valid_contours:
-            validated_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+            validated_mask = np.zeros((crop_height, crop_width), dtype=np.uint8)
             cv2.drawContours(
                 validated_mask, valid_contours, -1, 255, thickness=cv2.FILLED
             )
@@ -395,10 +418,15 @@ def process_single_bubble(
                 largest_contour = max(boundary_contours, key=cv2.contourArea)
                 final_mask = np.zeros((img_height, img_width), dtype=np.uint8)
                 cv2.drawContours(
-                    final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED
+                    final_mask,
+                    [largest_contour],
+                    -1,
+                    255,
+                    thickness=cv2.FILLED,
+                    offset=(ox, oy),
                 )
                 x, y, w, h = cv2.boundingRect(largest_contour)
-                text_bbox = (x, y, x + w, y + h)
+                text_bbox = (x + ox, y + oy, x + ox + w, y + oy + h)
 
                 if classify_colored:
                     # Sample bubble interior excluding exact text pixels and outline to determine if colored
@@ -894,7 +922,6 @@ def clean_speech_bubbles(
                     if flux_seed == -1
                     else max(0, int(flux_seed))
                 )
-                temp_files = []
                 try:
                     if inpaint_method == "flux_klein_9b":
                         backend = flux_backend
@@ -993,31 +1020,6 @@ def clean_speech_bubbles(
                                 )
                                 continue
 
-                            # Save intermediate result to disk to free memory when multiple regions
-                            if idx < len(colored_bubbles) - 1:
-                                temp_file = None
-                                try:
-                                    temp_fd, temp_file = tempfile.mkstemp(suffix=".png")
-                                    os.close(temp_fd)
-                                    pil_working.save(temp_file, format="PNG")
-                                    log_message(
-                                        "Saved intermediate inpainting result to disk",
-                                        verbose=verbose,
-                                    )
-                                    temp_files.append(temp_file)
-                                    with Image.open(temp_file) as img_tmp:
-                                        img_tmp.load()
-                                        pil_working = img_tmp.copy()
-                                    gc.collect()
-                                except Exception as e:
-                                    log_message(
-                                        f"Warning: Failed to save intermediate inpainting result: {e}",
-                                        verbose=verbose,
-                                    )
-                                    if temp_file and temp_file in temp_files:
-                                        temp_files.remove(temp_file)
-                                    # fall through with in-memory image
-
                     cleaned_image = cv2.cvtColor(
                         np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR
                     )
@@ -1026,13 +1028,6 @@ def clean_speech_bubbles(
                         f"Flux inpainting aborted; falling back to standard fill: {e}",
                         always_print=True,
                     )
-                finally:
-                    for temp_file in temp_files:
-                        if temp_file and os.path.exists(temp_file):
-                            try:
-                                os.remove(temp_file)
-                            except Exception:
-                                pass
             elif colored_bubbles:
                 log_message(
                     "Colored bubbles detected but Flux inpainting skipped "

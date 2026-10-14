@@ -1,10 +1,7 @@
 import base64
-import gc
 import math
-import os
 import random
 import re
-import tempfile
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -905,32 +902,713 @@ def finish_outside_text_work(
             inpainter = None
             log_message("Using OpenCV simple fill for inpainting", verbose=verbose)
         current_image = pil_image
-        temp_files = []
         none_skipped_clip_bboxes = set()
-        try:
-            if mask_groups:
-                base_seed = (
-                    random.randint(1, 999999)
-                    if config.outside_text.seed == -1
-                    else config.outside_text.seed
+        if mask_groups:
+            base_seed = (
+                random.randint(1, 999999)
+                if config.outside_text.seed == -1
+                else config.outside_text.seed
+            )
+
+            extracted_text_colors = {}
+            flux_inpaints = 0
+            cv2_inpaints = 0
+            none_skips = 0
+            group_flux_regions = bool(config.outside_text.flux_group_regions)
+            grouped_flux_candidates = []
+            request_coordinator = getattr(config, "request_coordinator", None)
+            pending_flux_candidates = []
+
+            def apply_candidate_simple_fill(candidate, color_to_use):
+                new_img = current_image.copy()
+                candidate_group = candidate["group"]
+                candidate_mask = candidate["mask"]
+                candidate_original_bbox = candidate["original_bbox_dict"]
+                c_ox0, c_oy0, c_ox1, c_oy1 = candidate["original_bounds"]
+                mask_indices = candidate_group.get("mask_indices", [])
+
+                rect_mask = _build_osb_simple_fill_mask(
+                    img_w=img_w,
+                    img_h=img_h,
+                    mask_indices=mask_indices,
+                    outside_text_results=outside_text_results,
+                    outside_text_data=outside_text_data,
+                    config=config,
+                    fallback_bounds=(
+                        (c_ox0, c_oy0, c_ox1, c_oy1)
+                        if candidate_original_bbox
+                        else None
+                    ),
+                    total_bubble_mask=total_bubble_mask,
                 )
 
-                extracted_text_colors = {}
-                flux_inpaints = 0
-                cv2_inpaints = 0
-                none_skips = 0
-                group_flux_regions = bool(config.outside_text.flux_group_regions)
-                grouped_flux_candidates = []
-                request_coordinator = getattr(config, "request_coordinator", None)
-                pending_flux_candidates = []
+                if rect_mask is None:
+                    mask_pil = Image.fromarray(
+                        (candidate_mask * 255).astype(np.uint8), mode="L"
+                    )
+                    patch = Image.new("RGB", new_img.size, color_to_use)
+                    new_img.paste(patch, (0, 0), mask=mask_pil)
+                    return new_img
 
-                def apply_candidate_simple_fill(candidate, color_to_use):
-                    new_img = current_image.copy()
-                    candidate_group = candidate["group"]
-                    candidate_mask = candidate["mask"]
-                    candidate_original_bbox = candidate["original_bbox_dict"]
-                    c_ox0, c_oy0, c_ox1, c_oy1 = candidate["original_bounds"]
-                    mask_indices = candidate_group.get("mask_indices", [])
+                ys, xs = np.where(rect_mask)
+                if len(xs) > 0 and len(ys) > 0:
+                    min_x, max_x = int(np.min(xs)), int(np.max(xs)) + 1
+                    min_y, max_y = int(np.min(ys)), int(np.max(ys)) + 1
+                    region_mask = rect_mask[min_y:max_y, min_x:max_x]
+                    mask_pil = Image.fromarray(
+                        (region_mask * 255).astype(np.uint8), mode="L"
+                    )
+                    patch = Image.new(
+                        "RGB", (max_x - min_x, max_y - min_y), color_to_use
+                    )
+                    new_img.paste(patch, (min_x, min_y), mask=mask_pil)
+
+                return new_img
+
+            def flush_pending_flux_candidates():
+                nonlocal current_image, flux_inpaints, cv2_inpaints
+                if not pending_flux_candidates:
+                    return
+
+                candidates = list(pending_flux_candidates)
+                pending_flux_candidates.clear()
+                waves = partition_non_overlapping_waves(
+                    candidates,
+                    lambda candidate: candidate["context_bbox"],
+                )
+                log_message(
+                    f"Scheduling OSB Flux in {len(waves)} wave(s)",
+                    verbose=verbose,
+                )
+
+                for wave in waves:
+                    base_image = current_image
+
+                    def make_job(candidate, base_img=base_image):
+                        def job():
+                            image_for_job = base_img.copy()
+                            try:
+                                result_image = inpainter.inpaint_mask(
+                                    image_for_job,
+                                    candidate["mask"],
+                                    seed=candidate["seed"],
+                                    verbose=verbose,
+                                    strict_mask_clipping=True,
+                                    composite_clip_bbox=candidate[
+                                        "composite_clip_bbox"
+                                    ],
+                                )
+                                if result_image is image_for_job:
+                                    raise RuntimeError(
+                                        "Flux returned original image (no inpaint)"
+                                    )
+                                return {
+                                    "candidate": candidate,
+                                    "image": result_image,
+                                    "error": None,
+                                }
+                            except Exception as e:
+                                return {
+                                    "candidate": candidate,
+                                    "image": None,
+                                    "error": e,
+                                }
+
+                        return job
+
+                    results = request_coordinator.map_ordered(
+                        [make_job(candidate) for candidate in wave]
+                    )
+                    for result in results:
+                        candidate = result["candidate"]
+                        if result["error"] is not None:
+                            fallback_color_to_use = candidate["fallback_color"]
+                            log_message(
+                                f"Flux failed for OSB region {candidate['index']}"
+                                f" (Flux inpainting error: {result['error']}); "
+                                f"falling back to CV2 fill ({fallback_color_to_use})",
+                                always_print=True,
+                            )
+                            current_image = apply_candidate_simple_fill(
+                                candidate, fallback_color_to_use
+                            )
+                            cv2_inpaints += 1
+                            continue
+
+                        context_bbox = candidate["context_bbox"]
+                        if context_bbox is None:
+                            current_image = result["image"]
+                        else:
+                            current_image = paste_image_region(
+                                current_image,
+                                result["image"],
+                                context_bbox,
+                            )
+                        flux_inpaints += 1
+
+            for i, group in enumerate(mask_groups):
+                log_message(
+                    f"Inpainting outside text region {i + 1}/{len(mask_groups)}",
+                    verbose=verbose,
+                )
+                combined_mask = group["combined_mask"]
+                combined_mask = np.logical_and(
+                    combined_mask, np.logical_not(total_bubble_mask)
+                )
+                if not np.any(combined_mask):
+                    log_message(
+                        "Skipping outside text region after bubble masking (no remaining area)",
+                        verbose=verbose,
+                    )
+                    continue
+                region_seed = base_seed + i if base_seed > 0 else base_seed
+
+                original_bbox_dict = group.get("original_bbox")
+                composite_clip_bbox = None
+                fill_color = None
+                fallback_fill_color = None
+                ox0 = oy0 = ox1 = oy1 = None
+                if original_bbox_dict:
+                    ox = int(original_bbox_dict.get("x", 0))
+                    oy = int(original_bbox_dict.get("y", 0))
+                    ow = int(original_bbox_dict.get("width", 0))
+                    oh = int(original_bbox_dict.get("height", 0))
+                    if ow > 0 and oh > 0:
+                        ox0 = max(0, min(img_w, ox))
+                        oy0 = max(0, min(img_h, oy))
+                        ox1 = max(0, min(img_w, ox + ow))
+                        oy1 = max(0, min(img_h, oy + oh))
+                        composite_clip_bbox = (ox, oy, ox + ow, oy + oh)
+
+                        # Determine detected text color for this region to ensure contrast
+                        group_bg_is_dark = None
+                        if original_text_colors:
+                            votes_dark = 0
+                            votes_light = 0
+                            gx1, gy1, gx2, gy2 = ox, oy, ox + ow, oy + oh
+
+                            for (
+                                bx1,
+                                by1,
+                                bx2,
+                                by2,
+                            ), t_dark in original_text_colors.items():
+                                # Check if center of OCR box is inside group box
+                                bcx = (bx1 + bx2) / 2
+                                bcy = (by1 + by2) / 2
+                                if (
+                                    bcx >= gx1
+                                    and bcx <= gx2
+                                    and bcy >= gy1
+                                    and bcy <= gy2
+                                ):
+                                    if t_dark:
+                                        votes_dark += 1
+                                    else:
+                                        votes_light += 1
+                            if votes_dark > 0 or votes_light > 0:
+                                group_bg_is_dark = votes_dark >= votes_light
+
+                                # Detected value represents background brightness
+                                fallback_fill_color = (
+                                    (0, 0, 0) if group_bg_is_dark else (255, 255, 255)
+                                )
+
+                                t_type = "Dark" if group_bg_is_dark else "Light"
+                                f_col = (
+                                    "White"
+                                    if fallback_fill_color == (255, 255, 255)
+                                    else "Black"
+                                )
+                                log_message(
+                                    f"OSB Region {i + 1}: Detected {t_type} background. "
+                                    f"Fallback fill: {f_col}.",
+                                    verbose=verbose,
+                                )
+
+                        # Expanded sampling around the original bbox to find background color
+                        mask_indices = group.get("mask_indices", [])
+                        if mask_indices and raw_outside_text_results:
+                            rx0 = int(
+                                min(
+                                    [
+                                        raw_outside_text_results[idx][0][0]
+                                        for idx in mask_indices
+                                    ]
+                                )
+                            )
+                            ry0 = int(
+                                min(
+                                    [
+                                        raw_outside_text_results[idx][0][1]
+                                        for idx in mask_indices
+                                    ]
+                                )
+                            )
+                            rx1 = int(
+                                max(
+                                    [
+                                        raw_outside_text_results[idx][0][2]
+                                        for idx in mask_indices
+                                    ]
+                                )
+                            )
+                            ry1 = int(
+                                max(
+                                    [
+                                        raw_outside_text_results[idx][0][3]
+                                        for idx in mask_indices
+                                    ]
+                                )
+                            )
+                        else:
+                            rx0, ry0, rx1, ry1 = ox, oy, ox + ow, oy + oh
+
+                        sx1 = max(0, rx0 - OSB_EXPANSION_PX)
+                        sy1 = max(0, ry0 - OSB_EXPANSION_PX)
+                        sx2 = min(img_w, rx1 + OSB_EXPANSION_PX)
+                        sy2 = min(img_h, ry1 + OSB_EXPANSION_PX)
+
+                        if sx2 > sx1 and sy2 > sy1:
+                            mask_h, mask_w = sy2 - sy1, sx2 - sx1
+                            local_mask = np.ones((mask_h, mask_w), dtype=bool)
+
+                            lx0 = max(0, rx0 - sx1)
+                            ly0 = max(0, ry0 - sy1)
+                            lx1 = min(mask_w, rx1 - sx1)
+                            ly1 = min(mask_h, ry1 - sy1)
+
+                            if lx1 > lx0 and ly1 > ly0:
+                                local_mask[ly0:ly1, lx0:lx1] = False
+
+                            border_pixels = None
+                            min_border_pixels = 20
+                            if np.count_nonzero(local_mask) >= min_border_pixels:
+                                sampling_crop = current_image.crop((sx1, sy1, sx2, sy2))
+                                crop_np = np.array(sampling_crop.convert("RGB"))
+                                border_pixels = crop_np[local_mask]
+
+                            if border_pixels is not None and border_pixels.size > 0:
+                                bg_rgb_med = np.median(border_pixels, axis=0).astype(
+                                    int
+                                )
+                                diffs = np.max(
+                                    np.abs(border_pixels.astype(int) - bg_rgb_med),
+                                    axis=1,
+                                )
+                                solid_ratio = float(
+                                    np.mean(diffs <= OSB_COLOR_TOLERANCE)
+                                )
+                                is_border_solid = (
+                                    solid_ratio >= OSB_SOLID_RATIO_THRESHOLD
+                                )
+
+                                if (
+                                    bg_rgb_med[0] >= OSB_WHITE_SNAP_THRESH
+                                    and bg_rgb_med[1] >= OSB_WHITE_SNAP_THRESH
+                                    and bg_rgb_med[2] >= OSB_WHITE_SNAP_THRESH
+                                ):
+                                    detected_color = (255, 255, 255)
+                                elif (
+                                    bg_rgb_med[0] <= OSB_BLACK_SNAP_THRESH
+                                    and bg_rgb_med[1] <= OSB_BLACK_SNAP_THRESH
+                                    and bg_rgb_med[2] <= OSB_BLACK_SNAP_THRESH
+                                ):
+                                    detected_color = (0, 0, 0)
+                                else:
+                                    detected_color = (
+                                        int(bg_rgb_med[0]),
+                                        int(bg_rgb_med[1]),
+                                        int(bg_rgb_med[2]),
+                                    )
+
+                                if is_border_solid or fallback_fill_color is None:
+                                    fallback_fill_color = detected_color
+
+                                ref_bg_rgb = np.array(
+                                    detected_color
+                                    if is_border_solid
+                                    else (
+                                        fallback_fill_color
+                                        if fallback_fill_color is not None
+                                        else (0, 0, 0)
+                                    ),
+                                    dtype=np.uint8,
+                                )
+                                bg_lab = cv2.cvtColor(
+                                    np.uint8([[ref_bg_rgb]]), cv2.COLOR_RGB2LAB
+                                )[0][0]
+
+                                crop_rgb = np.array(
+                                    pil_image.crop((rx0, ry0, rx1, ry1)).convert("RGB")
+                                )
+                                crop_gray = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2GRAY)
+
+                                # 1. Detect outlined monochrome text (black text + white outline or white text + dark outline)
+                                detected_text_color = None
+
+                                # Dark glyph components (candidate black text core)
+                                ink_mask = (crop_gray < 50).astype(np.uint8) * 255
+                                num_labels, labels, stats, _ = (
+                                    cv2.connectedComponentsWithStats(ink_mask)
+                                )
+                                dark_glyph_comps = []
+                                total_dark_glyph_area = 0
+
+                                for l in range(1, num_labels):
+                                    area = stats[l, cv2.CC_STAT_AREA]
+                                    if area < 10:
+                                        continue
+                                    comp = (labels == l).astype(np.uint8) * 255
+                                    e2 = cv2.erode(comp, np.ones((2, 2), np.uint8))
+                                    if np.count_nonzero(e2) == 0:
+                                        continue
+
+                                    dilated = cv2.dilate(
+                                        comp, np.ones((5, 5), np.uint8)
+                                    )
+                                    boundary = cv2.bitwise_and(
+                                        dilated, cv2.bitwise_not(comp)
+                                    )
+                                    b_pixels = crop_gray[boundary == 255]
+                                    if len(b_pixels) == 0:
+                                        continue
+
+                                    bright_ratio = np.count_nonzero(
+                                        b_pixels > 150
+                                    ) / len(b_pixels)
+                                    if bright_ratio >= 0.40:
+                                        dark_glyph_comps.append(
+                                            {
+                                                "area": area,
+                                                "bright_ratio": bright_ratio,
+                                            }
+                                        )
+                                        total_dark_glyph_area += area
+
+                                # White glyph components (candidate white text core)
+                                white_mask = (crop_gray > 200).astype(np.uint8) * 255
+                                num_w, labels_w, stats_w, _ = (
+                                    cv2.connectedComponentsWithStats(white_mask)
+                                )
+                                white_glyph_comps = []
+                                total_white_glyph_area = 0
+
+                                for l in range(1, num_w):
+                                    area = stats_w[l, cv2.CC_STAT_AREA]
+                                    if area < 10:
+                                        continue
+                                    comp = (labels_w == l).astype(np.uint8) * 255
+                                    e2 = cv2.erode(comp, np.ones((2, 2), np.uint8))
+                                    e2_area = np.count_nonzero(e2)
+                                    if e2_area == 0 or (e2_area / area) < 0.05:
+                                        continue
+
+                                    dilated = cv2.dilate(
+                                        comp, np.ones((5, 5), np.uint8)
+                                    )
+                                    boundary = cv2.bitwise_and(
+                                        dilated, cv2.bitwise_not(comp)
+                                    )
+                                    b_pixels = crop_gray[boundary == 255]
+                                    if len(b_pixels) == 0:
+                                        continue
+
+                                    dark_ratio = np.count_nonzero(b_pixels < 90) / len(
+                                        b_pixels
+                                    )
+                                    if dark_ratio >= 0.40:
+                                        white_glyph_comps.append(
+                                            {
+                                                "area": area,
+                                                "dark_ratio": dark_ratio,
+                                            }
+                                        )
+                                        total_white_glyph_area += area
+
+                                has_dark_outlines = (
+                                    len(dark_glyph_comps) >= 2
+                                    or (
+                                        len(dark_glyph_comps) == 1
+                                        and total_dark_glyph_area >= 30
+                                    )
+                                    or total_dark_glyph_area >= 50
+                                )
+                                has_white_outlines = (
+                                    len(white_glyph_comps) >= 2
+                                    or (
+                                        len(white_glyph_comps) == 1
+                                        and total_white_glyph_area >= 30
+                                    )
+                                    or total_white_glyph_area >= 50
+                                )
+
+                                if has_dark_outlines and not has_white_outlines:
+                                    detected_text_color = (0, 0, 0)
+                                elif has_white_outlines and not has_dark_outlines:
+                                    detected_text_color = (255, 255, 255)
+                                elif has_dark_outlines and has_white_outlines:
+                                    avg_dark_ratio = float(
+                                        np.mean(
+                                            [
+                                                c["bright_ratio"]
+                                                for c in dark_glyph_comps
+                                            ]
+                                        )
+                                    )
+                                    avg_white_ratio = float(
+                                        np.mean(
+                                            [c["dark_ratio"] for c in white_glyph_comps]
+                                        )
+                                    )
+                                    if (
+                                        len(dark_glyph_comps) > len(white_glyph_comps)
+                                        and avg_dark_ratio >= avg_white_ratio * 0.8
+                                    ):
+                                        detected_text_color = (0, 0, 0)
+                                    elif (
+                                        len(white_glyph_comps) > len(dark_glyph_comps)
+                                        and avg_white_ratio >= avg_dark_ratio * 0.8
+                                    ):
+                                        detected_text_color = (255, 255, 255)
+                                    elif avg_dark_ratio > avg_white_ratio:
+                                        detected_text_color = (0, 0, 0)
+                                    else:
+                                        detected_text_color = (255, 255, 255)
+
+                                # 3. Detect chromatic text via LAB contrast against background
+                                if detected_text_color is None:
+                                    crop_lab = cv2.cvtColor(
+                                        crop_rgb, cv2.COLOR_RGB2LAB
+                                    ).astype(np.float32)
+                                    dist_map = np.linalg.norm(
+                                        crop_lab - bg_lab.astype(np.float32), axis=2
+                                    )
+
+                                    robust_max_dist = np.percentile(dist_map, 95)
+                                    CONTRAST_THRESHOLD = max(30, robust_max_dist * 0.6)
+                                    contrast_mask = (
+                                        dist_map > CONTRAST_THRESHOLD
+                                    ).astype(np.uint8) * 255
+
+                                    kernel_3 = np.ones((3, 3), np.uint8)
+                                    contrast_mask = cv2.morphologyEx(
+                                        contrast_mask, cv2.MORPH_CLOSE, kernel_3
+                                    )
+                                    contrast_mask = cv2.erode(
+                                        contrast_mask,
+                                        np.ones((2, 2), np.uint8),
+                                        iterations=1,
+                                    )
+
+                                    contours, _ = cv2.findContours(
+                                        contrast_mask,
+                                        cv2.RETR_EXTERNAL,
+                                        cv2.CHAIN_APPROX_SIMPLE,
+                                    )
+                                    clean_mask = np.zeros_like(contrast_mask)
+                                    MIN_COMPONENT_AREA = 4
+                                    for cnt in contours:
+                                        if cv2.contourArea(cnt) >= MIN_COMPONENT_AREA:
+                                            cv2.drawContours(
+                                                clean_mask,
+                                                [cnt],
+                                                -1,
+                                                255,
+                                                cv2.FILLED,
+                                            )
+
+                                    text_pixels_rgb = crop_rgb[clean_mask == 255]
+                                    if len(text_pixels_rgb) >= 10:
+                                        sampled_rgb = tuple(
+                                            np.median(text_pixels_rgb, axis=0).astype(
+                                                int
+                                            )
+                                        )
+                                        hsv = cv2.cvtColor(
+                                            np.uint8([[sampled_rgb]]),
+                                            cv2.COLOR_RGB2HSV,
+                                        )[0][0]
+                                        if hsv[1] >= 25:
+                                            detected_text_color = sampled_rgb
+
+                                # 4. Fallback for non-outlined monochrome text: contrast against fill
+                                if detected_text_color is None:
+                                    fill_for_contrast = (
+                                        fallback_fill_color
+                                        if fallback_fill_color is not None
+                                        else (0, 0, 0)
+                                    )
+                                    fill_lum = (
+                                        0.299 * fill_for_contrast[0]
+                                        + 0.587 * fill_for_contrast[1]
+                                        + 0.114 * fill_for_contrast[2]
+                                    )
+                                    detected_text_color = (
+                                        (0, 0, 0)
+                                        if fill_lum >= 128
+                                        else (255, 255, 255)
+                                    )
+
+                                extracted_text_colors[composite_clip_bbox] = (
+                                    detected_text_color
+                                )
+
+                                force_fill = inpainting_method == "opencv"
+
+                                # Get expanded bounds for this group to check solid color and for cv2 fill
+                                p_x0, p_y0, p_x1, p_y1 = ox, oy, ox + ow, oy + oh
+                                mask_indices = group.get("mask_indices", [])
+                                if mask_indices and outside_text_results:
+                                    p_x0 = max(
+                                        0,
+                                        int(
+                                            min(
+                                                [
+                                                    outside_text_results[idx][0][0]
+                                                    for idx in mask_indices
+                                                ]
+                                            )
+                                        ),
+                                    )
+                                    p_y0 = max(
+                                        0,
+                                        int(
+                                            min(
+                                                [
+                                                    outside_text_results[idx][0][1]
+                                                    for idx in mask_indices
+                                                ]
+                                            )
+                                        ),
+                                    )
+                                    p_x1 = min(
+                                        img_w,
+                                        int(
+                                            max(
+                                                [
+                                                    outside_text_results[idx][0][2]
+                                                    for idx in mask_indices
+                                                ]
+                                            )
+                                        ),
+                                    )
+                                    p_y1 = min(
+                                        img_h,
+                                        int(
+                                            max(
+                                                [
+                                                    outside_text_results[idx][0][3]
+                                                    for idx in mask_indices
+                                                ]
+                                            )
+                                        ),
+                                    )
+
+                                # Simply check if the expanded boundary is solid color
+                                expanded_is_solid = is_border_solid
+                                if not force_fill:
+                                    ex_sx1 = max(0, p_x0 - OSB_EXPANSION_PX)
+                                    ex_sy1 = max(0, p_y0 - OSB_EXPANSION_PX)
+                                    ex_sx2 = min(img_w, p_x1 + OSB_EXPANSION_PX)
+                                    ex_sy2 = min(img_h, p_y1 + OSB_EXPANSION_PX)
+
+                                    if ex_sx2 > ex_sx1 and ex_sy2 > ex_sy1:
+                                        # Grab boundary pixels using Numpy directly for speed
+                                        crop_img = current_image.crop(
+                                            (ex_sx1, ex_sy1, ex_sx2, ex_sy2)
+                                        )
+                                        ecrop_np = np.array(crop_img.convert("RGB"))
+                                        elocal_mask = np.ones(
+                                            ecrop_np.shape[:2], dtype=bool
+                                        )
+
+                                        ix1 = max(0, p_x0 - ex_sx1)
+                                        iy1 = max(0, p_y0 - ex_sy1)
+                                        ix2 = min(ecrop_np.shape[1], p_x1 - ex_sx1)
+                                        iy2 = min(ecrop_np.shape[0], p_y1 - ex_sy1)
+
+                                        if ix2 > ix1 and iy2 > iy1:
+                                            elocal_mask[iy1:iy2, ix1:ix2] = False
+
+                                        eborder_pixels = ecrop_np[elocal_mask]
+                                        if eborder_pixels.size > 0:
+                                            ebg_rgb_med = np.median(
+                                                eborder_pixels, axis=0
+                                            ).astype(int)
+                                            ediffs = np.max(
+                                                np.abs(
+                                                    eborder_pixels.astype(int)
+                                                    - ebg_rgb_med
+                                                ),
+                                                axis=1,
+                                            )
+                                            esolid_ratio = float(
+                                                np.mean(ediffs <= OSB_COLOR_TOLERANCE)
+                                            )
+                                            if (
+                                                ebg_rgb_med[0] >= OSB_WHITE_SNAP_THRESH
+                                                and ebg_rgb_med[1]
+                                                >= OSB_WHITE_SNAP_THRESH
+                                                and ebg_rgb_med[2]
+                                                >= OSB_WHITE_SNAP_THRESH
+                                            ):
+                                                edetected_color = (255, 255, 255)
+                                            elif (
+                                                ebg_rgb_med[0] <= OSB_BLACK_SNAP_THRESH
+                                                and ebg_rgb_med[1]
+                                                <= OSB_BLACK_SNAP_THRESH
+                                                and ebg_rgb_med[2]
+                                                <= OSB_BLACK_SNAP_THRESH
+                                            ):
+                                                edetected_color = (0, 0, 0)
+                                            else:
+                                                edetected_color = (
+                                                    int(ebg_rgb_med[0]),
+                                                    int(ebg_rgb_med[1]),
+                                                    int(ebg_rgb_med[2]),
+                                                )
+
+                                            if (
+                                                esolid_ratio
+                                                >= OSB_SOLID_RATIO_THRESHOLD
+                                            ):
+                                                expanded_is_solid = True
+                                                fallback_fill_color = edetected_color
+
+                                should_simple_fill = expanded_is_solid or force_fill
+
+                                if should_simple_fill:
+                                    fill_color = (
+                                        fallback_fill_color
+                                        if fallback_fill_color is not None
+                                        else detected_color
+                                    )
+
+                                    if force_fill:
+                                        log_message(
+                                            f"Using OpenCV simple fill for OSB region: {fill_color} background",
+                                            verbose=verbose,
+                                        )
+                                    else:
+                                        log_message(
+                                            f"Skipping Flux for OSB region: detected solid {fill_color} background",
+                                            verbose=verbose,
+                                        )
+
+                def apply_simple_fill(
+                    color_to_use,
+                    new_img_src=current_image,
+                    grp=group,
+                    orig_dict=original_bbox_dict,
+                    b_ox0=ox0,
+                    b_oy0=oy0,
+                    b_ox1=ox1,
+                    b_oy1=oy1,
+                    comb_mask=combined_mask,
+                ):
+                    new_img = new_img_src.copy()
+                    mask_indices = grp.get("mask_indices", [])
 
                     rect_mask = _build_osb_simple_fill_mask(
                         img_w=img_w,
@@ -940,16 +1618,15 @@ def finish_outside_text_work(
                         outside_text_data=outside_text_data,
                         config=config,
                         fallback_bounds=(
-                            (c_ox0, c_oy0, c_ox1, c_oy1)
-                            if candidate_original_bbox
-                            else None
+                            (b_ox0, b_oy0, b_ox1, b_oy1) if orig_dict else None
                         ),
                         total_bubble_mask=total_bubble_mask,
                     )
 
                     if rect_mask is None:
+                        # Full mask fill fallback
                         mask_pil = Image.fromarray(
-                            (candidate_mask * 255).astype(np.uint8), mode="L"
+                            (comb_mask * 255).astype(np.uint8), mode="L"
                         )
                         patch = Image.new("RGB", new_img.size, color_to_use)
                         new_img.paste(patch, (0, 0), mask=mask_pil)
@@ -970,955 +1647,206 @@ def finish_outside_text_work(
 
                     return new_img
 
-                def flush_pending_flux_candidates():
-                    nonlocal current_image, flux_inpaints, cv2_inpaints
-                    if not pending_flux_candidates:
-                        return
+                if fill_color is not None:
+                    flush_pending_flux_candidates()
+                    current_image = apply_simple_fill(fill_color)
+                    cv2_inpaints += 1
+                    continue
 
-                    candidates = list(pending_flux_candidates)
-                    pending_flux_candidates.clear()
-                    waves = partition_non_overlapping_waves(
-                        candidates,
-                        lambda candidate: candidate["context_bbox"],
-                    )
+                if inpainting_method == "none":
+                    if composite_clip_bbox:
+                        none_skipped_clip_bboxes.add(composite_clip_bbox)
+                    none_skips += 1
                     log_message(
-                        f"Scheduling OSB Flux in {len(waves)} wave(s)",
+                        f"Skipping inpaint for non-solid OSB region {i + 1} (none mode)",
                         verbose=verbose,
                     )
+                    continue
 
-                    for wave in waves:
-                        base_image = current_image
+                if group_flux_regions and inpainter is not None:
+                    flush_pending_flux_candidates()
+                    grouped_mask = combined_mask.copy()
+                    if composite_clip_bbox is not None:
+                        clip_x1, clip_y1, clip_x2, clip_y2 = composite_clip_bbox
+                        clip_x1 = max(0, min(img_w, clip_x1))
+                        clip_x2 = max(0, min(img_w, clip_x2))
+                        clip_y1 = max(0, min(img_h, clip_y1))
+                        clip_y2 = max(0, min(img_h, clip_y2))
 
-                        def make_job(candidate, base_img=base_image):
-                            def job():
-                                image_for_job = base_img.copy()
-                                try:
-                                    result_image = inpainter.inpaint_mask(
-                                        image_for_job,
-                                        candidate["mask"],
-                                        seed=candidate["seed"],
-                                        verbose=verbose,
-                                        strict_mask_clipping=True,
-                                        composite_clip_bbox=candidate[
-                                            "composite_clip_bbox"
-                                        ],
-                                    )
-                                    if result_image is image_for_job:
-                                        raise RuntimeError(
-                                            "Flux returned original image (no inpaint)"
-                                        )
-                                    return {
-                                        "candidate": candidate,
-                                        "image": result_image,
-                                        "error": None,
-                                    }
-                                except Exception as e:
-                                    return {
-                                        "candidate": candidate,
-                                        "image": None,
-                                        "error": e,
-                                    }
+                        clipped_grouped_mask = np.zeros_like(grouped_mask)
+                        if clip_x2 > clip_x1 and clip_y2 > clip_y1:
+                            clipped_grouped_mask[clip_y1:clip_y2, clip_x1:clip_x2] = (
+                                grouped_mask[clip_y1:clip_y2, clip_x1:clip_x2]
+                            )
+                        grouped_mask = clipped_grouped_mask
 
-                            return job
-
-                        results = request_coordinator.map_ordered(
-                            [make_job(candidate) for candidate in wave]
-                        )
-                        for result in results:
-                            candidate = result["candidate"]
-                            if result["error"] is not None:
-                                fallback_color_to_use = candidate["fallback_color"]
-                                log_message(
-                                    f"Flux failed for OSB region {candidate['index']}"
-                                    f" (Flux inpainting error: {result['error']}); "
-                                    f"falling back to CV2 fill ({fallback_color_to_use})",
-                                    always_print=True,
-                                )
-                                current_image = apply_candidate_simple_fill(
-                                    candidate, fallback_color_to_use
-                                )
-                                cv2_inpaints += 1
-                                continue
-
-                            context_bbox = candidate["context_bbox"]
-                            if context_bbox is None:
-                                current_image = result["image"]
-                            else:
-                                current_image = paste_image_region(
-                                    current_image,
-                                    result["image"],
-                                    context_bbox,
-                                )
-                            flux_inpaints += 1
-
-                for i, group in enumerate(mask_groups):
-                    log_message(
-                        f"Inpainting outside text region {i + 1}/{len(mask_groups)}",
-                        verbose=verbose,
-                    )
-                    combined_mask = group["combined_mask"]
-                    combined_mask = np.logical_and(
-                        combined_mask, np.logical_not(total_bubble_mask)
-                    )
-                    if not np.any(combined_mask):
+                    if not np.any(grouped_mask):
                         log_message(
-                            "Skipping outside text region after bubble masking (no remaining area)",
+                            f"Skipping OSB region {i + 1} after grouped clip (no remaining area)",
                             verbose=verbose,
                         )
                         continue
-                    region_seed = base_seed + i if base_seed > 0 else base_seed
 
-                    original_bbox_dict = group.get("original_bbox")
-                    composite_clip_bbox = None
-                    fill_color = None
-                    fallback_fill_color = None
-                    ox0 = oy0 = ox1 = oy1 = None
-                    if original_bbox_dict:
-                        ox = int(original_bbox_dict.get("x", 0))
-                        oy = int(original_bbox_dict.get("y", 0))
-                        ow = int(original_bbox_dict.get("width", 0))
-                        oh = int(original_bbox_dict.get("height", 0))
-                        if ow > 0 and oh > 0:
-                            ox0 = max(0, min(img_w, ox))
-                            oy0 = max(0, min(img_h, oy))
-                            ox1 = max(0, min(img_w, ox + ow))
-                            oy1 = max(0, min(img_h, oy + oh))
-                            composite_clip_bbox = (ox, oy, ox + ow, oy + oh)
-
-                            # Determine detected text color for this region to ensure contrast
-                            group_bg_is_dark = None
-                            if original_text_colors:
-                                votes_dark = 0
-                                votes_light = 0
-                                gx1, gy1, gx2, gy2 = ox, oy, ox + ow, oy + oh
-
-                                for (
-                                    bx1,
-                                    by1,
-                                    bx2,
-                                    by2,
-                                ), t_dark in original_text_colors.items():
-                                    # Check if center of OCR box is inside group box
-                                    bcx = (bx1 + bx2) / 2
-                                    bcy = (by1 + by2) / 2
-                                    if (
-                                        bcx >= gx1
-                                        and bcx <= gx2
-                                        and bcy >= gy1
-                                        and bcy <= gy2
-                                    ):
-                                        if t_dark:
-                                            votes_dark += 1
-                                        else:
-                                            votes_light += 1
-                                if votes_dark > 0 or votes_light > 0:
-                                    group_bg_is_dark = votes_dark >= votes_light
-
-                                    # Detected value represents background brightness
-                                    fallback_fill_color = (
-                                        (0, 0, 0)
-                                        if group_bg_is_dark
-                                        else (255, 255, 255)
-                                    )
-
-                                    t_type = "Dark" if group_bg_is_dark else "Light"
-                                    f_col = (
-                                        "White"
-                                        if fallback_fill_color == (255, 255, 255)
-                                        else "Black"
-                                    )
-                                    log_message(
-                                        f"OSB Region {i + 1}: Detected {t_type} background. "
-                                        f"Fallback fill: {f_col}.",
-                                        verbose=verbose,
-                                    )
-
-                            # Expanded sampling around the original bbox to find background color
-                            mask_indices = group.get("mask_indices", [])
-                            if mask_indices and raw_outside_text_results:
-                                rx0 = int(
-                                    min(
-                                        [
-                                            raw_outside_text_results[idx][0][0]
-                                            for idx in mask_indices
-                                        ]
-                                    )
-                                )
-                                ry0 = int(
-                                    min(
-                                        [
-                                            raw_outside_text_results[idx][0][1]
-                                            for idx in mask_indices
-                                        ]
-                                    )
-                                )
-                                rx1 = int(
-                                    max(
-                                        [
-                                            raw_outside_text_results[idx][0][2]
-                                            for idx in mask_indices
-                                        ]
-                                    )
-                                )
-                                ry1 = int(
-                                    max(
-                                        [
-                                            raw_outside_text_results[idx][0][3]
-                                            for idx in mask_indices
-                                        ]
-                                    )
-                                )
-                            else:
-                                rx0, ry0, rx1, ry1 = ox, oy, ox + ow, oy + oh
-
-                            sx1 = max(0, rx0 - OSB_EXPANSION_PX)
-                            sy1 = max(0, ry0 - OSB_EXPANSION_PX)
-                            sx2 = min(img_w, rx1 + OSB_EXPANSION_PX)
-                            sy2 = min(img_h, ry1 + OSB_EXPANSION_PX)
-
-                            if sx2 > sx1 and sy2 > sy1:
-                                mask_h, mask_w = sy2 - sy1, sx2 - sx1
-                                local_mask = np.ones((mask_h, mask_w), dtype=bool)
-
-                                lx0 = max(0, rx0 - sx1)
-                                ly0 = max(0, ry0 - sy1)
-                                lx1 = min(mask_w, rx1 - sx1)
-                                ly1 = min(mask_h, ry1 - sy1)
-
-                                if lx1 > lx0 and ly1 > ly0:
-                                    local_mask[ly0:ly1, lx0:lx1] = False
-
-                                border_pixels = None
-                                min_border_pixels = 20
-                                if np.count_nonzero(local_mask) >= min_border_pixels:
-                                    sampling_crop = current_image.crop(
-                                        (sx1, sy1, sx2, sy2)
-                                    )
-                                    crop_np = np.array(sampling_crop.convert("RGB"))
-                                    border_pixels = crop_np[local_mask]
-
-                                if border_pixels is not None and border_pixels.size > 0:
-                                    bg_rgb_med = np.median(
-                                        border_pixels, axis=0
-                                    ).astype(int)
-                                    diffs = np.max(
-                                        np.abs(border_pixels.astype(int) - bg_rgb_med),
-                                        axis=1,
-                                    )
-                                    solid_ratio = float(
-                                        np.mean(diffs <= OSB_COLOR_TOLERANCE)
-                                    )
-                                    is_border_solid = (
-                                        solid_ratio >= OSB_SOLID_RATIO_THRESHOLD
-                                    )
-
-                                    if (
-                                        bg_rgb_med[0] >= OSB_WHITE_SNAP_THRESH
-                                        and bg_rgb_med[1] >= OSB_WHITE_SNAP_THRESH
-                                        and bg_rgb_med[2] >= OSB_WHITE_SNAP_THRESH
-                                    ):
-                                        detected_color = (255, 255, 255)
-                                    elif (
-                                        bg_rgb_med[0] <= OSB_BLACK_SNAP_THRESH
-                                        and bg_rgb_med[1] <= OSB_BLACK_SNAP_THRESH
-                                        and bg_rgb_med[2] <= OSB_BLACK_SNAP_THRESH
-                                    ):
-                                        detected_color = (0, 0, 0)
-                                    else:
-                                        detected_color = (
-                                            int(bg_rgb_med[0]),
-                                            int(bg_rgb_med[1]),
-                                            int(bg_rgb_med[2]),
-                                        )
-
-                                    if is_border_solid or fallback_fill_color is None:
-                                        fallback_fill_color = detected_color
-
-                                    ref_bg_rgb = np.array(
-                                        detected_color
-                                        if is_border_solid
-                                        else (
-                                            fallback_fill_color
-                                            if fallback_fill_color is not None
-                                            else (0, 0, 0)
-                                        ),
-                                        dtype=np.uint8,
-                                    )
-                                    bg_lab = cv2.cvtColor(
-                                        np.uint8([[ref_bg_rgb]]), cv2.COLOR_RGB2LAB
-                                    )[0][0]
-
-                                    crop_rgb = np.array(
-                                        pil_image.crop((rx0, ry0, rx1, ry1)).convert(
-                                            "RGB"
-                                        )
-                                    )
-                                    crop_gray = cv2.cvtColor(
-                                        crop_rgb, cv2.COLOR_RGB2GRAY
-                                    )
-
-                                    # 1. Detect outlined monochrome text (black text + white outline or white text + dark outline)
-                                    detected_text_color = None
-
-                                    # Dark glyph components (candidate black text core)
-                                    ink_mask = (crop_gray < 50).astype(np.uint8) * 255
-                                    num_labels, labels, stats, _ = (
-                                        cv2.connectedComponentsWithStats(ink_mask)
-                                    )
-                                    dark_glyph_comps = []
-                                    total_dark_glyph_area = 0
-
-                                    for l in range(1, num_labels):
-                                        area = stats[l, cv2.CC_STAT_AREA]
-                                        if area < 10:
-                                            continue
-                                        comp = (labels == l).astype(np.uint8) * 255
-                                        e2 = cv2.erode(comp, np.ones((2, 2), np.uint8))
-                                        if np.count_nonzero(e2) == 0:
-                                            continue
-
-                                        dilated = cv2.dilate(
-                                            comp, np.ones((5, 5), np.uint8)
-                                        )
-                                        boundary = cv2.bitwise_and(
-                                            dilated, cv2.bitwise_not(comp)
-                                        )
-                                        b_pixels = crop_gray[boundary == 255]
-                                        if len(b_pixels) == 0:
-                                            continue
-
-                                        bright_ratio = np.count_nonzero(
-                                            b_pixels > 150
-                                        ) / len(b_pixels)
-                                        if bright_ratio >= 0.40:
-                                            dark_glyph_comps.append(
-                                                {
-                                                    "area": area,
-                                                    "bright_ratio": bright_ratio,
-                                                }
-                                            )
-                                            total_dark_glyph_area += area
-
-                                    # White glyph components (candidate white text core)
-                                    white_mask = (crop_gray > 200).astype(
-                                        np.uint8
-                                    ) * 255
-                                    num_w, labels_w, stats_w, _ = (
-                                        cv2.connectedComponentsWithStats(white_mask)
-                                    )
-                                    white_glyph_comps = []
-                                    total_white_glyph_area = 0
-
-                                    for l in range(1, num_w):
-                                        area = stats_w[l, cv2.CC_STAT_AREA]
-                                        if area < 10:
-                                            continue
-                                        comp = (labels_w == l).astype(np.uint8) * 255
-                                        e2 = cv2.erode(comp, np.ones((2, 2), np.uint8))
-                                        e2_area = np.count_nonzero(e2)
-                                        if e2_area == 0 or (e2_area / area) < 0.05:
-                                            continue
-
-                                        dilated = cv2.dilate(
-                                            comp, np.ones((5, 5), np.uint8)
-                                        )
-                                        boundary = cv2.bitwise_and(
-                                            dilated, cv2.bitwise_not(comp)
-                                        )
-                                        b_pixels = crop_gray[boundary == 255]
-                                        if len(b_pixels) == 0:
-                                            continue
-
-                                        dark_ratio = np.count_nonzero(
-                                            b_pixels < 90
-                                        ) / len(b_pixels)
-                                        if dark_ratio >= 0.40:
-                                            white_glyph_comps.append(
-                                                {
-                                                    "area": area,
-                                                    "dark_ratio": dark_ratio,
-                                                }
-                                            )
-                                            total_white_glyph_area += area
-
-                                    has_dark_outlines = (
-                                        len(dark_glyph_comps) >= 2
-                                        or (
-                                            len(dark_glyph_comps) == 1
-                                            and total_dark_glyph_area >= 30
-                                        )
-                                        or total_dark_glyph_area >= 50
-                                    )
-                                    has_white_outlines = (
-                                        len(white_glyph_comps) >= 2
-                                        or (
-                                            len(white_glyph_comps) == 1
-                                            and total_white_glyph_area >= 30
-                                        )
-                                        or total_white_glyph_area >= 50
-                                    )
-
-                                    if has_dark_outlines and not has_white_outlines:
-                                        detected_text_color = (0, 0, 0)
-                                    elif has_white_outlines and not has_dark_outlines:
-                                        detected_text_color = (255, 255, 255)
-                                    elif has_dark_outlines and has_white_outlines:
-                                        avg_dark_ratio = float(
-                                            np.mean(
-                                                [
-                                                    c["bright_ratio"]
-                                                    for c in dark_glyph_comps
-                                                ]
-                                            )
-                                        )
-                                        avg_white_ratio = float(
-                                            np.mean(
-                                                [
-                                                    c["dark_ratio"]
-                                                    for c in white_glyph_comps
-                                                ]
-                                            )
-                                        )
-                                        if (
-                                            len(dark_glyph_comps)
-                                            > len(white_glyph_comps)
-                                            and avg_dark_ratio >= avg_white_ratio * 0.8
-                                        ):
-                                            detected_text_color = (0, 0, 0)
-                                        elif (
-                                            len(white_glyph_comps)
-                                            > len(dark_glyph_comps)
-                                            and avg_white_ratio >= avg_dark_ratio * 0.8
-                                        ):
-                                            detected_text_color = (255, 255, 255)
-                                        elif avg_dark_ratio > avg_white_ratio:
-                                            detected_text_color = (0, 0, 0)
-                                        else:
-                                            detected_text_color = (255, 255, 255)
-
-                                    # 3. Detect chromatic text via LAB contrast against background
-                                    if detected_text_color is None:
-                                        crop_lab = cv2.cvtColor(
-                                            crop_rgb, cv2.COLOR_RGB2LAB
-                                        ).astype(np.float32)
-                                        dist_map = np.linalg.norm(
-                                            crop_lab - bg_lab.astype(np.float32), axis=2
-                                        )
-
-                                        robust_max_dist = np.percentile(dist_map, 95)
-                                        CONTRAST_THRESHOLD = max(
-                                            30, robust_max_dist * 0.6
-                                        )
-                                        contrast_mask = (
-                                            dist_map > CONTRAST_THRESHOLD
-                                        ).astype(np.uint8) * 255
-
-                                        kernel_3 = np.ones((3, 3), np.uint8)
-                                        contrast_mask = cv2.morphologyEx(
-                                            contrast_mask, cv2.MORPH_CLOSE, kernel_3
-                                        )
-                                        contrast_mask = cv2.erode(
-                                            contrast_mask,
-                                            np.ones((2, 2), np.uint8),
-                                            iterations=1,
-                                        )
-
-                                        contours, _ = cv2.findContours(
-                                            contrast_mask,
-                                            cv2.RETR_EXTERNAL,
-                                            cv2.CHAIN_APPROX_SIMPLE,
-                                        )
-                                        clean_mask = np.zeros_like(contrast_mask)
-                                        MIN_COMPONENT_AREA = 4
-                                        for cnt in contours:
-                                            if (
-                                                cv2.contourArea(cnt)
-                                                >= MIN_COMPONENT_AREA
-                                            ):
-                                                cv2.drawContours(
-                                                    clean_mask,
-                                                    [cnt],
-                                                    -1,
-                                                    255,
-                                                    cv2.FILLED,
-                                                )
-
-                                        text_pixels_rgb = crop_rgb[clean_mask == 255]
-                                        if len(text_pixels_rgb) >= 10:
-                                            sampled_rgb = tuple(
-                                                np.median(
-                                                    text_pixels_rgb, axis=0
-                                                ).astype(int)
-                                            )
-                                            hsv = cv2.cvtColor(
-                                                np.uint8([[sampled_rgb]]),
-                                                cv2.COLOR_RGB2HSV,
-                                            )[0][0]
-                                            if hsv[1] >= 25:
-                                                detected_text_color = sampled_rgb
-
-                                    # 4. Fallback for non-outlined monochrome text: contrast against fill
-                                    if detected_text_color is None:
-                                        fill_for_contrast = (
-                                            fallback_fill_color
-                                            if fallback_fill_color is not None
-                                            else (0, 0, 0)
-                                        )
-                                        fill_lum = (
-                                            0.299 * fill_for_contrast[0]
-                                            + 0.587 * fill_for_contrast[1]
-                                            + 0.114 * fill_for_contrast[2]
-                                        )
-                                        detected_text_color = (
-                                            (0, 0, 0)
-                                            if fill_lum >= 128
-                                            else (255, 255, 255)
-                                        )
-
-                                    extracted_text_colors[composite_clip_bbox] = (
-                                        detected_text_color
-                                    )
-
-                                    force_fill = inpainting_method == "opencv"
-
-                                    # Get expanded bounds for this group to check solid color and for cv2 fill
-                                    p_x0, p_y0, p_x1, p_y1 = ox, oy, ox + ow, oy + oh
-                                    mask_indices = group.get("mask_indices", [])
-                                    if mask_indices and outside_text_results:
-                                        p_x0 = max(
-                                            0,
-                                            int(
-                                                min(
-                                                    [
-                                                        outside_text_results[idx][0][0]
-                                                        for idx in mask_indices
-                                                    ]
-                                                )
-                                            ),
-                                        )
-                                        p_y0 = max(
-                                            0,
-                                            int(
-                                                min(
-                                                    [
-                                                        outside_text_results[idx][0][1]
-                                                        for idx in mask_indices
-                                                    ]
-                                                )
-                                            ),
-                                        )
-                                        p_x1 = min(
-                                            img_w,
-                                            int(
-                                                max(
-                                                    [
-                                                        outside_text_results[idx][0][2]
-                                                        for idx in mask_indices
-                                                    ]
-                                                )
-                                            ),
-                                        )
-                                        p_y1 = min(
-                                            img_h,
-                                            int(
-                                                max(
-                                                    [
-                                                        outside_text_results[idx][0][3]
-                                                        for idx in mask_indices
-                                                    ]
-                                                )
-                                            ),
-                                        )
-
-                                    # Simply check if the expanded boundary is solid color
-                                    expanded_is_solid = is_border_solid
-                                    if not force_fill:
-                                        ex_sx1 = max(0, p_x0 - OSB_EXPANSION_PX)
-                                        ex_sy1 = max(0, p_y0 - OSB_EXPANSION_PX)
-                                        ex_sx2 = min(img_w, p_x1 + OSB_EXPANSION_PX)
-                                        ex_sy2 = min(img_h, p_y1 + OSB_EXPANSION_PX)
-
-                                        if ex_sx2 > ex_sx1 and ex_sy2 > ex_sy1:
-                                            # Grab boundary pixels using Numpy directly for speed
-                                            crop_img = current_image.crop(
-                                                (ex_sx1, ex_sy1, ex_sx2, ex_sy2)
-                                            )
-                                            ecrop_np = np.array(crop_img.convert("RGB"))
-                                            elocal_mask = np.ones(
-                                                ecrop_np.shape[:2], dtype=bool
-                                            )
-
-                                            ix1 = max(0, p_x0 - ex_sx1)
-                                            iy1 = max(0, p_y0 - ex_sy1)
-                                            ix2 = min(ecrop_np.shape[1], p_x1 - ex_sx1)
-                                            iy2 = min(ecrop_np.shape[0], p_y1 - ex_sy1)
-
-                                            if ix2 > ix1 and iy2 > iy1:
-                                                elocal_mask[iy1:iy2, ix1:ix2] = False
-
-                                            eborder_pixels = ecrop_np[elocal_mask]
-                                            if eborder_pixels.size > 0:
-                                                ebg_rgb_med = np.median(
-                                                    eborder_pixels, axis=0
-                                                ).astype(int)
-                                                ediffs = np.max(
-                                                    np.abs(
-                                                        eborder_pixels.astype(int)
-                                                        - ebg_rgb_med
-                                                    ),
-                                                    axis=1,
-                                                )
-                                                esolid_ratio = float(
-                                                    np.mean(
-                                                        ediffs <= OSB_COLOR_TOLERANCE
-                                                    )
-                                                )
-                                                if (
-                                                    ebg_rgb_med[0]
-                                                    >= OSB_WHITE_SNAP_THRESH
-                                                    and ebg_rgb_med[1]
-                                                    >= OSB_WHITE_SNAP_THRESH
-                                                    and ebg_rgb_med[2]
-                                                    >= OSB_WHITE_SNAP_THRESH
-                                                ):
-                                                    edetected_color = (255, 255, 255)
-                                                elif (
-                                                    ebg_rgb_med[0]
-                                                    <= OSB_BLACK_SNAP_THRESH
-                                                    and ebg_rgb_med[1]
-                                                    <= OSB_BLACK_SNAP_THRESH
-                                                    and ebg_rgb_med[2]
-                                                    <= OSB_BLACK_SNAP_THRESH
-                                                ):
-                                                    edetected_color = (0, 0, 0)
-                                                else:
-                                                    edetected_color = (
-                                                        int(ebg_rgb_med[0]),
-                                                        int(ebg_rgb_med[1]),
-                                                        int(ebg_rgb_med[2]),
-                                                    )
-
-                                                if (
-                                                    esolid_ratio
-                                                    >= OSB_SOLID_RATIO_THRESHOLD
-                                                ):
-                                                    expanded_is_solid = True
-                                                    fallback_fill_color = (
-                                                        edetected_color
-                                                    )
-
-                                    should_simple_fill = expanded_is_solid or force_fill
-
-                                    if should_simple_fill:
-                                        fill_color = (
-                                            fallback_fill_color
-                                            if fallback_fill_color is not None
-                                            else detected_color
-                                        )
-
-                                        if force_fill:
-                                            log_message(
-                                                f"Using OpenCV simple fill for OSB region: {fill_color} background",
-                                                verbose=verbose,
-                                            )
-                                        else:
-                                            log_message(
-                                                f"Skipping Flux for OSB region: detected solid {fill_color} background",
-                                                verbose=verbose,
-                                            )
-
-                    def apply_simple_fill(
-                        color_to_use,
-                        new_img_src=current_image,
-                        grp=group,
-                        orig_dict=original_bbox_dict,
-                        b_ox0=ox0,
-                        b_oy0=oy0,
-                        b_ox1=ox1,
-                        b_oy1=oy1,
-                        comb_mask=combined_mask,
-                    ):
-                        new_img = new_img_src.copy()
-                        mask_indices = grp.get("mask_indices", [])
-
-                        rect_mask = _build_osb_simple_fill_mask(
-                            img_w=img_w,
-                            img_h=img_h,
-                            mask_indices=mask_indices,
-                            outside_text_results=outside_text_results,
-                            outside_text_data=outside_text_data,
-                            config=config,
-                            fallback_bounds=(
-                                (b_ox0, b_oy0, b_ox1, b_oy1) if orig_dict else None
+                    grouped_flux_candidates.append(
+                        {
+                            "index": i + 1,
+                            "mask": grouped_mask,
+                            "fallback_color": (
+                                fallback_fill_color
+                                if fallback_fill_color
+                                else (255, 255, 255)
                             ),
-                            total_bubble_mask=total_bubble_mask,
-                        )
+                        }
+                    )
+                    log_message(
+                        f"Queued OSB region {i + 1} for grouped Flux inpainting",
+                        verbose=verbose,
+                    )
+                    continue
 
-                        if rect_mask is None:
-                            # Full mask fill fallback
-                            mask_pil = Image.fromarray(
-                                (comb_mask * 255).astype(np.uint8), mode="L"
-                            )
-                            patch = Image.new("RGB", new_img.size, color_to_use)
-                            new_img.paste(patch, (0, 0), mask=mask_pil)
-                            return new_img
+                if request_coordinator is not None and inpainter is not None:
+                    fallback_color_to_use = (
+                        fallback_fill_color if fallback_fill_color else (255, 255, 255)
+                    )
+                    pending_flux_candidates.append(
+                        {
+                            "index": i + 1,
+                            "mask": combined_mask.copy(),
+                            "seed": region_seed,
+                            "composite_clip_bbox": composite_clip_bbox,
+                            "fallback_color": fallback_color_to_use,
+                            "group": group,
+                            "original_bbox_dict": original_bbox_dict,
+                            "original_bounds": (ox0, oy0, ox1, oy1),
+                            "context_bbox": expanded_mask_bbox(
+                                combined_mask, current_image.size
+                            ),
+                        }
+                    )
+                    log_message(
+                        f"Queued OSB region {i + 1} for intra-page Flux scheduling",
+                        verbose=verbose,
+                    )
+                    continue
 
-                        ys, xs = np.where(rect_mask)
-                        if len(xs) > 0 and len(ys) > 0:
-                            min_x, max_x = int(np.min(xs)), int(np.max(xs)) + 1
-                            min_y, max_y = int(np.min(ys)), int(np.max(ys)) + 1
-                            region_mask = rect_mask[min_y:max_y, min_x:max_x]
-                            mask_pil = Image.fromarray(
-                                (region_mask * 255).astype(np.uint8), mode="L"
-                            )
-                            patch = Image.new(
-                                "RGB", (max_x - min_x, max_y - min_y), color_to_use
-                            )
-                            new_img.paste(patch, (min_x, min_y), mask=mask_pil)
+                flux_failed = False
+                flux_fail_reason = None
+                inpainted_image = None
 
-                        return new_img
-
-                    if fill_color is not None:
-                        flush_pending_flux_candidates()
-                        current_image = apply_simple_fill(fill_color)
-                        cv2_inpaints += 1
-                        continue
-
-                    if inpainting_method == "none":
-                        if composite_clip_bbox:
-                            none_skipped_clip_bboxes.add(composite_clip_bbox)
-                        none_skips += 1
-                        log_message(
-                            f"Skipping inpaint for non-solid OSB region {i + 1} (none mode)",
+                if inpainter is None:
+                    flux_failed = True
+                    flux_fail_reason = "Flux inpainter unavailable"
+                else:
+                    try:
+                        inpainted_image = inpainter.inpaint_mask(
+                            current_image,
+                            combined_mask,
+                            seed=region_seed,
                             verbose=verbose,
+                            strict_mask_clipping=True,
+                            composite_clip_bbox=composite_clip_bbox,
                         )
-                        continue
-
-                    if group_flux_regions and inpainter is not None:
-                        flush_pending_flux_candidates()
-                        grouped_mask = combined_mask.copy()
-                        if composite_clip_bbox is not None:
-                            clip_x1, clip_y1, clip_x2, clip_y2 = composite_clip_bbox
-                            clip_x1 = max(0, min(img_w, clip_x1))
-                            clip_x2 = max(0, min(img_w, clip_x2))
-                            clip_y1 = max(0, min(img_h, clip_y1))
-                            clip_y2 = max(0, min(img_h, clip_y2))
-
-                            clipped_grouped_mask = np.zeros_like(grouped_mask)
-                            if clip_x2 > clip_x1 and clip_y2 > clip_y1:
-                                clipped_grouped_mask[
-                                    clip_y1:clip_y2, clip_x1:clip_x2
-                                ] = grouped_mask[clip_y1:clip_y2, clip_x1:clip_x2]
-                            grouped_mask = clipped_grouped_mask
-
-                        if not np.any(grouped_mask):
-                            log_message(
-                                f"Skipping OSB region {i + 1} after grouped clip (no remaining area)",
-                                verbose=verbose,
+                        if inpainted_image is current_image:
+                            flux_failed = True
+                            flux_fail_reason = (
+                                "Flux returned original image (no inpaint)"
                             )
-                            continue
-
-                        grouped_flux_candidates.append(
-                            {
-                                "index": i + 1,
-                                "mask": grouped_mask,
-                                "fallback_color": (
-                                    fallback_fill_color
-                                    if fallback_fill_color
-                                    else (255, 255, 255)
-                                ),
-                            }
-                        )
-                        log_message(
-                            f"Queued OSB region {i + 1} for grouped Flux inpainting",
-                            verbose=verbose,
-                        )
-                        continue
-
-                    if request_coordinator is not None and inpainter is not None:
-                        fallback_color_to_use = (
-                            fallback_fill_color
-                            if fallback_fill_color
-                            else (255, 255, 255)
-                        )
-                        pending_flux_candidates.append(
-                            {
-                                "index": i + 1,
-                                "mask": combined_mask.copy(),
-                                "seed": region_seed,
-                                "composite_clip_bbox": composite_clip_bbox,
-                                "fallback_color": fallback_color_to_use,
-                                "group": group,
-                                "original_bbox_dict": original_bbox_dict,
-                                "original_bounds": (ox0, oy0, ox1, oy1),
-                                "context_bbox": expanded_mask_bbox(
-                                    combined_mask, current_image.size
-                                ),
-                            }
-                        )
-                        log_message(
-                            f"Queued OSB region {i + 1} for intra-page Flux scheduling",
-                            verbose=verbose,
-                        )
-                        continue
-
-                    flux_failed = False
-                    flux_fail_reason = None
-                    inpainted_image = None
-
-                    if inpainter is None:
+                    except Exception as e:
                         flux_failed = True
-                        flux_fail_reason = "Flux inpainter unavailable"
-                    else:
-                        try:
+                        flux_fail_reason = f"Flux inpainting error: {e}"
+
+                if flux_failed:
+                    fallback_color_to_use = (
+                        fallback_fill_color if fallback_fill_color else (255, 255, 255)
+                    )
+                    log_message(
+                        f"Flux failed for OSB region {i + 1}"
+                        + (f" ({flux_fail_reason})" if flux_fail_reason else "")
+                        + f"; falling back to CV2 fill ({fallback_color_to_use})",
+                        always_print=True,
+                    )
+                    current_image = apply_simple_fill(fallback_color_to_use)
+                    cv2_inpaints += 1
+                    continue
+
+                flux_inpaints += 1
+                current_image = inpainted_image
+
+            flush_pending_flux_candidates()
+
+            if grouped_flux_candidates:
+                grouped_mask = np.zeros((img_h, img_w), dtype=bool)
+                for candidate in grouped_flux_candidates:
+                    grouped_mask = np.logical_or(grouped_mask, candidate["mask"])
+
+                if np.any(grouped_mask):
+                    log_message(
+                        "Running grouped Flux inpainting for "
+                        f"{len(grouped_flux_candidates)} OSB regions",
+                        verbose=verbose,
+                    )
+                    try:
+                        group_seed = base_seed
+                        inpaint_kwargs = {
+                            "seed": group_seed,
+                            "verbose": verbose,
+                            "strict_mask_clipping": True,
+                            "ocr_params": {
+                                "type": "outside_text_group",
+                                "regions": len(grouped_flux_candidates),
+                            },
+                        }
+                        if request_coordinator is not None:
+                            inpainted_image = request_coordinator.run(
+                                inpainter.inpaint_mask,
+                                current_image,
+                                grouped_mask,
+                                **inpaint_kwargs,
+                            )
+                        else:
                             inpainted_image = inpainter.inpaint_mask(
                                 current_image,
-                                combined_mask,
-                                seed=region_seed,
-                                verbose=verbose,
-                                strict_mask_clipping=True,
-                                composite_clip_bbox=composite_clip_bbox,
+                                grouped_mask,
+                                **inpaint_kwargs,
                             )
-                            if inpainted_image is current_image:
-                                flux_failed = True
-                                flux_fail_reason = (
-                                    "Flux returned original image (no inpaint)"
-                                )
-                        except Exception as e:
-                            flux_failed = True
-                            flux_fail_reason = f"Flux inpainting error: {e}"
-
-                    if flux_failed:
-                        fallback_color_to_use = (
-                            fallback_fill_color
-                            if fallback_fill_color
-                            else (255, 255, 255)
-                        )
+                        if inpainted_image is current_image:
+                            raise RuntimeError(
+                                "Flux returned original image (no inpaint)"
+                            )
+                        current_image = inpainted_image
+                        flux_inpaints += len(grouped_flux_candidates)
+                    except Exception as e:
                         log_message(
-                            f"Flux failed for OSB region {i + 1}"
-                            + (f" ({flux_fail_reason})" if flux_fail_reason else "")
-                            + f"; falling back to CV2 fill ({fallback_color_to_use})",
+                            "Grouped Flux inpainting failed "
+                            f"({e}); falling back to CV2 fill",
                             always_print=True,
                         )
-                        current_image = apply_simple_fill(fallback_color_to_use)
-                        cv2_inpaints += 1
-                        continue
-
-                    flux_inpaints += 1
-                    # Save to disk if more regions remain to reduce memory usage
-                    if i < len(mask_groups) - 1:
-                        temp_file = None
-                        try:
-                            temp_fd, temp_file = tempfile.mkstemp(suffix=".png")
-                            os.close(temp_fd)
-                            inpainted_image.save(temp_file, format="PNG")
-                            temp_files.append(temp_file)
-
-                            with Image.open(temp_file) as img_tmp:
-                                img_tmp.load()
-                                current_image = img_tmp.copy()
-
-                            del inpainted_image
-                            gc.collect()
-                            log_message(
-                                "Saved intermediate inpainting result to disk",
-                                verbose=verbose,
+                        for candidate in grouped_flux_candidates:
+                            mask_pil = Image.fromarray(
+                                (candidate["mask"] * 255).astype(np.uint8),
+                                mode="L",
                             )
-                        except Exception as e:
-                            log_message(
-                                "Warning: Failed to save intermediate image to disk: "
-                                f"{e}. Continuing with in-memory processing.",
-                                verbose=verbose,
+                            patch = Image.new(
+                                "RGB",
+                                current_image.size,
+                                candidate["fallback_color"],
                             )
-                            # Fallback to in-memory if disk save fails
-                            current_image = inpainted_image
-                            if temp_file and temp_file in temp_files:
-                                temp_files.remove(temp_file)
-                    else:
-                        current_image = inpainted_image
+                            next_image = current_image.copy()
+                            next_image.paste(patch, (0, 0), mask=mask_pil)
+                            current_image = next_image
+                        cv2_inpaints += len(grouped_flux_candidates)
 
-                flush_pending_flux_candidates()
-
-                if grouped_flux_candidates:
-                    grouped_mask = np.zeros((img_h, img_w), dtype=bool)
-                    for candidate in grouped_flux_candidates:
-                        grouped_mask = np.logical_or(grouped_mask, candidate["mask"])
-
-                    if np.any(grouped_mask):
-                        log_message(
-                            "Running grouped Flux inpainting for "
-                            f"{len(grouped_flux_candidates)} OSB regions",
-                            verbose=verbose,
-                        )
-                        try:
-                            group_seed = base_seed
-                            inpaint_kwargs = {
-                                "seed": group_seed,
-                                "verbose": verbose,
-                                "strict_mask_clipping": True,
-                                "ocr_params": {
-                                    "type": "outside_text_group",
-                                    "regions": len(grouped_flux_candidates),
-                                },
-                            }
-                            if request_coordinator is not None:
-                                inpainted_image = request_coordinator.run(
-                                    inpainter.inpaint_mask,
-                                    current_image,
-                                    grouped_mask,
-                                    **inpaint_kwargs,
-                                )
-                            else:
-                                inpainted_image = inpainter.inpaint_mask(
-                                    current_image,
-                                    grouped_mask,
-                                    **inpaint_kwargs,
-                                )
-                            if inpainted_image is current_image:
-                                raise RuntimeError(
-                                    "Flux returned original image (no inpaint)"
-                                )
-                            current_image = inpainted_image
-                            flux_inpaints += len(grouped_flux_candidates)
-                        except Exception as e:
-                            log_message(
-                                "Grouped Flux inpainting failed "
-                                f"({e}); falling back to CV2 fill",
-                                always_print=True,
-                            )
-                            for candidate in grouped_flux_candidates:
-                                mask_pil = Image.fromarray(
-                                    (candidate["mask"] * 255).astype(np.uint8),
-                                    mode="L",
-                                )
-                                patch = Image.new(
-                                    "RGB",
-                                    current_image.size,
-                                    candidate["fallback_color"],
-                                )
-                                next_image = current_image.copy()
-                                next_image.paste(patch, (0, 0), mask=mask_pil)
-                                current_image = next_image
-                            cv2_inpaints += len(grouped_flux_candidates)
-
-                log_message("Outside text inpainting completed", verbose=verbose)
-                parts = [
-                    f"Flux: {flux_inpaints}",
-                    f"CV2: {cv2_inpaints}",
-                ]
-                if none_skips:
-                    parts.append(f"Skipped (none): {none_skips}")
-                log_message(
-                    f"Inpainted {len(mask_groups)} outside text regions ({', '.join(parts)})",
-                    always_print=True,
-                )
-        finally:
-            for temp_file in temp_files:
-                if temp_file and os.path.exists(temp_file):
-                    try:
-                        os.remove(temp_file)
-                    except Exception:
-                        pass
+            log_message("Outside text inpainting completed", verbose=verbose)
+            parts = [
+                f"Flux: {flux_inpaints}",
+                f"CV2: {cv2_inpaints}",
+            ]
+            if none_skips:
+                parts.append(f"Skipped (none): {none_skips}")
+            log_message(
+                f"Inpainted {len(mask_groups)} outside text regions ({', '.join(parts)})",
+                always_print=True,
+            )
 
         _apply_inpaint_render_metadata(
             outside_text_data,

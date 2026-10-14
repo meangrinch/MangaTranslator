@@ -1023,7 +1023,6 @@ def translate_and_render(
 
     get_cache().set_current_image(pil_image_processed, verbose)
 
-    original_cv_image = pil_to_cv2(pil_image_processed)
     full_page_context_source = pil_image_processed.copy()
 
     # Detect speech bubbles first so OSB processing can respect bubble regions

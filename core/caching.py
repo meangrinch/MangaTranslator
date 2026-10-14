@@ -47,9 +47,9 @@ class UnifiedCache:
         metadata = (
             f"{data_image.mode}_{data_image.size[0]}_{data_image.size[1]}".encode()
         )
-        image_bytes = data_image.tobytes()
-        digest = hashlib.sha256(metadata + image_bytes).hexdigest()
-        return digest[:16]
+        digest = hashlib.sha256(metadata)
+        digest.update(data_image.tobytes())
+        return digest.hexdigest()[:16]
 
     def _hash_numpy(self, array: np.ndarray) -> str:
         """Compute strict SHA256 hash of numpy array contents.

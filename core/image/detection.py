@@ -66,9 +66,8 @@ def _point_in_box(point_x: float, point_y: float, box) -> bool:
 
 def _mask_to_bbox(mask, fallback_box=None) -> tuple[int, int, int, int]:
     """Convert a binary mask to an xyxy bbox, falling back when empty."""
-    mask_array = np.asarray(mask) > 0
-    coords = np.where(mask_array)
-    if coords[0].size == 0 or coords[1].size == 0:
+    x, y, w, h = cv2.boundingRect((np.asarray(mask) > 0).view(np.uint8))
+    if w == 0 or h == 0:
         if fallback_box is None:
             return (0, 0, 0, 0)
         x0_f, y0_f, x1_f, y1_f = (
@@ -81,13 +80,7 @@ def _mask_to_bbox(mask, fallback_box=None) -> tuple[int, int, int, int]:
             round(y1_f),
         )
 
-    y_coords, x_coords = coords
-    return (
-        int(x_coords.min()),
-        int(y_coords.min()),
-        int(x_coords.max()) + 1,
-        int(y_coords.max()) + 1,
-    )
+    return (x, y, x + w, y + h)
 
 
 def _text_box_meaningfully_matches_box(t_box, b_box) -> bool:
@@ -1755,11 +1748,10 @@ def detect_speech_bubbles(
                 y1 = int(np.ceil(max(0, min(y1_f, img_h))))
 
                 if x1 > x0 and y1 > y0:
-                    bbox_mask = np.zeros((img_h, img_w), dtype=bool)
-                    bbox_mask[y0:y1, x0:x1] = True
-                    mask_bool = np.logical_and(mask_bool, bbox_mask)
-
-                clipped_mask = mask_bool.astype(np.uint8) * 255
+                    clipped_mask = np.zeros((img_h, img_w), dtype=np.uint8)
+                    clipped_mask[y0:y1, x0:x1] = mask_bool[y0:y1, x0:x1] * np.uint8(255)
+                else:
+                    clipped_mask = mask_bool.astype(np.uint8) * 255
 
                 if i < synth_start_idx:
                     sam_masks_for_yolo[process_indices[i]] = clipped_mask
