@@ -844,10 +844,22 @@ def _format_batch_success_message(
         except Exception:
             pass
 
+    msg_parts.append(f"\n• Successful Translations: {success_count}/{total_images}\n")
+    msg_parts.append(failure_details)
+    retry_attempted = results.get("retry_attempted_count")
+    if retry_attempted:
+        retry_ok = results.get("retry_success_count", 0)
+        retry_fail = results.get("retry_failed_count", 0)
+        msg_parts.append(
+            f"• Retry pass: {retry_ok} recovered, {retry_fail} still failed "
+            f"(of {retry_attempted} attempted)\n"
+        )
+    failed_paths_file = results.get("failed_paths_file")
+    if failed_paths_file:
+        msg_parts.append(f"• Failed paths list: {failed_paths_file}\n")
+
     msg_parts.extend(
         [
-            f"• Successful Translations: {success_count}/{total_images}\n",
-            failure_details,
             f"\n• Total Processing Time: {processing_time:.2f} seconds ({seconds_per_image:.2f} seconds/image)\n",
             f"• Saved to: {output_path}",
         ]
@@ -857,17 +869,6 @@ def _format_batch_success_message(
         has_terms = bool(load_terms(glossary_path))
         msg_parts.append(
             f"\n• Glossary: {glossary_path}{'' if has_terms else ' (no terms found)'}"
-        )
-    failed_paths_file = results.get("failed_paths_file")
-    if failed_paths_file:
-        msg_parts.append(f"\n• Failed paths list: {failed_paths_file}")
-    retry_attempted = results.get("retry_attempted_count")
-    if retry_attempted:
-        retry_ok = results.get("retry_success_count", 0)
-        retry_fail = results.get("retry_failed_count", 0)
-        msg_parts.append(
-            f"\n• Retry pass: {retry_ok} recovered, {retry_fail} still failed "
-            f"(of {retry_attempted} attempted)"
         )
     return "".join(msg_parts)
 
