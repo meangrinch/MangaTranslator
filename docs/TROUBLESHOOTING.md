@@ -135,8 +135,9 @@
   - Enable "Force Cache Translations" to reuse cached translations on repeat runs when using non-deterministic sampling
 
 - **Batch translation failed for some files:**
-  - Failed images have their paths saved to `failed_paths.txt` in the output directory. You can upload this file to the ZIP archive upload area in the web UI, or pass it via `--input` in the CLI to retry only the failed files.
-  - *Note:* If you uploaded individual images directly via the web UI, the recorded paths will point to Gradio's temporary cache directories, which may be cleaned up after your session ends.
+  - Failed images are copied into a `failed` folder in the output directory and listed in `failed_paths.txt` next to it. Upload this file to the ZIP archive upload area in the web UI, or pass it via `--input` in the CLI, to retry only the failed files. The retry writes its results into the original output directory with the same folder structure (in the CLI, `--output` overrides this) and reuses that run's terminology memory file.
+  - Copies that translate successfully on retry are removed from the `failed` folder, and `failed_paths.txt` is rewritten to list only what still fails.
+  - *Note:* If you add images to the web UI uploader together with the list, they are processed as a new batch in a new output directory.
 
 ### Inpainting
 

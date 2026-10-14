@@ -35,7 +35,7 @@ from utils.exceptions import (
     ValidationError,
 )
 from utils.logging import log_message
-from utils.path_list import resolve_source_path, write_failed_paths
+from utils.path_list import record_failed_images, resolve_source_path
 
 from .image.cleaning import clean_speech_bubbles, retry_cleaning_with_otsu
 from .image.detection import detect_panels, detect_speech_bubbles
@@ -2812,6 +2812,7 @@ def batch_translate_images(
     cancellation_manager: Optional["CancellationManager"] = None,
     source_path_map: dict[str, str] | None = None,
     glossary_name: str | None = None,
+    glossary_path: str | None = None,
 ) -> dict[str, Any]:
     """
     Process all images in a directory using a configuration object.
@@ -2828,6 +2829,9 @@ def batch_translate_images(
             (used when UI/CLI copies inputs into a temp directory).
         glossary_name: Name for a new terminology memory file (the input folder or ZIP
             name). Defaults to the first image's stem.
+        glossary_path: Existing terminology memory file to reuse (a retried run's
+            glossary) when the config doesn't set one; takes precedence over
+            glossary_name.
 
     Returns:
         dict: Processing results with keys:
@@ -2888,20 +2892,20 @@ def batch_translate_images(
         log_message(f"No image files found in '{input_dir}'", always_print=True)
         return empty_results
 
-    glossary_path = None
     translation_cfg = config.translation
-    if translation_cfg.terminology_memory:
+    if not translation_cfg.terminology_memory:
+        glossary_path = None
+    elif translation_cfg.terminology_memory_path:
         glossary_path = translation_cfg.terminology_memory_path
-        if not glossary_path:
-            glossary_path = str(
-                default_glossary_path(glossary_name or image_files[0].stem)
-            )
-            config = replace(
-                config,
-                translation=replace(
-                    translation_cfg, terminology_memory_path=glossary_path
-                ),
-            )
+    else:
+        glossary_path = glossary_path or str(
+            default_glossary_path(glossary_name or image_files[0].stem)
+        )
+        config = replace(
+            config,
+            translation=replace(translation_cfg, terminology_memory_path=glossary_path),
+        )
+    if glossary_path:
         _check_glossary_path(Path(glossary_path))
         log_message(f"Terminology memory: {glossary_path}", always_print=True)
 
@@ -3072,14 +3076,28 @@ def batch_translate_images(
     if glossary_path:
         results["glossary_path"] = glossary_path
 
-    failed_paths = results.get("failed_image_paths") or []
-    if failed_paths:
-        failed_file = write_failed_paths(output_dir, failed_paths)
-        if failed_file:
-            results["failed_paths_file"] = str(failed_file)
-            log_message(
-                f"Failed image paths saved to: {failed_file}",
-                always_print=True,
-            )
+    still_failed = set(results.get("failed_image_paths") or [])
+    failures = [
+        (
+            Path(job["img_path"]),
+            Path(job["img_path"]).relative_to(input_dir)
+            if preserve_structure
+            else Path(Path(job["img_path"]).name),
+        )
+        for job in failed_jobs
+        if job["source_path"] in still_failed
+    ]
+    succeeded = [
+        source
+        for source in (resolve_source_path(p, source_path_map) for p in image_files)
+        if source not in still_failed
+    ]
+    failed_file = record_failed_images(output_dir, failures, succeeded, glossary_path)
+    if failed_file:
+        results["failed_paths_file"] = str(failed_file)
+        log_message(
+            f"Failed image paths saved to: {failed_file}",
+            always_print=True,
+        )
 
     return results

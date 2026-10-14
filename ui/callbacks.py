@@ -26,7 +26,7 @@ from utils.model_metadata import (
     is_opencode_multimodal_model,
     is_zai_vision_model,
 )
-from utils.path_list import read_image_paths_from_txt
+from utils.path_list import FAILED_DIRNAME, read_image_paths_from_txt
 
 from . import logic, settings_manager, utils
 from .cancellation import CancellationManager
@@ -950,22 +950,18 @@ def handle_translate_click(
 def handle_zip_or_failed_paths_upload(
     file_path: str | None,
 ) -> tuple[Any, Any]:
-    """Expand a failed-paths .txt into the images uploader; leave ZIPs unchanged."""
-    if not file_path:
+    """Reject a failed-paths .txt that lists no existing images.
+
+    A valid .txt stays in its slot so the batch can read its run folder and
+    glossary headers; ZIPs are left as Gradio set them.
+    """
+    if not file_path or Path(file_path).suffix.lower() != ".txt":
         return gr.update(), gr.update()
 
-    path = Path(file_path)
-    if path.suffix.lower() != ".txt":
-        # ZIP or other: leave both components as Gradio already set them.
-        return gr.update(), gr.update()
-
-    images = [str(p) for p in read_image_paths_from_txt(path)]
-    if not images:
+    if not read_image_paths_from_txt(file_path):
         gr.Warning("No existing image paths found in the path list file.")
         return gr.update(), gr.update(value=None)
-
-    # Populate image preview; clear the zip/txt slot so batch uses the file list.
-    return gr.update(value=images), gr.update(value=None)
+    return gr.update(), gr.update()
 
 
 def handle_batch_click(
@@ -983,10 +979,14 @@ def handle_batch_click(
     CANCELLATION_MANAGER = CancellationManager()
     try:
         zip_file_path = None
+        path_list_file = None
         if input_zip:
             zip_path = Path(input_zip)
-            if zip_path.suffix.lower() == ".txt":
-                # Defensive: expand path list if change-handler did not already
+            if zip_path.suffix.lower() == ".txt" and not input_files:
+                path_list_file = str(zip_path)
+            elif zip_path.suffix.lower() == ".txt":
+                # Merged with uploaded images, the list can't route results back
+                # into its original run, so its paths join the new batch instead.
                 expanded = [str(p) for p in read_image_paths_from_txt(zip_path)]
                 if not expanded:
                     raise gr.Error(
@@ -1008,13 +1008,15 @@ def handle_batch_click(
                 f"{ERROR_PREFIX}Invalid input format. Expected a list of files."
             )
 
-        if not zip_file_path and not input_files:
+        if not zip_file_path and not input_files and not path_list_file:
             raise gr.Error(
                 f"{ERROR_PREFIX}Please upload images, a folder, a ZIP/CBZ archive, "
                 "or a failed-paths .txt file."
             )
 
-        if zip_file_path and input_files:
+        if path_list_file:
+            input_to_process = path_list_file
+        elif zip_file_path and input_files:
             input_to_process = {
                 "zip": str(zip_file_path),
                 "files": input_files,
@@ -1055,7 +1057,10 @@ def handle_batch_click(
             processed_files = [
                 f
                 for f in processed_files
-                if f.is_file() and f.suffix.lower() in image_extensions
+                if f.is_file()
+                and f.suffix.lower() in image_extensions
+                # failed/ holds untranslated copies of the failed pages
+                and f.relative_to(output_path).parts[0] != FAILED_DIRNAME
             ]
             processed_files.sort(  # Sort naturally (e.g., page_1, page_2, page_10)
                 key=lambda x: tuple(

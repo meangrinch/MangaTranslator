@@ -1,12 +1,24 @@
+import shutil
+import tempfile
 import xml.etree.ElementTree as ET
+from dataclasses import replace
+from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
+import torch
+from PIL import Image
 
+from core import pipeline
+from core.config import MangaTranslatorConfig
 from core.scaling import scale_kernel
 from utils import update_checker
 from utils.archive import copy_comic_info, safe_extract_zip
-from utils.path_list import read_image_paths_from_txt, write_failed_paths
+from utils.path_list import (
+    read_image_paths_from_txt,
+    record_failed_images,
+    stage_path_list,
+)
 
 
 def _zip(tmp_path, names):
@@ -108,7 +120,7 @@ def test_last_seen_version_round_trip_preserves_other_keys(tmp_path):
     assert '"theme": "dark"' in config.read_text(encoding="utf-8")
 
 
-def test_failed_paths_round_trip(tmp_path):
+def test_read_image_paths_from_txt_keeps_existing_images(tmp_path):
     pages = tmp_path / "pages"
     pages.mkdir()
     page = pages / "001.png"
@@ -116,20 +128,81 @@ def test_failed_paths_round_trip(tmp_path):
     note = pages / "notes.md"
     note.write_bytes(b"")
 
-    out = write_failed_paths(tmp_path / "out", [str(page), str(page), "", None])
-    assert out is not None
-    assert out.read_text(encoding="utf-8").splitlines() == [str(page.resolve())]
-
-    out.write_text(
+    path_list = tmp_path / "failed_paths.txt"
+    path_list.write_text(
         f'# comment\n\n"{page}"\n{note}\n{pages / "missing.png"}\n{page}\n',
         encoding="utf-8",
     )
-    assert read_image_paths_from_txt(out) == [page.resolve()]
+    assert read_image_paths_from_txt(path_list) == [page.resolve()]
 
 
-def test_write_failed_paths_nothing_to_write(tmp_path):
-    assert write_failed_paths(tmp_path, ["", None]) is None
+def test_record_failed_images_nothing_to_write(tmp_path):
+    assert record_failed_images(tmp_path, [], []) is None
     assert not (tmp_path / "failed_paths.txt").exists()
+
+
+def test_failed_images_retry_back_into_original_run(monkeypatch, tmp_path):
+    # Default glossaries go under ./output/.glossary, so keep them inside tmp_path
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "extracted"
+    for rel in ("ch1/001.png", "ch2/001.png", "ch2/002.png"):
+        (source / rel).parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (8, 8), "white").save(source / rel)
+
+    failing = {"ch1/001.png", "ch2/001.png"}
+    written = []
+    glossaries = []
+
+    def fake_translate_and_render(image_path, config, output_path, **_):
+        glossaries.append(Path(config.translation.terminology_memory_path).resolve())
+        if f"{Path(image_path).parent.name}/{Path(image_path).name}" in failing:
+            raise RuntimeError("boom")
+        written.append(Path(output_path).resolve().relative_to(run).as_posix())
+
+    monkeypatch.setattr(pipeline, "translate_and_render", fake_translate_and_render)
+    config = MangaTranslatorConfig(
+        yolo_model_path="model.pt", device=torch.device("cpu")
+    )
+    config.translation = replace(config.translation, terminology_memory=True)
+    run = (tmp_path / "run").resolve()
+
+    results = pipeline.batch_translate_images(
+        source, config, run, preserve_structure=True, glossary_name="series"
+    )
+    glossary = Path(results["glossary_path"]).resolve()
+    # A ZIP run's extraction folder is deleted once the batch returns.
+    shutil.rmtree(source)
+
+    def retry(path_list):
+        staged = Path(tempfile.mkdtemp(dir=tmp_path))
+        source_path_map, run_dir, glossary_path = stage_path_list(path_list, staged)
+        assert run_dir == run
+        assert Path(glossary_path) == glossary
+        written.clear()
+        return pipeline.batch_translate_images(
+            staged,
+            config,
+            run_dir,
+            preserve_structure=True,
+            source_path_map=source_path_map,
+            glossary_path=glossary_path,
+        )
+
+    failing = {"ch2/001.png"}
+    results = retry(results["failed_paths_file"])
+    assert written == ["ch1/001_translated.png"]
+    assert not (run / "failed" / "ch1").exists()
+    assert read_image_paths_from_txt(results["failed_paths_file"]) == [
+        run / "failed" / "ch2" / "001.png"
+    ]
+
+    failing = set()
+    results = retry(results["failed_paths_file"])
+    assert written == ["ch2/001_translated.png"]
+    assert "failed_paths_file" not in results
+    assert not (run / "failed").exists()
+    assert not (run / "failed_paths.txt").exists()
+    assert set(glossaries) == {glossary}
 
 
 @pytest.mark.parametrize(

@@ -4,7 +4,6 @@ import os
 # Suppress OpenBLAS NUM_THREADS warnings on machines with >24 logical cores.
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "24")
 
-import shutil
 import sys
 import tempfile
 import time
@@ -1489,6 +1488,8 @@ def main():
         )
         zip_temp_dir_obj = None
         path_list_temp_dir_obj = None
+        path_list_run_dir = None
+        glossary_path = None
         preserve_structure = False
         source_path_map = None
 
@@ -1522,40 +1523,20 @@ def main():
                 )
                 sys.exit(1)
         elif input_path.is_file() and input_path.suffix.lower() == ".txt":
-            from utils.path_list import read_image_paths_from_txt
+            from utils.path_list import stage_path_list
 
             log_message(
                 f"Detected failed-paths list: {input_path.name}",
                 always_print=True,
             )
-            image_paths = read_image_paths_from_txt(input_path)
-            if not image_paths:
-                log_message(
-                    f"Error: no existing image paths found in '{args.input}'.",
-                    always_print=True,
-                )
-                sys.exit(1)
-
             path_list_temp_dir_obj = tempfile.TemporaryDirectory()
             temp_dir_path = Path(path_list_temp_dir_obj.name)
-            source_path_map = {}
-
-            for index, img_file in enumerate(image_paths):
-                dest = temp_dir_path / img_file.name
-                if dest.exists():
-                    dest = temp_dir_path / f"{img_file.stem}_{index}{img_file.suffix}"
-                try:
-                    shutil.copy2(img_file, dest)
-                    source_path_map[str(dest.resolve())] = str(img_file.resolve())
-                except Exception as copy_err:
-                    log_message(
-                        f"Warning: failed to copy {img_file}: {copy_err}",
-                        always_print=True,
-                    )
-
+            source_path_map, path_list_run_dir, glossary_path = stage_path_list(
+                input_path, temp_dir_path
+            )
             if not source_path_map:
                 log_message(
-                    f"Error: could not stage any images from '{args.input}'.",
+                    f"Error: no existing image paths found in '{args.input}'.",
                     always_print=True,
                 )
                 sys.exit(1)
@@ -1565,7 +1546,7 @@ def main():
                 always_print=True,
             )
             input_path = temp_dir_path
-            preserve_structure = False
+            preserve_structure = path_list_run_dir is not None
         elif not input_path.is_dir():
             log_message(
                 f"Error: --batch requires --input '{args.input}' to be a directory, "
@@ -1574,7 +1555,8 @@ def main():
             )
             sys.exit(1)
 
-        output_dir = Path(args.output) if args.output else None
+        # A failed-paths list writes back into its original run unless --output is set
+        output_dir = Path(args.output) if args.output else path_list_run_dir
 
         if args.output:
             output_dir = Path(args.output)
@@ -1598,6 +1580,7 @@ def main():
                 preserve_structure=preserve_structure,
                 source_path_map=source_path_map,
                 glossary_name=glossary_name,
+                glossary_path=glossary_path,
             )
             failed_paths_file = results.get("failed_paths_file")
             if failed_paths_file:

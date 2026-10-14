@@ -22,7 +22,7 @@ from utils.exceptions import (
     ValidationError,
 )
 from utils.logging import log_message
-from utils.path_list import IMAGE_EXTENSIONS, read_image_paths_from_txt
+from utils.path_list import IMAGE_EXTENSIONS, stage_path_list
 
 if TYPE_CHECKING:
     from ui.cancellation import CancellationManager
@@ -338,6 +338,7 @@ def process_batch_logic(
         preserve_structure = False
         source_path_map: dict[str, str] = {}
         glossary_name = None
+        glossary_path = None
 
         if (
             isinstance(input_dir_or_files, dict)
@@ -425,22 +426,18 @@ def process_batch_logic(
                 preserve_structure = True
                 glossary_name = input_path.stem
             elif input_path.is_file() and input_path.suffix.lower() == ".txt":
-                image_paths = read_image_paths_from_txt(input_path)
-                if not image_paths:
+                temp_dir_path_obj = tempfile.TemporaryDirectory()
+                temp_dir_path = Path(temp_dir_path_obj.name)
+                source_path_map, run_dir, glossary_path = stage_path_list(
+                    input_path, temp_dir_path
+                )
+                if not source_path_map:
                     raise ValidationError(
                         "No existing image paths found in the path list file."
                     )
-                temp_dir_path_obj = tempfile.TemporaryDirectory()
-                temp_dir_path = Path(temp_dir_path_obj.name)
-                image_files_to_copy, skipped_files = _collect_valid_images(image_paths)
-                if not image_files_to_copy:
-                    raise ValidationError(
-                        "No valid image files found in the path list file. "
-                        f"Skipped: {', '.join(skipped_files) if skipped_files else 'None'}"
-                    )
-                _copy_images_with_source_map(
-                    image_files_to_copy, temp_dir_path, source_path_map
-                )
+                if run_dir:
+                    batch_output_path = run_dir
+                    preserve_structure = True
                 process_dir = temp_dir_path
             elif input_path.is_dir():
                 process_dir = input_path
@@ -459,6 +456,7 @@ def process_batch_logic(
             cancellation_manager=cancellation_manager,
             source_path_map=source_path_map or None,
             glossary_name=glossary_name,
+            glossary_path=glossary_path,
         )
 
         processing_time = time.time() - start_time
