@@ -90,10 +90,10 @@
 
 - **連結された吹き出しが検出されない:**
   - 「連結吹き出し検出（Conjoined Bubble Detection）」が有効になっていることを確認してください。
-  - 「吹き出し検出의 信頼度しきい値（Bubble Detection Confidence）」を下げてみてください（例: 0.20）。
+  - 「吹き出し信頼度しきい値（Bubble Confidence Threshold）」を下げてみてください（例: 0.20）。
 
 - **小さな吹き出しが検出されない / レンダリングされたテキストを配置するスペースがない:**
-  - 「初期（initial）」画像アップスケーリングを有効にしてアップスケール倍率を調整（例: 2.0x-4.0x）し、「自動スケール（Auto Scale）」を無効にしてください。
+  - 「初期（initial）」画像アップスケーリングを有効にしてアップスケール倍率を調整（例: 2.0x-4.0x）し、「自動スケール（Auto-Scale to Image Size）」を無効にしてください。
 
 - **カラー/グレースケールの吹き出しで、内部の色が保持されない:**
   - 「カラー吹き出しに Flux インペイントを使用（Use Flux to Inpaint Colored Bubbles）」を有効にしてください。
@@ -126,8 +126,8 @@
 - **LLM のトークン使用量が高すぎる:**
   - 「ページ全体を LLM に送信（Send Full Page to LLM）」を無効にしてください。
   - 「前文の画像（Previous Context Images）」および「前文の OCR テキスト（Previous Context OCR Text）」を 0 に設定してください。
-  - 「吹き出し最小短辺ピクセル（Bubble Min Side Pixels）」/「文脈画像最大長辺ピクセル（Context Image Max Side Pixels）」/「OSB 最小短辺ピクセル（OSB Min Side Pixels）」のターゲットサイズを下げてください（画像 1 枚あたりのトークン数が固定のモデルでは効果がありません）。
-  - 「メディア解像度（Media Resolution）」を下げてください（Gemini または SpaceXAI 모델を使用している場合）。
+  - 「吹き出し最小短辺ピクセル（Bubble Min Side Pixels）」/「文脈画像最大長辺ピクセル（Context Image Max Side Pixels）」/「OSB 最小短辺ピクセル（OSB Text Min Side Pixels）」のターゲットサイズを下げてください（画像 1 枚あたりのトークン数が固定のモデルでは効果がありません）。
+  - 「メディア解像度（Media Resolution）」を下げてください（Gemini または SpaceXAI モデルを使用している場合）。
   - 「画像ディテール（Image Detail）」を下げてください（OpenAI モデルを使用している場合）。
   - "manga-ocr/paddleocr-vl-1.6" OCR 方法を使用してください（より高性能な VLM を直接使用するよりも性能が劣る場合があります）。
   - 「翻訳キャッシュの強制（Force Cache Translations）」を有効にして、非決定論的サンプリングでの再実行時にもキャッシュされた翻訳を再利用してください。
@@ -140,7 +140,7 @@
 
 - **吹き出し外（OSB）のテキストがインペイント / クリーニングされない:**
   - 「OSB テキスト検出の有効化（Enable OSB Text Detection）」が有効になっていることを確認してください。
-  - `hf_token` が設定されていることを確認してください（セットアップ/セットアップ後の設定を参照）。
+  - `hf_token` が設定されていることを確認してください（設定/吹き出し外テキスト設定を参照）。
 
 - **VRAM 不足 / CUDA エラー:**
   - より低い Flux/text_encoder 量子化を選択してください（sd.cpp のみ）。

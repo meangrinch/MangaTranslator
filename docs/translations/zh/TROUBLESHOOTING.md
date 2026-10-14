@@ -91,10 +91,10 @@
 
 - **未检测到相连的对话框：**
   - 确保启用了“相连气泡检测 (Conjoined Bubble Detection)”
-  - 降低“气泡检测置信度 (Bubble Detection Confidence)”（例如 0.20）
+  - 降低“气泡置信度阈值 (Bubble Confidence Threshold)”（例如 0.20）
 
 - **未检测到微小气泡/渲染文本空间不足：**
-  - 启用“初始 (initial)”图像超分辨率并调整放大倍数（例如 2.0-4.0x），同时禁用“自动缩放 (Auto Scale)”
+  - 启用“初始 (initial)”图像超分辨率并调整放大倍数（例如 2.0-4.0x），同时禁用“自动缩放 (Auto-Scale to Image Size)”
 
 - **彩色/灰度气泡未能保留内部颜色：**
   - 启用“使用 Flux 重绘彩色气泡 (Use Flux to Inpaint Colored Bubbles)”
@@ -127,7 +127,7 @@
 - **LLM Token 消耗量过高：**
   - 禁用“发送整页给 LLM (Send Full Page to LLM)”
   - 将“前文图像 (Previous Context Images)”和“前文 OCR 文本 (Previous Context OCR Text)”设置为 0
-  - 降低“气泡最小边长 (Bubble Min Side Pixels)”/“上下文图像最大边长 (Context Image Max Side Pixels)”/“OSB 最小边长 (OSB Min Side Pixels)”的目标大小（对每张图像使用固定 Token 数的模型无效）
+  - 降低“气泡最小边长 (Bubble Min Side Pixels)”/“上下文图像最大边长 (Context Image Max Side Pixels)”/“OSB 最小边长 (OSB Text Min Side Pixels)”的目标大小（对每张图像使用固定 Token 数的模型无效）
   - 降低“媒体分辨率 (Media Resolution)”（如果使用 Gemini 或 SpaceXAI 模型）
   - 降低“图像细节 (Image Detail)”（如果使用 OpenAI 模型）
   - 使用 "manga-ocr/paddleocr-vl-1.6" OCR 方法（其效果可能不及更强的多模态模型）
@@ -141,7 +141,7 @@
 
 - **对话框外 (OSB) 的文本未被重绘/擦除：**
   - 确保启用了“启用 OSB 文本检测 (Enable OSB Text Detection)”
-  - 确保已设置 `hf_token`（参见 安装/安装后设置）
+  - 确保已设置 `hf_token`（参见 配置/对话框外文本设置）
 
 - **显存不足 (Out of VRAM) / CUDA 错误：**
   - 选择较低的 Flux/文本编码器量化版本（仅限 sd.cpp）

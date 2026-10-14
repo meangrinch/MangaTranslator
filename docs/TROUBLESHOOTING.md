@@ -91,10 +91,10 @@
 
 - **Conjoined bubbles not detected:**
   - Ensure "Conjoined Bubble Detection" is enabled
-  - Lower "Bubble Detection Confidence" (e.g., 0.20)
+  - Lower "Bubble Confidence Threshold" (e.g., 0.20)
 
 - **Small bubbles not detected/no room for rendered text:**
-  - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x), also disable "Auto Scale"
+  - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x), also disable "Auto-Scale to Image Size"
 
 - **Colored/grayscale bubbles not preserving interior color:**
   - Enable "Use Flux to Inpaint Colored Bubbles"
@@ -127,7 +127,7 @@
 - **High LLM token usage:**
   - Disable "Send Full Page to LLM"
   - Set "Previous Context Images" and "Previous Context OCR Text" to 0
-  - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Min Side Pixels" target sizes (no effect on models that use a fixed number of tokens per image)
+  - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Text Min Side Pixels" target sizes (no effect on models that use a fixed number of tokens per image)
   - Lower "Media Resolution" (if using Gemini or SpaceXAI models)
   - Lower "Image Detail" (if using OpenAI models)
   - Use "manga-ocr/paddleocr-vl-1.6" OCR method (may perform worse than more-capable VLMs)
@@ -141,7 +141,7 @@
 
 - **OSB text not inpainted/cleaned:**
   - Ensure "Enable OSB Text Detection" is enabled
-  - Ensure hf_token is set (see Installation/Post-Install Setup)
+  - Ensure hf_token is set (see Configuration/OSB Text Setup)
 
 - **Out of VRAM / CUDA errors:**
   - Select a lower Flux/text_encoder quant (sd.cpp only)
