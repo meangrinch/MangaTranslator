@@ -249,6 +249,7 @@ class UIConfigState:
     batch_previous_context_image_count: int = 0
     batch_previous_context_text_count: int = 3
     batch_terminology_memory: bool = True
+    # Not saved: a remembered choice would feed one series' glossary into the next
     batch_glossary_file: str = ""
 
     def to_save_dict(self) -> dict[str, Any]:
@@ -412,7 +413,6 @@ class UIConfigState:
             ),
             "batch_previous_context_text_count": self.batch_previous_context_text_count,
             "batch_terminology_memory": self.batch_terminology_memory,
-            "batch_glossary_file": self.batch_glossary_file,
         }
         return data
 
@@ -803,7 +803,6 @@ class UIConfigState:
                 data.get("batch_previous_context_text_count", 3)
             ),
             batch_terminology_memory=bool(data.get("batch_terminology_memory", True)),
-            batch_glossary_file=str(data.get("batch_glossary_file", "") or ""),
         )
 
 

@@ -1771,18 +1771,20 @@ def translate_and_render(
     if current_ocr_texts:
         _attach_ocr_texts(sorted_bubble_data, current_ocr_texts, verbose)
 
-    sizes = sizes._replace(
-        main_max_font=_resolve_main_max_font(
-            config,
-            page_cv,
-            processed_bubbles_info,
-            sizes.main_min_font,
-            sizes.main_max_font,
-            processing_scale,
-            strip_glyph_size,
-            verbose,
+    # The test-mode branch above already resolved the auto font size
+    if not (config.test_mode and bubble_images_b64):
+        sizes = sizes._replace(
+            main_max_font=_resolve_main_max_font(
+                config,
+                page_cv,
+                processed_bubbles_info,
+                sizes.main_min_font,
+                sizes.main_max_font,
+                processing_scale,
+                strip_glyph_size,
+                verbose,
+            )
         )
-    )
     cleaned = _render_translations(
         cleaned,
         sorted_bubble_data,
@@ -2059,6 +2061,12 @@ async def _batch_translate_pages(
             {"error_key": error_key, "img_path": img_path, "source_path": source_path}
         )
 
+    def _remember_ocr_texts(img_path: Path, texts: list[str]) -> None:
+        # Kept even when the page fails: one empty bubble doesn't void the rest
+        if texts:
+            with ocr_text_history_lock:
+                ocr_text_history[img_path] = texts
+
     if n_workers > 1 and getattr(config, "batch_parallel_within_pages", False):
         request_coordinator = BatchRequestCoordinator(
             n_workers, cancellation_manager=cancellation_manager
@@ -2104,18 +2112,18 @@ async def _batch_translate_pages(
             ocr_text_history_lock,
         )
         first_ocr_texts: list[str] = []
-        _translate_batch_page(
-            first_img,
-            config,
-            first_output,
-            cancellation_manager=cancellation_manager,
-            previous_context_images=first_previous_context_images,
-            previous_context_texts=first_previous_context_texts,
-            ocr_texts_out=first_ocr_texts,
-        )
-        if first_ocr_texts:
-            with ocr_text_history_lock:
-                ocr_text_history[first_img] = first_ocr_texts
+        try:
+            _translate_batch_page(
+                first_img,
+                config,
+                first_output,
+                cancellation_manager=cancellation_manager,
+                previous_context_images=first_previous_context_images,
+                previous_context_texts=first_previous_context_texts,
+                ocr_texts_out=first_ocr_texts,
+            )
+        finally:
+            _remember_ocr_texts(first_img, first_ocr_texts)
         results["success_count"] += 1
     except CancellationError:
         raise
@@ -2185,18 +2193,18 @@ async def _batch_translate_pages(
             )
 
         captured_ocr_texts: list[str] = []
-        _translate_batch_page(
-            img_path,
-            config,
-            output_path,
-            cancellation_manager=cancellation_manager,
-            previous_context_images=previous_context_images,
-            previous_context_texts_provider=previous_context_texts_provider,
-            ocr_texts_out=captured_ocr_texts,
-        )
-        if captured_ocr_texts:
-            with ocr_text_history_lock:
-                ocr_text_history[img_path] = captured_ocr_texts
+        try:
+            _translate_batch_page(
+                img_path,
+                config,
+                output_path,
+                cancellation_manager=cancellation_manager,
+                previous_context_images=previous_context_images,
+                previous_context_texts_provider=previous_context_texts_provider,
+                ocr_texts_out=captured_ocr_texts,
+            )
+        finally:
+            _remember_ocr_texts(img_path, captured_ocr_texts)
         return display_path, error_key
 
     async def _worker(img_path: Path, index: int, executor: ThreadPoolExecutor):
@@ -2420,7 +2428,7 @@ def batch_translate_images(
                 cancellation_manager=cancellation_manager,
                 source_path_map=source_path_map,
             )
-    except CancellationError:
+    except (CancellationError, KeyboardInterrupt):
         # Only empty subfolders remain when no page was saved yet.
         if created_output_dir and not any(p.is_file() for p in output_dir.rglob("*")):
             shutil.rmtree(output_dir, ignore_errors=True)

@@ -503,7 +503,7 @@ def create_layout(
                             batch_glossary_file = gr.Dropdown(
                                 _glossary_choices(),
                                 label="Glossary File",
-                                value=saved_settings.get("batch_glossary_file", ""),
+                                value="",
                                 allow_custom_value=True,
                                 info=(
                                     "To continue a series, pick the previous "

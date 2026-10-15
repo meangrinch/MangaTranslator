@@ -265,8 +265,13 @@ def test_ui_maps_terminology_memory_for_batch_only(tmp_path):
     reloaded = UIConfigState.from_dict(
         {**state.to_save_dict(), "batch_terminology_memory": False}
     )
-    assert reloaded.batch_glossary_file == "series.txt"
     assert reloaded.batch_terminology_memory is False
+    # A saved choice would carry one series' glossary into the next series' batches
+    assert "batch_glossary_file" not in state.to_save_dict()
+    assert (
+        UIConfigState.from_dict({"batch_glossary_file": "old.txt"}).batch_glossary_file
+        == ""
+    )
 
 
 def test_cache_hit_rebuilds_glossary_without_llm_call(monkeypatch, tmp_path):
@@ -323,6 +328,11 @@ def test_split_new_terms_reads_inline_pair_after_marker():
 
 def test_split_new_terms_ignores_marker_inside_an_item():
     response = "1: a || The NEW TERMS: list\n2: c || d"
+    assert split_new_terms(response) == (response, [])
+
+
+def test_split_new_terms_ignores_item_line_starting_with_new_terms():
+    response = "1: a || The contract is void.\nNew terms will apply.\n2: c || d"
     assert split_new_terms(response) == (response, [])
 
 

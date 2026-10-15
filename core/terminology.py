@@ -10,8 +10,9 @@ from pathlib import Path
 
 NEW_TERMS_MARKER = "NEW TERMS:"
 
-# Only a line that starts with the marker counts, so an item mentioning it is safe
-_MARKER_LINE = re.compile(r"(?im)^[ \t#*`>-]*new terms[ \t*`]*:?[ \t*`]*(.*)$")
+# Only a line that starts with the marker counts, so an item mentioning it is safe.
+# Text may follow it only after a colon, so a line like "New terms apply" isn't one.
+_MARKER_LINE = re.compile(r"(?im)^[ \t#*`>-]*new terms[ \t*`]*(?::[ \t*`]*(.*)|$)")
 _READING = re.compile(r"\([^)]*\)|（[^）]*）")
 _BULLET = re.compile(r"^(?:[-*+]|\d+[.)])\s+")
 _ARROW = re.compile(r"\s*(?:->|→)\s*")
@@ -72,7 +73,7 @@ def split_new_terms(
     # A fence opened just for the terms block would otherwise join the last item
     while "\n" in head and head.rsplit("\n", 1)[1].strip().startswith("```"):
         head = head.rsplit("\n", 1)[0].rstrip()
-    lines = [match.group(1), *response_text[match.end() :].splitlines()]
+    lines = [match.group(1) or "", *response_text[match.end() :].splitlines()]
     return head, [pair for line in lines if (pair := _parse_pair(line))]
 
 

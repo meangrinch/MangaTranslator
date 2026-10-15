@@ -60,6 +60,27 @@ def test_batch_cancelled_before_any_page_leaves_no_output_folder(tmp_path):
     assert not output_dir.exists()
 
 
+def test_batch_interrupted_by_ctrl_c_leaves_no_output_folder(monkeypatch, tmp_path):
+    input_dir = tmp_path / "in"
+    (input_dir / "ch1").mkdir(parents=True)
+    Image.new("RGB", (8, 8)).save(input_dir / "ch1" / "page.png")
+    output_dir = tmp_path / "out" / "run"
+
+    def interrupted(*_, **__):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(pipeline, "translate_and_render", interrupted)
+    config = MangaTranslatorConfig(
+        yolo_model_path="model.pt", device=torch.device("cpu")
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        pipeline.batch_translate_images(
+            input_dir, config, output_dir=output_dir, preserve_structure=True
+        )
+    assert not output_dir.exists()
+
+
 def test_llm_call_is_abandoned_while_the_request_is_still_in_flight(
     monkeypatch, manager
 ):
@@ -85,6 +106,35 @@ def test_llm_call_is_abandoned_while_the_request_is_still_in_flight(
         assert not finished.is_set()
     finally:
         release.set()
+
+
+def test_abandoned_llm_call_still_sees_its_cancel_after_a_new_run_starts(
+    monkeypatch, manager
+):
+    release = threading.Event()
+    seen = []
+
+    def blocking_endpoint(**_):
+        manager.cancel()
+        release.wait(5)
+        seen.append(cancellation.is_cancelled())
+        return "late"
+
+    monkeypatch.setitem(
+        translation._PROVIDER_ENDPOINTS,
+        "Google",
+        ("google_api_key", "Google", blocking_endpoint),
+    )
+    config = TranslationConfig(provider="Google", google_api_key="key")
+
+    with pytest.raises(CancellationError):
+        translation._call_llm_endpoint(config, [], "prompt")
+    cancellation.activate(CancellationManager())
+    release.set()
+    deadline = time.monotonic() + 5
+    while not seen and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert seen == [True]
 
 
 def test_page_cleaning_lets_a_cancel_through_instead_of_falling_back(monkeypatch):

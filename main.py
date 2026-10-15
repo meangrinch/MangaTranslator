@@ -1436,7 +1436,6 @@ def main():
         output_dir = Path(args.output) if args.output else path_list_run_dir
 
         if args.output:
-            output_dir = Path(args.output)
             if not output_dir.exists():
                 log_message(
                     f"Creating output directory: {output_dir}", always_print=True

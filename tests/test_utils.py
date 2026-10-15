@@ -234,6 +234,43 @@ def test_page_with_an_empty_bubble_counts_as_failed(
     ]
 
 
+@pytest.mark.parametrize("parallel_requests", [1, 2])
+def test_page_failed_for_an_empty_bubble_still_feeds_later_context(
+    monkeypatch, tmp_path, parallel_requests
+):
+    source = tmp_path / "pages"
+    source.mkdir()
+    for name in ("001.png", "002.png", "003.png"):
+        Image.new("RGB", (8, 8), "white").save(source / name)
+
+    previous_by_page = {}
+
+    def fake_translate_and_render(image_path, config, output_path, **kwargs):
+        provider = kwargs.get("previous_context_texts_provider")
+        name = Path(image_path).stem
+        previous_by_page[name] = (
+            provider() if provider else kwargs.get("previous_context_texts")
+        )
+        kwargs["ocr_texts_out"].append(f"text-{name}")
+        if name != "003":
+            kwargs["empty_bubbles_out"].append((0, 0, 4, 4))
+
+    monkeypatch.setattr(pipeline, "translate_and_render", fake_translate_and_render)
+    config = MangaTranslatorConfig(
+        yolo_model_path="model.pt",
+        device=torch.device("cpu"),
+        parallel_requests=parallel_requests,
+        retry_failed_once=False,
+    )
+    config.translation = replace(
+        config.translation, terminology_memory=False, previous_context_text_count=2
+    )
+
+    results = pipeline.batch_translate_images(source, config, tmp_path / "run")
+    assert sorted(results["errors"]) == ["001.png", "002.png"]
+    assert previous_by_page["003"] == [["text-001"], ["text-002"]]
+
+
 def _stage_uploads(tmp_path, rel_paths):
     from ui.logic import _copy_images_with_source_map
 

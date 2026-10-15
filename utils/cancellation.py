@@ -22,13 +22,23 @@ class CancellationManager:
 
 
 # The UI runs one job at a time; this is its manager, for code that isn't handed one.
-# It stays set after the run ends so abandoned background calls still see the cancel.
 _active: CancellationManager | None = None
+# Abandoned background calls keep their run's manager after the next run activates one
+_pinned = threading.local()
 
 
 def activate(manager: CancellationManager) -> None:
     global _active
     _active = manager
+
+
+def active_manager() -> CancellationManager | None:
+    return _active
+
+
+def pin_thread(manager: CancellationManager | None) -> None:
+    """Make this thread check `manager` instead of whichever one is active later."""
+    _pinned.manager = manager
 
 
 def cancel_active() -> None:
@@ -37,7 +47,7 @@ def cancel_active() -> None:
 
 
 def is_cancelled() -> bool:
-    manager = _active
+    manager = getattr(_pinned, "manager", None) or _active
     return manager is not None and manager.is_cancelled()
 
 

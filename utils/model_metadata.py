@@ -604,8 +604,8 @@ def is_opencode_chat_completions_model(
     if not model_name:
         return False
     base_name = model_name.strip().lower().split("/")[-1]
-    # shortcut: name prefixes copied from OpenCode's endpoint tables (2026-10) because
-    # its /models list has no endpoint field; revisit when a listed model 404s.
+    # Name prefixes copied from OpenCode's endpoint tables (2026-10) because its
+    # /models list has no endpoint field; revisit when a listed model 404s.
     if base_name.startswith(("gpt-", "claude-", "gemini-", "grok-", "muse-", "jev-")):
         return False
     if tier == "go":

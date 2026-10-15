@@ -31,7 +31,7 @@ from core.terminology import (
     record_new_terms,
     split_new_terms,
 )
-from utils.cancellation import raise_if_cancelled
+from utils.cancellation import active_manager, pin_thread, raise_if_cancelled
 from utils.endpoints import (
     call_anthropic_endpoint,
     call_deepseek_endpoint,
@@ -947,8 +947,11 @@ def _run_abandoning_on_cancel(fn: Callable[..., T], **kwargs: Any) -> T:
     """
     raise_if_cancelled()
     future: Future = Future()
+    manager = active_manager()
 
     def run() -> None:
+        # Retries and continuations stop on this run's cancel, not a later run's state
+        pin_thread(manager)
         try:
             future.set_result(fn(**kwargs))
         except BaseException as e:
