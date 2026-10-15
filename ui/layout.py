@@ -599,9 +599,11 @@ def create_layout(
                             label="Translated Images",
                             show_label=True,
                             columns=4,
+                            fit_columns=False,
                             height="auto",
                             object_fit="contain",
                             buttons=["download", "download_all", "fullscreen"],
+                            elem_id="batch_output_gallery",
                         )
                         batch_status_message = gr.Textbox(
                             label="Status",

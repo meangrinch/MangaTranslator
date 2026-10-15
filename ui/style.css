@@ -180,6 +180,11 @@
     overflow-y: hidden !important;
 }
 
+/* --- Gradio hardcodes overflow-y: scroll, which shows an empty scrollbar track --- */
+#batch_output_gallery .grid-wrap {
+    overflow-y: auto !important;
+}
+
 /* --- Limit visible entries in dropdown menus --- */
 ul.options {
     max-height: 400px !important;
