@@ -38,6 +38,28 @@ def test_cancel_before_work_raises_cancellation_not_translation_error(tmp_path):
         )
 
 
+def test_batch_cancelled_before_any_page_leaves_no_output_folder(tmp_path):
+    input_dir = tmp_path / "in"
+    (input_dir / "ch1").mkdir(parents=True)
+    Image.new("RGB", (8, 8)).save(input_dir / "ch1" / "page.png")
+    output_dir = tmp_path / "out" / "run"
+    cancelled = CancellationManager()
+    cancelled.cancel()
+    config = MangaTranslatorConfig(
+        yolo_model_path="model.pt", device=torch.device("cpu")
+    )
+
+    with pytest.raises(CancellationError):
+        pipeline.batch_translate_images(
+            input_dir,
+            config,
+            output_dir=output_dir,
+            preserve_structure=True,
+            cancellation_manager=cancelled,
+        )
+    assert not output_dir.exists()
+
+
 def test_llm_call_is_abandoned_while_the_request_is_still_in_flight(
     monkeypatch, manager
 ):

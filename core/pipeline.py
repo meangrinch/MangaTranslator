@@ -3,6 +3,7 @@ import base64
 import math
 import os
 import re
+import shutil
 import tempfile
 import threading
 import time
@@ -2333,8 +2334,6 @@ def batch_translate_images(
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         output_dir = Path("./output") / timestamp
 
-    os.makedirs(output_dir, exist_ok=True)
-
     image_extensions = [".jpg", ".jpeg", ".png", ".webp"]
 
     if preserve_structure:
@@ -2387,35 +2386,45 @@ def batch_translate_images(
     total_images = len(image_files)
     start_batch_time = time.time()
 
-    if progress_callback:
-        progress_callback(0.0, f"Starting batch processing of {total_images} images...")
+    created_output_dir = not output_dir.exists()
+    os.makedirs(output_dir, exist_ok=True)
+    try:
+        if progress_callback:
+            progress_callback(
+                0.0, f"Starting batch processing of {total_images} images..."
+            )
 
-    results = asyncio.run(
-        _batch_translate_pages(
-            image_files=image_files,
-            input_dir=input_dir,
-            config=config,
-            output_dir=output_dir,
-            preserve_structure=preserve_structure,
-            progress_callback=progress_callback,
-            cancellation_manager=cancellation_manager,
-            source_path_map=source_path_map,
+        results = asyncio.run(
+            _batch_translate_pages(
+                image_files=image_files,
+                input_dir=input_dir,
+                config=config,
+                output_dir=output_dir,
+                preserve_structure=preserve_structure,
+                progress_callback=progress_callback,
+                cancellation_manager=cancellation_manager,
+                source_path_map=source_path_map,
+            )
         )
-    )
-    failed_jobs = results.pop("_failed_jobs", [])
+        failed_jobs = results.pop("_failed_jobs", [])
 
-    if _should_run_failed_retry(config, failed_jobs, cancellation_manager):
-        _retry_failed_batch_images(
-            failed_jobs=failed_jobs,
-            results=results,
-            config=config,
-            input_dir=input_dir,
-            output_dir=output_dir,
-            preserve_structure=preserve_structure,
-            progress_callback=progress_callback,
-            cancellation_manager=cancellation_manager,
-            source_path_map=source_path_map,
-        )
+        if _should_run_failed_retry(config, failed_jobs, cancellation_manager):
+            _retry_failed_batch_images(
+                failed_jobs=failed_jobs,
+                results=results,
+                config=config,
+                input_dir=input_dir,
+                output_dir=output_dir,
+                preserve_structure=preserve_structure,
+                progress_callback=progress_callback,
+                cancellation_manager=cancellation_manager,
+                source_path_map=source_path_map,
+            )
+    except CancellationError:
+        # Only empty subfolders remain when no page was saved yet.
+        if created_output_dir and not any(p.is_file() for p in output_dir.rglob("*")):
+            shutil.rmtree(output_dir, ignore_errors=True)
+        raise
 
     copy_comic_info(
         input_dir, output_dir, config.translation.output_language, preserve_structure
