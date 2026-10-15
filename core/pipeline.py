@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from core.batch_coordinator import BatchRequestCoordinator
 from core.caching import get_cache
@@ -37,6 +37,10 @@ from utils.exceptions import (
 from utils.logging import log_message
 from utils.path_list import record_failed_images, resolve_source_path
 
+from .component_order_debug import (
+    ENABLE_COMPONENT_ORDER_DEBUG,
+    write_component_order_debug,
+)
 from .image.cleaning import clean_speech_bubbles, retry_cleaning_with_otsu
 from .image.detection import detect_panels, detect_speech_bubbles
 from .image.image_utils import (
@@ -49,7 +53,7 @@ from .image.image_utils import (
     upscale_image,
     upscale_image_to_dimension,
 )
-from .image.sorting import sort_bubbles_by_reading_order, sort_panels_by_reading_order
+from .image.sorting import sort_bubbles_by_reading_order
 from .image.strip_splitting import TARGET_RATIO as STRIP_TARGET_RATIO
 from .image.strip_splitting import find_cut_rows
 from .image.tilt_detection import compute_effective_tilt_angle
@@ -73,7 +77,6 @@ if TYPE_CHECKING:
     from utils.cancellation import CancellationManager
 
 
-ENABLE_COMPONENT_ORDER_DEBUG = False
 PREVIOUS_CONTEXT_CACHE_MAX_SIZE = 32
 NATURAL_SORT_TOKEN_RE = re.compile(r"(\d+)")
 # Translated cap height relative to the measured original lettering. CJK glyphs fill the em
@@ -86,6 +89,20 @@ AUTO_FONT_TYPICAL_CAP_HEIGHT = 13.0
 # Ink parts at which one bubble's measurement is fully trusted. Bubbles with fewer count for
 # less, and a page that cannot reach it in total (e.g. a lone "..." bubble) is unmeasurable.
 AUTO_FONT_TRUSTED_INK_PARTS = 10
+# Translation errors that fail the page instead of leaving error text in its bubbles.
+# utils/endpoints/_http.py words its errors to match these.
+CRITICAL_TRANSLATION_ERRORS = (
+    "429",
+    "rate limit",
+    "rate-limit",
+    "auth",
+    "unauthorized",
+    "forbidden",
+    "payment",
+    "quota",
+    "empty response",
+    "api failed",
+)
 
 
 def _page_glyph_size(
@@ -234,36 +251,8 @@ def _natural_text_sort_key(text: str) -> tuple[tuple[int, int | str, str], ...]:
     )
 
 
-def _natural_path_sort_key(path: Path):
+def natural_path_sort_key(path: Path):
     return tuple(_natural_text_sort_key(part) for part in path.parts)
-
-
-def _debug_mask_bbox(mask):
-    """Return full-image bbox for a debug mask, or None when empty/invalid."""
-    normalized = (
-        _normalize_debug_mask(mask, (mask.shape[1], mask.shape[0]))
-        if isinstance(mask, np.ndarray) and mask.ndim >= 2
-        else None
-    )
-    if normalized is None:
-        try:
-            mask_array = np.asarray(mask)
-            if mask_array.ndim == 3:
-                mask_array = mask_array[..., 0]
-            if mask_array.ndim != 2:
-                return None
-            normalized = mask_array > 0
-        except Exception:
-            return None
-    coords = np.where(normalized)
-    if coords[0].size == 0 or coords[1].size == 0:
-        return None
-    return [
-        int(coords[1].min()),
-        int(coords[0].min()),
-        int(coords[1].max()) + 1,
-        int(coords[0].max()) + 1,
-    ]
 
 
 def get_image_encoding_params(pil_image_format: str | None) -> tuple[str, str]:
@@ -493,207 +482,6 @@ def _build_previous_context_texts(
             if texts:
                 previous_texts.append(list(texts))
     return previous_texts
-
-
-def _load_debug_font(size: int):
-    """Load a bold-ish font for the debug overlay, falling back safely."""
-    font_candidates = [
-        "arialbd.ttf",
-        "arial.ttf",
-        "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-    ]
-    for candidate in font_candidates:
-        try:
-            return ImageFont.truetype(candidate, size=size)
-        except OSError:
-            continue
-    return ImageFont.load_default()
-
-
-def _draw_dashed_rectangle(draw, bbox, color, width=2, dash=12, gap=7):
-    """Draw a dashed rectangle matching the requested debug style."""
-    x0, y0, x1, y1 = [int(v) for v in bbox]
-    if x1 <= x0 or y1 <= y0:
-        return
-
-    def _draw_dashed_line(start, end, horizontal=True):
-        if horizontal:
-            fixed = start[1]
-            pos = start[0]
-            limit = end[0]
-            while pos < limit:
-                seg_end = min(pos + dash, limit)
-                draw.line((pos, fixed, seg_end, fixed), fill=color, width=width)
-                pos += dash + gap
-        else:
-            fixed = start[0]
-            pos = start[1]
-            limit = end[1]
-            while pos < limit:
-                seg_end = min(pos + dash, limit)
-                draw.line((fixed, pos, fixed, seg_end), fill=color, width=width)
-                pos += dash + gap
-
-    _draw_dashed_line((x0, y0), (x1, y0), horizontal=True)
-    _draw_dashed_line((x0, y1), (x1, y1), horizontal=True)
-    _draw_dashed_line((x0, y0), (x0, y1), horizontal=False)
-    _draw_dashed_line((x1, y0), (x1, y1), horizontal=False)
-
-
-def _draw_centered_index(draw, bbox, value, font, color):
-    """Draw the index at the visual center of the box."""
-    x0, y0, x1, y1 = bbox
-    cx = round((x0 + x1) / 2)
-    cy = round((y0 + y1) / 2)
-    label = str(value)
-    try:
-        draw.text((cx, cy), label, fill=color, font=font, anchor="mm")
-    except TypeError:
-        left, top, right, bottom = draw.textbbox((0, 0), label, font=font)
-        draw.text(
-            (cx - (right - left) / 2, cy - (bottom - top) / 2),
-            label,
-            fill=color,
-            font=font,
-        )
-
-
-def _normalize_debug_mask(mask, image_size):
-    """Normalize a debug mask into a full-image boolean array."""
-    if mask is None:
-        return None
-
-    try:
-        mask_array = np.asarray(mask)
-    except Exception:
-        return None
-
-    if mask_array.ndim == 3:
-        mask_array = mask_array[..., 0]
-
-    if mask_array.ndim != 2:
-        return None
-
-    width, height = image_size
-    if mask_array.shape != (height, width):
-        return None
-
-    return mask_array > 0
-
-
-def _apply_mask_debug_overlay(canvas, mask, color=(255, 0, 0, 84)):
-    """Alpha-composite a semi-transparent mask overlay onto the debug canvas."""
-    normalized_mask = _normalize_debug_mask(mask, canvas.size)
-    if normalized_mask is None or not np.any(normalized_mask):
-        return
-
-    overlay = np.zeros((canvas.size[1], canvas.size[0], 4), dtype=np.uint8)
-    overlay[normalized_mask] = color
-    canvas.alpha_composite(Image.fromarray(overlay, mode="RGBA"))
-
-
-def _write_component_order_debug_image(
-    image_size,
-    sorted_items,
-    panels,
-    bubble_masks,
-    reading_direction,
-    image_path,
-    output_path,
-    verbose=False,
-):
-    """Write a debug PNG showing panel order and merged text-element order."""
-    width, height = image_size
-    if width <= 0 or height <= 0:
-        return
-
-    canvas = Image.new("RGBA", (width, height), (238, 238, 238, 255))
-    draw = ImageDraw.Draw(canvas)
-
-    panel_color = (32, 63, 255)
-    osb_color = (255, 0, 255)
-    bubble_color = (34, 160, 34)
-    index_color = (255, 0, 0)
-
-    font_size = max(14, min(width, height) // 28)
-    font = _load_debug_font(font_size)
-
-    panel_order = (
-        sort_panels_by_reading_order(panels, reading_direction) if panels else []
-    )
-
-    for item in sorted_items:
-        if item.get("is_outside_text", False):
-            continue
-        bbox = tuple(round(v) for v in item.get("bbox", (0, 0, 0, 0)))
-        _apply_mask_debug_overlay(
-            canvas, bubble_masks.get(bbox) if bubble_masks else None
-        )
-
-    for panel_index, panel_id in enumerate(panel_order, start=1):
-        panel_bbox = tuple(round(v) for v in panels[panel_id])
-        draw.rectangle(panel_bbox, outline=panel_color, width=3)
-        _draw_centered_index(draw, panel_bbox, panel_index, font, index_color)
-
-    for item_index, item in enumerate(sorted_items, start=1):
-        bbox = tuple(round(v) for v in item.get("bbox", (0, 0, 0, 0)))
-        if item.get("is_outside_text", False):
-            draw.rectangle(bbox, outline=osb_color, width=2)
-            draw_bbox = bbox
-        else:
-            mask_bbox = (
-                _debug_mask_bbox(bubble_masks.get(bbox)) if bubble_masks else None
-            )
-            draw_bbox = tuple(mask_bbox) if mask_bbox is not None else bbox
-            _draw_dashed_rectangle(draw, draw_bbox, bubble_color, width=2)
-        _draw_centered_index(draw, draw_bbox, item_index, font, index_color)
-
-    base_path = Path(output_path) if output_path else Path(image_path)
-    debug_path = base_path.parent / f"{base_path.stem}.component-order-debug.png"
-    debug_path.parent.mkdir(parents=True, exist_ok=True)
-    canvas.convert("RGB").save(debug_path, format="PNG")
-    log_message(
-        f"Wrote component-order debug image: {debug_path}",
-        verbose=verbose,
-        always_print=True,
-    )
-
-
-def _write_llm_crop_debug_images(
-    sorted_items,
-    image_path,
-    output_path,
-    verbose=False,
-):
-    """Save the exact image crops the LLM sees to a debug subfolder."""
-    base_path = Path(output_path) if output_path else Path(image_path)
-    crop_dir = base_path.parent / f"{base_path.stem}.llm-crops"
-    crop_dir.mkdir(parents=True, exist_ok=True)
-
-    count = 0
-    for i, item in enumerate(sorted_items, start=1):
-        img_b64 = item.get("image_b64")
-        if not img_b64:
-            continue
-        try:
-            img_bytes = base64.b64decode(img_b64)
-            img_arr = np.frombuffer(img_bytes, dtype=np.uint8)
-            img_cv = cv2.imdecode(img_arr, cv2.IMREAD_COLOR)
-            if img_cv is None:
-                continue
-            label = "osb" if item.get("is_outside_text", False) else "bubble"
-            crop_path = crop_dir / f"{i:03d}_{label}.png"
-            cv2.imwrite(str(crop_path), img_cv)
-            count += 1
-        except Exception:
-            pass
-
-    log_message(
-        f"Wrote {count} LLM crop debug images to: {crop_dir}",
-        verbose=verbose,
-        always_print=True,
-    )
 
 
 def _resolve_pre_upscale_factor(
@@ -1407,56 +1195,16 @@ def translate_and_render(
                     all_text_data, reading_direction, panels=panels
                 )
                 if ENABLE_COMPONENT_ORDER_DEBUG:
-                    bubble_debug_masks = {}
-                    for bubble in sorted_bubble_data:
-                        if bubble.get("is_outside_text", False):
-                            continue
-                        bbox = tuple(round(v) for v in bubble.get("bbox", ()))
-                        if len(bbox) != 4:
-                            continue
-                        mask = bubble.get("sam_mask")
-                        if mask is not None:
-                            bubble_debug_masks[bbox] = mask
-
-                    for info in processed_bubbles_info:
-                        bbox = tuple(round(v) for v in info.get("bbox", ()))
-                        if len(bbox) != 4:
-                            continue
-                        mask = info.get("mask")
-                        if mask is None:
-                            mask = info.get("base_mask")
-                        if mask is not None:
-                            bubble_debug_masks[bbox] = mask
-
-                    try:
-                        _write_component_order_debug_image(
-                            pil_image_processed.size,
-                            sorted_bubble_data,
-                            debug_panels,
-                            bubble_debug_masks,
-                            reading_direction,
-                            image_path,
-                            output_path,
-                            verbose=verbose,
-                        )
-                    except Exception as e:
-                        log_message(
-                            f"Failed to write component-order debug image: {e}",
-                            always_print=True,
-                        )
-
-                    try:
-                        _write_llm_crop_debug_images(
-                            sorted_bubble_data,
-                            image_path,
-                            output_path,
-                            verbose=verbose,
-                        )
-                    except Exception as e:
-                        log_message(
-                            f"Failed to write LLM crop debug images: {e}",
-                            always_print=True,
-                        )
+                    write_component_order_debug(
+                        sorted_bubble_data,
+                        processed_bubbles_info,
+                        pil_image_processed.size,
+                        debug_panels,
+                        reading_direction,
+                        image_path,
+                        output_path,
+                        verbose=verbose,
+                    )
 
                 bubble_images_b64 = [
                     bubble["image_b64"]
@@ -1546,6 +1294,46 @@ def translate_and_render(
                     )
                     return texts, ocr_texts
 
+                def _translate_or_placeholders(
+                    get_result: Callable[[], tuple[list[str], list[str]]],
+                ) -> tuple[list[str], list[str]]:
+                    """Run the translation; non-critical failures become per-bubble error text."""
+                    try:
+                        texts, ocr_texts = get_result()
+                    except TranslationError as e:
+                        error_str = str(e).lower()
+                        if any(t in error_str for t in CRITICAL_TRANSLATION_ERRORS):
+                            raise
+                        log_message(f"Translation failed: {e}", always_print=True)
+                        texts = [f"[Translation Error: {e}]"] * len(bubble_images_b64)
+                        ocr_texts = []
+                    except CancellationError:
+                        raise
+                    except Exception as e:
+                        log_message(f"Translation API error: {e}", always_print=True)
+                        texts = [
+                            "[Translation Error: API call raised exception]"
+                            for _ in sorted_bubble_data
+                        ]
+                        ocr_texts = []
+
+                    if ocr_texts and ocr_texts_out is not None:
+                        ocr_texts_out.extend(_pair_context_lines(ocr_texts, texts))
+
+                    valid_translations = [
+                        t
+                        for t in texts
+                        if t
+                        and not t.startswith("[Translation Error")
+                        and not t.startswith("API Error")
+                        and not t.startswith(_provider_tag)
+                        and t.strip()
+                        not in {"[OCR FAILED]", "[Empty response / no content]"}
+                    ]
+                    if bubble_images_b64 and not valid_translations:
+                        raise TranslationError("All bubbles failed.")
+                    return texts, ocr_texts
+
                 if not bubble_images_b64:
                     log_message("No valid bubbles after sorting", always_print=True)
                     if use_llm_inpaint_overlap:
@@ -1615,128 +1403,18 @@ def translate_and_render(
                                 )
                             final_image_to_save = pil_cleaned_image
 
-                            try:
-                                translated_texts, current_ocr_texts = (
-                                    translate_future.result()
-                                )
-                                if current_ocr_texts and ocr_texts_out is not None:
-                                    ocr_texts_out.extend(
-                                        _pair_context_lines(
-                                            current_ocr_texts, translated_texts
-                                        )
-                                    )
-                            except TranslationError as e:
-                                error_str = str(e).lower()
-                                critical_tokens = (
-                                    "429",
-                                    "rate limit",
-                                    "rate-limit",
-                                    "auth",
-                                    "unauthorized",
-                                    "forbidden",
-                                    "payment",
-                                    "quota",
-                                    "empty response",
-                                    "api failed",
-                                )
-                                if any(token in error_str for token in critical_tokens):
-                                    raise
-
-                                log_message(
-                                    f"Translation failed: {e}", always_print=True
-                                )
-                                translated_texts = [f"[Translation Error: {e}]"] * len(
-                                    bubble_images_b64
-                                )
-                            except CancellationError:
-                                raise
-                            except Exception as e:
-                                log_message(
-                                    f"Translation API error: {e}", always_print=True
-                                )
-                                translated_texts = [
-                                    "[Translation Error: API call raised exception]"
-                                    for _ in sorted_bubble_data
-                                ]
-
-                        valid_translations = [
-                            t
-                            for t in translated_texts
-                            if t
-                            and not t.startswith("[Translation Error")
-                            and not t.startswith("API Error")
-                            and not t.startswith(_provider_tag)
-                            and t.strip()
-                            not in {
-                                "[OCR FAILED]",
-                                "[Empty response / no content]",
-                            }
-                        ]
-
-                        if bubble_images_b64 and not valid_translations:
-                            raise TranslationError("All bubbles failed.")
+                            translated_texts, current_ocr_texts = (
+                                _translate_or_placeholders(translate_future.result)
+                            )
                     else:
-                        try:
-                            translated_texts, current_ocr_texts = _run_llm_translation()
-                            if current_ocr_texts and ocr_texts_out is not None:
-                                ocr_texts_out.extend(
-                                    _pair_context_lines(
-                                        current_ocr_texts, translated_texts
-                                    )
-                                )
-                        except TranslationError as e:
-                            error_str = str(e).lower()
-                            critical_tokens = (
-                                "429",
-                                "rate limit",
-                                "rate-limit",
-                                "auth",
-                                "unauthorized",
-                                "forbidden",
-                                "payment",
-                                "quota",
-                                "empty response",
-                                "api failed",
-                            )
-                            if any(token in error_str for token in critical_tokens):
-                                raise
-
-                            log_message(f"Translation failed: {e}", always_print=True)
-                            translated_texts = [f"[Translation Error: {e}]"] * len(
-                                bubble_images_b64
-                            )
-                        except CancellationError:
-                            raise
-                        except Exception as e:
-                            log_message(
-                                f"Translation API error: {e}", always_print=True
-                            )
-                            translated_texts = [
-                                "[Translation Error: API call raised exception]"
-                                for _ in sorted_bubble_data
-                            ]
-
-                        valid_translations = [
-                            t
-                            for t in translated_texts
-                            if t
-                            and not t.startswith("[Translation Error")
-                            and not t.startswith("API Error")
-                            and not t.startswith(_provider_tag)
-                            and t.strip()
-                            not in {
-                                "[OCR FAILED]",
-                                "[Empty response / no content]",
-                            }
-                        ]
-
-                        if bubble_images_b64 and not valid_translations:
-                            raise TranslationError("All bubbles failed.")
+                        translated_texts, current_ocr_texts = (
+                            _translate_or_placeholders(_run_llm_translation)
+                        )
 
                 if current_ocr_texts:
                     if len(current_ocr_texts) == len(sorted_bubble_data):
                         for bubble, ocr_text in zip(
-                            sorted_bubble_data, current_ocr_texts
+                            sorted_bubble_data, current_ocr_texts, strict=False
                         ):
                             bubble["ocr_text"] = ocr_text
                     else:
@@ -2006,154 +1684,64 @@ def translate_and_render(
                                 )
                                 osb_layout_dims = (avail_w * shrink, avail_h * shrink)
 
-                            try:
-                                rendered_image = render_text_skia(
-                                    pil_image=pil_cleaned_image,
-                                    text=text,
-                                    bbox=bbox,
-                                    font_dir=font_dir,
-                                    cleaned_mask=cleaned_mask,
-                                    bubble_color_bgr=bubble_color_bgr,
-                                    config=render_config,
-                                    verbose=verbose,
-                                    bubble_id=str(i + 1),
-                                    rotation_deg=rotation_deg,
-                                    vertical_stack=vertical_stack,
-                                    text_color_rgb=text_color_rgb,
-                                    raise_on_safe_error=False,
-                                    text_background_color=text_bg_rgb,
-                                    fallback_padding_pixels=osb_padding_pixels,
-                                    layout_dimensions=osb_layout_dims,
-                                )
-                                success = True
-                            except Exception as e:
-                                log_message(
-                                    f"Text rendering failed: {e}", verbose=verbose
-                                )
-                                success = False
-
-                                # Tier 1: If rotated, try opposite orientation while preserving tilt rotation
-                                if abs(rotation_deg) > 0.01:
-                                    alt_vertical = not vertical_stack
+                            # Try the detected tilt and orientation first, then the opposite
+                            # orientation, then upright in each orientation
+                            attempts = [(rotation_deg, vertical_stack, osb_layout_dims)]
+                            if abs(rotation_deg) > 0.01:
+                                attempts += [
+                                    (rotation_deg, not vertical_stack, osb_layout_dims),
+                                    (0.0, vertical_stack, None),
+                                ]
+                            attempts.append((0.0, not vertical_stack, None))
+                            for (
+                                attempt_rotation,
+                                attempt_vertical,
+                                layout_dims,
+                            ) in attempts:
+                                try:
+                                    rendered_image = render_text_skia(
+                                        pil_image=pil_cleaned_image,
+                                        text=text,
+                                        bbox=bbox,
+                                        font_dir=font_dir,
+                                        cleaned_mask=cleaned_mask,
+                                        bubble_color_bgr=bubble_color_bgr,
+                                        config=render_config,
+                                        verbose=verbose,
+                                        bubble_id=str(i + 1),
+                                        rotation_deg=attempt_rotation,
+                                        vertical_stack=attempt_vertical,
+                                        text_color_rgb=text_color_rgb,
+                                        raise_on_safe_error=False,
+                                        text_background_color=text_bg_rgb,
+                                        fallback_padding_pixels=osb_padding_pixels,
+                                        layout_dimensions=layout_dims,
+                                    )
+                                    success = True
+                                    break
+                                except Exception as e:
                                     log_message(
-                                        f"Retrying OSB render with opposite orientation at {rotation_deg:.1f} deg (vertical_stack={alt_vertical})",
+                                        f"OSB render failed at {attempt_rotation:.1f} deg "
+                                        f"(vertical_stack={attempt_vertical}): {e}",
                                         verbose=verbose,
                                     )
-                                    try:
-                                        rendered_image = render_text_skia(
-                                            pil_image=pil_cleaned_image,
-                                            text=text,
-                                            bbox=bbox,
-                                            font_dir=font_dir,
-                                            cleaned_mask=cleaned_mask,
-                                            bubble_color_bgr=bubble_color_bgr,
-                                            config=render_config,
-                                            verbose=verbose,
-                                            bubble_id=str(i + 1),
-                                            rotation_deg=rotation_deg,
-                                            vertical_stack=alt_vertical,
-                                            text_color_rgb=text_color_rgb,
-                                            raise_on_safe_error=False,
-                                            text_background_color=text_bg_rgb,
-                                            fallback_padding_pixels=osb_padding_pixels,
-                                            layout_dimensions=osb_layout_dims,
-                                        )
-                                        success = True
-                                    except Exception as e_rot_alt:
-                                        log_message(
-                                            f"Rotated opposite orientation retry failed: {e_rot_alt}",
-                                            verbose=verbose,
-                                        )
-                                        success = False
-
-                                # Tier 2: Retry upright at 0.0 deg with initial vertical_stack
-                                if not success and abs(rotation_deg) > 0.01:
+                            # Last resort: restore the original OSB patch if available
+                            if not success:
+                                if "original_crop_pil" in bubble:
                                     log_message(
-                                        f"Retrying OSB render upright at 0.0 deg (vertical_stack={vertical_stack})",
+                                        f"Restoring original OSB patch for {bbox}",
                                         verbose=verbose,
+                                        always_print=True,
                                     )
-                                    try:
-                                        rendered_image = render_text_skia(
-                                            pil_image=pil_cleaned_image,
-                                            text=text,
-                                            bbox=bbox,
-                                            font_dir=font_dir,
-                                            cleaned_mask=cleaned_mask,
-                                            bubble_color_bgr=bubble_color_bgr,
-                                            config=render_config,
-                                            verbose=verbose,
-                                            bubble_id=str(i + 1),
-                                            rotation_deg=0.0,
-                                            vertical_stack=vertical_stack,
-                                            text_color_rgb=text_color_rgb,
-                                            raise_on_safe_error=False,
-                                            text_background_color=text_bg_rgb,
-                                            fallback_padding_pixels=osb_padding_pixels,
-                                            layout_dimensions=None,
-                                        )
-                                        success = True
-                                    except Exception as e_upright:
-                                        log_message(
-                                            f"Upright retry failed: {e_upright}",
-                                            verbose=verbose,
-                                        )
-                                        success = False
-
-                                # Tier 3: Try opposite layout orientation upright at 0.0 deg
-                                if not success:
-                                    alt_vertical = not vertical_stack
-                                    try:
-                                        log_message(
-                                            f"OSB render failed, retrying with opposite orientation (vertical_stack={alt_vertical})",
-                                            verbose=verbose,
-                                        )
-                                        rendered_image = render_text_skia(
-                                            pil_image=pil_cleaned_image,
-                                            text=text,
-                                            bbox=bbox,
-                                            font_dir=font_dir,
-                                            cleaned_mask=cleaned_mask,
-                                            bubble_color_bgr=bubble_color_bgr,
-                                            config=render_config,
-                                            verbose=verbose,
-                                            bubble_id=str(i + 1),
-                                            rotation_deg=0.0,
-                                            vertical_stack=alt_vertical,
-                                            text_color_rgb=text_color_rgb,
-                                            raise_on_safe_error=False,
-                                            text_background_color=text_bg_rgb,
-                                            fallback_padding_pixels=osb_padding_pixels,
-                                            layout_dimensions=None,
-                                        )
-                                        log_message(
-                                            "Orientation fallback succeeded",
-                                            verbose=verbose,
-                                        )
-                                        success = True
-                                    except Exception as e_alt:
-                                        log_message(
-                                            f"Orientation fallback failed: {e_alt}",
-                                            verbose=verbose,
-                                        )
-                                        success = False
-
-                                # Tier 3: Restore original OSB patch if available
-                                if not success:
-                                    if "original_crop_pil" in bubble:
-                                        log_message(
-                                            f"Restoring original OSB patch for {bbox}",
-                                            verbose=verbose,
-                                            always_print=True,
-                                        )
-                                        rendered_image = pil_cleaned_image.copy()
-                                        original_patch = bubble["original_crop_pil"]
-                                        rendered_image.paste(
-                                            original_patch, (bbox[0], bbox[1])
-                                        )
-                                        success = True
-                                    else:
-                                        rendered_image = pil_cleaned_image
-                                        success = False
+                                    rendered_image = pil_cleaned_image.copy()
+                                    original_patch = bubble["original_crop_pil"]
+                                    rendered_image.paste(
+                                        original_patch, (bbox[0], bbox[1])
+                                    )
+                                    success = True
+                                else:
+                                    rendered_image = pil_cleaned_image
+                                    success = False
                         else:
                             try:
                                 rendered_image = render_text_skia(
@@ -2255,6 +1843,7 @@ def translate_and_render(
                                             bubble_id=str(i + 1),
                                             rotation_deg=rotation_deg,
                                             vertical_stack=vertical_stack,
+                                            text_color_rgb=text_color_rgb,
                                             raise_on_safe_error=False,
                                         )
                                         success = True
@@ -2293,6 +1882,7 @@ def translate_and_render(
                                             bubble_id=str(i + 1),
                                             rotation_deg=rotation_deg,
                                             vertical_stack=vertical_stack,
+                                            text_color_rgb=text_color_rgb,
                                             raise_on_safe_error=False,
                                         )
                                         success = True
@@ -2572,7 +2162,7 @@ def _retry_failed_batch_images(
             )
 
 
-async def _batch_translate_parallel(
+async def _batch_translate_pages(
     image_files: list[Path],
     input_dir: Path,
     config: MangaTranslatorConfig,
@@ -2582,11 +2172,12 @@ async def _batch_translate_parallel(
     cancellation_manager: Optional["CancellationManager"],
     source_path_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Process images in parallel using a semaphore to maintain target concurrency.
+    """Process images with up to `config.parallel_requests` pages in flight.
 
-    The first image is processed sequentially to warm up all ML models (triggering
+    The first image is processed alone to warm up all ML models (triggering
     lazy loading and YOLO layer fusing on the main thread). Remaining images are
-    then processed in parallel with models already initialized.
+    then processed in parallel with models already initialized; with one worker
+    they run in order.
     """
     total_images = len(image_files)
     n_workers = config.parallel_requests
@@ -2607,12 +2198,21 @@ async def _batch_translate_parallel(
     )
 
     log_message(
-        f"Starting parallel batch processing: {total_images} images, "
-        f"{n_workers} parallel workers",
+        f"Starting batch processing: {total_images} images, {n_workers} worker(s)",
         always_print=True,
     )
 
-    if getattr(config, "batch_parallel_within_pages", False):
+    def _record_failure(img_path: Path, display_path: str, error_key: str, error):
+        log_message(f"Error processing {display_path}: {error!s}", always_print=True)
+        source_path = resolve_source_path(img_path, source_path_map)
+        results["error_count"] += 1
+        results["errors"][error_key] = str(error)
+        results["failed_image_paths"].append(source_path)
+        results["_failed_jobs"].append(
+            {"error_key": error_key, "img_path": img_path, "source_path": source_path}
+        )
+
+    if n_workers > 1 and getattr(config, "batch_parallel_within_pages", False):
         request_coordinator = BatchRequestCoordinator(
             n_workers, cancellation_manager=cancellation_manager
         )
@@ -2638,6 +2238,10 @@ async def _batch_translate_parallel(
     try:
         if cancellation_manager and cancellation_manager.is_cancelled():
             raise CancellationError("Batch process cancelled by user.")
+        if progress_callback:
+            progress_callback(
+                0.0, f"Processing image 1/{total_images}: {first_display}"
+            )
         first_previous_context_images = _build_previous_context_images(
             image_files,
             0,
@@ -2669,18 +2273,7 @@ async def _batch_translate_parallel(
     except CancellationError:
         raise
     except Exception as e:
-        log_message(f"Error processing {first_display}: {e!s}", always_print=True)
-        source_path = resolve_source_path(first_img, source_path_map)
-        results["error_count"] += 1
-        results["errors"][first_key] = str(e)
-        results["failed_image_paths"].append(source_path)
-        results["_failed_jobs"].append(
-            {
-                "error_key": first_key,
-                "img_path": first_img,
-                "source_path": source_path,
-            }
-        )
+        _record_failure(first_img, first_display, first_key, e)
     finally:
         ocr_text_ready_events[0].set()
 
@@ -2775,11 +2368,25 @@ async def _batch_translate_parallel(
                     cancelled = True
                     return
 
-                loop = asyncio.get_event_loop()
-                try:
-                    await loop.run_in_executor(
-                        executor, _process_single, img_path, index
+                if progress_callback:
+                    _, display_name, _ = _resolve_output_path(
+                        img_path, input_dir, output_dir, config, preserve_structure
                     )
+                    progress_callback(
+                        completed_count / total_images,
+                        f"Processing image {index + 1}/{total_images}: {display_name}",
+                    )
+
+                loop = asyncio.get_running_loop()
+                try:
+                    if n_workers == 1:
+                        # On the main thread, so Ctrl+C stops the batch at once
+                        # instead of waiting for a worker thread's page to finish
+                        _process_single(img_path, index)
+                    else:
+                        await loop.run_in_executor(
+                            executor, _process_single, img_path, index
+                        )
                     with results_lock:
                         results["success_count"] += 1
                         completed_count += 1
@@ -2791,22 +2398,8 @@ async def _batch_translate_parallel(
                     _, display_path, error_key = _resolve_output_path(
                         img_path, input_dir, output_dir, config, preserve_structure
                     )
-                    log_message(
-                        f"Error processing {display_path}: {e!s}",
-                        always_print=True,
-                    )
-                    source_path = resolve_source_path(img_path, source_path_map)
                     with results_lock:
-                        results["error_count"] += 1
-                        results["errors"][error_key] = str(e)
-                        results["failed_image_paths"].append(source_path)
-                        results["_failed_jobs"].append(
-                            {
-                                "error_key": error_key,
-                                "img_path": img_path,
-                                "source_path": source_path,
-                            }
-                        )
+                        _record_failure(img_path, display_path, error_key, e)
                         completed_count += 1
                         count = completed_count
 
@@ -2900,7 +2493,7 @@ def batch_translate_images(
 
     if preserve_structure:
         image_files = []
-        for root, dirs, files in os.walk(input_dir):
+        for root, _dirs, files in os.walk(input_dir):
             for file in files:
                 file_path = Path(root) / file
                 if file_path.suffix.lower() in image_extensions:
@@ -2919,7 +2512,7 @@ def batch_translate_images(
             )
         except ValueError:
             sort_path = path
-        return _natural_path_sort_key(sort_path)
+        return natural_path_sort_key(sort_path)
 
     image_files.sort(key=_batch_sort_key)
 
@@ -2950,122 +2543,19 @@ def batch_translate_images(
     if progress_callback:
         progress_callback(0.0, f"Starting batch processing of {total_images} images...")
 
-    if config.parallel_requests > 1:
-        results = asyncio.run(
-            _batch_translate_parallel(
-                image_files=image_files,
-                input_dir=input_dir,
-                config=config,
-                output_dir=output_dir,
-                preserve_structure=preserve_structure,
-                progress_callback=progress_callback,
-                cancellation_manager=cancellation_manager,
-                source_path_map=source_path_map,
-            )
+    results = asyncio.run(
+        _batch_translate_pages(
+            image_files=image_files,
+            input_dir=input_dir,
+            config=config,
+            output_dir=output_dir,
+            preserve_structure=preserve_structure,
+            progress_callback=progress_callback,
+            cancellation_manager=cancellation_manager,
+            source_path_map=source_path_map,
         )
-        failed_jobs = results.pop("_failed_jobs", [])
-    else:
-        results = {
-            "success_count": 0,
-            "error_count": 0,
-            "errors": {},
-            "failed_image_paths": [],
-        }
-        failed_jobs: list[dict[str, Any]] = []
-        previous_context_cache = OrderedDict()
-        previous_context_cache_lock = threading.Lock()
-        ocr_text_history: dict[Path, list[str]] = {}
-        ocr_text_history_lock = threading.Lock()
-        log_message(
-            f"Starting batch processing: {total_images} images", always_print=True
-        )
-
-        for i, img_path in enumerate(image_files):
-            try:
-                output_path, display_path, error_key = _resolve_output_path(
-                    img_path, input_dir, output_dir, config, preserve_structure
-                )
-
-                if cancellation_manager and cancellation_manager.is_cancelled():
-                    raise CancellationError("Batch process cancelled by user.")
-
-                if progress_callback:
-                    current_progress = i / total_images
-                    progress_callback(
-                        current_progress,
-                        f"Processing image {i + 1}/{total_images}: {display_path}",
-                    )
-
-                log_message(
-                    f"Processing {i + 1}/{total_images}: {display_path}",
-                    always_print=True,
-                )
-
-                previous_context_images = _build_previous_context_images(
-                    image_files,
-                    i,
-                    config,
-                    previous_context_cache,
-                    previous_context_cache_lock,
-                )
-                previous_context_texts = _build_previous_context_texts(
-                    image_files,
-                    i,
-                    config,
-                    ocr_text_history,
-                    ocr_text_history_lock,
-                )
-                captured_ocr_texts: list[str] = []
-                _translate_batch_page(
-                    img_path,
-                    config,
-                    output_path,
-                    cancellation_manager=cancellation_manager,
-                    previous_context_images=previous_context_images,
-                    previous_context_texts=previous_context_texts,
-                    ocr_texts_out=captured_ocr_texts,
-                )
-                if captured_ocr_texts:
-                    with ocr_text_history_lock:
-                        ocr_text_history[img_path] = captured_ocr_texts
-
-                results["success_count"] += 1
-
-                if progress_callback:
-                    completed_progress = (i + 1) / total_images
-                    progress_callback(
-                        completed_progress,
-                        f"Completed {i + 1}/{total_images} images",
-                    )
-
-            except CancellationError:
-                log_message(
-                    f"Batch cancelled during processing of {display_path}",
-                    verbose=config.verbose,
-                )
-                raise
-            except Exception as e:
-                log_message(
-                    f"Error processing {display_path}: {e!s}", always_print=True
-                )
-                source_path = resolve_source_path(img_path, source_path_map)
-                results["error_count"] += 1
-                results["errors"][error_key] = str(e)
-                results["failed_image_paths"].append(source_path)
-                failed_jobs.append(
-                    {
-                        "error_key": error_key,
-                        "img_path": img_path,
-                        "source_path": source_path,
-                    }
-                )
-
-                if progress_callback:
-                    completed_progress = (i + 1) / total_images
-                    progress_callback(
-                        completed_progress,
-                        f"Completed {i + 1}/{total_images} images (with errors)",
-                    )
+    )
+    failed_jobs = results.pop("_failed_jobs", [])
 
     if _should_run_failed_retry(config, failed_jobs, cancellation_manager):
         _retry_failed_batch_images(

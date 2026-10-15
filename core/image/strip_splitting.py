@@ -17,7 +17,7 @@ def _pick_gap(free: np.ndarray, min_gap: int, prefer: int) -> int | None:
     edges = np.flatnonzero(padded[1:] != padded[:-1])
     middles = [
         int(start + end) // 2
-        for start, end in zip(edges[::2], edges[1::2])
+        for start, end in zip(edges[::2], edges[1::2], strict=False)
         if end - start >= min_gap
     ]
     return min(middles, key=lambda row: abs(row - prefer), default=None)

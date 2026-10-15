@@ -316,7 +316,7 @@ def draw_layout(
                 block_height = layout_data.get("block_height") or 0.0
                 block_top_y = target_center_y - block_height / 2.0
 
-                for i, line_data in enumerate(final_lines_data):
+                for line_data in final_lines_data:
                     segment_text = line_data.get("text_with_markers", "")
                     style_name = line_data.get("style", "regular")
                     typeface_to_use, hb_face_to_use = _resolve_style_resources(
@@ -369,7 +369,7 @@ def draw_layout(
                     skia_point_positions = []
                     segment_cursor_x = 0.0
 
-                    for _, pos in zip(infos, positions):
+                    for _, pos in zip(infos, positions, strict=False):
                         glyph_x = (
                             baseline_x
                             + segment_cursor_x
@@ -480,7 +480,7 @@ def draw_layout(
                         else:
                             segment_start_x = cursor_x
 
-                        for _, pos in zip(infos, positions):
+                        for _, pos in zip(infos, positions, strict=False):
                             glyph_x = (
                                 segment_start_x
                                 + segment_cursor_x

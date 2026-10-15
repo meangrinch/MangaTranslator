@@ -2,7 +2,11 @@ import cv2
 import numpy as np
 import pytest
 
-from core.image.cleaning import _build_adaptive_shrink_mask, process_single_bubble
+from core.image.cleaning import (
+    _build_adaptive_shrink_mask,
+    clean_speech_bubbles,
+    process_single_bubble,
+)
 from utils.exceptions import CleaningError
 
 
@@ -55,6 +59,28 @@ def _bubble_page(height, width, ox, oy):
     bbox = (ox + 10, oy + 10, ox + 200, oy + 210)
     neighbors = [(ox + 190, oy + 50, ox + 260, oy + 170)]
     return gray, base, bbox, neighbors
+
+
+def test_sam_and_yolo_detections_of_one_bubble_clean_the_same():
+    from PIL import Image
+
+    gray, base, bbox, _ = _bubble_page(240, 280, 0, 0)
+    page = Image.fromarray(gray).convert("RGB")
+    contours, _ = cv2.findContours(base, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    sam = {"bbox": bbox, "sam_mask": base > 0}
+    yolo = {"bbox": bbox, "mask_points": contours[0].tolist()}
+    bad = {"bbox": (0, 0, 5, 5), "mask_points": [[1, 2, 3]]}
+
+    _, sam_info = clean_speech_bubbles(page, None, pre_computed_detections=[sam])
+    cleaned, yolo_info = clean_speech_bubbles(
+        page, None, pre_computed_detections=[bad, yolo]
+    )
+
+    assert len(sam_info) == len(yolo_info) == 1
+    assert sam_info[0]["is_sam"] and not yolo_info[0]["is_sam"]
+    assert np.array_equal(sam_info[0]["mask"], yolo_info[0]["mask"])
+    assert sam_info[0]["color"] == yolo_info[0]["color"]
+    assert cleaned[100, 90].tolist() == [255, 255, 255]
 
 
 @pytest.mark.parametrize("use_otsu", [False, True])

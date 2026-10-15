@@ -24,7 +24,7 @@ from core.image.image_utils import (
     process_bubble_image_cached,
     resize_lanczos_antiring,
 )
-from core.image.inpainting import FluxKleinInpainter, FluxKontextInpainter
+from core.image.inpainting import make_flux_inpainter
 from core.image.ocr_detection import OutsideTextDetector, extract_text_with_manga_ocr
 from core.image.tilt_detection import (
     compute_effective_tilt_angle,
@@ -83,7 +83,9 @@ def _build_outside_text_data(
     outside_text_data = []
     original_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
 
-    for expanded_res, raw_res in zip(outside_text_results, raw_outside_text_results):
+    for expanded_res, raw_res in zip(
+        outside_text_results, raw_outside_text_results, strict=False
+    ):
         bbox_coords, conf = expanded_res
         raw_coords, _ = raw_res
 
@@ -232,7 +234,7 @@ def _apply_inpaint_render_metadata(
             x1, y1, x2, y2 = bbox
             bcx, bcy = (x1 + x2) / 2, (y1 + y2) / 2
             for key, color in extracted_text_colors.items():
-                if key == raw_bbox_tuple or key == bbox:
+                if key in (raw_bbox_tuple, bbox):
                     item["text_color_rgb"] = color
                     break
                 if (
@@ -254,6 +256,78 @@ def _apply_inpaint_render_metadata(
                     needs_text_bg = True
                     break
         item["needs_text_background"] = needs_text_bg
+
+
+def _fill_mask(image: Image.Image, mask: np.ndarray, color) -> Image.Image:
+    """Copy of `image` with `color` painted wherever `mask` is set."""
+    filled = image.copy()
+    ys, xs = np.where(mask)
+    if len(xs) == 0:
+        return filled
+    x0, x1 = int(xs.min()), int(xs.max()) + 1
+    y0, y1 = int(ys.min()), int(ys.max()) + 1
+    region = Image.fromarray((mask[y0:y1, x0:x1] * 255).astype(np.uint8), mode="L")
+    filled.paste(Image.new("RGB", (x1 - x0, y1 - y0), color), (x0, y0), mask=region)
+    return filled
+
+
+def _results_bounds(results: list, indices: list[int]) -> tuple[int, int, int, int]:
+    """Union (x0, y0, x1, y1) of the boxes of `results[i]` for each index."""
+    boxes = [results[i][0] for i in indices]
+    return (
+        int(min(box[0] for box in boxes)),
+        int(min(box[1] for box in boxes)),
+        int(max(box[2] for box in boxes)),
+        int(max(box[3] for box in boxes)),
+    )
+
+
+def _border_color(pixels: np.ndarray) -> tuple[tuple[int, int, int], float]:
+    """Median RGB of border pixels (snapped to pure white/black) and the share near it."""
+    median = np.median(pixels, axis=0).astype(int)
+    diffs = np.max(np.abs(pixels.astype(int) - median), axis=1)
+    solid_ratio = float(np.mean(diffs <= OSB_COLOR_TOLERANCE))
+    if np.all(median >= OSB_WHITE_SNAP_THRESH):
+        color = (255, 255, 255)
+    elif np.all(median <= OSB_BLACK_SNAP_THRESH):
+        color = (0, 0, 0)
+    else:
+        color = (int(median[0]), int(median[1]), int(median[2]))
+    return color, solid_ratio
+
+
+def _outlined_glyph_components(
+    crop_gray: np.ndarray,
+    glyph_mask: np.ndarray,
+    is_contrasting,
+    min_core_ratio: float = 0.0,
+) -> list[tuple[int, float]]:
+    """(area, contrasting-border ratio) of each solid glyph whose border mostly contrasts."""
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(glyph_mask)
+    height, width = crop_gray.shape
+    found = []
+    for label in range(1, num_labels):
+        area = int(stats[label, cv2.CC_STAT_AREA])
+        if area < 10:
+            continue
+        # Work inside the component's own box, padded for the 5x5 dilation; scanning
+        # the whole region per component takes seconds on screentone
+        x, y, w, h = stats[label, :4]
+        y0, y1 = max(0, y - 3), min(height, y + h + 3)
+        x0, x1 = max(0, x - 3), min(width, x + w + 3)
+        comp = (labels[y0:y1, x0:x1] == label).astype(np.uint8) * 255
+        core = np.count_nonzero(cv2.erode(comp, np.ones((2, 2), np.uint8)))
+        if core == 0 or core / area < min_core_ratio:
+            continue
+        dilated = cv2.dilate(comp, np.ones((5, 5), np.uint8))
+        boundary = cv2.bitwise_and(dilated, cv2.bitwise_not(comp))
+        border = crop_gray[y0:y1, x0:x1][boundary == 255]
+        if len(border) == 0:
+            continue
+        ratio = np.count_nonzero(is_contrasting(border)) / len(border)
+        if ratio >= 0.40:
+            found.append((area, ratio))
+    return found
 
 
 def _is_page_number(text: str) -> bool:
@@ -602,9 +676,12 @@ def prepare_outside_text_work(
                 bbox_array = bbox_array[..., :3]
 
             pixels = bbox_array.reshape(-1, 3)
+            # Every 4th pixel is plenty to find two colors, at a tenth of the cost
+            if len(pixels) >= 8:
+                pixels = pixels[::4]
 
             # Use K-Means to find 2 dominant colors
-            kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
+            kmeans = KMeans(n_clusters=2, random_state=42, n_init=1)
             kmeans.fit(pixels)
 
             labels = kmeans.labels_
@@ -806,94 +883,43 @@ def finish_outside_text_work(
         # Create inpainter based on selected method
         inpainting_method = config.outside_text.inpainting_method
         inpainter = None
-        if inpainting_method == "flux_klein_9b":
+        flux_labels = {
+            "flux_klein_9b": "Flux.2 Klein 9B",
+            "flux_klein_4b": "Flux.2 Klein 4B",
+            "flux_kontext": "Flux.1 Kontext",
+        }
+        if inpainting_method in flux_labels:
+            osb = config.outside_text
+            label = flux_labels[inpainting_method]
             try:
-                backend = config.outside_text.flux_backend
-                inpainter = FluxKleinInpainter(
-                    variant="9b",
+                inpainter = make_flux_inpainter(
+                    inpainting_method,
                     device=config.device,
-                    huggingface_token=config.outside_text.huggingface_token,
-                    num_inference_steps=config.outside_text.flux_num_inference_steps,
-                    low_vram=config.outside_text.flux_low_vram,
-                    luminance_correction=config.outside_text.flux_luminance_correction,
-                    upscale_small_crops=config.outside_text.flux_upscale_small_crops,
-                    backend=backend,
-                    sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
-                    sdcpp_diffusion_quant=config.outside_text.flux_sdcpp_diffusion_quant,
-                    sdcpp_text_encoder_quant=config.outside_text.flux_sdcpp_text_encoder_quant,
+                    huggingface_token=osb.huggingface_token,
+                    num_inference_steps=osb.flux_num_inference_steps,
+                    backend=osb.flux_backend,
+                    low_vram=osb.flux_low_vram,
+                    residual_diff_threshold=osb.flux_residual_diff_threshold,
+                    luminance_correction=osb.flux_luminance_correction,
+                    upscale_small_crops=osb.flux_upscale_small_crops,
+                    sdcpp_cache_mode=osb.flux_sdcpp_cache_mode,
+                    sdcpp_diffusion_quant=osb.flux_sdcpp_diffusion_quant,
+                    sdcpp_text_encoder_quant=osb.flux_sdcpp_text_encoder_quant,
                     verbose=verbose,
-                )
-                backend_label = "sd.cpp" if backend == "sdcpp" else "SDNQ"
-                log_message(
-                    f"Using Flux.2 Klein 9B ({backend_label}) for inpainting",
-                    verbose=verbose,
-                )
-            except Exception as e:
-                log_message(
-                    f"Flux Klein 9B unavailable ({e}), falling back to OpenCV",
-                    verbose=verbose,
-                )
-
-        if inpainting_method == "flux_klein_4b":
-            try:
-                backend = config.outside_text.flux_backend
-                inpainter = FluxKleinInpainter(
-                    variant="4b",
-                    device=config.device,
-                    huggingface_token=config.outside_text.huggingface_token,
-                    num_inference_steps=config.outside_text.flux_num_inference_steps,
-                    low_vram=config.outside_text.flux_low_vram,
-                    luminance_correction=config.outside_text.flux_luminance_correction,
-                    upscale_small_crops=config.outside_text.flux_upscale_small_crops,
-                    backend=backend,
-                    sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
-                    sdcpp_diffusion_quant=config.outside_text.flux_sdcpp_diffusion_quant,
-                    sdcpp_text_encoder_quant=config.outside_text.flux_sdcpp_text_encoder_quant,
-                    verbose=verbose,
-                )
-                backend_label = "sd.cpp" if backend == "sdcpp" else "SDNQ"
-                log_message(
-                    f"Using Flux.2 Klein 4B ({backend_label}) for inpainting",
-                    verbose=verbose,
-                )
-            except Exception as e:
-                log_message(
-                    f"Flux Klein 4B unavailable ({e}), falling back to OpenCV",
-                    verbose=verbose,
-                )
-
-        if inpainting_method == "flux_kontext":
-            try:
-                backend = config.outside_text.flux_backend
-                low_vram = (
-                    config.outside_text.flux_low_vram if backend == "sdnq" else False
-                )
-                inpainter = FluxKontextInpainter(
-                    device=config.device,
-                    huggingface_token=config.outside_text.huggingface_token,
-                    num_inference_steps=config.outside_text.flux_num_inference_steps,
-                    residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
-                    backend=backend,
-                    low_vram=low_vram,
-                    sdcpp_cache_mode=config.outside_text.flux_sdcpp_cache_mode,
-                    sdcpp_diffusion_quant=config.outside_text.flux_sdcpp_diffusion_quant,
-                    sdcpp_text_encoder_quant=config.outside_text.flux_sdcpp_text_encoder_quant,
                 )
                 backend_label = {
                     "sdnq": "SDNQ",
                     "sdcpp": "sd.cpp",
                     "nunchaku": "Nunchaku",
-                }[backend]
+                }.get(osb.flux_backend, osb.flux_backend)
                 log_message(
-                    f"Using Flux.1 Kontext ({backend_label}) for inpainting",
-                    verbose=verbose,
+                    f"Using {label} ({backend_label}) for inpainting", verbose=verbose
                 )
             except Exception as e:
                 log_message(
-                    f"Flux Kontext unavailable ({e}), falling back to OpenCV",
+                    f"{label} unavailable ({e}), falling back to OpenCV",
                     verbose=verbose,
                 )
-
         if inpainting_method == "none":
             inpainter = None
             log_message(
@@ -921,51 +947,33 @@ def finish_outside_text_work(
             request_coordinator = getattr(config, "request_coordinator", None)
             pending_flux_candidates = []
 
-            def apply_candidate_simple_fill(candidate, color_to_use):
-                new_img = current_image.copy()
-                candidate_group = candidate["group"]
-                candidate_mask = candidate["mask"]
-                candidate_original_bbox = candidate["original_bbox_dict"]
-                c_ox0, c_oy0, c_ox1, c_oy1 = candidate["original_bounds"]
-                mask_indices = candidate_group.get("mask_indices", [])
-
+            def simple_fill(
+                image, color, group, combined_mask, original_bbox_dict, bounds
+            ):
+                """Fill the group's (tilt-aware) text boxes, else its whole mask."""
                 rect_mask = _build_osb_simple_fill_mask(
                     img_w=img_w,
                     img_h=img_h,
-                    mask_indices=mask_indices,
+                    mask_indices=group.get("mask_indices", []),
                     outside_text_results=outside_text_results,
                     outside_text_data=outside_text_data,
                     config=config,
-                    fallback_bounds=(
-                        (c_ox0, c_oy0, c_ox1, c_oy1)
-                        if candidate_original_bbox
-                        else None
-                    ),
+                    fallback_bounds=bounds if original_bbox_dict else None,
                     total_bubble_mask=total_bubble_mask,
                 )
+                return _fill_mask(
+                    image, combined_mask if rect_mask is None else rect_mask, color
+                )
 
-                if rect_mask is None:
-                    mask_pil = Image.fromarray(
-                        (candidate_mask * 255).astype(np.uint8), mode="L"
-                    )
-                    patch = Image.new("RGB", new_img.size, color_to_use)
-                    new_img.paste(patch, (0, 0), mask=mask_pil)
-                    return new_img
-
-                ys, xs = np.where(rect_mask)
-                if len(xs) > 0 and len(ys) > 0:
-                    min_x, max_x = int(np.min(xs)), int(np.max(xs)) + 1
-                    min_y, max_y = int(np.min(ys)), int(np.max(ys)) + 1
-                    region_mask = rect_mask[min_y:max_y, min_x:max_x]
-                    mask_pil = Image.fromarray(
-                        (region_mask * 255).astype(np.uint8), mode="L"
-                    )
-                    patch = Image.new(
-                        "RGB", (max_x - min_x, max_y - min_y), color_to_use
-                    )
-                    new_img.paste(patch, (min_x, min_y), mask=mask_pil)
-
-                return new_img
+            def apply_candidate_simple_fill(candidate, color_to_use):
+                return simple_fill(
+                    current_image,
+                    color_to_use,
+                    candidate["group"],
+                    candidate["mask"],
+                    candidate["original_bbox_dict"],
+                    candidate["original_bounds"],
+                )
 
             def flush_pending_flux_candidates():
                 nonlocal current_image, flux_inpaints, cv2_inpaints
@@ -1134,37 +1142,8 @@ def finish_outside_text_work(
                         # Expanded sampling around the original bbox to find background color
                         mask_indices = group.get("mask_indices", [])
                         if mask_indices and raw_outside_text_results:
-                            rx0 = int(
-                                min(
-                                    [
-                                        raw_outside_text_results[idx][0][0]
-                                        for idx in mask_indices
-                                    ]
-                                )
-                            )
-                            ry0 = int(
-                                min(
-                                    [
-                                        raw_outside_text_results[idx][0][1]
-                                        for idx in mask_indices
-                                    ]
-                                )
-                            )
-                            rx1 = int(
-                                max(
-                                    [
-                                        raw_outside_text_results[idx][0][2]
-                                        for idx in mask_indices
-                                    ]
-                                )
-                            )
-                            ry1 = int(
-                                max(
-                                    [
-                                        raw_outside_text_results[idx][0][3]
-                                        for idx in mask_indices
-                                    ]
-                                )
+                            rx0, ry0, rx1, ry1 = _results_bounds(
+                                raw_outside_text_results, mask_indices
                             )
                         else:
                             rx0, ry0, rx1, ry1 = ox, oy, ox + ow, oy + oh
@@ -1194,38 +1173,12 @@ def finish_outside_text_work(
                                 border_pixels = crop_np[local_mask]
 
                             if border_pixels is not None and border_pixels.size > 0:
-                                bg_rgb_med = np.median(border_pixels, axis=0).astype(
-                                    int
-                                )
-                                diffs = np.max(
-                                    np.abs(border_pixels.astype(int) - bg_rgb_med),
-                                    axis=1,
-                                )
-                                solid_ratio = float(
-                                    np.mean(diffs <= OSB_COLOR_TOLERANCE)
+                                detected_color, solid_ratio = _border_color(
+                                    border_pixels
                                 )
                                 is_border_solid = (
                                     solid_ratio >= OSB_SOLID_RATIO_THRESHOLD
                                 )
-
-                                if (
-                                    bg_rgb_med[0] >= OSB_WHITE_SNAP_THRESH
-                                    and bg_rgb_med[1] >= OSB_WHITE_SNAP_THRESH
-                                    and bg_rgb_med[2] >= OSB_WHITE_SNAP_THRESH
-                                ):
-                                    detected_color = (255, 255, 255)
-                                elif (
-                                    bg_rgb_med[0] <= OSB_BLACK_SNAP_THRESH
-                                    and bg_rgb_med[1] <= OSB_BLACK_SNAP_THRESH
-                                    and bg_rgb_med[2] <= OSB_BLACK_SNAP_THRESH
-                                ):
-                                    detected_color = (0, 0, 0)
-                                else:
-                                    detected_color = (
-                                        int(bg_rgb_med[0]),
-                                        int(bg_rgb_med[1]),
-                                        int(bg_rgb_med[2]),
-                                    )
 
                                 if is_border_solid or fallback_fill_color is None:
                                     fallback_fill_color = detected_color
@@ -1252,84 +1205,24 @@ def finish_outside_text_work(
                                 # 1. Detect outlined monochrome text (black text + white outline or white text + dark outline)
                                 detected_text_color = None
 
-                                # Dark glyph components (candidate black text core)
-                                ink_mask = (crop_gray < 50).astype(np.uint8) * 255
-                                num_labels, labels, stats, _ = (
-                                    cv2.connectedComponentsWithStats(ink_mask)
+                                # Glyph cores whose border contrasts: dark text with a light outline, and the reverse
+                                dark_glyph_comps = _outlined_glyph_components(
+                                    crop_gray,
+                                    (crop_gray < 50).astype(np.uint8) * 255,
+                                    lambda border: border > 150,
                                 )
-                                dark_glyph_comps = []
-                                total_dark_glyph_area = 0
-
-                                for l in range(1, num_labels):
-                                    area = stats[l, cv2.CC_STAT_AREA]
-                                    if area < 10:
-                                        continue
-                                    comp = (labels == l).astype(np.uint8) * 255
-                                    e2 = cv2.erode(comp, np.ones((2, 2), np.uint8))
-                                    if np.count_nonzero(e2) == 0:
-                                        continue
-
-                                    dilated = cv2.dilate(
-                                        comp, np.ones((5, 5), np.uint8)
-                                    )
-                                    boundary = cv2.bitwise_and(
-                                        dilated, cv2.bitwise_not(comp)
-                                    )
-                                    b_pixels = crop_gray[boundary == 255]
-                                    if len(b_pixels) == 0:
-                                        continue
-
-                                    bright_ratio = np.count_nonzero(
-                                        b_pixels > 150
-                                    ) / len(b_pixels)
-                                    if bright_ratio >= 0.40:
-                                        dark_glyph_comps.append(
-                                            {
-                                                "area": area,
-                                                "bright_ratio": bright_ratio,
-                                            }
-                                        )
-                                        total_dark_glyph_area += area
-
-                                # White glyph components (candidate white text core)
-                                white_mask = (crop_gray > 200).astype(np.uint8) * 255
-                                num_w, labels_w, stats_w, _ = (
-                                    cv2.connectedComponentsWithStats(white_mask)
+                                white_glyph_comps = _outlined_glyph_components(
+                                    crop_gray,
+                                    (crop_gray > 200).astype(np.uint8) * 255,
+                                    lambda border: border < 90,
+                                    min_core_ratio=0.05,
                                 )
-                                white_glyph_comps = []
-                                total_white_glyph_area = 0
-
-                                for l in range(1, num_w):
-                                    area = stats_w[l, cv2.CC_STAT_AREA]
-                                    if area < 10:
-                                        continue
-                                    comp = (labels_w == l).astype(np.uint8) * 255
-                                    e2 = cv2.erode(comp, np.ones((2, 2), np.uint8))
-                                    e2_area = np.count_nonzero(e2)
-                                    if e2_area == 0 or (e2_area / area) < 0.05:
-                                        continue
-
-                                    dilated = cv2.dilate(
-                                        comp, np.ones((5, 5), np.uint8)
-                                    )
-                                    boundary = cv2.bitwise_and(
-                                        dilated, cv2.bitwise_not(comp)
-                                    )
-                                    b_pixels = crop_gray[boundary == 255]
-                                    if len(b_pixels) == 0:
-                                        continue
-
-                                    dark_ratio = np.count_nonzero(b_pixels < 90) / len(
-                                        b_pixels
-                                    )
-                                    if dark_ratio >= 0.40:
-                                        white_glyph_comps.append(
-                                            {
-                                                "area": area,
-                                                "dark_ratio": dark_ratio,
-                                            }
-                                        )
-                                        total_white_glyph_area += area
+                                total_dark_glyph_area = sum(
+                                    a for a, _ in dark_glyph_comps
+                                )
+                                total_white_glyph_area = sum(
+                                    a for a, _ in white_glyph_comps
+                                )
 
                                 has_dark_outlines = (
                                     len(dark_glyph_comps) >= 2
@@ -1354,17 +1247,10 @@ def finish_outside_text_work(
                                     detected_text_color = (255, 255, 255)
                                 elif has_dark_outlines and has_white_outlines:
                                     avg_dark_ratio = float(
-                                        np.mean(
-                                            [
-                                                c["bright_ratio"]
-                                                for c in dark_glyph_comps
-                                            ]
-                                        )
+                                        np.mean([r for _, r in dark_glyph_comps])
                                     )
                                     avg_white_ratio = float(
-                                        np.mean(
-                                            [c["dark_ratio"] for c in white_glyph_comps]
-                                        )
+                                        np.mean([r for _, r in white_glyph_comps])
                                     )
                                     if (
                                         len(dark_glyph_comps) > len(white_glyph_comps)
@@ -1465,50 +1351,11 @@ def finish_outside_text_work(
                                 p_x0, p_y0, p_x1, p_y1 = ox, oy, ox + ow, oy + oh
                                 mask_indices = group.get("mask_indices", [])
                                 if mask_indices and outside_text_results:
-                                    p_x0 = max(
-                                        0,
-                                        int(
-                                            min(
-                                                [
-                                                    outside_text_results[idx][0][0]
-                                                    for idx in mask_indices
-                                                ]
-                                            )
-                                        ),
+                                    p_x0, p_y0, p_x1, p_y1 = _results_bounds(
+                                        outside_text_results, mask_indices
                                     )
-                                    p_y0 = max(
-                                        0,
-                                        int(
-                                            min(
-                                                [
-                                                    outside_text_results[idx][0][1]
-                                                    for idx in mask_indices
-                                                ]
-                                            )
-                                        ),
-                                    )
-                                    p_x1 = min(
-                                        img_w,
-                                        int(
-                                            max(
-                                                [
-                                                    outside_text_results[idx][0][2]
-                                                    for idx in mask_indices
-                                                ]
-                                            )
-                                        ),
-                                    )
-                                    p_y1 = min(
-                                        img_h,
-                                        int(
-                                            max(
-                                                [
-                                                    outside_text_results[idx][0][3]
-                                                    for idx in mask_indices
-                                                ]
-                                            )
-                                        ),
-                                    )
+                                    p_x0, p_y0 = max(0, p_x0), max(0, p_y0)
+                                    p_x1, p_y1 = min(img_w, p_x1), min(img_h, p_y1)
 
                                 # Simply check if the expanded boundary is solid color
                                 expanded_is_solid = is_border_solid
@@ -1538,42 +1385,9 @@ def finish_outside_text_work(
 
                                         eborder_pixels = ecrop_np[elocal_mask]
                                         if eborder_pixels.size > 0:
-                                            ebg_rgb_med = np.median(
-                                                eborder_pixels, axis=0
-                                            ).astype(int)
-                                            ediffs = np.max(
-                                                np.abs(
-                                                    eborder_pixels.astype(int)
-                                                    - ebg_rgb_med
-                                                ),
-                                                axis=1,
+                                            edetected_color, esolid_ratio = (
+                                                _border_color(eborder_pixels)
                                             )
-                                            esolid_ratio = float(
-                                                np.mean(ediffs <= OSB_COLOR_TOLERANCE)
-                                            )
-                                            if (
-                                                ebg_rgb_med[0] >= OSB_WHITE_SNAP_THRESH
-                                                and ebg_rgb_med[1]
-                                                >= OSB_WHITE_SNAP_THRESH
-                                                and ebg_rgb_med[2]
-                                                >= OSB_WHITE_SNAP_THRESH
-                                            ):
-                                                edetected_color = (255, 255, 255)
-                                            elif (
-                                                ebg_rgb_med[0] <= OSB_BLACK_SNAP_THRESH
-                                                and ebg_rgb_med[1]
-                                                <= OSB_BLACK_SNAP_THRESH
-                                                and ebg_rgb_med[2]
-                                                <= OSB_BLACK_SNAP_THRESH
-                                            ):
-                                                edetected_color = (0, 0, 0)
-                                            else:
-                                                edetected_color = (
-                                                    int(ebg_rgb_med[0]),
-                                                    int(ebg_rgb_med[1]),
-                                                    int(ebg_rgb_med[2]),
-                                                )
-
                                             if (
                                                 esolid_ratio
                                                 >= OSB_SOLID_RATIO_THRESHOLD
@@ -1601,60 +1415,18 @@ def finish_outside_text_work(
                                             verbose=verbose,
                                         )
 
-                def apply_simple_fill(
-                    color_to_use,
-                    new_img_src=current_image,
-                    grp=group,
-                    orig_dict=original_bbox_dict,
-                    b_ox0=ox0,
-                    b_oy0=oy0,
-                    b_ox1=ox1,
-                    b_oy1=oy1,
-                    comb_mask=combined_mask,
-                ):
-                    new_img = new_img_src.copy()
-                    mask_indices = grp.get("mask_indices", [])
-
-                    rect_mask = _build_osb_simple_fill_mask(
-                        img_w=img_w,
-                        img_h=img_h,
-                        mask_indices=mask_indices,
-                        outside_text_results=outside_text_results,
-                        outside_text_data=outside_text_data,
-                        config=config,
-                        fallback_bounds=(
-                            (b_ox0, b_oy0, b_ox1, b_oy1) if orig_dict else None
-                        ),
-                        total_bubble_mask=total_bubble_mask,
-                    )
-
-                    if rect_mask is None:
-                        # Full mask fill fallback
-                        mask_pil = Image.fromarray(
-                            (comb_mask * 255).astype(np.uint8), mode="L"
-                        )
-                        patch = Image.new("RGB", new_img.size, color_to_use)
-                        new_img.paste(patch, (0, 0), mask=mask_pil)
-                        return new_img
-
-                    ys, xs = np.where(rect_mask)
-                    if len(xs) > 0 and len(ys) > 0:
-                        min_x, max_x = int(np.min(xs)), int(np.max(xs)) + 1
-                        min_y, max_y = int(np.min(ys)), int(np.max(ys)) + 1
-                        region_mask = rect_mask[min_y:max_y, min_x:max_x]
-                        mask_pil = Image.fromarray(
-                            (region_mask * 255).astype(np.uint8), mode="L"
-                        )
-                        patch = Image.new(
-                            "RGB", (max_x - min_x, max_y - min_y), color_to_use
-                        )
-                        new_img.paste(patch, (min_x, min_y), mask=mask_pil)
-
-                    return new_img
+                region_fill_args = (
+                    group,
+                    combined_mask,
+                    original_bbox_dict,
+                    (ox0, oy0, ox1, oy1),
+                )
 
                 if fill_color is not None:
                     flush_pending_flux_candidates()
-                    current_image = apply_simple_fill(fill_color)
+                    current_image = simple_fill(
+                        current_image, fill_color, *region_fill_args
+                    )
                     cv2_inpaints += 1
                     continue
 
@@ -1772,7 +1544,9 @@ def finish_outside_text_work(
                         + f"; falling back to CV2 fill ({fallback_color_to_use})",
                         always_print=True,
                     )
-                    current_image = apply_simple_fill(fallback_color_to_use)
+                    current_image = simple_fill(
+                        current_image, fallback_color_to_use, *region_fill_args
+                    )
                     cv2_inpaints += 1
                     continue
 
@@ -1831,18 +1605,11 @@ def finish_outside_text_work(
                             always_print=True,
                         )
                         for candidate in grouped_flux_candidates:
-                            mask_pil = Image.fromarray(
-                                (candidate["mask"] * 255).astype(np.uint8),
-                                mode="L",
-                            )
-                            patch = Image.new(
-                                "RGB",
-                                current_image.size,
+                            current_image = _fill_mask(
+                                current_image,
+                                candidate["mask"],
                                 candidate["fallback_color"],
                             )
-                            next_image = current_image.copy()
-                            next_image.paste(patch, (0, 0), mask=mask_pil)
-                            current_image = next_image
                         cv2_inpaints += len(grouped_flux_candidates)
 
             log_message("Outside text inpainting completed", verbose=verbose)

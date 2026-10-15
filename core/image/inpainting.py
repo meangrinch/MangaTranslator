@@ -92,6 +92,52 @@ def _flux_prompt_kwargs(
     return kwargs
 
 
+def make_flux_inpainter(
+    method: str,
+    *,
+    device: torch.device | None,
+    huggingface_token: str,
+    num_inference_steps: int,
+    backend: str,
+    low_vram: bool,
+    residual_diff_threshold: float,
+    luminance_correction: bool,
+    upscale_small_crops: bool,
+    sdcpp_cache_mode: str,
+    sdcpp_diffusion_quant: str,
+    sdcpp_text_encoder_quant: str,
+    verbose: bool = False,
+):
+    """Build the inpainter for "flux_klein_9b", "flux_klein_4b", or (otherwise) Flux.1 Kontext."""
+    if method in ("flux_klein_9b", "flux_klein_4b"):
+        return FluxKleinInpainter(
+            variant=method.removeprefix("flux_klein_"),
+            device=device,
+            huggingface_token=huggingface_token,
+            num_inference_steps=int(num_inference_steps),
+            low_vram=low_vram,
+            luminance_correction=luminance_correction,
+            upscale_small_crops=upscale_small_crops,
+            backend=backend,
+            sdcpp_cache_mode=sdcpp_cache_mode,
+            sdcpp_diffusion_quant=sdcpp_diffusion_quant,
+            sdcpp_text_encoder_quant=sdcpp_text_encoder_quant,
+            verbose=verbose,
+        )
+    return FluxKontextInpainter(
+        device=device,
+        huggingface_token=huggingface_token,
+        num_inference_steps=int(num_inference_steps),
+        residual_diff_threshold=float(residual_diff_threshold),
+        backend=backend,
+        # Only SDNQ offloads to the CPU
+        low_vram=low_vram if backend == "sdnq" else False,
+        sdcpp_cache_mode=sdcpp_cache_mode,
+        sdcpp_diffusion_quant=sdcpp_diffusion_quant,
+        sdcpp_text_encoder_quant=sdcpp_text_encoder_quant,
+    )
+
+
 class FluxKontextInpainter:
     """Inpainter using Flux Kontext models for text removal."""
 
@@ -348,10 +394,7 @@ class FluxKontextInpainter:
         Returns:
             tuple: (mask_for_composite, x, y, width, height)
         """
-        if mask_chw.dim() == 4:
-            mask = mask_chw[0, 0]
-        else:
-            mask = mask_chw[0]
+        mask = mask_chw[0, 0] if mask_chw.dim() == 4 else mask_chw[0]
 
         H, W = mask.shape[0], mask.shape[1]
         hard = mask.clone().unsqueeze(0)
@@ -386,10 +429,7 @@ class FluxKontextInpainter:
         h0 = y2 - y1
 
         if preferred_resolutions:
-            if h0 == 0:
-                initial_ar = W / H
-            else:
-                initial_ar = w0 / h0
+            initial_ar = W / H if h0 == 0 else w0 / h0
             log_message(
                 f"  - Initial mask bounding box AR: {initial_ar:.2f}",
                 verbose=verbose,
@@ -1119,10 +1159,14 @@ class FluxKleinInpainter:
             _prompt_value_to_device(self._pooled_prompt_embeds_cpu, device),
         )
 
+    def _snap_dimension(self, dim: int) -> int:
+        """Round dimension down to a multiple of RESOLUTION_MULTIPLE, at least MIN_RESOLUTION."""
+        dim = max(self.MIN_RESOLUTION, dim)
+        return (dim // self.RESOLUTION_MULTIPLE) * self.RESOLUTION_MULTIPLE
+
     def _quantize_dimension(self, dim: int) -> int:
         """Quantize dimension to be a multiple of RESOLUTION_MULTIPLE within allowed range."""
-        dim = max(self.MIN_RESOLUTION, min(self.MAX_RESOLUTION, dim))
-        return (dim // self.RESOLUTION_MULTIPLE) * self.RESOLUTION_MULTIPLE
+        return self._snap_dimension(min(self.MAX_RESOLUTION, dim))
 
     def _expand_bounds_to_min_size(
         self,
@@ -1301,6 +1345,11 @@ class FluxKleinInpainter:
         else:
             scale = 1.0
             reason = "model-compatible dimensions"
+        if current_pixels > 0:
+            # Fit the longest side here; clamping each side later would distort the shape
+            scale = min(
+                scale, self.MAX_RESOLUTION / orig_w, self.MAX_RESOLUTION / orig_h
+            )
 
         new_w = int(orig_w * scale)
         new_h = int(orig_h * scale)
@@ -1422,8 +1471,9 @@ class FluxKleinInpainter:
         y2 = min(img_h, y_max + 1 + padding)
         x1, y1, x2, y2 = self._expand_bounds_to_min_size(x1, y1, x2, y2, img_w, img_h)
 
-        width = min(self._quantize_dimension(x2 - x1), img_w)
-        height = min(self._quantize_dimension(y2 - y1), img_h)
+        # Only snap to the patch grid here; _prepare_image_for_inference caps the size
+        width = min(self._snap_dimension(x2 - x1), img_w)
+        height = min(self._snap_dimension(y2 - y1), img_h)
 
         if x1 + width > img_w:
             x1 = max(0, img_w - width)

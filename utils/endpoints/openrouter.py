@@ -1,3 +1,4 @@
+import contextlib
 from typing import Any
 
 import requests
@@ -47,10 +48,8 @@ def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
     """
     if not model_name:
         return False
-    try:
+    with contextlib.suppress(Exception):
         _ensure_openrouter_models_meta_loaded(debug=debug)
-    except Exception:
-        pass
 
     lm = model_name.lower()
     meta = _OPENROUTER_MODELS_META.get(lm)

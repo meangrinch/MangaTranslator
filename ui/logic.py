@@ -58,9 +58,14 @@ def _copy_images_with_source_map(
     source_path_map: dict[str, str],
 ) -> None:
     """Copy images into dest_dir and record temp→original path mapping."""
-    for img_file in image_files:
+    # Folder uploads arrive by base name, so ch1/001.png and ch2/001.png collide.
+    # Prefixing every file with its upload position keeps them apart and in order.
+    names = [img_file.name for img_file in image_files]
+    prefix_names = len(set(names)) < len(names)
+    for index, img_file in enumerate(image_files):
         try:
-            dest = dest_dir / img_file.name
+            name = f"{index:05d}_{img_file.name}" if prefix_names else img_file.name
+            dest = dest_dir / name
             shutil.copy2(img_file, dest)
             source_path_map[str(dest.resolve())] = str(img_file.resolve())
         except Exception as copy_err:
@@ -110,12 +115,14 @@ def extract_zip_to_temp(
 
         return temp_dir_path, temp_dir_obj
 
-    except zipfile.BadZipFile:
+    except zipfile.BadZipFile as e:
         temp_dir_obj.cleanup()
-        raise ValidationError(f"File '{zip_file_path}' is not a valid ZIP archive.")
+        raise ValidationError(
+            f"File '{zip_file_path}' is not a valid ZIP archive."
+        ) from e
     except Exception as e:
         temp_dir_obj.cleanup()
-        raise ValidationError(f"Failed to extract ZIP archive: {e!s}")
+        raise ValidationError(f"Failed to extract ZIP archive: {e!s}") from e
 
 
 def translate_manga_logic(

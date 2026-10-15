@@ -71,6 +71,29 @@ def test_translation_round_trip(cache):
     assert cache.get_translation(None) == (None, None)
 
 
+def test_translation_with_failed_items_is_not_cached(cache, monkeypatch):
+    from core.services import translation
+
+    calls = []
+
+    def fake_endpoint(*args, **kwargs):
+        calls.append(1)
+        return "1: 原文 || Hello"
+
+    monkeypatch.setattr(translation, "get_cache", lambda: cache)
+    monkeypatch.setattr(translation, "_call_llm_endpoint", fake_endpoint)
+    config = replace(DETERMINISTIC, provider="P", translation_mode="one-step")
+
+    def translate():
+        return translation.call_translation_api_batch(
+            config, ["b1", "b2"], "page", ["image/png"] * 2, "image/png", [{}, {}]
+        )
+
+    assert translate() == ["Hello", "[P: Missing item 2]"]
+    translate()
+    assert len(calls) == 2
+
+
 def test_yolo_key_depends_on_pixels_and_confidence(cache):
     white = Image.new("RGB", (8, 8), "white")
     black = Image.new("RGB", (8, 8), "black")

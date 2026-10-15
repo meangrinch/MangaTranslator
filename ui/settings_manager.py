@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 from collections import OrderedDict
@@ -562,8 +563,14 @@ def save_config(incoming_settings: dict[str, Any]):
             (k, config_to_write[k]) for k in ordered_keys
         )
 
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(ordered_config, f, indent=2)
+        # Write then swap, so a failed write can't leave a truncated config behind
+        tmp_file = CONFIG_FILE.with_name(CONFIG_FILE.name + ".tmp")
+        try:
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(ordered_config, f, indent=2)
+            os.replace(tmp_file, CONFIG_FILE)
+        finally:
+            tmp_file.unlink(missing_ok=True)
 
         if changed_setting_keys:
             changed_setting_keys = [k for k in changed_setting_keys if k is not None]
@@ -624,17 +631,13 @@ def get_saved_settings() -> dict[str, Any]:
                 pm = settings.get("provider_models") or {}
                 if isinstance(pm, dict) and "Gemini" in pm:
                     pm.setdefault("Google", pm.get("Gemini"))
-                    try:
+                    with contextlib.suppress(Exception):
                         del pm["Gemini"]
-                    except Exception:
-                        pass
                     settings["provider_models"] = pm
                 if isinstance(pm, dict) and "xAI" in pm:
                     pm.setdefault("SpaceXAI", pm.get("xAI"))
-                    try:
+                    with contextlib.suppress(Exception):
                         del pm["xAI"]
-                    except Exception:
-                        pass
                     settings["provider_models"] = pm
 
                 # 4) ocr_method: paddleocr-vl -> paddleocr-vl-1.6
@@ -649,11 +652,7 @@ def get_saved_settings() -> dict[str, Any]:
             )
             saved_model_for_provider = provider_models_dict.get(loaded_provider)
 
-            if (
-                loaded_provider == "OpenRouter"
-                or loaded_provider == "OpenAI-Compatible"
-                or loaded_provider == "OpenCode"
-            ):
+            if loaded_provider in {"OpenRouter", "OpenAI-Compatible", "OpenCode"}:
                 settings["model_name"] = saved_model_for_provider
             else:
                 valid_models = PROVIDER_MODELS.get(loaded_provider, [])
@@ -692,7 +691,7 @@ def get_saved_settings() -> dict[str, Any]:
             always_print=True,
         )
         default_provider = DEFAULT_SETTINGS["provider"]
-        if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
+        if default_provider not in {"OpenRouter", "OpenAI-Compatible"}:
             valid_models = PROVIDER_MODELS.get(default_provider, [])
             settings["model_name"] = valid_models[0] if valid_models else None
         else:
@@ -703,7 +702,7 @@ def get_saved_settings() -> dict[str, Any]:
             always_print=True,
         )
         default_provider = DEFAULT_SETTINGS["provider"]
-        if default_provider != "OpenRouter" and default_provider != "OpenAI-Compatible":
+        if default_provider not in {"OpenRouter", "OpenAI-Compatible"}:
             valid_models = PROVIDER_MODELS.get(default_provider, [])
             settings["model_name"] = valid_models[0] if valid_models else None
         else:

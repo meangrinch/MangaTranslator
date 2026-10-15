@@ -788,7 +788,7 @@ def _call_llm_endpoint(
     """Internal helper to dispatch API calls based on provider."""
     provider = config.provider
     model_name = config.model_name
-    api_parts = parts + [{"text": prompt_text}]
+    api_parts = [*parts, {"text": prompt_text}]
     coordinator = getattr(config, "request_coordinator", None)
     if coordinator is not None and not coordinator.in_slot():
         return coordinator.run(
@@ -1017,12 +1017,14 @@ def _check_ocr_failure(texts: list[str], provider: str | None = None) -> bool:
         return True
 
     if provider:
-        for text in texts:
-            if f"[{provider}-OCR:" not in text:
-                return False
-        return True
+        return all(f"[{provider}-OCR:" in text for text in texts)
     else:
         return all(text == "[OCR FAILED]" for text in texts)
+
+
+def _has_failed_items(texts: list[str], provider: str) -> bool:
+    """True if any item is a failure placeholder, which a retry might fix."""
+    return any(t == "[OCR FAILED]" or t.startswith(f"[{provider}") for t in texts)
 
 
 def _pair_context_lines(ocr_texts: list[str], translations: list[str]) -> list[str]:
@@ -1034,7 +1036,7 @@ def _pair_context_lines(ocr_texts: list[str], translations: list[str]) -> list[s
         ocr
         if ocr == "[OCR FAILED]" or not tr or tr.startswith("[")
         else f"{ocr} → {tr}"
-        for ocr, tr in zip(ocr_texts, translations)
+        for ocr, tr in zip(ocr_texts, translations, strict=False)
     ]
 
 
@@ -1311,7 +1313,7 @@ def _perform_manga_ocr(
     extracted_texts = extract_text_with_manga_ocr(pil_images, verbose=debug)
 
     formatted_texts = []
-    for i, text in enumerate(extracted_texts):
+    for text in extracted_texts:
         if text == "[OCR FAILED]" or not text:
             formatted_texts.append(text if text else "[OCR FAILED]")
         else:
@@ -1381,7 +1383,7 @@ def _perform_paddle_ocr_vl(
     extracted_texts = extract_text_with_paddle_ocr_vl(pil_images, verbose=debug)
 
     formatted_texts = []
-    for i, text in enumerate(extracted_texts):
+    for text in extracted_texts:
         if text == "[OCR FAILED]" or not text:
             formatted_texts.append(text if text else "[OCR FAILED]")
         else:
@@ -1641,7 +1643,9 @@ def call_translation_api_batch(
         ]
 
     for pages_back, image in zip(
-        range(previous_context_image_count, 0, -1), previous_context_images
+        range(previous_context_image_count, 0, -1),
+        previous_context_images,
+        strict=False,
     ):
         base_parts += [
             {"text": _PREVIOUS_PAGE_LABEL.format(pages_back)},
@@ -1727,7 +1731,9 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                 ]
 
             for pages_back, image in zip(
-                range(previous_context_image_count, 0, -1), previous_context_images
+                range(previous_context_image_count, 0, -1),
+                previous_context_images,
+                strict=False,
             ):
                 translation_parts += [
                     {"text": _PREVIOUS_PAGE_LABEL.format(pages_back)},
@@ -1834,12 +1840,13 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                 else:
                     combined_results.append(final_translations[i])
 
-            cache.set_translation(
-                cache_key,
-                combined_results,
-                ocr_texts=extracted_texts,
-                new_terms=new_terms,
-            )
+            if not _has_failed_items(combined_results, provider):
+                cache.set_translation(
+                    cache_key,
+                    combined_results,
+                    ocr_texts=extracted_texts,
+                    new_terms=new_terms,
+                )
             if ocr_texts_output is not None:
                 ocr_texts_output.extend(extracted_texts)
             return combined_results
@@ -1906,9 +1913,10 @@ Transcribe each crop, then translate that transcription into {output_language}.{
 
             if new_terms:
                 _record_glossary_terms(glossary_path, new_terms, ocr_texts, debug)
-            cache.set_translation(
-                cache_key, translations, ocr_texts=ocr_texts, new_terms=new_terms
-            )
+            if not _has_failed_items(translations, provider):
+                cache.set_translation(
+                    cache_key, translations, ocr_texts=ocr_texts, new_terms=new_terms
+                )
             if ocr_texts_output is not None:
                 ocr_texts_output.extend(ocr_texts)
             return translations
@@ -2045,7 +2053,7 @@ def prepare_bubble_images_for_translation(
 
         bubble_image_pil = cv2_to_pil(bubble_image_cv)
 
-        if upscale_method == "model" or upscale_method == "model_lite":
+        if upscale_method in {"model", "model_lite"}:
             final_bubble_pil = process_bubble_image_cached(
                 bubble_image_pil,
                 upscale_model,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 from collections.abc import Iterable
@@ -75,10 +76,8 @@ def record_failed_images(
 
     if failed_root.is_dir():
         for root, _, _ in os.walk(failed_root, topdown=False):
-            try:
+            with contextlib.suppress(OSError):  # not empty
                 Path(root).rmdir()
-            except OSError:
-                pass  # not empty
 
     out_file = out_dir / FAILED_PATHS_FILENAME
     try:

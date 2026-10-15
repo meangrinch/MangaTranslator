@@ -314,7 +314,7 @@ def create_layout(
         )
 
         saved_osb_font_pack = saved_settings.get("outside_text_osb_font_pack", "")
-        if saved_osb_font_pack not in ([""] + font_choices):
+        if saved_osb_font_pack not in (["", *font_choices]):
             saved_osb_font_pack = ""
 
         initial_provider = saved_settings.get(
@@ -322,11 +322,7 @@ def create_layout(
         )
         initial_model_name = saved_settings.get("model_name")
 
-        if (
-            initial_provider == "OpenRouter"
-            or initial_provider == "OpenAI-Compatible"
-            or initial_provider == "OpenCode"
-        ):
+        if initial_provider in {"OpenRouter", "OpenAI-Compatible", "OpenCode"}:
             initial_models_choices = [initial_model_name] if initial_model_name else []
         else:
             initial_models_choices = settings_manager.PROVIDER_MODELS.get(
@@ -2081,7 +2077,7 @@ def create_layout(
                                 gr.Markdown("### Font Rendering")
                                 outside_text_osb_font_pack = gr.Dropdown(
                                     value=saved_osb_font_pack,
-                                    choices=[""] + font_choices,
+                                    choices=["", *font_choices],
                                     label="Text Font",
                                     info="Font for rendering OSB text translations (leave empty to use main font)",
                                 )
@@ -2739,8 +2735,7 @@ def create_layout(
             batch_glossary_file,
         ]
 
-        translate_inputs = [
-            input_image,
+        shared_inputs = [
             confidence,
             conjoined_confidence,
             panel_confidence,
@@ -2885,152 +2880,8 @@ def create_layout(
             batch_glossary_file,
         ]
 
-        batch_inputs = [
-            input_files,
-            input_zip,
-            confidence,
-            conjoined_confidence,
-            panel_confidence,
-            seg_model,
-            bubble_detector_model,
-            conjoined_detection_checkbox,
-            osb_text_verification_checkbox,
-            use_panel_sorting_checkbox,
-            thresholding_value,
-            use_otsu_threshold,
-            auto_threshold,
-            inpaint_colored_bubbles,
-            roi_shrink_px,
-            provider_selector,
-            google_api_key,
-            openai_api_key,
-            anthropic_api_key,
-            xai_api_key,
-            meta_api_key,
-            deepseek_api_key,
-            zai_api_key,
-            moonshot_api_key,
-            mimo_api_key,
-            qwencloud_api_key,
-            opencode_api_key,
-            opencode_tier,
-            openrouter_api_key,
-            openai_compatible_url_input,
-            openai_compatible_api_key_input,
-            config_model_name,
-            temperature,
-            top_p,
-            top_k,
-            use_custom_sampling_checkbox,
-            max_tokens,
-            config_reading_direction,
-            config_translation_mode,
-            ocr_method_radio,
-            ocr_correction,
-            force_cache_translations,
-            input_language,
-            output_language,
-            font_dropdown,
-            max_font_size,
-            min_font_size,
-            auto_font_size,
-            line_spacing_mult,
-            use_ligatures,
-            output_format,
-            jpeg_quality,
-            png_compression,
-            verbose,
-            cleaning_only_toggle,
-            upscaling_only_toggle,
-            test_mode_toggle,
-            enable_web_search_checkbox,
-            enable_code_execution_checkbox,
-            image_detail_dropdown,
-            media_resolution_dropdown,
-            media_resolution_bubbles_dropdown,
-            media_resolution_context_dropdown,
-            reasoning_effort_dropdown,
-            effort_dropdown,
-            verbosity_dropdown,
-            send_full_page_context,
-            whiteout_conjoined_bubbles,
-            upscale_method,
-            bubble_min_side_pixels,
-            context_image_max_side_pixels,
-            osb_min_side_pixels,
-            hyphenate_before_scaling,
-            detach_trailing_punctuation,
-            auto_vertical_text,
-            vertical_line_spacing_mult,
-            vertical_font_size_mult,
-            hyphen_penalty,
-            hyphenation_min_word_length,
-            badness_exponent,
-            padding_pixels,
-            supersampling_factor,
-            outside_text_enabled,
-            outside_text_seed,
-            outside_text_inpainting_method,
-            outside_text_flux_backend_state,
-            outside_text_flux_low_vram,
-            outside_text_flux_sdcpp_cache_mode,
-            outside_text_flux_sdcpp_diffusion_quant_state,
-            outside_text_flux_sdcpp_text_encoder_quant_state,
-            outside_text_flux_num_inference_steps,
-            outside_text_flux_luminance_correction,
-            outside_text_flux_upscale_small_crops,
-            outside_text_flux_group_regions,
-            outside_text_flux_residual_diff_threshold,
-            outside_text_osb_confidence,
-            outside_text_osb_text_free_only,
-            outside_text_min_area_ignore_ratio_percent,
-            outside_text_enable_page_number_filtering,
-            outside_text_page_filter_margin_threshold,
-            outside_text_page_filter_min_area_ratio,
-            outside_text_huggingface_token,
-            outside_text_osb_font_pack,
-            outside_text_osb_max_font_size,
-            outside_text_osb_min_font_size,
-            outside_text_osb_use_ligatures,
-            outside_text_osb_outline_ratio,
-            outside_text_osb_line_spacing,
-            outside_text_osb_padding_pixels,
-            outside_text_osb_auto_vertical_text,
-            outside_text_osb_vertical_line_spacing_mult,
-            outside_text_osb_vertical_font_size_mult,
-            outside_text_bbox_expansion_percent_width,
-            outside_text_bbox_expansion_percent_height,
-            outside_text_osb_render_expansion_narrow_multiplier,
-            outside_text_osb_render_expansion_aspect_ratio_threshold,
-            outside_text_osb_render_expansion_tiny_multiplier,
-            outside_text_osb_render_expansion_area_threshold_percent,
-            outside_text_text_box_proximity_ratio,
-            outside_text_osb_follow_tilt,
-            outside_text_osb_max_tilt_deg,
-            outside_text_osb_min_tilt_deg,
-            outside_text_osb_tilt_confidence_threshold,
-            image_upscale_mode,
-            image_upscale_factor,
-            image_upscale_model,
-            auto_scale,
-            split_long_strips,
-            batch_input_language,
-            batch_output_language,
-            batch_font_dropdown,
-            special_instructions,
-            batch_special_instructions,
-            ero_doujinshi_mode,
-            batch_ero_doujinshi_mode,
-            batch_parallel_requests,
-            batch_parallel_within_pages,
-            overlap_llm_with_inpaint,
-            batch_overlap_llm_with_inpaint,
-            batch_retry_failed_once,
-            batch_previous_context_image_count,
-            batch_previous_context_text_count,
-            batch_terminology_memory,
-            batch_glossary_file,
-        ]
+        translate_inputs = [input_image, *shared_inputs]
+        batch_inputs = [input_files, input_zip, *shared_inputs]
 
         # Config Tab Navigation & Updates
         output_components_for_switch = setting_groups + nav_buttons

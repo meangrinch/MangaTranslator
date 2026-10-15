@@ -501,6 +501,12 @@ def test_retry_stops_once_cancelled_during_backoff(net, monkeypatch):
         cancellation.activate(CancellationManager())
 
 
+def test_retry_backs_off_on_server_overload(net):
+    net.queue = [503, 529, {"text": "ok"}]
+    assert retrying_post() == "ok"
+    assert net.sleeps == [1.0, 2.0]
+
+
 def test_other_http_errors_raise_at_once_with_hint(net):
     net.queue = [401]
     with pytest.raises(

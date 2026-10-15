@@ -16,6 +16,8 @@ COMMON_STATUS_HINTS = {
     401: "Check API key",
     403: "Permission denied, check API key/plan",
 }
+# Rate limits and transient server overloads (529 is Anthropic's "overloaded")
+RETRY_STATUSES = {429, 500, 502, 503, 504, 529}
 
 
 def api_error(error: Any, label: str) -> TranslationError:
@@ -40,8 +42,8 @@ def post_with_retries(
     status_hints: dict[int, str] | None = None,
 ) -> T:
     """
-    POST `payload` and return `parse(response_json)`, retrying rate limits (429)
-    and connection errors with exponential backoff.
+    POST `payload` and return `parse(response_json)`, retrying rate limits (429),
+    server overloads (5xx) and connection errors with exponential backoff.
 
     Args:
         url (str): Endpoint URL.
@@ -77,17 +79,21 @@ def post_with_retries(
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
             error_text = e.response.text[:500]  # Limit error text length
-            if status_code != 429:
+            if status_code not in RETRY_STATUSES:
                 reason = f"Status {status_code}: {error_text}"
                 hint = (status_hints or {}).get(status_code)
                 if hint:
                     reason += f" ({hint})"
                 raise TranslationError(f"{label} API HTTP Error: {reason}") from e
             if not can_retry:
+                if status_code == 429:
+                    raise TranslationError(
+                        f"{label} API HTTP Error: Rate limited after {attempts} attempts: {error_text}"
+                    ) from e
                 raise TranslationError(
-                    f"{label} API HTTP Error: Rate limited after {attempts} attempts: {error_text}"
+                    f"{label} API HTTP Error: Status {status_code} after {attempts} attempts: {error_text}"
                 ) from e
-            log_message(f"Rate limited, retrying in {delay:.1f}s", verbose=debug)
+            log_message(f"HTTP {status_code}, retrying in {delay:.1f}s", verbose=debug)
         except requests.exceptions.RequestException as e:
             if not can_retry:
                 raise TranslationError(

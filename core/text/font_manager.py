@@ -1,5 +1,6 @@
 import io
 import os
+import threading
 from collections import OrderedDict
 from pathlib import Path
 
@@ -11,32 +12,38 @@ from utils.logging import log_message
 
 
 class LRUCache:
-    """Simple LRU cache implementation to prevent unbounded memory growth."""
+    """Simple LRU cache implementation to prevent unbounded memory growth.
+
+    Locked because parallel batch pages read and fill the font caches at once.
+    """
 
     def __init__(self, max_size: int = 100):
         self.max_size = max_size
         self.cache = OrderedDict()
+        self._lock = threading.Lock()
 
     def get(self, key):
-        if key in self.cache:
-            value = self.cache.pop(key)
-            self.cache[key] = value
-            return value
-        return None
+        with self._lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)
+                return self.cache[key]
+            return None
 
     def put(self, key, value):
-        if key in self.cache:
-            self.cache.pop(key)
-        elif len(self.cache) >= self.max_size:
-            self.cache.popitem(last=False)
-        self.cache[key] = value
+        with self._lock:
+            if key in self.cache:
+                self.cache.pop(key)
+            elif len(self.cache) >= self.max_size:
+                self.cache.popitem(last=False)
+            self.cache[key] = value
 
     def __contains__(self, key):
-        return key in self.cache
+        with self._lock:
+            return key in self.cache
 
     def __delitem__(self, key):
-        if key in self.cache:
-            del self.cache[key]
+        with self._lock:
+            self.cache.pop(key, None)
 
 
 _font_data_cache = LRUCache(max_size=50)

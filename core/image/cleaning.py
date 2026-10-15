@@ -23,7 +23,7 @@ from utils.logging import log_message
 
 from .detection import detect_speech_bubbles
 from .image_utils import pil_to_cv2
-from .inpainting import FluxKleinInpainter, FluxKontextInpainter
+from .inpainting import make_flux_inpainter
 
 # Cleaning parameters
 GRAYSCALE_MIDPOINT = 128  # Threshold for determining black vs white bubbles
@@ -155,6 +155,36 @@ def _inpaint_colored_bubbles_with_coordinator(
             )
 
     return pil_working
+
+
+def _polygon_mask(
+    detection: dict[str, Any], img_height: int, img_width: int, verbose: bool
+) -> np.ndarray | None:
+    """Rasterize a YOLO detection's polygon, or None (logged) when it has no usable one."""
+    bbox = detection.get("bbox")
+    points_list = detection.get("mask_points")
+    if points_list is None or len(points_list) == 0:
+        log_message(f"Skipping detection {bbox}: no mask points", verbose=verbose)
+        return None
+    try:
+        points = np.array(points_list, dtype=np.float32)
+        if points.ndim == 3 and points.shape[1] == 1:
+            points_int = np.round(points).astype(int)
+        elif points.ndim == 2 and points.shape[1] == 2:
+            points_int = np.round(points).astype(int).reshape((-1, 1, 2))
+        else:
+            log_message(
+                f"Skipping detection {bbox}: invalid mask format", verbose=verbose
+            )
+            return None
+        yolo_mask = np.zeros((img_height, img_width), dtype=np.uint8)
+        cv2.fillPoly(yolo_mask, [points_int], 255)
+        return _normalize_mask(yolo_mask)
+    except Exception as e:
+        log_message(
+            f"Error processing YOLO mask for detection {bbox}: {e}", always_print=True
+        )
+        return None
 
 
 def _shift_bbox(bbox, dx: int, dy: int) -> tuple:
@@ -705,213 +735,98 @@ def clean_speech_bubbles(
         )
         for detection in detections:
             raise_if_cancelled()
-            final_mask = None
-            fill_color_bgr = None
-            is_colored_bubble = False
-            sample_color_bgr: tuple[int, int, int] | None = None
-            text_bbox: tuple[int, int, int, int] | None = None
-            text_color_bgr: tuple[int, int, int] | None = None
-            base_mask = None
-            is_sam_mask = False
-
+            bbox = detection.get("bbox")
             sam_mask = detection.get("sam_mask")
-            if sam_mask is not None:
+            is_sam_mask = sam_mask is not None
+            if is_sam_mask:
                 base_mask = _normalize_mask(sam_mask)
-                is_sam_mask = True
-                try:
-                    (
-                        final_mask,
-                        fill_color_bgr,
-                        is_colored_bubble,
-                        sample_color_bgr,
-                        text_bbox,
-                        text_color_bgr,
-                    ) = process_single_bubble(
-                        base_mask,
-                        img_gray,
-                        img_height,
-                        img_width,
-                        thresholding_value,
-                        use_otsu_threshold,
-                        effective_roi_shrink_px,
-                        verbose,
-                        detection.get("bbox"),
-                        is_sam=True,
-                        dilation_kernel=dilation_kernel,
-                        constraint_erosion_kernel=constraint_erosion_kernel,
-                        min_contour_area=min_contour_area,
-                        classify_colored=inpaint_colored_bubbles,
-                        neighbor_bboxes=detection.get("conjoined_neighbor_bboxes"),
-                        processing_scale=processing_scale,
-                        image_bgr=image,
-                        auto_threshold=auto_threshold,
-                    )
-                except Exception as e:
-                    retry_success = False
-                    if not use_otsu_threshold and base_mask is not None:
-                        log_message(
-                            f"Standard cleaning failed for {detection.get('bbox')}, retrying with Otsu...",
-                            verbose=verbose,
-                        )
-                        retry_res = retry_cleaning_with_otsu(
-                            image,
-                            {
-                                "base_mask": base_mask,
-                                "bbox": detection.get("bbox"),
-                                "is_sam": True,
-                                "neighbor_bboxes": detection.get(
-                                    "conjoined_neighbor_bboxes"
-                                ),
-                            },
-                            thresholding_value,
-                            roi_shrink_px,
-                            processing_scale,
-                            verbose,
-                            inpaint_colored_bubbles,
-                        )
-                        if retry_res:
-                            final_mask = retry_res["mask"]
-                            fill_color_bgr = retry_res["color"]
-                            sample_color_bgr = retry_res["color"]
-                            is_colored_bubble = retry_res["is_colored"]
-                            text_bbox = retry_res["text_bbox"]
-                            text_color_bgr = retry_res.get("text_color_bgr")
-                            retry_success = True
-                            log_message(
-                                f"Otsu retry successful for {detection.get('bbox')}",
-                                verbose=verbose,
-                            )
-                        else:
-                            log_message(
-                                f"Otsu retry failed for {detection.get('bbox')}",
-                                verbose=verbose,
-                            )
-
-                    if not retry_success:
-                        error_msg = f"Error processing SAM mask for detection {detection.get('bbox')}: {e}"
-                        log_message(error_msg, always_print=True)
-                        continue
             else:
-                if "mask_points" not in detection or not detection["mask_points"]:
-                    log_message(
-                        f"Skipping detection {detection.get('bbox')}: no mask points",
-                        verbose=verbose,
-                    )
+                base_mask = _polygon_mask(detection, img_height, img_width, verbose)
+                if base_mask is None:
                     continue
 
-                try:
-                    points_list = detection["mask_points"]
-                    points = np.array(points_list, dtype=np.float32)
-
-                    if len(points.shape) == 3 and points.shape[1] == 1:
-                        points_int = np.round(points).astype(int)
-                    elif len(points.shape) == 2 and points.shape[1] == 2:
-                        points_int = np.round(points).astype(int).reshape((-1, 1, 2))
-                    else:
-                        log_message(
-                            f"Skipping detection {detection.get('bbox')}: invalid mask format",
-                            verbose=verbose,
-                        )
-                        continue
-
-                    yolo_mask = np.zeros((img_height, img_width), dtype=np.uint8)
-                    cv2.fillPoly(yolo_mask, [points_int], 255)
-                    base_mask = _normalize_mask(yolo_mask)
-
-                    (
-                        final_mask,
-                        fill_color_bgr,
-                        is_colored_bubble,
-                        sample_color_bgr,
-                        text_bbox,
-                        text_color_bgr,
-                    ) = process_single_bubble(
-                        base_mask,
-                        img_gray,
-                        img_height,
-                        img_width,
-                        thresholding_value,
-                        use_otsu_threshold,
-                        effective_roi_shrink_px,
-                        verbose,
-                        detection.get("bbox"),
-                        is_sam=False,
-                        dilation_kernel=dilation_kernel,
-                        constraint_erosion_kernel=constraint_erosion_kernel,
-                        min_contour_area=min_contour_area,
-                        classify_colored=inpaint_colored_bubbles,
-                        neighbor_bboxes=detection.get("conjoined_neighbor_bboxes"),
-                        processing_scale=processing_scale,
-                        image_bgr=image,
-                        auto_threshold=auto_threshold,
+            try:
+                (
+                    final_mask,
+                    fill_color_bgr,
+                    is_colored_bubble,
+                    sample_color_bgr,
+                    text_bbox,
+                    text_color_bgr,
+                ) = process_single_bubble(
+                    base_mask,
+                    img_gray,
+                    img_height,
+                    img_width,
+                    thresholding_value,
+                    use_otsu_threshold,
+                    effective_roi_shrink_px,
+                    verbose,
+                    bbox,
+                    is_sam=is_sam_mask,
+                    dilation_kernel=dilation_kernel,
+                    constraint_erosion_kernel=constraint_erosion_kernel,
+                    min_contour_area=min_contour_area,
+                    classify_colored=inpaint_colored_bubbles,
+                    neighbor_bboxes=detection.get("conjoined_neighbor_bboxes"),
+                    processing_scale=processing_scale,
+                    image_bgr=image,
+                    auto_threshold=auto_threshold,
+                )
+            except Exception as e:
+                retry_res = None
+                if not use_otsu_threshold:
+                    log_message(
+                        f"Standard cleaning failed for {bbox}, retrying with Otsu...",
+                        verbose=verbose,
                     )
+                    retry_res = retry_cleaning_with_otsu(
+                        image,
+                        {
+                            "base_mask": base_mask,
+                            "bbox": bbox,
+                            "is_sam": is_sam_mask,
+                            "neighbor_bboxes": detection.get(
+                                "conjoined_neighbor_bboxes"
+                            ),
+                        },
+                        thresholding_value,
+                        roi_shrink_px,
+                        processing_scale,
+                        verbose,
+                        inpaint_colored_bubbles,
+                    )
+                    log_message(
+                        f"Otsu retry {'successful' if retry_res else 'failed'} for {bbox}",
+                        verbose=verbose,
+                    )
+                if not retry_res:
+                    log_message(
+                        f"Error processing {'SAM' if is_sam_mask else 'YOLO'} mask "
+                        f"for detection {bbox}: {e}",
+                        always_print=True,
+                    )
+                    continue
+                final_mask = retry_res["mask"]
+                fill_color_bgr = sample_color_bgr = retry_res["color"]
+                is_colored_bubble = retry_res["is_colored"]
+                text_bbox = retry_res["text_bbox"]
+                text_color_bgr = retry_res.get("text_color_bgr")
 
-                except Exception as e:
-                    retry_success = False
-                    if not use_otsu_threshold and base_mask is not None:
-                        log_message(
-                            f"Standard cleaning failed for {detection.get('bbox')}, retrying with Otsu...",
-                            verbose=verbose,
-                        )
-                        retry_res = retry_cleaning_with_otsu(
-                            image,
-                            {
-                                "base_mask": base_mask,
-                                "bbox": detection.get("bbox"),
-                                "is_sam": False,
-                                "neighbor_bboxes": detection.get(
-                                    "conjoined_neighbor_bboxes"
-                                ),
-                            },
-                            thresholding_value,
-                            roi_shrink_px,
-                            processing_scale,
-                            verbose,
-                            inpaint_colored_bubbles,
-                        )
-                        if retry_res:
-                            final_mask = retry_res["mask"]
-                            fill_color_bgr = retry_res["color"]
-                            sample_color_bgr = retry_res["color"]
-                            is_colored_bubble = retry_res["is_colored"]
-                            text_bbox = retry_res["text_bbox"]
-                            text_color_bgr = retry_res.get("text_color_bgr")
-                            retry_success = True
-                            log_message(
-                                f"Otsu retry successful for {detection.get('bbox')}",
-                                verbose=verbose,
-                            )
-                        else:
-                            log_message(
-                                f"Otsu retry failed for {detection.get('bbox')}",
-                                verbose=verbose,
-                            )
-
-                    if not retry_success:
-                        error_msg = f"Error processing YOLO mask for detection {detection.get('bbox')}: {e}"
-                        log_message(error_msg, always_print=True)
-                        continue
-
-            if final_mask is not None and fill_color_bgr is not None:
-                processed_bubbles.append(
-                    {
-                        "mask": final_mask,
-                        "base_mask": base_mask,
-                        "color": (
-                            sample_color_bgr if sample_color_bgr else fill_color_bgr
-                        ),
-                        "bbox": detection.get("bbox"),
-                        "is_colored": is_colored_bubble,
-                        "text_bbox": text_bbox,
-                        "text_color_bgr": text_color_bgr,
-                        "is_sam": is_sam_mask,
-                        "inpainted": False,
-                    }
-                )
-                log_message(
-                    f"Detection {detection.get('bbox')}: processed successfully",
-                    verbose=verbose,
-                )
+            processed_bubbles.append(
+                {
+                    "mask": final_mask,
+                    "base_mask": base_mask,
+                    "color": sample_color_bgr if sample_color_bgr else fill_color_bgr,
+                    "bbox": bbox,
+                    "is_colored": is_colored_bubble,
+                    "text_bbox": text_bbox,
+                    "text_color_bgr": text_color_bgr,
+                    "is_sam": is_sam_mask,
+                    "inpainted": False,
+                }
+            )
+            log_message(f"Detection {bbox}: processed successfully", verbose=verbose)
 
         # Optional Flux inpainting for colored bubbles (text-only mask)
         if inpaint_colored_bubbles and inpaint_method not in ("opencv", "none"):
@@ -932,52 +847,21 @@ def clean_speech_bubbles(
                     else max(0, int(flux_seed))
                 )
                 try:
-                    if inpaint_method == "flux_klein_9b":
-                        backend = flux_backend
-                        inpainter = FluxKleinInpainter(
-                            variant="9b",
-                            device=device,
-                            huggingface_token=flux_hf_token,
-                            num_inference_steps=int(flux_num_inference_steps),
-                            low_vram=flux_low_vram,
-                            luminance_correction=flux_luminance_correction,
-                            upscale_small_crops=flux_upscale_small_crops,
-                            backend=backend,
-                            sdcpp_cache_mode=flux_sdcpp_cache_mode,
-                            sdcpp_diffusion_quant=flux_sdcpp_diffusion_quant,
-                            sdcpp_text_encoder_quant=flux_sdcpp_text_encoder_quant,
-                            verbose=verbose,
-                        )
-                    elif inpaint_method == "flux_klein_4b":
-                        backend = flux_backend
-                        inpainter = FluxKleinInpainter(
-                            variant="4b",
-                            device=device,
-                            huggingface_token=flux_hf_token,
-                            num_inference_steps=int(flux_num_inference_steps),
-                            low_vram=flux_low_vram,
-                            luminance_correction=flux_luminance_correction,
-                            upscale_small_crops=flux_upscale_small_crops,
-                            backend=backend,
-                            sdcpp_cache_mode=flux_sdcpp_cache_mode,
-                            sdcpp_diffusion_quant=flux_sdcpp_diffusion_quant,
-                            sdcpp_text_encoder_quant=flux_sdcpp_text_encoder_quant,
-                            verbose=verbose,
-                        )
-                    else:
-                        # Default to Flux Kontext
-                        low_vram = flux_low_vram if flux_backend == "sdnq" else False
-                        inpainter = FluxKontextInpainter(
-                            device=device,
-                            huggingface_token=flux_hf_token,
-                            num_inference_steps=int(flux_num_inference_steps),
-                            residual_diff_threshold=float(flux_residual_diff_threshold),
-                            backend=flux_backend,
-                            low_vram=low_vram,
-                            sdcpp_cache_mode=flux_sdcpp_cache_mode,
-                            sdcpp_diffusion_quant=flux_sdcpp_diffusion_quant,
-                            sdcpp_text_encoder_quant=flux_sdcpp_text_encoder_quant,
-                        )
+                    inpainter = make_flux_inpainter(
+                        inpaint_method,
+                        device=device,
+                        huggingface_token=flux_hf_token,
+                        num_inference_steps=flux_num_inference_steps,
+                        backend=flux_backend,
+                        low_vram=flux_low_vram,
+                        residual_diff_threshold=flux_residual_diff_threshold,
+                        luminance_correction=flux_luminance_correction,
+                        upscale_small_crops=flux_upscale_small_crops,
+                        sdcpp_cache_mode=flux_sdcpp_cache_mode,
+                        sdcpp_diffusion_quant=flux_sdcpp_diffusion_quant,
+                        sdcpp_text_encoder_quant=flux_sdcpp_text_encoder_quant,
+                        verbose=verbose,
+                    )
                     if request_coordinator is not None and len(colored_bubbles) > 1:
                         pil_working = _inpaint_colored_bubbles_with_coordinator(
                             pil_working,
@@ -1042,12 +926,6 @@ def clean_speech_bubbles(
                         f"Flux inpainting aborted; falling back to standard fill: {e}",
                         always_print=True,
                     )
-            elif colored_bubbles:
-                log_message(
-                    "Colored bubbles detected but Flux inpainting skipped "
-                    "(missing Hugging Face token); falling back to standard fill",
-                    always_print=True,
-                )
 
         # Group masks by color for efficient batch processing (skip already inpainted regions)
         if processed_bubbles:
@@ -1075,11 +953,11 @@ def clean_speech_bubbles(
         )
         return cleaned_image, processed_bubbles
     except OSError as e:
-        raise ImageProcessingError(f"Error loading image {image_input}: {e!s}")
+        raise ImageProcessingError(f"Error loading image {image_input}: {e!s}") from e
     except CancellationError:
         raise
     except Exception as e:
-        raise CleaningError(f"Error cleaning speech bubbles: {e!s}")
+        raise CleaningError(f"Error cleaning speech bubbles: {e!s}") from e
 
 
 def retry_cleaning_with_otsu(

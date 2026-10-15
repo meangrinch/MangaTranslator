@@ -1,4 +1,3 @@
-import re
 import time
 from pathlib import Path
 from typing import Any
@@ -8,6 +7,7 @@ import torch
 from PIL import Image
 
 from core.config import MangaTranslatorConfig
+from core.pipeline import natural_path_sort_key
 from core.terminology import load_terms
 from core.text.text_processing import text_layout_control_interactivity
 from core.validation import (
@@ -447,7 +447,7 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
             ui_state.general.test_mode,
         )
     except ValidationError as e:
-        raise gr.Error(f"{ERROR_PREFIX}{e!s}")
+        raise gr.Error(f"{ERROR_PREFIX}{e!s}") from e
 
     # Skip API key validation if in cleaning-only, upscaling-only, or test mode
     if (
@@ -928,20 +928,20 @@ def handle_translate_click(
 
     except gr.Error as e:
         cleaned = _clean_error_message(e)
-        gr.Error(cleaned)
+        gr.Warning(cleaned)
         return None, _status_update(cleaned)
     except CancellationError:
         return None, _status_update("Translation cancelled by user.")
     except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
         cleaned = _clean_error_message(e)
-        gr.Error(cleaned)
+        gr.Warning(cleaned)
         return None, _status_update(cleaned)
     except Exception as e:
         import traceback
 
         traceback.print_exc()
         cleaned = _clean_error_message(f"An unexpected error occurred: {e!s}")
-        gr.Error(cleaned)
+        gr.Warning(cleaned)
         return None, _status_update(cleaned)
 
 
@@ -999,7 +999,7 @@ def handle_batch_click(
                 try:
                     zip_file_path = validate_zip_file(input_zip)
                 except (ValidationError, FileNotFoundError) as e:
-                    raise gr.Error(f"{ERROR_PREFIX}{e!s}")
+                    raise gr.Error(f"{ERROR_PREFIX}{e!s}") from e
 
         if input_files and not isinstance(input_files, list):
             raise gr.Error(
@@ -1060,11 +1060,8 @@ def handle_batch_click(
                 # failed/ holds untranslated copies of the failed pages
                 and f.relative_to(output_path).parts[0] != FAILED_DIRNAME
             ]
-            processed_files.sort(  # Sort naturally (e.g., page_1, page_2, page_10)
-                key=lambda x: tuple(
-                    int(part) if part.isdigit() else part
-                    for part in re.split(r"(\d+)", x.stem)
-                )
+            processed_files.sort(
+                key=lambda f: natural_path_sort_key(f.relative_to(output_path))
             )
             gallery_images = [str(file_path) for file_path in processed_files]
 
@@ -1084,7 +1081,7 @@ def handle_batch_click(
     except gr.Error as e:
         progress(1.0, desc="Error occurred")
         cleaned = _clean_error_message(e)
-        gr.Error(cleaned)
+        gr.Warning(cleaned)
         return None, _status_update(cleaned)
     except CancellationError:
         progress(1.0, desc="Cancelled")
@@ -1092,7 +1089,7 @@ def handle_batch_click(
     except (ValidationError, FileNotFoundError, ValueError, logic.LogicError) as e:
         progress(1.0, desc="Error occurred")
         cleaned = _clean_error_message(e)
-        gr.Error(cleaned)
+        gr.Warning(cleaned)
         return None, _status_update(cleaned)
     except Exception as e:
         progress(1.0, desc="Error occurred")
@@ -1102,7 +1099,7 @@ def handle_batch_click(
         cleaned = _clean_error_message(
             f"An unexpected error occurred during batch processing: {e!s}"
         )
-        gr.Error(cleaned)
+        gr.Warning(cleaned)
         return None, _status_update(cleaned)
 
 
@@ -1472,11 +1469,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         )
         default_ui_state.llm_settings.model_name = default_model_name
 
-    if (
-        default_provider == "OpenRouter"
-        or default_provider == "OpenAI-Compatible"
-        or default_provider == "OpenCode"
-    ):
+    if default_provider in {"OpenRouter", "OpenAI-Compatible", "OpenCode"}:
         default_models_choices = [default_model_name] if default_model_name else []
     else:
         default_models_choices = settings_manager.PROVIDER_MODELS.get(
@@ -1932,7 +1925,7 @@ def handle_unload_models_click():
         model_manager.unload_all()
         gr.Info("All models unloaded from memory successfully.")
     except Exception as e:
-        gr.Error(f"Error unloading models: {e!s}")
+        gr.Warning(f"Error unloading models: {e!s}")
 
 
 def handle_model_change(

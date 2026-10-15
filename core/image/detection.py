@@ -1328,7 +1328,7 @@ def detect_speech_bubbles(
             verbose=verbose,
         )
     except Exception as e:
-        raise ImageProcessingError(f"Error loading image: {e}")
+        raise ImageProcessingError(f"Error loading image: {e}") from e
 
     model_manager = get_model_manager()
     cache = get_cache()
@@ -1336,7 +1336,7 @@ def detect_speech_bubbles(
         primary_model = model_manager.load_yolo_speech_bubble(model_path)
         log_message(f"Loaded primary YOLO model: {model_path}", verbose=verbose)
     except Exception as e:
-        raise ModelError(f"Error loading primary model: {e}")
+        raise ModelError(f"Error loading primary model: {e}") from e
 
     yolo_cache_key = cache.get_yolo_cache_key(image_pil, model_path, confidence)
     cached_yolo = cache.get_yolo_detection(yolo_cache_key)
@@ -1740,7 +1740,9 @@ def detect_speech_bubbles(
                 _device,
             )
 
-            for i, (mask_bool, box) in enumerate(zip(all_masks_bool, boxes_to_process)):
+            for i, (mask_bool, box) in enumerate(
+                zip(all_masks_bool, boxes_to_process, strict=False)
+            ):
                 x0_f, y0_f, x1_f, y1_f = box.tolist()
                 x0 = int(np.floor(max(0, min(x0_f, img_w))))
                 y0 = int(np.floor(max(0, min(y0_f, img_h))))
@@ -1865,13 +1867,13 @@ def detect_panels(
             verbose=verbose,
         )
     except Exception as e:
-        raise ImageProcessingError(f"Error loading image: {e}")
+        raise ImageProcessingError(f"Error loading image: {e}") from e
 
     model_manager = get_model_manager()
     try:
         panel_model = model_manager.load_yolo_panel(verbose=verbose)
     except Exception as e:
-        raise ModelError(f"Error loading panel model: {e}")
+        raise ModelError(f"Error loading panel model: {e}") from e
 
     try:
         results = panel_model(

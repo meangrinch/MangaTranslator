@@ -542,7 +542,9 @@ def resize_lanczos_antiring(image: Image.Image, size: tuple[int, int]) -> Image.
     """
     resized = np.asarray(image.resize(size, Image.LANCZOS))
     lo = hi = np.asarray(image)
-    for axis, (src_n, dst_n) in enumerate(zip(image.size[::-1], size[::-1])):
+    for axis, (src_n, dst_n) in enumerate(
+        zip(image.size[::-1], size[::-1], strict=False)
+    ):
         scale = src_n / dst_n
         # Downscaling stretches the kernel, so the main lobe covers more source pixels
         k = max(scale, 1.0)
@@ -626,10 +628,8 @@ def convert_image_to_target_mode(
         return pil_image
 
     if target_mode == "RGB":
-        if (
-            pil_image.mode == "RGBA"
-            or pil_image.mode == "LA"
-            or (pil_image.mode == "P" and "transparency" in pil_image.info)
+        if pil_image.mode in {"RGBA", "LA"} or (
+            pil_image.mode == "P" and "transparency" in pil_image.info
         ):
             log_message(
                 f"Converting {pil_image.mode} to RGB (flattening transparency)",

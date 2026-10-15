@@ -191,7 +191,7 @@ def _measure_vertical_unit(
     vertical_advances = []
     first_vertical_origin_y: float | None = None
 
-    for info, pos in zip(infos, positions):
+    for info, pos in zip(infos, positions, strict=False):
         extents = hb_font.get_glyph_extents(info.codepoint)
         origin_x = cursor_x + pos.x_offset
         origin_y = -pos.y_offset
@@ -444,10 +444,7 @@ def check_fit(
                     core_text = styled_match.group(2)
 
                 match = re.match(r"^(\W*)([\w\-]+)(\W*)$", core_text)
-                if match:
-                    core_word_length = len(match.group(2))
-                else:
-                    core_word_length = len(core_text)
+                core_word_length = len(match.group(2)) if match else len(core_text)
 
                 if core_word_length > hyphenation_min_word_length:
                     word_width = calculate_styled_line_width(

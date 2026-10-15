@@ -166,7 +166,7 @@ class OutsideTextDetector:
         sorted_results = sorted(results, key=get_area, reverse=True)
         filtered_results = []
 
-        for i, current_result in enumerate(sorted_results):
+        for _i, current_result in enumerate(sorted_results):
             is_nested = False
             current_bbox = current_result[0]
 
@@ -237,7 +237,7 @@ class OutsideTextDetector:
                 verbose=verbose,
             )
         except Exception as e:
-            raise ImageProcessingError(f"Error loading image: {e}")
+            raise ImageProcessingError(f"Error loading image: {e}") from e
 
         provided_bubble_boxes = None
         if existing_bubbles is not None:
@@ -600,7 +600,9 @@ class OutsideTextDetector:
         boxes = [[int(c) for c in result[0]] for result in results]
 
         expanded_boxes = []
-        for box in boxes:
+        kept_results = []
+        kept_indices = []
+        for index, (box, result) in enumerate(zip(boxes, results, strict=True)):
             x0, y0, x1, y1 = box
             width = x1 - x0
             height = y1 - y0
@@ -610,17 +612,31 @@ class OutsideTextDetector:
             y0e = int(np.floor(max(0, y0 - expand_y)))
             x1e = int(np.ceil(min(img_w, x1 + expand_x)))
             y1e = int(np.ceil(min(img_h, y1 + expand_y)))
+            # Keep each box's result and original index with it, so dropping a
+            # degenerate box doesn't shift later boxes onto the wrong results
             if x1e > x0e and y1e > y0e:
                 expanded_boxes.append([x0e, y0e, x1e, y1e])
+                kept_results.append(result)
+                kept_indices.append(index)
 
         log_message(
             f"Grouping {len(expanded_boxes)} text boxes spatially...",
             verbose=verbose,
         )
 
-        grouped_boxes = self._group_text_boxes_spatially(
-            expanded_boxes, results, img_w, img_h, text_box_proximity_ratio, verbose
-        )
+        grouped_boxes = [
+            (group_boxes, group_results, [kept_indices[i] for i in group_indices])
+            for group_boxes, group_results, group_indices in (
+                self._group_text_boxes_spatially(
+                    expanded_boxes,
+                    kept_results,
+                    img_w,
+                    img_h,
+                    text_box_proximity_ratio,
+                    verbose,
+                )
+            )
+        ]
 
         groups = []
         for group_boxes, group_results, global_indices in grouped_boxes:
@@ -641,8 +657,8 @@ class OutsideTextDetector:
                     f"  - Group too large ({max_x - min_x}x{max_y - min_y}), splitting...",
                     verbose=verbose,
                 )
-                for i, (box, result, g_idx) in enumerate(
-                    zip(group_boxes, group_results, global_indices)
+                for box, result, g_idx in zip(
+                    group_boxes, group_results, global_indices, strict=False
                 ):
                     x0, y0, x1, y1 = box
                     mask = np.zeros((img_h, img_w), dtype=bool)
@@ -680,8 +696,8 @@ class OutsideTextDetector:
 
             raw_boxes = [[int(c) for c in res[0]] for res in group_results]
 
-            for i, (box, result, raw_box, g_idx) in enumerate(
-                zip(group_boxes, group_results, raw_boxes, global_indices)
+            for box, result, g_idx in zip(
+                group_boxes, group_results, global_indices, strict=False
             ):
                 x0, y0, x1, y1 = box
                 mask = np.zeros((img_h, img_w), dtype=bool)

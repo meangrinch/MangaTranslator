@@ -18,6 +18,23 @@ from utils.model_metadata import (
     flux_sdcpp_text_encoder_quants,
 )
 
+# Model used when --model-name is not given; the keys are the --provider choices
+CLI_DEFAULT_MODELS = {
+    "Google": "gemini-3.8-flash",
+    "OpenAI": "gpt-6-luna",
+    "Anthropic": "claude-haiku-5-5",
+    "SpaceXAI": "grok-4.7",
+    "Meta Model": "muse-spark-1.3-contributor",
+    "DeepSeek": "deepseek-flash",
+    "Z.ai": "glm-5.3-flash",
+    "Moonshot AI": "kimi-k3",
+    "Xiaomi MiMo": "mimo-v2.6-flash",
+    "QwenCloud": "qwen3.8-flash",
+    "OpenCode": "deepseek-v4.1-flash",
+    "OpenRouter": "google/gemini-3.8-flash",
+    "OpenAI-Compatible": "default",
+}
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -114,21 +131,7 @@ def main():
         "--provider",
         type=str,
         default="Google",
-        choices=[
-            "Google",
-            "OpenAI",
-            "Anthropic",
-            "SpaceXAI",
-            "Meta Model",
-            "DeepSeek",
-            "Z.ai",
-            "Moonshot AI",
-            "Xiaomi MiMo",
-            "QwenCloud",
-            "OpenCode",
-            "OpenRouter",
-            "OpenAI-Compatible",
-        ],
+        choices=list(CLI_DEFAULT_MODELS),
         help="LLM provider to use for translation",
     )
     parser.add_argument(
@@ -301,6 +304,21 @@ def main():
         help="Disable conjoined bubble detection using secondary RT-DETR model",
     )
     parser.set_defaults(conjoined_detection=True)
+    parser.add_argument(
+        "--no-panel-sorting",
+        dest="use_panel_sorting",
+        action="store_false",
+        help="Sort bubbles across the whole page instead of within detected panels",
+    )
+    parser.add_argument(
+        "--no-osb-text-verification",
+        dest="use_osb_text_verification",
+        action="store_false",
+        help=(
+            "Skip checking with the AnimeText YOLO model that bubble boxes "
+            "fully cover their text"
+        ),
+    )
     parser.add_argument(
         "--bubble-detector-model",
         dest="bubble_detector_model",
@@ -575,6 +593,12 @@ def main():
         type=float,
         default=2.0,
         help="Factor for the selected upscaling mode (1.0-8.0).",
+    )
+    parser.add_argument(
+        "--image-upscale-model",
+        choices=["model", "model_lite"],
+        default="model_lite",
+        help="Model for image upscaling: 'model' (best quality) or 'model_lite' (faster).",
     )
     parser.add_argument(
         "--no-auto-scale",
@@ -1065,6 +1089,7 @@ def main():
     import torch
 
     from core.config import (
+        PROVIDER_API_KEYS,
         CleaningConfig,
         DetectionConfig,
         MangaTranslatorConfig,
@@ -1073,6 +1098,7 @@ def main():
         PreprocessingConfig,
         RenderingConfig,
         TranslationConfig,
+        env_api_key,
     )
     from core.llm_defaults import get_provider_sampling_defaults
     from core.pipeline import batch_translate_images, translate_and_render
@@ -1093,100 +1119,16 @@ def main():
 
     # --- Create Config Object ---
     provider = args.provider
-    api_key = None
-    api_key_arg_name = ""
-    api_key_env_var = ""
-    compatible_url = None
-
-    if provider == "Google":
-        api_key = (
-            args.google_api_key
-            or os.environ.get("GOOGLE_API_KEY")
-            or os.environ.get("GEMINI_API_KEY")
-        )
-        api_key_arg_name = "--google-api-key"
-        api_key_env_var = "GOOGLE_API_KEY or GEMINI_API_KEY"
-        default_model = "gemini-3.8-flash"
-    elif provider == "OpenAI":
-        api_key = args.openai_api_key or os.environ.get("OPENAI_API_KEY")
-        api_key_arg_name = "--openai-api-key"
-        api_key_env_var = "OPENAI_API_KEY"
-        default_model = "gpt-6-luna"
-    elif provider == "Anthropic":
-        api_key = args.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
-        api_key_arg_name = "--anthropic-api-key"
-        api_key_env_var = "ANTHROPIC_API_KEY"
-        default_model = "claude-haiku-5-5"
-    elif provider == "SpaceXAI":
-        api_key = (
-            args.spacexai_api_key
-            or os.environ.get("SPACEXAI_API_KEY")
-            or os.environ.get("XAI_API_KEY")
-        )
-        api_key_arg_name = "--spacexai-api-key"
-        api_key_env_var = "SPACEXAI_API_KEY or XAI_API_KEY"
-        default_model = "grok-4.7"
-    elif provider == "Meta Model":
-        api_key = (
-            getattr(args, "meta_api_key", None)
-            or os.environ.get("META_MODEL_API_KEY")
-            or os.environ.get("META_API_KEY")
-        )
-        api_key_arg_name = "--meta-api-key"
-        api_key_env_var = "META_MODEL_API_KEY or META_API_KEY"
-        default_model = "muse-spark-1.3-contributor"
-    elif provider == "DeepSeek":
-        api_key = args.deepseek_api_key or os.environ.get("DEEPSEEK_API_KEY")
-        api_key_arg_name = "--deepseek-api-key"
-        api_key_env_var = "DEEPSEEK_API_KEY"
-        default_model = "deepseek-flash"
-    elif provider == "Z.ai":
-        api_key = args.zai_api_key or os.environ.get("ZAI_API_KEY")
-        api_key_arg_name = "--zai-api-key"
-        api_key_env_var = "ZAI_API_KEY"
-        default_model = "glm-5.3-flash"
-    elif provider == "Moonshot AI":
-        api_key = args.moonshot_api_key or os.environ.get("MOONSHOT_API_KEY")
-        api_key_arg_name = "--moonshot-api-key"
-        api_key_env_var = "MOONSHOT_API_KEY"
-        default_model = "kimi-k3"
-    elif provider == "Xiaomi MiMo":
-        api_key = args.mimo_api_key or os.environ.get("MIMO_API_KEY")
-        api_key_arg_name = "--mimo-api-key"
-        api_key_env_var = "MIMO_API_KEY"
-        default_model = "mimo-v2.6-flash"
-    elif provider == "QwenCloud":
-        api_key = (
-            args.qwencloud_api_key
-            or os.environ.get("QWENCLOUD_API_KEY")
-            or os.environ.get("QWEN_API_KEY")
-        )
-        api_key_arg_name = "--qwencloud-api-key"
-        api_key_env_var = "QWENCLOUD_API_KEY or QWEN_API_KEY"
-        default_model = "qwen3.8-flash"
-    elif provider == "OpenCode":
-        api_key = (
-            args.opencode_api_key
-            or os.environ.get("OPENCODE_API_KEY")
-            or os.environ.get("OPENCODE_ZEN_API_KEY")
-            or os.environ.get("OPENCODE_GO_API_KEY")
-        )
-        api_key_arg_name = "--opencode-api-key"
-        api_key_env_var = "OPENCODE_API_KEY"
-        default_model = "deepseek-v4.1-flash"
-    elif provider == "OpenRouter":
-        api_key = args.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
-        api_key_arg_name = "--openrouter-api-key"
-        api_key_env_var = "OPENROUTER_API_KEY"
-        default_model = "google/gemini-3.8-flash"
-    elif provider == "OpenAI-Compatible":
-        compatible_url = args.openai_compatible_url
-        api_key = args.openai_compatible_api_key or os.environ.get(
-            "OPENAI_COMPATIBLE_API_KEY"
-        )
-        api_key_arg_name = "--openai-compatible-api-key"
-        api_key_env_var = "OPENAI_COMPATIBLE_API_KEY"
-        default_model = "default"
+    key_field, key_env_vars = PROVIDER_API_KEYS[provider]
+    # The CLI flag for SpaceXAI is --spacexai-api-key; others match the config field
+    key_arg = "spacexai_api_key" if provider == "SpaceXAI" else key_field
+    api_key = getattr(args, key_arg, None) or env_api_key(provider)
+    api_key_arg_name = "--" + key_arg.replace("_", "-")
+    api_key_env_var = " or ".join(key_env_vars)
+    default_model = CLI_DEFAULT_MODELS[provider]
+    compatible_url = (
+        args.openai_compatible_url if provider == "OpenAI-Compatible" else None
+    )
 
     if (
         provider != "OpenAI-Compatible"
@@ -1262,6 +1204,8 @@ def main():
             seg_model=args.seg_model,
             bubble_detector_model=args.bubble_detector_model,
             conjoined_detection=args.conjoined_detection,
+            use_panel_sorting=args.use_panel_sorting,
+            use_osb_text_verification=args.use_osb_text_verification,
         ),
         cleaning=CleaningConfig(
             thresholding_value=args.thresholding_value,
@@ -1272,87 +1216,10 @@ def main():
         ),
         translation=TranslationConfig(
             provider=provider,
-            google_api_key=(
-                api_key
-                if provider == "Google"
-                else (
-                    os.environ.get("GOOGLE_API_KEY")
-                    or os.environ.get("GEMINI_API_KEY", "")
-                )
-            ),
-            openai_api_key=(
-                api_key
-                if provider == "OpenAI"
-                else os.environ.get("OPENAI_API_KEY", "")
-            ),
-            anthropic_api_key=(
-                api_key
-                if provider == "Anthropic"
-                else os.environ.get("ANTHROPIC_API_KEY", "")
-            ),
-            xai_api_key=(
-                api_key
-                if provider == "SpaceXAI"
-                else (
-                    os.environ.get("SPACEXAI_API_KEY")
-                    or os.environ.get("XAI_API_KEY", "")
-                )
-            ),
-            meta_api_key=(
-                api_key
-                if provider == "Meta Model"
-                else (
-                    os.environ.get("META_MODEL_API_KEY")
-                    or os.environ.get("META_API_KEY", "")
-                )
-            ),
-            deepseek_api_key=(
-                api_key
-                if provider == "DeepSeek"
-                else os.environ.get("DEEPSEEK_API_KEY", "")
-            ),
-            zai_api_key=(
-                api_key if provider == "Z.ai" else os.environ.get("ZAI_API_KEY", "")
-            ),
-            moonshot_api_key=(
-                api_key
-                if provider == "Moonshot AI"
-                else os.environ.get("MOONSHOT_API_KEY", "")
-            ),
-            mimo_api_key=(
-                api_key
-                if provider == "Xiaomi MiMo"
-                else os.environ.get("MIMO_API_KEY", "")
-            ),
-            qwencloud_api_key=(
-                api_key
-                if provider == "QwenCloud"
-                else (
-                    os.environ.get("QWENCLOUD_API_KEY")
-                    or os.environ.get("QWEN_API_KEY", "")
-                )
-            ),
-            opencode_api_key=(
-                api_key
-                if provider == "OpenCode"
-                else (
-                    os.environ.get("OPENCODE_API_KEY")
-                    or os.environ.get("OPENCODE_ZEN_API_KEY")
-                    or os.environ.get("OPENCODE_GO_API_KEY", "")
-                )
-            ),
-            opencode_tier=getattr(args, "opencode_tier", "zen"),
-            openrouter_api_key=(
-                api_key
-                if provider == "OpenRouter"
-                else os.environ.get("OPENROUTER_API_KEY", "")
-            ),
+            # Keys for other providers come from the environment in __post_init__
+            **{key_field: api_key},
             openai_compatible_url=compatible_url,
-            openai_compatible_api_key=(
-                api_key
-                if provider == "OpenAI-Compatible"
-                else os.environ.get("OPENAI_COMPATIBLE_API_KEY", "")
-            ),
+            opencode_tier=getattr(args, "opencode_tier", "zen"),
             model_name=model_name,
             temperature=args.temperature,
             top_p=args.top_p,
@@ -1426,6 +1293,7 @@ def main():
             png_compression=args.png_compression,
             upscale_final_image=args.image_upscale_mode == "final",
             image_upscale_factor=args.image_upscale_factor,
+            image_upscale_model=args.image_upscale_model,
         ),
         outside_text=OutsideTextConfig(
             enabled=args.osb_enable,

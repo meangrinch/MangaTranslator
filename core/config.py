@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -5,6 +6,35 @@ import torch
 
 from core.device import get_best_device
 from core.llm_defaults import DEFAULT_LLM_PROVIDER, get_provider_sampling_defaults
+
+# Each provider's TranslationConfig key field and the env vars it falls back to, in order
+PROVIDER_API_KEYS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "Google": ("google_api_key", ("GOOGLE_API_KEY", "GEMINI_API_KEY")),
+    "OpenAI": ("openai_api_key", ("OPENAI_API_KEY",)),
+    "Anthropic": ("anthropic_api_key", ("ANTHROPIC_API_KEY",)),
+    "SpaceXAI": ("xai_api_key", ("SPACEXAI_API_KEY", "XAI_API_KEY")),
+    "Meta Model": ("meta_api_key", ("META_MODEL_API_KEY", "META_API_KEY")),
+    "DeepSeek": ("deepseek_api_key", ("DEEPSEEK_API_KEY",)),
+    "Z.ai": ("zai_api_key", ("ZAI_API_KEY",)),
+    "Moonshot AI": ("moonshot_api_key", ("MOONSHOT_API_KEY",)),
+    "Xiaomi MiMo": ("mimo_api_key", ("MIMO_API_KEY",)),
+    "QwenCloud": ("qwencloud_api_key", ("QWENCLOUD_API_KEY", "QWEN_API_KEY")),
+    "OpenCode": (
+        "opencode_api_key",
+        ("OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY", "OPENCODE_GO_API_KEY"),
+    ),
+    "OpenRouter": ("openrouter_api_key", ("OPENROUTER_API_KEY",)),
+    "OpenAI-Compatible": (
+        "openai_compatible_api_key",
+        ("OPENAI_COMPATIBLE_API_KEY",),
+    ),
+}
+
+
+def env_api_key(provider: str) -> str:
+    """First non-empty environment variable holding `provider`'s API key, or ""."""
+    env_names = PROVIDER_API_KEYS.get(provider, ("", ()))[1]
+    return next((value for name in env_names if (value := os.environ.get(name))), "")
 
 
 @dataclass
@@ -220,52 +250,9 @@ class MangaTranslatorConfig:
 
     def __post_init__(self):
         # Load API keys from environment variables if not already set
-        import os
-
-        if not self.translation.google_api_key:
-            self.translation.google_api_key = os.environ.get(
-                "GOOGLE_API_KEY"
-            ) or os.environ.get("GEMINI_API_KEY", "")
-        if not self.translation.openai_api_key:
-            self.translation.openai_api_key = os.environ.get("OPENAI_API_KEY", "")
-        if not self.translation.anthropic_api_key:
-            self.translation.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        if not self.translation.xai_api_key:
-            self.translation.xai_api_key = os.environ.get(
-                "SPACEXAI_API_KEY"
-            ) or os.environ.get("XAI_API_KEY", "")
-        if not self.translation.meta_api_key:
-            self.translation.meta_api_key = os.environ.get(
-                "META_MODEL_API_KEY"
-            ) or os.environ.get("META_API_KEY", "")
-        if not self.translation.deepseek_api_key:
-            self.translation.deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-        if not self.translation.zai_api_key:
-            self.translation.zai_api_key = os.environ.get("ZAI_API_KEY", "")
-        if not self.translation.moonshot_api_key:
-            self.translation.moonshot_api_key = os.environ.get("MOONSHOT_API_KEY", "")
-        if not self.translation.mimo_api_key:
-            self.translation.mimo_api_key = os.environ.get("MIMO_API_KEY", "")
-        if not self.translation.qwencloud_api_key:
-            self.translation.qwencloud_api_key = os.environ.get(
-                "QWENCLOUD_API_KEY"
-            ) or os.environ.get("QWEN_API_KEY", "")
-        if not self.translation.opencode_api_key:
-            self.translation.opencode_api_key = (
-                os.environ.get("OPENCODE_API_KEY")
-                or os.environ.get("OPENCODE_ZEN_API_KEY")
-                or os.environ.get("OPENCODE_GO_API_KEY", "")
-            )
-        if not self.translation.openrouter_api_key:
-            self.translation.openrouter_api_key = os.environ.get(
-                "OPENROUTER_API_KEY", ""
-            )
-        if (
-            not self.translation.openai_compatible_api_key
-        ):  # Check if it's None or empty string
-            self.translation.openai_compatible_api_key = os.environ.get(
-                "OPENAI_COMPATIBLE_API_KEY", ""
-            )
+        for provider, (key_field, _) in PROVIDER_API_KEYS.items():
+            if not getattr(self.translation, key_field):
+                setattr(self.translation, key_field, env_api_key(provider))
         if not self.outside_text.huggingface_token:
             self.outside_text.huggingface_token = os.environ.get("HF_TOKEN", "")
 

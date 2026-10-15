@@ -234,6 +234,85 @@ def test_page_with_an_empty_bubble_counts_as_failed(
     ]
 
 
+def _stage_uploads(tmp_path, rel_paths):
+    from ui.logic import _copy_images_with_source_map
+
+    sources = []
+    for rel in rel_paths:
+        page = tmp_path / "uploads" / rel
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_bytes(rel.encode())
+        sources.append(page)
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    source_path_map = {}
+    _copy_images_with_source_map(sources, staged, source_path_map)
+    return sources, source_path_map
+
+
+@pytest.mark.parametrize(
+    "rel_paths",
+    [
+        ["ch1/001.png", "ch2/001.png"],
+        ["a/001.png", "b/001_2.png", "c/001.png"],
+    ],
+)
+def test_uploaded_images_with_the_same_name_are_all_kept(tmp_path, rel_paths):
+    sources, source_path_map = _stage_uploads(tmp_path, rel_paths)
+
+    assert sorted(source_path_map.values()) == sorted(str(p) for p in sources)
+    for dest, src in source_path_map.items():
+        assert Path(dest).read_bytes() == Path(src).read_bytes()
+
+
+def test_renamed_duplicate_uploads_keep_upload_order(tmp_path):
+    rel_paths = ["ch1/001.png", "ch1/002.png", "ch2/001.png", "ch2/002.png"]
+    sources, source_path_map = _stage_uploads(tmp_path, rel_paths)
+
+    staged_in_batch_order = sorted(
+        source_path_map,
+        key=lambda p: pipeline.natural_path_sort_key(Path(Path(p).name)),
+    )
+    assert [source_path_map[p] for p in staged_in_batch_order] == [
+        str(p) for p in sources
+    ]
+
+
+def test_single_worker_batch_runs_pages_in_order_on_the_main_thread(
+    monkeypatch, tmp_path
+):
+    import threading
+
+    source = tmp_path / "pages"
+    source.mkdir()
+    for name in ("001.png", "002.png", "003.png"):
+        Image.new("RGB", (8, 8), "white").save(source / name)
+
+    calls = []
+
+    def fake_translate_and_render(image_path, config, output_path, **kwargs):
+        provider = kwargs.get("previous_context_texts_provider")
+        previous = provider() if provider else kwargs.get("previous_context_texts")
+        name = Path(image_path).stem
+        calls.append((name, threading.current_thread(), previous))
+        kwargs["ocr_texts_out"].append(f"text-{name}")
+
+    monkeypatch.setattr(pipeline, "translate_and_render", fake_translate_and_render)
+    config = MangaTranslatorConfig(
+        yolo_model_path="model.pt", device=torch.device("cpu"), parallel_requests=1
+    )
+    config.translation = replace(
+        config.translation, terminology_memory=False, previous_context_text_count=2
+    )
+
+    pipeline.batch_translate_images(source, config, tmp_path / "run")
+
+    assert [name for name, _, _ in calls] == ["001", "002", "003"]
+    # Running pages on the main thread lets Ctrl+C stop the batch right away
+    assert all(thread is threading.main_thread() for _, thread, _ in calls)
+    assert calls[2][2] == [["text-001"], ["text-002"]]
+
+
 @pytest.mark.parametrize(
     ("kernel", "scale", "expected"),
     [

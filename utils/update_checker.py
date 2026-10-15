@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -87,12 +88,17 @@ def set_last_seen_version(version: str, config_file: Path | None = None) -> None
         except Exception:
             data = {}
     data["last_seen_version"] = version.strip()
+    # Write then swap, so a failed write can't truncate the user's saved settings
+    tmp_file = target.with_name(target.name + ".tmp")
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
-        with open(target, "w", encoding="utf-8") as f:
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+        os.replace(tmp_file, target)
     except Exception:
         pass
+    finally:
+        tmp_file.unlink(missing_ok=True)
 
 
 def format_release_notes(

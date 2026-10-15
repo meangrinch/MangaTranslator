@@ -1,9 +1,11 @@
 import atexit
 import base64
+import contextlib
 import io
 import json
 import os
 import platform
+import shutil
 import socket
 import subprocess
 import threading
@@ -16,6 +18,7 @@ import torch
 from PIL import Image
 
 from utils.cancellation import is_cancelled, raise_if_cancelled
+from utils.download import download_file
 from utils.exceptions import CancellationError, ModelError
 from utils.logging import log_message
 
@@ -132,10 +135,9 @@ def run_image_job(
     next_log = time.monotonic() + 10
     while time.monotonic() < deadline:
         if is_cancelled():
-            try:
+            # sd.cpp only cancels queued jobs; a generating one answers 409
+            with contextlib.suppress(OSError):
                 _json_request(f"{poll_url}/cancel", payload={}, timeout=5)
-            except OSError:
-                pass  # sd.cpp only cancels queued jobs; a generating one answers 409
             raise CancellationError("Process cancelled by user.")
         status = _json_request(poll_url, timeout=30)
         state = status.get("status")
@@ -188,44 +190,6 @@ class SDCppServerManager:
         self._servers = {}
         self._lock = threading.Lock()
         atexit.register(self.shutdown_servers)
-
-    def _download_file(self, path: Path, url: str, verbose: bool = False) -> None:
-        if path.exists():
-            return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        log_message(f"Downloading {path.name}...", always_print=True)
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req) as response, open(path, "wb") as f:
-                total = int(response.headers.get("Content-Length") or 0)
-                downloaded = 0
-                last_log = time.monotonic()
-                while True:
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    now = time.monotonic()
-                    if now - last_log >= 5:
-                        if total:
-                            percent = min(100.0, downloaded * 100.0 / total)
-                            log_message(
-                                f"  - {path.name}: {downloaded / (1024**2):.1f}/"
-                                f"{total / (1024**2):.1f} MiB ({percent:.1f}%)",
-                                always_print=True,
-                            )
-                        else:
-                            log_message(
-                                f"  - {path.name}: {downloaded / (1024**2):.1f} MiB",
-                                always_print=True,
-                            )
-                        last_log = now
-            log_message(f"Downloaded {path.name} successfully.", always_print=True)
-        except Exception as e:
-            if path.exists():
-                path.unlink()
-            raise ModelError(f"Failed to download {path.name}: {e}") from e
 
     def _remove_archive(self, archive_path: Path, verbose: bool = False) -> None:
         try:
@@ -354,11 +318,7 @@ class SDCppServerManager:
                 self._remove_archive(archive_path, verbose=verbose)
                 continue
 
-            self._download_file(
-                archive_path,
-                self._archive_url(runtime_archive),
-                verbose=verbose,
-            )
+            download_file(archive_path, self._archive_url(runtime_archive))
 
             log_message(f"Extracting {runtime_archive}...", verbose=verbose)
             try:
@@ -393,17 +353,22 @@ class SDCppServerManager:
             return executable
 
         self.install_dir.mkdir(parents=True, exist_ok=True)
-        self._download_file(
-            archive_path, self._archive_url(archive_name), verbose=verbose
-        )
+        download_file(archive_path, self._archive_url(archive_name))
 
         log_message(f"Extracting {archive_file}...", verbose=verbose)
+        # Extract beside the target and rename, so an interrupted extraction
+        # never leaves a half-filled folder that looks installed
+        part_dir = extract_dir.with_name(extract_dir.name + ".part")
         try:
-            extract_dir.mkdir(parents=True, exist_ok=True)
+            shutil.rmtree(part_dir, ignore_errors=True)
+            shutil.rmtree(extract_dir, ignore_errors=True)
             with zipfile.ZipFile(archive_path) as archive:
-                archive.extractall(extract_dir)
+                archive.extractall(part_dir)
+            os.replace(part_dir, extract_dir)
         except Exception as e:
             raise ModelError(f"Failed to extract {archive_file}: {e}") from e
+        finally:
+            shutil.rmtree(part_dir, ignore_errors=True)
 
         executable = self._find_server_executable(extract_dir)
         if executable is None:
@@ -412,10 +377,8 @@ class SDCppServerManager:
         self._ensure_runtime_archives(archive_name, executable, verbose=verbose)
 
         if platform.system().lower() != "windows":
-            try:
+            with contextlib.suppress(OSError):
                 executable.chmod(executable.stat().st_mode | 0o111)
-            except OSError:
-                pass
 
         self._remove_archive(archive_path, verbose=verbose)
         log_message("sd.cpp server is ready.", verbose=verbose)
@@ -725,7 +688,7 @@ class SDCppServerManager:
             ]
             cmd.extend(cache_args)
             for flag, key in zip(
-                assets["server_args"][::2], assets["server_args"][1::2]
+                assets["server_args"][::2], assets["server_args"][1::2], strict=False
             ):
                 cmd.extend([flag, str(assets[key])])
             if verbose:
@@ -811,10 +774,8 @@ class SDCppServerManager:
                 process.wait(timeout=10)
         log_file = server.get("log_file")
         if log_file is not None:
-            try:
+            with contextlib.suppress(OSError):
                 log_file.close()
-            except OSError:
-                pass
         self._close_windows_handle(server.get("job_handle"))
 
     def shutdown_server(self, model_key: str, verbose: bool = False) -> None:

@@ -1,9 +1,8 @@
+import contextlib
 import logging
 import os
 import shutil
 import threading
-import time
-import urllib.request
 from enum import Enum
 from pathlib import Path
 
@@ -23,6 +22,7 @@ from ultralytics import YOLO
 from core.device import empty_cache, get_best_device, get_best_dtype, get_device_info
 from core.ml.rtdetr_adapter import RTDetrYOLOAdapter
 from core.ml.sdcpp_server import SDCppServerManager
+from utils.download import download_file
 from utils.exceptions import ModelError
 from utils.logging import log_message
 from utils.model_metadata import FLUX_SDCPP_QUANT_FILES
@@ -262,51 +262,6 @@ class ModelManager:
         """cache_dir for from_pretrained; None selects the default HF cache."""
         return None if self.use_hf_cache else str(local_dir)
 
-    def _ensure_file(self, path: Path, url: str, verbose: bool = False) -> None:
-        """Download file from URL if it doesn't exist.
-
-        Args:
-            path: Path where file should be saved
-            url: URL to download from
-            verbose: Whether to print verbose logging
-        """
-        if path.exists():
-            return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        log_message(f"Downloading {path.name}...", always_print=True)
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req) as response, open(path, "wb") as f:
-                total = int(response.headers.get("Content-Length") or 0)
-                downloaded = 0
-                last_log = time.monotonic()
-                while True:
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    now = time.monotonic()
-                    if now - last_log >= 5:
-                        if total:
-                            percent = min(100.0, downloaded * 100.0 / total)
-                            log_message(
-                                f"  - {path.name}: {downloaded / (1024**2):.1f}/"
-                                f"{total / (1024**2):.1f} MiB ({percent:.1f}%)",
-                                always_print=True,
-                            )
-                        else:
-                            log_message(
-                                f"  - {path.name}: {downloaded / (1024**2):.1f} MiB",
-                                always_print=True,
-                            )
-                        last_log = now
-            log_message(f"Downloaded {path.name} successfully.", always_print=True)
-        except Exception as e:
-            if path.exists():
-                path.unlink()
-            raise ModelError(f"Failed to download {path.name}: {e}")
-
     def _remove_empty_child_dirs(self, root: Path, verbose: bool = False) -> None:
         if not root.exists():
             return
@@ -537,10 +492,8 @@ class ModelManager:
                 downloaded_path.replace(target)
             except Exception:
                 shutil.copyfile(downloaded_path, target)
-                try:
+                with contextlib.suppress(Exception):
                     downloaded_path.unlink()
-                except Exception:
-                    pass
 
             self._remove_empty_child_dirs(target.parent, verbose=verbose)
         log_message(f"Downloaded {target.name} successfully.", verbose=verbose)
@@ -618,10 +571,8 @@ class ModelManager:
                 try:
                     target_resolved.relative_to(models_dir)
                     # Safe to delete
-                    try:
+                    with contextlib.suppress(Exception):
                         shutil.rmtree(target_dir)
-                    except Exception:
-                        pass
                 except ValueError:
                     # target_dir is not within models/, skip deletion for safety
                     log_message(
@@ -654,9 +605,7 @@ class ModelManager:
                     hf_info["repo_id"], hf_info["filename"], path, verbose=verbose
                 )
             except Exception:
-                self._ensure_file(
-                    path, self.model_urls[ModelType.UPSCALE], verbose=verbose
-                )
+                download_file(path, self.model_urls[ModelType.UPSCALE])
 
             # Load model
             if path.suffix == ".safetensors":
@@ -697,9 +646,7 @@ class ModelManager:
                     hf_info["repo_id"], hf_info["filename"], path, verbose=verbose
                 )
             except Exception:
-                self._ensure_file(
-                    path, self.model_urls[ModelType.UPSCALE_LITE], verbose=verbose
-                )
+                download_file(path, self.model_urls[ModelType.UPSCALE_LITE])
 
             # Load model
             if path.suffix == ".safetensors":
@@ -1455,96 +1402,66 @@ class ModelManager:
             if force_gc:
                 empty_cache(self.device)
 
+    def _unload_models(self, model_types, verbose: bool = False) -> bool:
+        """Unload each loaded model in `model_types`; True if any was loaded."""
+        loaded = [
+            model_type for model_type in model_types if self.is_loaded(model_type)
+        ]
+        for model_type in loaded:
+            self.unload_model(model_type, force_gc=False, verbose=verbose)
+        if loaded:
+            empty_cache(self.device)
+        return bool(loaded)
+
     def unload_upscale_models(self, verbose: bool = False):
         """Unload upscale models (both regular and lite)."""
-        self.unload_model(ModelType.UPSCALE, force_gc=False, verbose=verbose)
-        self.unload_model(ModelType.UPSCALE_LITE, force_gc=False, verbose=verbose)
-        empty_cache(self.device)
+        self._unload_models((ModelType.UPSCALE, ModelType.UPSCALE_LITE), verbose)
         log_message("Upscale models unloaded.", verbose=verbose)
 
     def unload_ocr_models(self, verbose: bool = False):
         """Unload OCR-related models (YOLO, SAM2/SAM3, and manga-ocr)."""
-        models_unloaded = []
-        if self.is_loaded(ModelType.YOLO_SPEECH_BUBBLE):
-            models_unloaded.append("yolo_speech_bubble")
-        if self.is_loaded(ModelType.YOLO_SPEECH_BUBBLE_2):
-            models_unloaded.append("yolo_speech_bubble_2")
-        if self.is_loaded(ModelType.RTDETR_CONJOINED_BUBBLE):
-            models_unloaded.append("rtdetr_conjoined_bubble")
-        if self.is_loaded(ModelType.SAM2):
-            models_unloaded.append("sam2")
-        if self.is_loaded(ModelType.SAM3):
-            models_unloaded.append("sam3")
-        if self.is_loaded(ModelType.YOLO_OSBTEXT):
-            models_unloaded.append("yolo_osbtext")
-        if self.is_loaded(ModelType.YOLO_PANEL):
-            models_unloaded.append("yolo_panel")
-        if self.is_loaded(ModelType.MANGA_OCR):
-            models_unloaded.append("manga_ocr")
-        if self.is_loaded(ModelType.PADDLE_OCR_VL):
-            models_unloaded.append("paddle_ocr_vl")
-
-        self.unload_model(ModelType.YOLO_SPEECH_BUBBLE, force_gc=False, verbose=verbose)
-        self.unload_model(
-            ModelType.YOLO_SPEECH_BUBBLE_2, force_gc=False, verbose=verbose
+        ocr_models = (
+            ModelType.YOLO_SPEECH_BUBBLE,
+            ModelType.YOLO_SPEECH_BUBBLE_2,
+            ModelType.RTDETR_CONJOINED_BUBBLE,
+            ModelType.SAM2,
+            ModelType.SAM3,
+            ModelType.YOLO_OSBTEXT,
+            ModelType.YOLO_PANEL,
+            ModelType.MANGA_OCR,
+            ModelType.PADDLE_OCR_VL,
         )
-        self.unload_model(
-            ModelType.RTDETR_CONJOINED_BUBBLE, force_gc=False, verbose=verbose
-        )
-        self.unload_model(ModelType.SAM2, force_gc=False, verbose=verbose)
-        self.unload_model(ModelType.SAM3, force_gc=False, verbose=verbose)
-        self.unload_model(ModelType.YOLO_OSBTEXT, force_gc=False, verbose=verbose)
-        self.unload_model(ModelType.YOLO_PANEL, force_gc=False, verbose=verbose)
-        self.unload_model(ModelType.MANGA_OCR, force_gc=True, verbose=verbose)
-        self.unload_model(ModelType.PADDLE_OCR_VL, force_gc=True, verbose=verbose)
-
-        if models_unloaded:
+        if self._unload_models(ocr_models, verbose):
             log_message("OCR models unloaded.", verbose=verbose)
 
     def unload_flux_kontext_models(self, verbose: bool = False):
         """Unload all Flux.1 Kontext models."""
-        models_unloaded = []
-        if self.is_loaded(ModelType.FLUX_TRANSFORMER):
-            models_unloaded.append("flux_transformer")
-        if self.is_loaded(ModelType.FLUX_TEXT_ENCODER):
-            models_unloaded.append("flux_text_encoder")
-        if self.is_loaded(ModelType.FLUX_PIPELINE):
-            models_unloaded.append("flux_pipeline")
-
-        self.unload_model(ModelType.FLUX_TRANSFORMER, force_gc=False, verbose=verbose)
-        self.unload_model(ModelType.FLUX_TEXT_ENCODER, force_gc=False, verbose=verbose)
-        self.unload_model(ModelType.FLUX_PIPELINE, force_gc=True, verbose=verbose)
+        unloaded = self._unload_models(
+            (
+                ModelType.FLUX_TRANSFORMER,
+                ModelType.FLUX_TEXT_ENCODER,
+                ModelType.FLUX_PIPELINE,
+            ),
+            verbose,
+        )
         self.shutdown_sdcpp_server("flux_kontext", verbose=verbose)
-
-        if models_unloaded:
+        if unloaded:
             log_message("Flux.1 Kontext models unloaded.", verbose=verbose)
 
     def unload_flux_kontext_sdnq_models(self, verbose: bool = False):
         """Unload Flux.1 Kontext SDNQ model."""
-        if self.is_loaded(ModelType.FLUX_KONTEXT_SDNQ_PIPELINE):
-            self.unload_model(
-                ModelType.FLUX_KONTEXT_SDNQ_PIPELINE, force_gc=True, verbose=verbose
-            )
+        if self._unload_models((ModelType.FLUX_KONTEXT_SDNQ_PIPELINE,), verbose):
             log_message("Flux.1 Kontext SDNQ model unloaded.", verbose=verbose)
 
     def unload_flux_klein_models(self, verbose: bool = False):
         """Unload all Flux.2 Klein models."""
-        models_unloaded = []
-        if self.is_loaded(ModelType.FLUX_KLEIN_9B_PIPELINE):
-            models_unloaded.append("flux_klein_9b")
-        if self.is_loaded(ModelType.FLUX_KLEIN_4B_PIPELINE):
-            models_unloaded.append("flux_klein_4b")
-
-        self.unload_model(
-            ModelType.FLUX_KLEIN_9B_PIPELINE, force_gc=False, verbose=verbose
-        )
-        self.unload_model(
-            ModelType.FLUX_KLEIN_4B_PIPELINE, force_gc=True, verbose=verbose
+        unloaded = self._unload_models(
+            (ModelType.FLUX_KLEIN_9B_PIPELINE, ModelType.FLUX_KLEIN_4B_PIPELINE),
+            verbose,
         )
         self.shutdown_sdcpp_server("flux_klein_9b", verbose=verbose)
         self.shutdown_sdcpp_server("flux_klein_4b", verbose=verbose)
-
-        if models_unloaded:
+        if unloaded:
             log_message("Flux.2 Klein models unloaded.", verbose=verbose)
 
     def unload_all(self, verbose: bool = False):

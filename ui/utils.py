@@ -7,6 +7,7 @@ import gradio as gr
 import requests
 from PIL import Image
 
+from core.config import env_api_key
 from core.llm_defaults import get_provider_sampling_defaults
 from utils.endpoints import openrouter_is_reasoning_model
 from utils.endpoints.openai_compatible import build_openai_compatible_url
@@ -93,10 +94,7 @@ def get_available_font_packs(fonts_base_dir: Path) -> tuple[list[str], str | Non
     font_dirs = [d.name for d in fonts_base_dir.iterdir() if d.is_dir()]
     font_dirs.sort()
 
-    if font_dirs:
-        default_font = font_dirs[0]
-    else:
-        default_font = None
+    default_font = font_dirs[0] if font_dirs else None
 
     return font_dirs, default_font
 
@@ -110,49 +108,9 @@ def is_valid_google_api_key(api_key: str) -> bool:
 
 def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     """Validate API key format based on provider."""
-    env_var_map = {
-        "Google": "GOOGLE_API_KEY or GEMINI_API_KEY",
-        "OpenAI": "OPENAI_API_KEY",
-        "Anthropic": "ANTHROPIC_API_KEY",
-        "SpaceXAI": "SPACEXAI_API_KEY or XAI_API_KEY",
-        "Meta Model": "META_MODEL_API_KEY or META_API_KEY",
-        "OpenRouter": "OPENROUTER_API_KEY",
-        "DeepSeek": "DEEPSEEK_API_KEY",
-        "Moonshot AI": "MOONSHOT_API_KEY",
-        "Xiaomi MiMo": "MIMO_API_KEY",
-        "Z.ai": "ZAI_API_KEY",
-        "QwenCloud": "QWENCLOUD_API_KEY or QWEN_API_KEY",
-        "OpenCode": "OPENCODE_API_KEY, OPENCODE_ZEN_API_KEY, or OPENCODE_GO_API_KEY",
-        "OpenAI-Compatible": "OPENAI_COMPATIBLE_API_KEY",
-    }
-    env_var_name = env_var_map.get(provider)
-
     # Use environment variable if field is empty
     if not api_key:
-        if provider == "Google":
-            api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get(
-                "GEMINI_API_KEY", ""
-            )
-        elif provider == "SpaceXAI":
-            api_key = os.environ.get("SPACEXAI_API_KEY") or os.environ.get(
-                "XAI_API_KEY", ""
-            )
-        elif provider == "Meta Model":
-            api_key = os.environ.get("META_MODEL_API_KEY") or os.environ.get(
-                "META_API_KEY", ""
-            )
-        elif provider == "QwenCloud":
-            api_key = os.environ.get("QWENCLOUD_API_KEY") or os.environ.get(
-                "QWEN_API_KEY", ""
-            )
-        elif provider == "OpenCode":
-            api_key = (
-                os.environ.get("OPENCODE_API_KEY")
-                or os.environ.get("OPENCODE_ZEN_API_KEY")
-                or os.environ.get("OPENCODE_GO_API_KEY", "")
-            )
-        elif env_var_name:
-            api_key = os.environ.get(env_var_name, "")
+        api_key = env_api_key(provider)
 
     if not api_key and provider != "OpenAI-Compatible":
         return False, f"{provider} API key is required"
@@ -341,7 +299,7 @@ def refresh_models_and_fonts(fonts_base_dir: Path):
             else (font_packs[0] if font_packs else None)
         )
         osb_font_result = gr.update(
-            choices=[""] + font_packs, value=selected_osb_font_val
+            choices=["", *font_packs], value=selected_osb_font_val
         )
 
         font_count = len(font_packs)
@@ -350,12 +308,12 @@ def refresh_models_and_fonts(fonts_base_dir: Path):
 
         return single_font_result, batch_font_result, osb_font_result
     except Exception as e:
-        gr.Error(f"Error refreshing resources: {e!s}")
+        gr.Warning(f"Error refreshing resources: {e!s}")
         font_packs, _ = get_available_font_packs(fonts_base_dir)
         return (
             gr.update(choices=font_packs),
             gr.update(choices=font_packs),
-            gr.update(choices=[""] + font_packs),
+            gr.update(choices=["", *font_packs]),
         )
 
 
@@ -458,7 +416,7 @@ def get_reasoning_effort_label(provider: str, model_name: str | None = None) -> 
 
     if provider == "SpaceXAI" and "multi-agent" in model_name.lower():
         return "Multi-Agent Depth"
-    elif (provider == "Google" or provider == "OpenRouter") and (gemini3 or gemma):
+    elif (provider in {"Google", "OpenRouter"}) and (gemini3 or gemma):
         return "Thinking Level"
     elif (
         provider == "Google"
@@ -521,7 +479,7 @@ def get_reasoning_effort_info_text(
         if supports_qwencloud_reasoning_effort(model_name):
             return "Controls model's internal reasoning effort."
         return "Enables or disables model thinking (auto=enabled, none=disabled)."
-    elif provider == "Meta Model" or provider == "OpenCode" or provider == "DeepSeek":
+    elif provider in {"Meta Model", "OpenCode", "DeepSeek"}:
         return "Controls model's internal reasoning effort."
     elif provider == "Z.ai":
         if supports_zai_reasoning_effort(model_name):
@@ -1705,12 +1663,7 @@ def fetch_and_update_opencode_models(
         log_message(f"Using cached OpenCode ({tier_key}) models", verbose=verbose)
         models = cached
     else:
-        resolved_api_key = (
-            api_key
-            or os.environ.get("OPENCODE_API_KEY")
-            or os.environ.get("OPENCODE_ZEN_API_KEY")
-            or os.environ.get("OPENCODE_GO_API_KEY", "")
-        )
+        resolved_api_key = api_key or env_api_key("OpenCode")
         if not resolved_api_key:
             return gr.update(choices=[], value=None)
 
