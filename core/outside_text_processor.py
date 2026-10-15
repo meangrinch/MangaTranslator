@@ -31,6 +31,8 @@ from core.image.tilt_detection import (
     detect_crop_tilt_angle,
 )
 from core.ml.model_manager import get_model_manager
+from utils.cancellation import raise_if_cancelled
+from utils.exceptions import CancellationError
 from utils.logging import log_message
 
 # OSB Expansion and Classification Constants
@@ -1007,6 +1009,8 @@ def finish_outside_text_work(
                                     "image": result_image,
                                     "error": None,
                                 }
+                            except CancellationError:
+                                raise
                             except Exception as e:
                                 return {
                                     "candidate": candidate,
@@ -1047,6 +1051,7 @@ def finish_outside_text_work(
                         flux_inpaints += 1
 
             for i, group in enumerate(mask_groups):
+                raise_if_cancelled()
                 log_message(
                     f"Inpainting outside text region {i + 1}/{len(mask_groups)}",
                     verbose=verbose,
@@ -1751,6 +1756,8 @@ def finish_outside_text_work(
                             flux_fail_reason = (
                                 "Flux returned original image (no inpaint)"
                             )
+                    except CancellationError:
+                        raise
                     except Exception as e:
                         flux_failed = True
                         flux_fail_reason = f"Flux inpainting error: {e}"
@@ -1815,6 +1822,8 @@ def finish_outside_text_work(
                             )
                         current_image = inpainted_image
                         flux_inpaints += len(grouped_flux_candidates)
+                    except CancellationError:
+                        raise
                     except Exception as e:
                         log_message(
                             "Grouped Flux inpainting failed "
@@ -1855,6 +1864,8 @@ def finish_outside_text_work(
         )
         return current_image, outside_text_data
 
+    except CancellationError:
+        raise
     except Exception as e:
         log_message(
             f"Error during outside text inpainting: {e}",

@@ -15,7 +15,8 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from utils.exceptions import ModelError
+from utils.cancellation import is_cancelled, raise_if_cancelled
+from utils.exceptions import CancellationError, ModelError
 from utils.logging import log_message
 
 
@@ -130,6 +131,12 @@ def run_image_job(
     deadline = time.monotonic() + timeout_sec
     next_log = time.monotonic() + 10
     while time.monotonic() < deadline:
+        if is_cancelled():
+            try:
+                _json_request(f"{poll_url}/cancel", payload={}, timeout=5)
+            except OSError:
+                pass  # sd.cpp only cancels queued jobs; a generating one answers 409
+            raise CancellationError("Process cancelled by user.")
         status = _json_request(poll_url, timeout=30)
         state = status.get("status")
         if state == "completed":
@@ -628,6 +635,7 @@ class SDCppServerManager:
         )
         deadline = time.monotonic() + timeout_sec
         while time.monotonic() < deadline:
+            raise_if_cancelled()  # ensure_flux_server stops the half-started server
             if process.poll() is not None:
                 detail = self._log_tail(log_path)
                 raise ModelError(

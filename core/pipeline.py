@@ -70,7 +70,7 @@ from .text.text_processing import supports_long_word_breaking
 from .text.text_renderer import render_text_skia
 
 if TYPE_CHECKING:
-    from ui.cancellation import CancellationManager
+    from utils.cancellation import CancellationManager
 
 
 ENABLE_COMPONENT_ORDER_DEBUG = False
@@ -219,6 +219,8 @@ def _clean_speech_bubbles_for_page(
     except CleaningError as e:
         log_message(f"Cleaning failed: {e}", always_print=True)
         return fallback_cv_image.copy(), []
+    except CancellationError:
+        raise
     except Exception as e:
         log_message(f"Error during cleaning: {e}", always_print=True)
         return fallback_cv_image.copy(), []
@@ -925,7 +927,7 @@ def translate_and_render(
         raise
 
     if cancellation_manager and cancellation_manager.is_cancelled():
-        raise TranslationError("Process cancelled by user.")
+        raise CancellationError("Process cancelled by user.")
 
     desired_format = config.output.output_format
     output_ext_for_mode = (
@@ -1048,6 +1050,9 @@ def translate_and_render(
         bubble_data = []
         text_free_boxes = []
 
+    if cancellation_manager and cancellation_manager.is_cancelled():
+        raise CancellationError("Process cancelled by user.")
+
     panels = None
     debug_panels = None
     if config.detection.use_panel_sorting or ENABLE_COMPONENT_ORDER_DEBUG:
@@ -1082,6 +1087,9 @@ def translate_and_render(
 
         if config.detection.use_panel_sorting:
             panels = debug_panels
+
+    if cancellation_manager and cancellation_manager.is_cancelled():
+        raise CancellationError("Process cancelled by user.")
 
     # Process outside text (detect always; optionally defer inpainting for LLM overlap)
     use_llm_inpaint_overlap = _should_overlap_llm_with_inpaint(config)
@@ -1640,6 +1648,8 @@ def translate_and_render(
                                 translated_texts = [f"[Translation Error: {e}]"] * len(
                                     bubble_images_b64
                                 )
+                            except CancellationError:
+                                raise
                             except Exception as e:
                                 log_message(
                                     f"Translation API error: {e}", always_print=True
@@ -1695,6 +1705,8 @@ def translate_and_render(
                             translated_texts = [f"[Translation Error: {e}]"] * len(
                                 bubble_images_b64
                             )
+                        except CancellationError:
+                            raise
                         except Exception as e:
                             log_message(
                                 f"Translation API error: {e}", always_print=True
@@ -1764,6 +1776,8 @@ def translate_and_render(
                         "[Empty response / no content]",
                     }
                     for i, bubble in enumerate(sorted_bubble_data):
+                        if cancellation_manager and cancellation_manager.is_cancelled():
+                            raise CancellationError("Process cancelled by user.")
                         bubble["translation"] = translated_texts[i]
                         bbox = bubble["bbox"]
                         text = bubble.get("translation", "")

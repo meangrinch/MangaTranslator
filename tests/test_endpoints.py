@@ -5,6 +5,8 @@ from types import SimpleNamespace
 import pytest
 import requests
 
+from utils import cancellation
+from utils.cancellation import CancellationManager
 from utils.endpoints import (
     call_anthropic_endpoint,
     call_deepseek_endpoint,
@@ -19,7 +21,7 @@ from utils.endpoints import (
 )
 from utils.endpoints._http import post_with_retries
 from utils.endpoints.openai_compatible import build_openai_compatible_url
-from utils.exceptions import TranslationError
+from utils.exceptions import CancellationError, TranslationError
 from utils.model_metadata import anthropic_model_flags
 
 IMAGE = {"inline_data": {"mime_type": "image/png", "data": "AAAA"}}
@@ -484,6 +486,19 @@ def test_retry_gives_up_on_429_after_max_retries(net):
     ):
         retrying_post(max_retries=2)
     assert net.sleeps == [1.0, 2.0]
+
+
+def test_retry_stops_once_cancelled_during_backoff(net, monkeypatch):
+    manager = CancellationManager()
+    cancellation.activate(manager)
+    monkeypatch.setattr(time, "sleep", lambda _: manager.cancel())
+    net.queue = [429, {"text": "ok"}]
+    try:
+        with pytest.raises(CancellationError):
+            retrying_post()
+        assert net.queue == [{"text": "ok"}]
+    finally:
+        cancellation.activate(CancellationManager())
 
 
 def test_other_http_errors_raise_at_once_with_hint(net):

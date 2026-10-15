@@ -10,6 +10,7 @@ from core.caching import get_cache
 from core.device import empty_cache, get_best_device, get_best_dtype
 from core.ml.model_manager import get_model_manager
 from core.ml.sdcpp_server import pil_to_base64_png, run_image_job
+from utils.cancellation import is_cancelled, raise_if_cancelled
 from utils.exceptions import ModelError
 from utils.logging import log_message
 from utils.model_metadata import (
@@ -28,6 +29,13 @@ FLUX_GUIDANCE_SCALE = 2.5
 # Surrounding context ratio and pixel ceiling to ensure clean blending without diluting inpaint resolution
 CONTEXT_PADDING_RATIO = 0.5
 MAX_CONTEXT_PADDING = 80
+
+
+def _interrupt_on_cancel(pipeline, step, timestep, callback_kwargs):
+    """Diffusers step callback that stops denoising once the user cancels."""
+    if is_cancelled():
+        pipeline._interrupt = True
+    return callback_kwargs
 
 
 def _prompt_value_to_cpu(value):
@@ -831,6 +839,7 @@ class FluxKontextInpainter:
 
             # CPU offload moves weights between devices; serialize access across threads
             with self.manager.flux_inference_lock:
+                raise_if_cancelled()  # Jobs queued on the lock skip their inference
                 self.load_models()
 
                 if self.pipeline is None:
@@ -868,6 +877,7 @@ class FluxKontextInpainter:
                             generator=gen,
                             output_type="pt",
                             max_area=required_area,
+                            callback_on_step_end=_interrupt_on_cancel,
                         )
                         img = out.images[0]
                         torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
@@ -907,6 +917,7 @@ class FluxKontextInpainter:
                             generator=gen,
                             output_type="pt",
                             max_area=required_area,
+                            callback_on_step_end=_interrupt_on_cancel,
                         )
                         img = out.images[0]
                         torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
@@ -923,6 +934,7 @@ class FluxKontextInpainter:
                     self.pipeline.transformer.to("cpu")
                     empty_cache(self.DEVICE)
 
+            raise_if_cancelled()  # An interrupted run returns a half-denoised patch
             patch_pil = generated_patch_pil.resize(
                 (width, height), Image.Resampling.LANCZOS
             )
@@ -1544,6 +1556,7 @@ class FluxKleinInpainter:
             log_message("  - Running inference...", verbose=verbose)
 
             with self.manager.flux_inference_lock:
+                raise_if_cancelled()  # Jobs queued on the lock skip their inference
                 self.load_models()
 
                 if self.pipeline is None:
@@ -1584,9 +1597,11 @@ class FluxKleinInpainter:
                             guidance_scale=self.KLEIN_GUIDANCE_SCALE,
                             num_inference_steps=self.num_inference_steps,
                             generator=gen,
+                            callback_on_step_end=_interrupt_on_cancel,
                         )
                         generated_patch_pil = out.images[0]
 
+            raise_if_cancelled()  # An interrupted run returns a half-denoised patch
             if (inference_w, inference_h) != (width, height):
                 patch_pil = generated_patch_pil.resize(
                     (width, height), Image.Resampling.LANCZOS

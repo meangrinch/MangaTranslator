@@ -14,6 +14,7 @@ from core.validation import (
     validate_mutually_exclusive_modes,
     validate_zip_file,
 )
+from utils import cancellation
 from utils.exceptions import CancellationError, ValidationError
 from utils.model_metadata import (
     FLUX_SDCPP_DIFFUSION_QUANTS,
@@ -29,7 +30,6 @@ from utils.model_metadata import (
 from utils.path_list import FAILED_DIRNAME, read_image_paths_from_txt
 
 from . import logic, settings_manager, utils
-from .cancellation import CancellationManager
 from .ui_models import (
     UICleaningSettings,
     UIConfigState,
@@ -45,8 +45,6 @@ from .ui_models import (
 
 ERROR_PREFIX = "❌ Error: "
 SUCCESS_PREFIX = "✅ "
-
-CANCELLATION_MANAGER: CancellationManager | None = None
 
 
 def _radio_choices(values):
@@ -882,8 +880,8 @@ def handle_translate_click(
     """Callback for the 'Translate' button click. Uses dataclasses for config."""
     input_image_path = args[0]
     start_time = time.time()
-    global CANCELLATION_MANAGER
-    CANCELLATION_MANAGER = CancellationManager()
+    cancellation_manager = cancellation.CancellationManager()
+    cancellation.activate(cancellation_manager)
     try:
         img_valid, img_msg = utils.validate_image(input_image_path)
         if not img_valid:
@@ -907,7 +905,7 @@ def handle_translate_click(
             selected_font_pack_name=selected_font_pack_name,
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
-            cancellation_manager=CANCELLATION_MANAGER,
+            cancellation_manager=cancellation_manager,
         )
 
         # Re-get font path for success message (logic already validated it)
@@ -975,8 +973,8 @@ def handle_batch_click(
     input_files = args[0]
     input_zip = args[1] if len(args) > 1 else None
     progress(0, desc="Starting batch process...")
-    global CANCELLATION_MANAGER
-    CANCELLATION_MANAGER = CancellationManager()
+    cancellation_manager = cancellation.CancellationManager()
+    cancellation.activate(cancellation_manager)
     try:
         zip_file_path = None
         path_list_file = None
@@ -1045,7 +1043,7 @@ def handle_batch_click(
             models_dir=models_dir,
             fonts_base_dir=fonts_base_dir,
             gradio_progress=progress,
-            cancellation_manager=CANCELLATION_MANAGER,
+            cancellation_manager=cancellation_manager,
         )
 
         output_path = results["output_path"]
@@ -2008,9 +2006,6 @@ def update_process_buttons(
     processing: bool, button_text_processing: str, button_text_idle: str
 ):
     """Toggle visibility and interactivity of processing buttons."""
-    global CANCELLATION_MANAGER
-    if not processing:
-        CANCELLATION_MANAGER = None
     return (
         gr.update(
             interactive=not processing,
@@ -2027,8 +2022,7 @@ def update_process_buttons(
 
 def cancel_process():
     """Signal that the current process should be cancelled."""
-    if CANCELLATION_MANAGER:
-        CANCELLATION_MANAGER.cancel()
+    cancellation.cancel_active()
 
 
 def handle_thresholding_change(use_otsu_threshold: bool):

@@ -25,7 +25,7 @@ from utils.logging import log_message
 from utils.path_list import IMAGE_EXTENSIONS, stage_path_list
 
 if TYPE_CHECKING:
-    from ui.cancellation import CancellationManager
+    from utils.cancellation import CancellationManager
 
 
 class LogicError(Exception):

@@ -1,8 +1,12 @@
 import base64
 import json
 import re
+import threading
+from collections.abc import Callable
+from concurrent.futures import Future
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from io import BytesIO
-from typing import Any
+from typing import Any, TypeVar
 
 import cv2
 import numpy as np
@@ -27,6 +31,7 @@ from core.terminology import (
     record_new_terms,
     split_new_terms,
 )
+from utils.cancellation import raise_if_cancelled
 from utils.endpoints import (
     call_anthropic_endpoint,
     call_deepseek_endpoint,
@@ -90,6 +95,8 @@ from utils.model_metadata import (
     supports_xai_reasoning_parameter,
     supports_zai_reasoning_effort,
 )
+
+T = TypeVar("T")
 
 _FULL_PAGE_LABEL = "Full page (context only):"
 _PREVIOUS_PAGE_LABEL = "Previous page, {} back (context only):"
@@ -823,7 +830,8 @@ def _call_llm_endpoint(
     elif provider == "OpenCode":
         provider_args["tier"] = getattr(config, "opencode_tier", "zen") or "zen"
 
-    return endpoint(
+    return _run_abandoning_on_cancel(
+        endpoint,
         model_name=model_name,
         parts=api_parts,
         generation_config=generation_config,
@@ -831,6 +839,29 @@ def _call_llm_endpoint(
         debug=debug,
         **provider_args,
     )
+
+
+def _run_abandoning_on_cancel(fn: Callable[..., T], **kwargs: Any) -> T:
+    """Run `fn` on a daemon thread and stop waiting for it once the user cancels.
+
+    An in-flight HTTP request can't be interrupted, so it finishes (and is billed)
+    in the background; its result is discarded.
+    """
+    raise_if_cancelled()
+    future: Future = Future()
+
+    def run() -> None:
+        try:
+            future.set_result(fn(**kwargs))
+        except BaseException as e:
+            future.set_exception(e)
+
+    threading.Thread(target=run, daemon=True).start()
+    while True:
+        try:
+            return future.result(timeout=0.2)
+        except FutureTimeoutError:
+            raise_if_cancelled()
 
 
 def _strip_code_fences(text: str) -> str:

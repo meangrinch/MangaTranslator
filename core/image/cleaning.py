@@ -12,7 +12,13 @@ from core.batch_coordinator import (
     paste_image_region,
 )
 from core.scaling import scale_area, scale_kernel, scale_scalar
-from utils.exceptions import CleaningError, ImageProcessingError, ValidationError
+from utils.cancellation import raise_if_cancelled
+from utils.exceptions import (
+    CancellationError,
+    CleaningError,
+    ImageProcessingError,
+    ValidationError,
+)
 from utils.logging import log_message
 
 from .detection import detect_speech_bubbles
@@ -112,6 +118,8 @@ def _inpaint_colored_bubbles_with_coordinator(
                         "image": result_image,
                         "error": None,
                     }
+                except CancellationError:
+                    raise
                 except Exception as e:
                     return {
                         "candidate": candidate,
@@ -696,6 +704,7 @@ def clean_speech_bubbles(
             maximum=5000,
         )
         for detection in detections:
+            raise_if_cancelled()
             final_mask = None
             fill_color_bgr = None
             is_colored_bubble = False
@@ -980,6 +989,7 @@ def clean_speech_bubbles(
                         )
                     else:
                         for idx, bubble_info in enumerate(colored_bubbles):
+                            raise_if_cancelled()
                             mask_np = bubble_info["mask"]
                             mask_bool = mask_np.astype(bool)
                             region_seed = (
@@ -1013,6 +1023,8 @@ def clean_speech_bubbles(
                                 _resample_inpainted_bubble_color(
                                     pil_working, bubble_info, mask_bool
                                 )
+                            except CancellationError:
+                                raise
                             except Exception as e:
                                 log_message(
                                     f"Flux inpainting failed for bubble {bbox_tuple}: {e}; falling back to standard fill",
@@ -1023,6 +1035,8 @@ def clean_speech_bubbles(
                     cleaned_image = cv2.cvtColor(
                         np.array(pil_working.convert("RGB")), cv2.COLOR_RGB2BGR
                     )
+                except CancellationError:
+                    raise
                 except Exception as e:
                     log_message(
                         f"Flux inpainting aborted; falling back to standard fill: {e}",
@@ -1062,6 +1076,8 @@ def clean_speech_bubbles(
         return cleaned_image, processed_bubbles
     except OSError as e:
         raise ImageProcessingError(f"Error loading image {image_input}: {e!s}")
+    except CancellationError:
+        raise
     except Exception as e:
         raise CleaningError(f"Error cleaning speech bubbles: {e!s}")
 

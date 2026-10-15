@@ -5,6 +5,7 @@ from typing import Any, TypeVar
 
 import requests
 
+from utils.cancellation import raise_if_cancelled
 from utils.exceptions import TranslationError
 from utils.logging import log_message
 
@@ -61,6 +62,7 @@ def post_with_retries(
     # core/pipeline.py matches on the wording of these errors ("429", "rate limit", ...)
     attempts = max_retries + 1
     for attempt in range(attempts):
+        raise_if_cancelled()
         delay = min(base_delay * (2**attempt), 16.0)  # Exponential backoff, max 16s
         can_retry = attempt < max_retries
         log_message(
