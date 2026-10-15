@@ -2367,7 +2367,8 @@ def batch_translate_images(
         return empty_results
 
     translation_cfg = config.translation
-    if not translation_cfg.terminology_memory:
+    translates = not (config.test_mode or config.cleaning_only or config.upscaling_only)
+    if not (translates and translation_cfg.terminology_memory):
         glossary_path = None
     elif translation_cfg.terminology_memory_path:
         glossary_path = translation_cfg.terminology_memory_path

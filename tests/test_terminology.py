@@ -126,7 +126,7 @@ def _default_glossary(name):
     return str(Path("output") / ".glossary" / f"{name}_{time.strftime('%Y-%m-%d')}.txt")
 
 
-def _run_batch(monkeypatch, tmp_path, translation_overrides, **kwargs):
+def _run_batch(monkeypatch, tmp_path, translation_overrides, mode=None, **kwargs):
     # Default glossaries go under ./output/.glossary, so keep them inside tmp_path
     monkeypatch.chdir(tmp_path)
     input_dir = tmp_path / "in"
@@ -145,6 +145,8 @@ def _run_batch(monkeypatch, tmp_path, translation_overrides, **kwargs):
         yolo_model_path="model.pt", device=torch.device("cpu")
     )
     config.translation = replace(config.translation, **translation_overrides)
+    if mode:
+        setattr(config, mode, True)
     output_dir = tmp_path / "out"
     results = pipeline.batch_translate_images(input_dir, config, output_dir, **kwargs)
     assert results["error_count"] == 0
@@ -180,6 +182,16 @@ def test_batch_keeps_explicit_glossary_path(monkeypatch, tmp_path):
 def test_batch_without_memory_sets_no_path(monkeypatch, tmp_path):
     seen, _, _ = _run_batch(monkeypatch, tmp_path, {}, glossary_name="series_ch1")
     assert seen == [None, None]
+
+
+@pytest.mark.parametrize("mode", ["test_mode", "cleaning_only", "upscaling_only"])
+def test_batch_without_translation_creates_no_glossary(monkeypatch, tmp_path, mode):
+    seen, results, _ = _run_batch(
+        monkeypatch, tmp_path, {"terminology_memory": True}, mode=mode
+    )
+    assert seen == [None, None]
+    assert "glossary_path" not in results
+    assert not (tmp_path / "output" / ".glossary").exists()
 
 
 def _run_translation(monkeypatch, tmp_path, mode, responses, seed=""):
