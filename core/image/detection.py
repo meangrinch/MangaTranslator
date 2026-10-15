@@ -1271,6 +1271,232 @@ def _build_segmentation_detections(
     return detections
 
 
+def _split_secondary_classes(
+    names: dict,
+    secondary_cls,
+    secondary_boxes,
+    secondary_sources: list,
+    text_free_boxes: list,
+):
+    """Keep RT-DETR `bubble` boxes, move `text_free` ones into `text_free_boxes`
+    (in place), and drop in-bubble `text_bubble` boxes."""
+    bubble_id = None
+    text_free_id = None
+    for cid, cname in names.items():
+        if cname == "bubble":
+            bubble_id = cid
+        elif cname == "text_free":
+            text_free_id = cid
+
+    filtered_boxes = []
+    filtered_sources = []
+    for i, s_box in enumerate(secondary_boxes):
+        _, secondary_idx = secondary_sources[i]
+        cls_id = int(secondary_cls[secondary_idx])
+        if text_free_id is not None and cls_id == text_free_id:
+            text_free_boxes.append(s_box.tolist())
+            continue
+        if bubble_id is None or cls_id == bubble_id:
+            filtered_boxes.append(s_box)
+            filtered_sources.append(secondary_sources[i])
+
+    secondary_boxes = (
+        torch.stack(filtered_boxes) if filtered_boxes else secondary_boxes[:0]
+    )
+    secondary_sources = filtered_sources
+    return secondary_boxes, secondary_sources
+
+
+def _add_missed_secondary_boxes(
+    primary_boxes, primary_sources: list, secondary_boxes, secondary_sources: list
+):
+    """Append secondary bubbles that no primary box overlaps (bubbles YOLO missed)."""
+    new_boxes = []
+    new_box_sources = []
+    primary_boxes_list = primary_boxes.tolist() if len(primary_boxes) > 0 else []
+
+    for i, s_box in enumerate(secondary_boxes):
+        s_box_list = s_box.tolist()
+
+        is_covered = False
+
+        for p_box_list in primary_boxes_list:
+            ioa_s_in_p = _calculate_ioa(s_box_list, p_box_list)
+            ioa_p_in_s = _calculate_ioa(p_box_list, s_box_list)
+
+            if ioa_s_in_p > IOA_OVERLAP_THRESHOLD or ioa_p_in_s > IOA_OVERLAP_THRESHOLD:
+                is_covered = True
+                break
+
+        if not is_covered:
+            new_boxes.append(s_box)
+            new_box_sources.append(secondary_sources[i])
+
+    if new_boxes:
+        log_message(
+            f"Found {len(new_boxes)} missed bubbles from secondary model",
+            always_print=True,
+        )
+        new_boxes_tensor = torch.stack(new_boxes)
+        if len(primary_boxes) > 0:
+            primary_boxes = torch.cat((primary_boxes, new_boxes_tensor), dim=0)
+        else:
+            primary_boxes = new_boxes_tensor
+        primary_sources.extend(new_box_sources)
+    return primary_boxes, primary_sources
+
+
+def _drop_text_free_primaries(
+    primary_boxes, primary_sources: list, text_free_boxes: list, osb_enabled: bool
+):
+    """Remove primary boxes that overlap a `text_free` detection (left to OSB)."""
+    indices_to_remove = []
+    primary_boxes_list = primary_boxes.tolist()
+
+    for i, p_box in enumerate(primary_boxes_list):
+        overlaps_text_free = False
+        for tf_box in text_free_boxes:
+            if (
+                _calculate_ioa(p_box, tf_box) > IOA_OVERLAP_THRESHOLD
+                or _calculate_ioa(tf_box, p_box) > IOA_OVERLAP_THRESHOLD
+            ):
+                overlaps_text_free = True
+                break
+
+        if overlaps_text_free:
+            indices_to_remove.append(i)
+
+    if indices_to_remove:
+        action = (
+            "routing to OSB pipeline" if osb_enabled else "discarding (OSB disabled)"
+        )
+        log_message(
+            f"Removing {len(indices_to_remove)} bubbles marked text_free ({action})",
+            always_print=True,
+        )
+        keep_indices = [
+            i for i in range(len(primary_boxes)) if i not in indices_to_remove
+        ]
+        if keep_indices:
+            primary_boxes = primary_boxes[keep_indices]
+            primary_sources = [primary_sources[i] for i in keep_indices]
+        else:
+            primary_boxes = torch.tensor([])
+            primary_sources = []
+    return primary_boxes, primary_sources
+
+
+def _sam_masks_for_boxes(
+    image_pil: Image.Image,
+    primary_boxes,
+    secondary_boxes,
+    simple_indices: list,
+    conjoined_indices: list,
+    synthetic_conjoined_groups: list[dict],
+    processor,
+    sam_model_instance,
+    device,
+    img_h: int,
+    img_w: int,
+    sam_model_name: str,
+    verbose: bool,
+) -> list:
+    """Run SAM on simple, conjoined-parent, and synthetic-parent boxes in one batch.
+
+    Returns per-primary-box masks (None where not prompted); synthetic group parent
+    masks are stored on the groups in place."""
+    boxes_to_process = []
+    process_indices = []
+
+    for idx in simple_indices:
+        boxes_to_process.append(primary_boxes[idx])
+        process_indices.append(idx)
+
+    for p_idx, s_indices in conjoined_indices:
+        # SAM needs the prompt box to cover all children for a usable mask
+        group_stack = torch.cat(
+            [primary_boxes[p_idx].unsqueeze(0)]
+            + [secondary_boxes[s_idx].unsqueeze(0) for s_idx in s_indices],
+            dim=0,
+        )
+        combined_parent_box = torch.cat(
+            [
+                group_stack[:, :2].min(dim=0).values,
+                group_stack[:, 2:].max(dim=0).values,
+            ]
+        )
+        boxes_to_process.append(combined_parent_box)
+        process_indices.append(p_idx)
+
+    # Append synthetic conjoined parent boxes to the same SAM batch
+    synth_start_idx = len(boxes_to_process)
+    for sg in synthetic_conjoined_groups:
+        boxes_to_process.append(sg["parent_box"])
+
+    sam_masks_for_yolo = [None] * len(primary_boxes)
+    if boxes_to_process:
+        all_boxes_tensor = torch.stack(boxes_to_process)
+
+        total_boxes = len(boxes_to_process)
+        simple_count = len(simple_indices)
+        conjoined_parent_count = len(conjoined_indices)
+        synth_parent_count = len(synthetic_conjoined_groups)
+
+        parts = []
+        if simple_count:
+            parts.append(f"{simple_count} simple")
+        if conjoined_parent_count:
+            parts.append(f"{conjoined_parent_count} conjoined parents")
+        if synth_parent_count:
+            parts.append(f"{synth_parent_count} synthetic conjoined parents")
+        if len(parts) > 1:
+            log_message(
+                f"Processing {total_boxes} bubbles ({' + '.join(parts)})...",
+                verbose=verbose,
+            )
+        else:
+            log_message(
+                f"Processing {total_boxes} simple bubbles...",
+                verbose=verbose,
+            )
+
+        all_masks_bool = _process_simple_bubbles(
+            image_pil,
+            all_boxes_tensor,
+            list(range(len(boxes_to_process))),
+            processor,
+            sam_model_instance,
+            device,
+        )
+
+        for i, (mask_bool, box) in enumerate(
+            zip(all_masks_bool, boxes_to_process, strict=False)
+        ):
+            x0_f, y0_f, x1_f, y1_f = box.tolist()
+            x0 = int(np.floor(max(0, min(x0_f, img_w))))
+            y0 = int(np.floor(max(0, min(y0_f, img_h))))
+            x1 = int(np.ceil(max(0, min(x1_f, img_w))))
+            y1 = int(np.ceil(max(0, min(y1_f, img_h))))
+
+            if x1 > x0 and y1 > y0:
+                clipped_mask = np.zeros((img_h, img_w), dtype=np.uint8)
+                clipped_mask[y0:y1, x0:x1] = mask_bool[y0:y1, x0:x1] * np.uint8(255)
+            else:
+                clipped_mask = mask_bool.astype(np.uint8) * 255
+
+            if i < synth_start_idx:
+                sam_masks_for_yolo[process_indices[i]] = clipped_mask
+            else:
+                sg_idx = i - synth_start_idx
+                synthetic_conjoined_groups[sg_idx]["parent_mask"] = clipped_mask
+
+        log_message(
+            f"Generated {len(all_masks_bool)} primary masks with {sam_model_name}",
+            always_print=True,
+        )
+    return sam_masks_for_yolo
+
+
 def detect_speech_bubbles(
     image_path: Path,
     model_path,
@@ -1439,115 +1665,26 @@ def detect_speech_bubbles(
 
             # Keep bubble for conjoined processing; collect text_free for OSB; ignore text_bubble.
             if len(secondary_boxes) > 0 and hasattr(secondary_model, "names"):
-                bubble_id = None
-                text_free_id = None
-                for cid, cname in secondary_model.names.items():
-                    if cname == "bubble":
-                        bubble_id = cid
-                    elif cname == "text_free":
-                        text_free_id = cid
-
-                secondary_cls = secondary_results.boxes.cls
-
-                filtered_boxes = []
-                filtered_sources = []
-                for i, s_box in enumerate(secondary_boxes):
-                    _, secondary_idx = secondary_sources[i]
-                    cls_id = int(secondary_cls[secondary_idx])
-                    if text_free_id is not None and cls_id == text_free_id:
-                        text_free_boxes.append(s_box.tolist())
-                        continue
-                    if bubble_id is None or cls_id == bubble_id:
-                        filtered_boxes.append(s_box)
-                        filtered_sources.append(secondary_sources[i])
-
-                secondary_boxes = (
-                    torch.stack(filtered_boxes)
-                    if filtered_boxes
-                    else secondary_boxes[:0]
+                secondary_boxes, secondary_sources = _split_secondary_classes(
+                    secondary_model.names,
+                    secondary_results.boxes.cls,
+                    secondary_boxes,
+                    secondary_sources,
+                    text_free_boxes,
                 )
-                secondary_sources = filtered_sources
-
                 if len(secondary_boxes) > 0:
-                    new_boxes = []
-                    new_box_sources = []
-                    primary_boxes_list = (
-                        primary_boxes.tolist() if len(primary_boxes) > 0 else []
+                    primary_boxes, primary_sources = _add_missed_secondary_boxes(
+                        primary_boxes,
+                        primary_sources,
+                        secondary_boxes,
+                        secondary_sources,
                     )
-
-                    for i, s_box in enumerate(secondary_boxes):
-                        s_box_list = s_box.tolist()
-
-                        is_covered = False
-
-                        for p_box_list in primary_boxes_list:
-                            ioa_s_in_p = _calculate_ioa(s_box_list, p_box_list)
-                            ioa_p_in_s = _calculate_ioa(p_box_list, s_box_list)
-
-                            if (
-                                ioa_s_in_p > IOA_OVERLAP_THRESHOLD
-                                or ioa_p_in_s > IOA_OVERLAP_THRESHOLD
-                            ):
-                                is_covered = True
-                                break
-
-                        if not is_covered:
-                            new_boxes.append(s_box)
-                            new_box_sources.append(secondary_sources[i])
-
-                    if new_boxes:
-                        log_message(
-                            f"Found {len(new_boxes)} missed bubbles from secondary model",
-                            always_print=True,
-                        )
-                        new_boxes_tensor = torch.stack(new_boxes)
-                        if len(primary_boxes) > 0:
-                            primary_boxes = torch.cat(
-                                (primary_boxes, new_boxes_tensor), dim=0
-                            )
-                        else:
-                            primary_boxes = new_boxes_tensor
-                        primary_sources.extend(new_box_sources)
 
             # Remove text_free detections (route to OSB if enabled, discard otherwise)
             if text_free_boxes and len(primary_boxes) > 0:
-                indices_to_remove = []
-                primary_boxes_list = primary_boxes.tolist()
-
-                for i, p_box in enumerate(primary_boxes_list):
-                    overlaps_text_free = False
-                    for tf_box in text_free_boxes:
-                        if (
-                            _calculate_ioa(p_box, tf_box) > IOA_OVERLAP_THRESHOLD
-                            or _calculate_ioa(tf_box, p_box) > IOA_OVERLAP_THRESHOLD
-                        ):
-                            overlaps_text_free = True
-                            break
-
-                    if overlaps_text_free:
-                        indices_to_remove.append(i)
-
-                if indices_to_remove:
-                    action = (
-                        "routing to OSB pipeline"
-                        if osb_enabled
-                        else "discarding (OSB disabled)"
-                    )
-                    log_message(
-                        f"Removing {len(indices_to_remove)} bubbles marked text_free ({action})",
-                        always_print=True,
-                    )
-                    keep_indices = [
-                        i
-                        for i in range(len(primary_boxes))
-                        if i not in indices_to_remove
-                    ]
-                    if keep_indices:
-                        primary_boxes = primary_boxes[keep_indices]
-                        primary_sources = [primary_sources[i] for i in keep_indices]
-                    else:
-                        primary_boxes = torch.tensor([])
-                        primary_sources = []
+                primary_boxes, primary_sources = _drop_text_free_primaries(
+                    primary_boxes, primary_sources, text_free_boxes, osb_enabled
+                )
 
         except Exception as e:
             log_message(
@@ -1626,10 +1763,10 @@ def detect_speech_bubbles(
                 }
             )
 
-    if not use_sam:
-        log_message("SAM disabled, using YOLO segmentation masks", verbose=verbose)
-        img_h, img_w = image_cv.shape[:2]
-        detections = _build_segmentation_detections(
+    img_h, img_w = image_cv.shape[:2]
+
+    def build_detections(sam_masks=None):
+        return _build_segmentation_detections(
             primary_boxes,
             grouping_primary_boxes,
             primary_sources,
@@ -1645,12 +1782,16 @@ def detect_speech_bubbles(
             conjoined_confidence,
             osb_text_boxes_np=osb_text_boxes_np,
             verbose=verbose,
+            sam_masks=sam_masks,
             synthetic_conjoined_groups=synthetic_conjoined_groups,
         )
-        return detections, text_free_boxes
 
+    if not use_sam:
+        log_message("SAM disabled, using YOLO segmentation masks", verbose=verbose)
+        return build_detections(), text_free_boxes
+
+    sam_model_name = "SAM 3" if seg_model == "sam3" else "SAM 2.1"
     try:
-        sam_model_name = "SAM 3" if seg_model == "sam3" else "SAM 2.1"
         log_message(
             f"Applying {sam_model_name} segmentation refinement", verbose=verbose
         )
@@ -1665,8 +1806,7 @@ def detect_speech_bubbles(
 
         if cached_sam is not None:
             log_message("  - Using cached SAM masks", always_print=True)
-            detections = cached_sam
-            return detections, text_free_boxes
+            return cached_sam, text_free_boxes
 
         # Load appropriate SAM model
         if seg_model == "sam3":
@@ -1675,117 +1815,23 @@ def detect_speech_bubbles(
             )
         else:
             processor, sam_model_instance = model_manager.load_sam2(verbose=verbose)
-        boxes_to_process = []
-        process_indices = []
 
-        for idx in simple_indices:
-            boxes_to_process.append(primary_boxes[idx])
-            process_indices.append(idx)
-
-        for p_idx, s_indices in conjoined_indices:
-            # SAM needs the prompt box to cover all children for a usable mask
-            group_stack = torch.cat(
-                [primary_boxes[p_idx].unsqueeze(0)]
-                + [secondary_boxes[s_idx].unsqueeze(0) for s_idx in s_indices],
-                dim=0,
-            )
-            combined_parent_box = torch.cat(
-                [
-                    group_stack[:, :2].min(dim=0).values,
-                    group_stack[:, 2:].max(dim=0).values,
-                ]
-            )
-            boxes_to_process.append(combined_parent_box)
-            process_indices.append(p_idx)
-
-        # Append synthetic conjoined parent boxes to the same SAM batch
-        synth_start_idx = len(boxes_to_process)
-        for sg in synthetic_conjoined_groups:
-            boxes_to_process.append(sg["parent_box"])
-
-        img_h, img_w = image_cv.shape[:2]
-        sam_masks_for_yolo = [None] * len(primary_boxes)
-        if boxes_to_process:
-            all_boxes_tensor = torch.stack(boxes_to_process)
-
-            total_boxes = len(boxes_to_process)
-            simple_count = len(simple_indices)
-            conjoined_parent_count = len(conjoined_indices)
-            synth_parent_count = len(synthetic_conjoined_groups)
-
-            parts = []
-            if simple_count:
-                parts.append(f"{simple_count} simple")
-            if conjoined_parent_count:
-                parts.append(f"{conjoined_parent_count} conjoined parents")
-            if synth_parent_count:
-                parts.append(f"{synth_parent_count} synthetic conjoined parents")
-            if len(parts) > 1:
-                log_message(
-                    f"Processing {total_boxes} bubbles ({' + '.join(parts)})...",
-                    verbose=verbose,
-                )
-            else:
-                log_message(
-                    f"Processing {total_boxes} simple bubbles...",
-                    verbose=verbose,
-                )
-
-            all_masks_bool = _process_simple_bubbles(
-                image_pil,
-                all_boxes_tensor,
-                list(range(len(boxes_to_process))),
-                processor,
-                sam_model_instance,
-                _device,
-            )
-
-            for i, (mask_bool, box) in enumerate(
-                zip(all_masks_bool, boxes_to_process, strict=False)
-            ):
-                x0_f, y0_f, x1_f, y1_f = box.tolist()
-                x0 = int(np.floor(max(0, min(x0_f, img_w))))
-                y0 = int(np.floor(max(0, min(y0_f, img_h))))
-                x1 = int(np.ceil(max(0, min(x1_f, img_w))))
-                y1 = int(np.ceil(max(0, min(y1_f, img_h))))
-
-                if x1 > x0 and y1 > y0:
-                    clipped_mask = np.zeros((img_h, img_w), dtype=np.uint8)
-                    clipped_mask[y0:y1, x0:x1] = mask_bool[y0:y1, x0:x1] * np.uint8(255)
-                else:
-                    clipped_mask = mask_bool.astype(np.uint8) * 255
-
-                if i < synth_start_idx:
-                    sam_masks_for_yolo[process_indices[i]] = clipped_mask
-                else:
-                    sg_idx = i - synth_start_idx
-                    synthetic_conjoined_groups[sg_idx]["parent_mask"] = clipped_mask
-
-            log_message(
-                f"Generated {len(all_masks_bool)} primary masks with {sam_model_name}",
-                always_print=True,
-            )
-
-        img_h, img_w = image_cv.shape[:2]
-        detections = _build_segmentation_detections(
+        sam_masks_for_yolo = _sam_masks_for_boxes(
+            image_pil,
             primary_boxes,
-            grouping_primary_boxes,
-            primary_sources,
-            primary_results,
-            primary_model,
             secondary_boxes,
-            secondary_sources,
-            secondary_results,
             simple_indices,
             conjoined_indices,
+            synthetic_conjoined_groups,
+            processor,
+            sam_model_instance,
+            _device,
             img_h,
             img_w,
-            conjoined_confidence,
-            osb_text_boxes_np=osb_text_boxes_np,
-            verbose=verbose,
-            sam_masks=sam_masks_for_yolo,
-            synthetic_conjoined_groups=synthetic_conjoined_groups,
+            sam_model_name,
+            verbose,
         )
+        detections = build_detections(sam_masks_for_yolo)
 
         log_message(
             f"{sam_model_name} segmentation completed successfully", verbose=verbose
@@ -1797,32 +1843,13 @@ def detect_speech_bubbles(
             f"{sam_model_name} segmentation failed: {e}. Falling back to YOLO segmentation masks.",
             always_print=True,
         )
-        img_h, img_w = image_cv.shape[:2]
-        detections = _build_segmentation_detections(
-            primary_boxes,
-            grouping_primary_boxes,
-            primary_sources,
-            primary_results,
-            primary_model,
-            secondary_boxes,
-            secondary_sources,
-            secondary_results,
-            simple_indices,
-            conjoined_indices,
-            img_h,
-            img_w,
-            conjoined_confidence,
-            osb_text_boxes_np=osb_text_boxes_np,
-            verbose=verbose,
-            synthetic_conjoined_groups=synthetic_conjoined_groups,
-        )
+        detections = build_detections()
 
         log_message(
             f"Fallback segmentation used {len(detections)} boxes",
             verbose=verbose,
         )
 
-        return detections, text_free_boxes
     return detections, text_free_boxes
 
 

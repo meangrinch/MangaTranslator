@@ -138,6 +138,172 @@ def make_flux_inpainter(
     )
 
 
+def _inpaint_cache_options(
+    inpainter,
+    strict_mask_clipping: bool,
+    composite_clip_bbox: tuple[int, int, int, int] | None,
+    ocr_params: dict | None,
+) -> dict:
+    """Cache-key fields shared by the Flux inpainters (backend quants and clip options)."""
+    options = {}
+    if inpainter.backend == "sdcpp":
+        options["sdcpp_cache"] = inpainter.sdcpp_cache_mode
+        options["sdcpp_diffusion_quant"] = inpainter.sdcpp_diffusion_quant
+        options["sdcpp_text_encoder_quant"] = inpainter.sdcpp_text_encoder_quant
+    if strict_mask_clipping:
+        options["strict_clip"] = True
+    if composite_clip_bbox is not None:
+        options["clip_bbox"] = tuple(composite_clip_bbox)
+    if ocr_params:
+        options.update(ocr_params)
+    return options
+
+
+def _lookup_inpaint_patch(
+    cache,
+    image_cropped_pil: Image.Image,
+    mask_crop_np: np.ndarray,
+    seed: int,
+    num_inference_steps: int,
+    residual_diff_threshold: float,
+    guidance_scale: float,
+    prompt: str,
+    cache_params: dict,
+) -> tuple[str | None, Image.Image | None]:
+    """Return (cache key, cached patch); (None, None) when the seed disables caching."""
+    if not cache.should_use_inpaint_cache(seed):
+        return None, None
+
+    # Downsample mask signature to reduce sensitivity to minor jitter
+    if mask_crop_np.size > 0:
+        sig_h = min(64, max(4, mask_crop_np.shape[0]))
+        sig_w = min(64, max(4, mask_crop_np.shape[1]))
+        mask_sig = (
+            torch.from_numpy(mask_crop_np.astype(np.float32)).unsqueeze(0).unsqueeze(0)
+        )
+        mask_sig = torch.nn.functional.interpolate(
+            mask_sig, size=(sig_h, sig_w), mode="bilinear", align_corners=False
+        )
+        mask_sig_np = (mask_sig > 0.5).cpu().numpy().astype(np.uint8)[0, 0]
+    else:
+        mask_sig_np = mask_crop_np
+
+    cache_key = cache.get_inpaint_cache_key(
+        image_cropped_pil,
+        mask_sig_np,
+        seed,
+        num_inference_steps,
+        residual_diff_threshold,
+        guidance_scale,
+        prompt,
+        cache_params,
+    )
+    cached_patch = cache.get_inpainted_image(cache_key)
+    if cached_patch is not None:
+        log_message("  - Using cached inpainting patch", always_print=True)
+    return cache_key, cached_patch
+
+
+def _clip_composite_mask(
+    mask_for_composite: torch.Tensor,
+    composite_clip_bbox: tuple[int, int, int, int],
+    image_size: tuple[int, int],
+    crop_box: tuple[int, int, int, int],
+) -> torch.Tensor:
+    """Zero the crop's composite mask outside `composite_clip_bbox` (image coordinates).
+
+    `crop_box` is (x, y, width, height) of the crop within the image.
+    """
+    img_w, img_h = image_size
+    x, y, width, height = crop_box
+    clip_x1, clip_y1, clip_x2, clip_y2 = composite_clip_bbox
+    clip_x1 = max(0, min(img_w, clip_x1))
+    clip_x2 = max(0, min(img_w, clip_x2))
+    clip_y1 = max(0, min(img_h, clip_y1))
+    clip_y2 = max(0, min(img_h, clip_y2))
+
+    start_x = max(0, clip_x1 - x)
+    end_x = min(width, clip_x2 - x)
+    start_y = max(0, clip_y1 - y)
+    end_y = min(height, clip_y2 - y)
+
+    clipped_mask = torch.zeros_like(mask_for_composite)
+    if end_x > start_x and end_y > start_y:
+        clipped_mask[:, start_y:end_y, start_x:end_x] = mask_for_composite[
+            :, start_y:end_y, start_x:end_x
+        ]
+    return clipped_mask
+
+
+def _feathered_crop_mask(mask_crop_np: np.ndarray, blur_radius: int) -> torch.Tensor:
+    """Composite alpha for a crop: 1 inside the mask, fading to 0 over `blur_radius` px."""
+    if blur_radius <= 0:
+        return torch.from_numpy(mask_crop_np.astype(np.float32))[None, ...]
+    d_out = distance_transform_edt(~mask_crop_np)
+    d_in = distance_transform_edt(mask_crop_np)
+    alpha = np.zeros_like(d_out, np.float32)
+    alpha[d_in > 0] = 1.0
+    ramp = np.clip(1.0 - (d_out / blur_radius), 0.0, 1.0)
+    alpha[d_out > 0] = ramp[d_out > 0]
+    return torch.from_numpy(alpha)[None, ...]
+
+
+def _paste_patch(
+    image_pil: Image.Image,
+    patch_pil: Image.Image,
+    mask_for_composite: torch.Tensor,
+    x1: int,
+    y1: int,
+) -> Image.Image:
+    """Blend `patch_pil` into `image_pil` at (x1, y1) through the composite mask."""
+    dest_tensor = torch.from_numpy(
+        np.asarray(image_pil, dtype=np.float32) / 255.0
+    ).unsqueeze(0)
+    src_tensor = torch.from_numpy(
+        np.asarray(patch_pil, dtype=np.float32) / 255.0
+    ).unsqueeze(0)
+
+    # Fix channel mismatch (e.g. RGBA destination vs RGB source)
+    dest_channels = dest_tensor.shape[-1]
+    src_channels = src_tensor.shape[-1]
+
+    if dest_channels > src_channels:
+        alpha_fill = torch.ones(
+            (*src_tensor.shape[:-1], dest_channels - src_channels),
+            device=src_tensor.device,
+            dtype=src_tensor.dtype,
+        )
+        src_tensor = torch.cat([src_tensor, alpha_fill], dim=-1)
+    elif src_channels > dest_channels:
+        src_tensor = src_tensor[..., :dest_channels]
+
+    dest_tensor = dest_tensor.movedim(-1, 1)
+    src_tensor = src_tensor.movedim(-1, 1)
+
+    mask_interp = torch.nn.functional.interpolate(
+        mask_for_composite.reshape(
+            (-1, 1, mask_for_composite.shape[-2], mask_for_composite.shape[-1])
+        ),
+        size=(src_tensor.shape[2], src_tensor.shape[3]),
+        mode="bilinear",
+    )
+
+    composited = dest_tensor.clone()
+    visible_h = min(src_tensor.shape[2], dest_tensor.shape[2] - y1)
+    visible_w = min(src_tensor.shape[3], dest_tensor.shape[3] - x1)
+
+    if visible_h > 0 and visible_w > 0:
+        src_portion = src_tensor[:, :, :visible_h, :visible_w]
+        mask_portion = mask_interp[:, :, :visible_h, :visible_w]
+        dest_portion = composited[:, :, y1 : y1 + visible_h, x1 : x1 + visible_w]
+
+        blended = src_portion * mask_portion + dest_portion * (1 - mask_portion)
+        composited[:, :, y1 : y1 + visible_h, x1 : x1 + visible_w] = blended
+
+    composited = composited.movedim(1, -1)
+    return Image.fromarray((composited[0].cpu().numpy() * 255).astype("uint8"))
+
+
 class FluxKontextInpainter:
     """Inpainter using Flux Kontext models for text removal."""
 
@@ -668,6 +834,80 @@ class FluxKontextInpainter:
         ).movedim(1, -1)
         return output
 
+    def _generate_patch(
+        self, image: Image.Image, width: int, height: int, seed: int, verbose: bool
+    ) -> Image.Image:
+        """Run the loaded backend on the scaled crop; the caller holds the inference lock."""
+        if self.backend == "sdcpp":
+            return self._run_sdcpp_inference(
+                image, width, height, seed, verbose=verbose
+            )
+
+        if self.backend == "sdnq":
+            with torch.inference_mode():
+                gen_device = "cpu" if self.low_vram else self.DEVICE
+                gen = torch.Generator(device=gen_device).manual_seed(seed)
+                prompt_device = _pipeline_execution_device(self.pipeline, self.DEVICE)
+                prompt_embeds, pooled_prompt_embeds = self._get_prompt_embeddings(
+                    prompt_device, verbose=verbose
+                )
+                return self._run_pipeline(
+                    image, width, height, gen, prompt_embeds, pooled_prompt_embeds
+                )
+
+        should_encode_prompt = self._prompt_embeds_cpu is None
+        if should_encode_prompt:
+            self.pipeline.text_encoder_2.to(self.DEVICE)
+
+        prompt_embeds, pooled_prompt_embeds = self._get_prompt_embeddings(
+            self.DEVICE, verbose=verbose
+        )
+
+        if should_encode_prompt:
+            self.pipeline.text_encoder_2.to("cpu")
+            empty_cache(self.DEVICE)
+
+        self.pipeline.transformer.to(self.DEVICE)
+
+        with torch.inference_mode():
+            gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
+            patch = self._run_pipeline(
+                image, width, height, gen, prompt_embeds, pooled_prompt_embeds
+            )
+
+        self.pipeline.transformer.to("cpu")
+        empty_cache(self.DEVICE)
+        return patch
+
+    def _run_pipeline(
+        self,
+        image: Image.Image,
+        width: int,
+        height: int,
+        generator: torch.Generator,
+        prompt_embeds,
+        pooled_prompt_embeds,
+    ) -> Image.Image:
+        """Diffusers Kontext call; returns the patch as an image with NaNs zeroed."""
+        out = self.pipeline(
+            **_flux_prompt_kwargs(prompt_embeds, pooled_prompt_embeds),
+            image=image,
+            width=width,
+            height=height,
+            num_inference_steps=self.num_inference_steps,
+            guidance_scale=self.guidance_scale,
+            generator=generator,
+            output_type="pt",
+            max_area=width * height,
+            callback_on_step_end=_interrupt_on_cancel,
+        )
+        img = out.images[0]
+        torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
+        img.clamp_(0, 1)
+        return Image.fromarray(
+            img.mul(255).round().to(torch.uint8).permute(1, 2, 0).cpu().numpy()
+        )
+
     def inpaint_mask(
         self,
         image_pil: Image.Image,
@@ -780,27 +1020,13 @@ class FluxKontextInpainter:
             mask_for_composite = mask_for_composite * original_mask_crop
 
         if composite_clip_bbox is not None:
-            clip_x1, clip_y1, clip_x2, clip_y2 = composite_clip_bbox
-
             img_h, img_w = mask_np.shape
-            clip_x1 = max(0, min(img_w, clip_x1))
-            clip_x2 = max(0, min(img_w, clip_x2))
-            clip_y1 = max(0, min(img_h, clip_y1))
-            clip_y2 = max(0, min(img_h, clip_y2))
-
-            start_x = max(0, clip_x1 - x)
-            end_x = min(width, clip_x2 - x)
-            start_y = max(0, clip_y1 - y)
-            end_y = min(height, clip_y2 - y)
-
-            if end_x <= start_x or end_y <= start_y:
-                mask_for_composite = torch.zeros_like(mask_for_composite)
-            else:
-                clipped_mask = torch.zeros_like(mask_for_composite)
-                clipped_mask[:, start_y:end_y, start_x:end_x] = mask_for_composite[
-                    :, start_y:end_y, start_x:end_x
-                ]
-                mask_for_composite = clipped_mask
+            mask_for_composite = _clip_composite_mask(
+                mask_for_composite,
+                composite_clip_bbox,
+                (img_w, img_h),
+                (x, y, width, height),
+            )
 
         log_message(
             f"  - Optimized bbox found at ({x}, {y}) with size {width}x{height}",
@@ -815,50 +1041,21 @@ class FluxKontextInpainter:
             "padding": padding,
             "blur": blur_radius,
             "backend": self.backend,
+            **_inpaint_cache_options(
+                self, strict_mask_clipping, composite_clip_bbox, ocr_params
+            ),
         }
-        if self.backend == "sdcpp":
-            cache_params["sdcpp_cache"] = self.sdcpp_cache_mode
-            cache_params["sdcpp_diffusion_quant"] = self.sdcpp_diffusion_quant
-            cache_params["sdcpp_text_encoder_quant"] = self.sdcpp_text_encoder_quant
-        if strict_mask_clipping:
-            cache_params["strict_clip"] = True
-        if composite_clip_bbox is not None:
-            cache_params["clip_bbox"] = tuple(composite_clip_bbox)
-        if ocr_params:
-            cache_params.update(ocr_params)
-
-        cache_key = None
-        cached_patch = None
-        if self.cache.should_use_inpaint_cache(seed):
-            # Downsample mask signature to reduce sensitivity to minor jitter
-            if mask_crop_np.size > 0:
-                sig_h = min(64, max(4, mask_crop_np.shape[0]))
-                sig_w = min(64, max(4, mask_crop_np.shape[1]))
-                mask_sig = (
-                    torch.from_numpy(mask_crop_np.astype(np.float32))
-                    .unsqueeze(0)
-                    .unsqueeze(0)
-                )
-                mask_sig = torch.nn.functional.interpolate(
-                    mask_sig, size=(sig_h, sig_w), mode="bilinear", align_corners=False
-                )
-                mask_sig_np = (mask_sig > 0.5).cpu().numpy().astype(np.uint8)[0, 0]
-            else:
-                mask_sig_np = mask_crop_np
-
-            cache_key = self.cache.get_inpaint_cache_key(
-                image_cropped_pil,
-                mask_sig_np,
-                seed,
-                self.num_inference_steps,
-                self.residual_diff_threshold,
-                self.guidance_scale,
-                self.prompt,
-                cache_params,
-            )
-            cached_patch = self.cache.get_inpainted_image(cache_key)
-            if cached_patch is not None:
-                log_message("  - Using cached inpainting patch", always_print=True)
+        cache_key, cached_patch = _lookup_inpaint_patch(
+            self.cache,
+            image_cropped_pil,
+            mask_crop_np,
+            seed,
+            self.num_inference_steps,
+            self.residual_diff_threshold,
+            self.guidance_scale,
+            self.prompt,
+            cache_params,
+        )
 
         patch_pil = cached_patch
 
@@ -875,8 +1072,6 @@ class FluxKontextInpainter:
 
             log_message("  - Running inference...", verbose=verbose)
 
-            required_area = inference_width * inference_height
-
             # CPU offload moves weights between devices; serialize access across threads
             with self.manager.flux_inference_lock:
                 raise_if_cancelled()  # Jobs queued on the lock skip their inference
@@ -889,90 +1084,13 @@ class FluxKontextInpainter:
                     )
                     return image_pil
 
-                if self.backend == "sdcpp":
-                    generated_patch_pil = self._run_sdcpp_inference(
-                        image_scaled_for_inference_pil,
-                        inference_width,
-                        inference_height,
-                        seed,
-                        verbose=verbose,
-                    )
-                elif self.backend == "sdnq":
-                    with torch.inference_mode():
-                        gen_device = "cpu" if self.low_vram else self.DEVICE
-                        gen = torch.Generator(device=gen_device).manual_seed(seed)
-                        prompt_device = _pipeline_execution_device(
-                            self.pipeline, self.DEVICE
-                        )
-                        prompt_embeds, pooled_prompt_embeds = (
-                            self._get_prompt_embeddings(prompt_device, verbose=verbose)
-                        )
-                        out = self.pipeline(
-                            **_flux_prompt_kwargs(prompt_embeds, pooled_prompt_embeds),
-                            image=image_scaled_for_inference_pil,
-                            width=inference_width,
-                            height=inference_height,
-                            num_inference_steps=self.num_inference_steps,
-                            guidance_scale=self.guidance_scale,
-                            generator=gen,
-                            output_type="pt",
-                            max_area=required_area,
-                            callback_on_step_end=_interrupt_on_cancel,
-                        )
-                        img = out.images[0]
-                        torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
-                        img.clamp_(0, 1)
-                        generated_patch_pil = Image.fromarray(
-                            img.mul(255)
-                            .round()
-                            .to(torch.uint8)
-                            .permute(1, 2, 0)
-                            .cpu()
-                            .numpy()
-                        )
-                else:
-                    should_encode_prompt = self._prompt_embeds_cpu is None
-                    if should_encode_prompt:
-                        self.pipeline.text_encoder_2.to(self.DEVICE)
-
-                    prompt_embeds, pooled_prompt_embeds = self._get_prompt_embeddings(
-                        self.DEVICE, verbose=verbose
-                    )
-
-                    if should_encode_prompt:
-                        self.pipeline.text_encoder_2.to("cpu")
-                        empty_cache(self.DEVICE)
-
-                    self.pipeline.transformer.to(self.DEVICE)
-
-                    with torch.inference_mode():
-                        gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
-                        out = self.pipeline(
-                            **_flux_prompt_kwargs(prompt_embeds, pooled_prompt_embeds),
-                            image=image_scaled_for_inference_pil,
-                            width=inference_width,
-                            height=inference_height,
-                            num_inference_steps=self.num_inference_steps,
-                            guidance_scale=self.guidance_scale,
-                            generator=gen,
-                            output_type="pt",
-                            max_area=required_area,
-                            callback_on_step_end=_interrupt_on_cancel,
-                        )
-                        img = out.images[0]
-                        torch.nan_to_num_(img, nan=0.0, posinf=1.0, neginf=0.0)
-                        img.clamp_(0, 1)
-                        generated_patch_pil = Image.fromarray(
-                            img.mul(255)
-                            .round()
-                            .to(torch.uint8)
-                            .permute(1, 2, 0)
-                            .cpu()
-                            .numpy()
-                        )
-
-                    self.pipeline.transformer.to("cpu")
-                    empty_cache(self.DEVICE)
+                generated_patch_pil = self._generate_patch(
+                    image_scaled_for_inference_pil,
+                    inference_width,
+                    inference_height,
+                    seed,
+                    verbose,
+                )
 
             raise_if_cancelled()  # An interrupted run returns a half-denoised patch
             patch_pil = generated_patch_pil.resize(
@@ -1408,6 +1526,40 @@ class FluxKleinInpainter:
             self.sdcpp_assets, payload, verbose=verbose, timeout_sec=900
         )
 
+    def _generate_patch(
+        self, image: Image.Image, width: int, height: int, seed: int, verbose: bool
+    ) -> Image.Image:
+        """Run the loaded backend on the scaled crop; the caller holds the inference lock."""
+        if self.backend == "sdcpp":
+            return self._run_sdcpp_inference(
+                image,
+                width,
+                height,
+                seed,
+                verbose=verbose or self.verbose,
+            )
+        with torch.inference_mode():
+            gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
+            prompt_device = _pipeline_execution_device(self.pipeline, self.DEVICE)
+            prompt_embeds, pooled_prompt_embeds = self._get_prompt_embeddings(
+                prompt_device, verbose=verbose or self.verbose
+            )
+            out = self.pipeline(
+                **_flux_prompt_kwargs(
+                    prompt_embeds,
+                    pooled_prompt_embeds,
+                    include_pooled=False,
+                ),
+                image=image,
+                height=height,
+                width=width,
+                guidance_scale=self.KLEIN_GUIDANCE_SCALE,
+                num_inference_steps=self.num_inference_steps,
+                generator=gen,
+                callback_on_step_end=_interrupt_on_cancel,
+            )
+            return out.images[0]
+
     def inpaint_mask(
         self,
         image_pil: Image.Image,
@@ -1434,7 +1586,6 @@ class FluxKleinInpainter:
         Returns:
             PIL.Image: The inpainted image
         """
-        from scipy.ndimage import distance_transform_edt
 
         mask_np = np.asarray(mask_np)
         if mask_np.dtype != bool:
@@ -1509,87 +1660,35 @@ class FluxKleinInpainter:
             "max_pixels": self.MAX_INFERENCE_PIXELS,
             "min_size": (self.MIN_RESOLUTION, self.MIN_RESOLUTION),
             "backend": self.backend,
+            **_inpaint_cache_options(
+                self, strict_mask_clipping, composite_clip_bbox, ocr_params
+            ),
         }
-        if self.backend == "sdcpp":
-            cache_params["sdcpp_cache"] = self.sdcpp_cache_mode
-            cache_params["sdcpp_diffusion_quant"] = self.sdcpp_diffusion_quant
-            cache_params["sdcpp_text_encoder_quant"] = self.sdcpp_text_encoder_quant
-        if strict_mask_clipping:
-            cache_params["strict_clip"] = True
-        if composite_clip_bbox is not None:
-            cache_params["clip_bbox"] = tuple(composite_clip_bbox)
-        if ocr_params:
-            cache_params.update(ocr_params)
+        cache_key, cached_patch = _lookup_inpaint_patch(
+            self.cache,
+            image_cropped_pil,
+            mask_crop_np,
+            seed,
+            self.num_inference_steps,
+            0.0,  # Klein doesn't use residual_diff_threshold
+            self.KLEIN_GUIDANCE_SCALE,
+            self.KLEIN_PROMPT,
+            cache_params,
+        )
 
-        cache_key = None
-        cached_patch = None
-        if self.cache.should_use_inpaint_cache(seed):
-            # Downsample mask signature to reduce sensitivity to minor jitter
-            if mask_crop_np.size > 0:
-                sig_h = min(64, max(4, mask_crop_np.shape[0]))
-                sig_w = min(64, max(4, mask_crop_np.shape[1]))
-                mask_sig = (
-                    torch.from_numpy(mask_crop_np.astype(np.float32))
-                    .unsqueeze(0)
-                    .unsqueeze(0)
-                )
-                mask_sig = torch.nn.functional.interpolate(
-                    mask_sig, size=(sig_h, sig_w), mode="bilinear", align_corners=False
-                )
-                mask_sig_np = (mask_sig > 0.5).cpu().numpy().astype(np.uint8)[0, 0]
-            else:
-                mask_sig_np = mask_crop_np
-
-            cache_key = self.cache.get_inpaint_cache_key(
-                image_cropped_pil,
-                mask_sig_np,
-                seed,
-                self.num_inference_steps,
-                0.0,  # Klein doesn't use residual_diff_threshold
-                self.KLEIN_GUIDANCE_SCALE,
-                self.KLEIN_PROMPT,
-                cache_params,
-            )
-            cached_patch = self.cache.get_inpainted_image(cache_key)
-            if cached_patch is not None:
-                log_message("  - Using cached inpainting patch", always_print=True)
-
-        mask_float = mask_crop_np.astype(np.float32)
-        if blur_radius > 0:
-            d_out = distance_transform_edt(~mask_crop_np)
-            d_in = distance_transform_edt(mask_crop_np)
-            alpha = np.zeros_like(d_out, np.float32)
-            alpha[d_in > 0] = 1.0
-            ramp = np.clip(1.0 - (d_out / blur_radius), 0.0, 1.0)
-            alpha[d_out > 0] = ramp[d_out > 0]
-            mask_for_composite = torch.from_numpy(alpha)[None, ...]
-        else:
-            mask_for_composite = torch.from_numpy(mask_float)[None, ...]
+        mask_for_composite = _feathered_crop_mask(mask_crop_np, blur_radius)
 
         if strict_mask_clipping:
             original_mask_crop = torch.from_numpy(mask_crop_np.astype(np.float32))
             mask_for_composite = mask_for_composite * original_mask_crop
 
         if composite_clip_bbox is not None:
-            clip_x1, clip_y1, clip_x2, clip_y2 = composite_clip_bbox
-            clip_x1 = max(0, min(img_w, clip_x1))
-            clip_x2 = max(0, min(img_w, clip_x2))
-            clip_y1 = max(0, min(img_h, clip_y1))
-            clip_y2 = max(0, min(img_h, clip_y2))
-
-            start_x = max(0, clip_x1 - x1)
-            end_x = min(width, clip_x2 - x1)
-            start_y = max(0, clip_y1 - y1)
-            end_y = min(height, clip_y2 - y1)
-
-            if end_x <= start_x or end_y <= start_y:
-                mask_for_composite = torch.zeros_like(mask_for_composite)
-            else:
-                clipped_mask = torch.zeros_like(mask_for_composite)
-                clipped_mask[:, start_y:end_y, start_x:end_x] = mask_for_composite[
-                    :, start_y:end_y, start_x:end_x
-                ]
-                mask_for_composite = clipped_mask
+            mask_for_composite = _clip_composite_mask(
+                mask_for_composite,
+                composite_clip_bbox,
+                (img_w, img_h),
+                (x1, y1, width, height),
+            )
 
         patch_pil = cached_patch
 
@@ -1616,40 +1715,9 @@ class FluxKleinInpainter:
                     )
                     return image_pil
 
-                if self.backend == "sdcpp":
-                    generated_patch_pil = self._run_sdcpp_inference(
-                        inference_image,
-                        inference_w,
-                        inference_h,
-                        seed,
-                        verbose=verbose or self.verbose,
-                    )
-                else:
-                    with torch.inference_mode():
-                        gen = torch.Generator(device=self.DEVICE).manual_seed(seed)
-                        prompt_device = _pipeline_execution_device(
-                            self.pipeline, self.DEVICE
-                        )
-                        prompt_embeds, pooled_prompt_embeds = (
-                            self._get_prompt_embeddings(
-                                prompt_device, verbose=verbose or self.verbose
-                            )
-                        )
-                        out = self.pipeline(
-                            **_flux_prompt_kwargs(
-                                prompt_embeds,
-                                pooled_prompt_embeds,
-                                include_pooled=False,
-                            ),
-                            image=inference_image,
-                            height=inference_h,
-                            width=inference_w,
-                            guidance_scale=self.KLEIN_GUIDANCE_SCALE,
-                            num_inference_steps=self.num_inference_steps,
-                            generator=gen,
-                            callback_on_step_end=_interrupt_on_cancel,
-                        )
-                        generated_patch_pil = out.images[0]
+                generated_patch_pil = self._generate_patch(
+                    inference_image, inference_w, inference_h, seed, verbose
+                )
 
             raise_if_cancelled()  # An interrupted run returns a half-denoised patch
             if (inference_w, inference_h) != (width, height):
@@ -1667,54 +1735,7 @@ class FluxKleinInpainter:
                     verbose=verbose,
                 )
 
-        dest_tensor = torch.from_numpy(
-            np.asarray(image_pil, dtype=np.float32) / 255.0
-        ).unsqueeze(0)
-        src_tensor = torch.from_numpy(
-            np.asarray(patch_pil, dtype=np.float32) / 255.0
-        ).unsqueeze(0)
-
-        # Fix channel mismatch (e.g. RGBA destination vs RGB source)
-        dest_channels = dest_tensor.shape[-1]
-        src_channels = src_tensor.shape[-1]
-
-        if dest_channels > src_channels:
-            padding = torch.ones(
-                (*src_tensor.shape[:-1], dest_channels - src_channels),
-                device=src_tensor.device,
-                dtype=src_tensor.dtype,
-            )
-            src_tensor = torch.cat([src_tensor, padding], dim=-1)
-        elif src_channels > dest_channels:
-            src_tensor = src_tensor[..., :dest_channels]
-
-        dest_tensor = dest_tensor.movedim(-1, 1)
-        src_tensor = src_tensor.movedim(-1, 1)
-
-        mask_interp = torch.nn.functional.interpolate(
-            mask_for_composite.reshape(
-                (-1, 1, mask_for_composite.shape[-2], mask_for_composite.shape[-1])
-            ),
-            size=(src_tensor.shape[2], src_tensor.shape[3]),
-            mode="bilinear",
-        )
-
-        composited = dest_tensor.clone()
-        visible_h = min(src_tensor.shape[2], dest_tensor.shape[2] - y1)
-        visible_w = min(src_tensor.shape[3], dest_tensor.shape[3] - x1)
-
-        if visible_h > 0 and visible_w > 0:
-            src_portion = src_tensor[:, :, :visible_h, :visible_w]
-            mask_portion = mask_interp[:, :, :visible_h, :visible_w]
-            dest_portion = composited[:, :, y1 : y1 + visible_h, x1 : x1 + visible_w]
-
-            blended = src_portion * mask_portion + dest_portion * (1 - mask_portion)
-            composited[:, :, y1 : y1 + visible_h, x1 : x1 + visible_w] = blended
-
-        composited = composited.movedim(1, -1)
-        composited_pil = Image.fromarray(
-            (composited[0].cpu().numpy() * 255).astype("uint8")
-        )
+        composited_pil = _paste_patch(image_pil, patch_pil, mask_for_composite, x1, y1)
 
         if (
             self.cache.should_use_inpaint_cache(seed)

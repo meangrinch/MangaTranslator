@@ -81,6 +81,305 @@ def _auto_vertical_layout_is_better(
     )
 
 
+class _ScaledMetrics:
+    """Font metrics scaled by the supersampling factor."""
+
+    def __init__(self, original, scale_factor):
+        self.fAscent = original.fAscent * scale_factor
+        self.fDescent = original.fDescent * scale_factor
+        # Preserve other attributes if they exist
+        if hasattr(original, "fLeading"):
+            self.fLeading = original.fLeading * scale_factor
+        if hasattr(original, "fXMin"):
+            self.fXMin = original.fXMin * scale_factor
+        if hasattr(original, "fXMax"):
+            self.fXMax = original.fXMax * scale_factor
+        if hasattr(original, "fYMin"):
+            self.fYMin = original.fYMin * scale_factor
+        if hasattr(original, "fYMax"):
+            self.fYMax = original.fYMax * scale_factor
+
+
+def _scale_layout_data(layout_data: dict, factor: float) -> dict:
+    """Copy of `layout_data` with every size and position scaled by `factor`."""
+    scaled_layout_data = layout_data.copy()
+    scaled_layout_data["lines"] = [
+        line_data.copy() for line_data in layout_data["lines"]
+    ]
+    scaled_layout_data["font_size"] = layout_data["font_size"] * factor
+    scaled_layout_data["line_height"] = layout_data["line_height"] * factor
+    scaled_layout_data["max_line_width"] = layout_data["max_line_width"] * factor
+    if layout_data.get("block_height") is not None:
+        scaled_layout_data["block_height"] = layout_data["block_height"] * factor
+
+    # Scale per-line and per-glyph measurements
+    for line_data in scaled_layout_data["lines"]:
+        for key in (
+            "width",
+            "height",
+            "advance_height",
+            "baseline_offset_y",
+            "left",
+            "right",
+            "top",
+            "bottom",
+            "origin_y",
+        ):
+            if key in line_data:
+                line_data[key] = line_data[key] * factor
+
+    scaled_layout_data["metrics"] = _ScaledMetrics(layout_data["metrics"], factor)
+    return scaled_layout_data
+
+
+def _load_style_variants(
+    clean_text: str,
+    font_variants: dict,
+    regular_typeface,
+    regular_hb_face,
+    verbose: bool,
+) -> tuple[dict, dict]:
+    """Load the italic/bold variants the text's style markers use (regular as fallback)."""
+    required_styles = {"regular"} | {
+        style for _, style in parse_styled_segments(clean_text)
+    }
+    log_message(f"Required styles: {sorted(required_styles)}", verbose=verbose)
+
+    loaded_typefaces = {"regular": regular_typeface}
+    loaded_hb_faces = {"regular": regular_hb_face}
+
+    for style in ["italic", "bold", "bold_italic"]:
+        if style in required_styles:
+            font_path = font_variants.get(style)
+            if font_path:
+                log_message(f"Loading {style}: {font_path.name}", verbose=verbose)
+                _, typeface, hb_face = load_font_resources(str(font_path), style=style)
+                if typeface and hb_face:
+                    loaded_typefaces[style] = typeface
+                    loaded_hb_faces[style] = hb_face
+                else:
+                    log_message(
+                        f"Failed to load {style} variant, using regular",
+                        verbose=verbose,
+                    )
+            else:
+                log_message(
+                    f"Style '{style}' not found, using regular",
+                    verbose=verbose,
+                )
+    return loaded_typefaces, loaded_hb_faces
+
+
+def _resolve_text_color(
+    text_color_rgb: tuple[int, int, int] | None,
+    bubble_color_bgr: tuple[int, int, int] | None,
+):
+    """Explicit text color, else black or white by contrast with the bubble background."""
+    if text_color_rgb is not None:
+        return skia.Color(text_color_rgb[0], text_color_rgb[1], text_color_rgb[2])
+    if bubble_color_bgr is None:
+        return skia.ColorBLACK
+    try:
+        # bubble_color_bgr may be a grayscale proxy; treat as BGR
+        bg_brightness = (
+            bubble_color_bgr[0] + bubble_color_bgr[1] + bubble_color_bgr[2]
+        ) / 3.0
+        # If background is dark, use white text; if light, use black
+        return (
+            skia.ColorWHITE if bg_brightness < GRAYSCALE_MIDPOINT else skia.ColorBLACK
+        )
+    except Exception:
+        return skia.ColorBLACK
+
+
+def _draw_text(
+    surface,
+    layout_data: dict,
+    center: tuple[float, float],
+    rotation_deg: float,
+    fonts: tuple,
+    text_color,
+    outline_width: float,
+    verbose: bool,
+    text_background_color,
+) -> None:
+    """Draw the layout centered on `center`, rotated about it when tilted.
+
+    `fonts` is (typefaces, hb_faces, regular_typeface, regular_hb_face, features).
+    Rotation and translation are delegated to drawing_engine so Skia state stays
+    consistent."""
+    rotated = bool(rotation_deg and abs(rotation_deg) > 0.01)
+    center_x, center_y = center
+    success = draw_layout(
+        surface,
+        layout_data,
+        0.0 if rotated else center_x,
+        0.0 if rotated else center_y,
+        *fonts,
+        text_color,
+        outline_width,
+        verbose,
+        pre_translate_x=float(center_x) if rotated else 0.0,
+        pre_translate_y=float(center_y) if rotated else 0.0,
+        pre_rotate_deg=float(rotation_deg) if rotated else 0.0,
+        text_background_color=text_background_color,
+    )
+    if not success:
+        log_message("Drawing failed", always_print=True)
+        raise RenderingError("Text drawing failed")
+
+
+def _render_supersampled(
+    pil_image: Image.Image,
+    bbox: tuple[int, int, int, int],
+    layout_data: dict,
+    center: tuple[float, float],
+    rotation_deg: float,
+    factor: int,
+    fonts: tuple,
+    text_color,
+    outline_width: float,
+    verbose: bool,
+    text_background_color,
+) -> Image.Image:
+    """Draw at `factor`x on an upscaled crop of the bbox, then downscale and paste back."""
+    x1, y1, x2, y2 = bbox
+    # Crop the bbox region (plus room for tilted text), within image bounds
+    img_width, img_height = pil_image.size
+    tilt_margin = 0
+    if rotation_deg and abs(rotation_deg) > 0.01:
+        tilt_margin = (
+            math.ceil(
+                max(x2 - x1, y2 - y1) * math.sin(math.radians(abs(rotation_deg))) / 2
+            )
+            + OSB_TILT_SUPERSAMPLE_MARGIN
+        )
+    crop_x1 = max(0, x1 - tilt_margin)
+    crop_y1 = max(0, y1 - tilt_margin)
+    crop_x2 = min(img_width, x2 + tilt_margin)
+    crop_y2 = min(img_height, y2 + tilt_margin)
+
+    cropped_region = pil_image.crop((crop_x1, crop_y1, crop_x2, crop_y2))
+    crop_width = crop_x2 - crop_x1
+    crop_height = crop_y2 - crop_y1
+
+    upscaled_region = cropped_region.resize(
+        (int(crop_width * factor), int(crop_height * factor)), Image.Resampling.LANCZOS
+    )
+
+    # Scale coordinates relative to the crop origin
+    scaled_center = (
+        (center[0] - crop_x1) * factor,
+        (center[1] - crop_y1) * factor,
+    )
+    scaled_layout_data = _scale_layout_data(layout_data, factor)
+
+    try:
+        scaled_surface = pil_to_skia_surface(upscaled_region)
+    except RenderingError as e:
+        raise RenderingError(f"Scaled surface preparation failed: {e}") from e
+
+    _draw_text(
+        scaled_surface,
+        scaled_layout_data,
+        scaled_center,
+        rotation_deg,
+        fonts,
+        text_color,
+        outline_width * factor,
+        verbose,
+        text_background_color,
+    )
+
+    try:
+        scaled_pil_result = skia_surface_to_pil(scaled_surface)
+    except RenderingError as e:
+        raise RenderingError(f"Scaled conversion failed: {e}") from e
+
+    # Downscale using LANCZOS for high quality
+    downscaled_result = scaled_pil_result.resize(
+        (crop_width, crop_height), Image.Resampling.LANCZOS
+    )
+    final_pil_image = pil_image.copy()
+    final_pil_image.paste(downscaled_result, (crop_x1, crop_y1))
+    return final_pil_image
+
+
+def _text_area(
+    bbox: tuple[int, int, int, int],
+    cleaned_mask: np.ndarray | None,
+    config: RenderingConfig,
+    raise_on_safe_error: bool,
+    layout_dimensions: tuple[float, float] | None,
+    fallback_padding_pixels: float | None,
+    verbose: bool,
+):
+    """Where text may go: the mask's centered safe box, else a padded bbox.
+
+    Returns (layout box top-left or None, max width, max height, center x, center y).
+    """
+    x1, y1, x2, y2 = bbox
+    bubble_width = x2 - x1
+    bubble_height = y2 - y1
+    layout_box_top_left = None
+    safe_area_result = None
+    safe_area_fallback_logged = False
+    if cleaned_mask is not None:
+        try:
+            safe_area_result = calculate_centroid_expansion_box(
+                cleaned_mask, padding_pixels=config.padding_pixels, verbose=verbose
+            )
+        except ImageProcessingError:
+            # Safe area calculation failed, will use fallback below
+            safe_area_result = None
+            if raise_on_safe_error:
+                raise
+            log_message(
+                "Safe area calculation failed, falling back to padded bbox method",
+                verbose=verbose,
+            )
+            safe_area_fallback_logged = True
+
+    if safe_area_result is not None:
+        guaranteed_box, _ = safe_area_result
+        box_x, box_y, box_w, box_h = guaranteed_box
+        layout_box_top_left = (box_x, box_y)
+        max_render_width = float(box_w)
+        max_render_height = float(box_h)
+        target_center_x = box_x + box_w / 2.0
+        target_center_y = box_y + box_h / 2.0
+        log_message("Using centroid-based safe area calculation", verbose=verbose)
+    else:
+        # Fallback to padded bbox
+        if not safe_area_fallback_logged:
+            log_message(
+                "Safe area calculation failed, falling back to padded bbox method",
+                verbose=verbose,
+            )
+        if layout_dimensions is not None:
+            max_render_width, max_render_height = layout_dimensions
+        elif fallback_padding_pixels is not None:
+            max_render_width = bubble_width - 2 * fallback_padding_pixels
+            max_render_height = bubble_height - 2 * fallback_padding_pixels
+        else:
+            max_render_width = bubble_width * (1 - 2 * FALLBACK_PADDING_RATIO)
+            max_render_height = bubble_height * (1 - 2 * FALLBACK_PADDING_RATIO)
+
+        if max_render_width <= 0 or max_render_height <= 0:
+            max_render_width = max(1.0, float(bubble_width))
+            max_render_height = max(1.0, float(bubble_height))
+
+        target_center_x = x1 + bubble_width / 2.0
+        target_center_y = y1 + bubble_height / 2.0
+    return (
+        layout_box_top_left,
+        max_render_width,
+        max_render_height,
+        target_center_x,
+        target_center_y,
+    )
+
+
 def render_text_skia(
     pil_image: Image.Image,
     text: str,
@@ -158,56 +457,21 @@ def render_text_skia(
     if config is None:
         config = RenderingConfig()
 
-    layout_box_top_left = None
-    safe_area_result = None
-    safe_area_fallback_logged = False
-    if cleaned_mask is not None:
-        try:
-            safe_area_result = calculate_centroid_expansion_box(
-                cleaned_mask, padding_pixels=config.padding_pixels, verbose=verbose
-            )
-        except ImageProcessingError:
-            # Safe area calculation failed, will use fallback below
-            safe_area_result = None
-            if raise_on_safe_error:
-                raise
-            log_message(
-                "Safe area calculation failed, falling back to padded bbox method",
-                verbose=verbose,
-            )
-            safe_area_fallback_logged = True
-
-    if safe_area_result is not None:
-        guaranteed_box, _ = safe_area_result
-        box_x, box_y, box_w, box_h = guaranteed_box
-        layout_box_top_left = (box_x, box_y)
-        max_render_width = float(box_w)
-        max_render_height = float(box_h)
-        target_center_x = box_x + box_w / 2.0
-        target_center_y = box_y + box_h / 2.0
-        log_message("Using centroid-based safe area calculation", verbose=verbose)
-    else:
-        # Fallback to padded bbox
-        if not safe_area_fallback_logged:
-            log_message(
-                "Safe area calculation failed, falling back to padded bbox method",
-                verbose=verbose,
-            )
-        if layout_dimensions is not None:
-            max_render_width, max_render_height = layout_dimensions
-        elif fallback_padding_pixels is not None:
-            max_render_width = bubble_width - 2 * fallback_padding_pixels
-            max_render_height = bubble_height - 2 * fallback_padding_pixels
-        else:
-            max_render_width = bubble_width * (1 - 2 * FALLBACK_PADDING_RATIO)
-            max_render_height = bubble_height * (1 - 2 * FALLBACK_PADDING_RATIO)
-
-        if max_render_width <= 0 or max_render_height <= 0:
-            max_render_width = max(1.0, float(bubble_width))
-            max_render_height = max(1.0, float(bubble_height))
-
-        target_center_x = x1 + bubble_width / 2.0
-        target_center_y = y1 + bubble_height / 2.0
+    (
+        layout_box_top_left,
+        max_render_width,
+        max_render_height,
+        target_center_x,
+        target_center_y,
+    ) = _text_area(
+        bbox,
+        cleaned_mask,
+        config,
+        raise_on_safe_error,
+        layout_dimensions,
+        fallback_padding_pixels,
+        verbose,
+    )
 
     try:
         font_variants = find_font_variants(font_dir, verbose=verbose)
@@ -333,52 +597,19 @@ def render_text_skia(
         result.info["font_size"] = layout_data["font_size"]
         return result
 
-    required_styles = {"regular"} | {
-        style for _, style in parse_styled_segments(clean_text)
-    }
-    log_message(f"Required styles: {sorted(required_styles)}", verbose=verbose)
-
-    loaded_typefaces = {"regular": regular_typeface}
-    loaded_hb_faces = {"regular": regular_hb_face}
-
-    for style in ["italic", "bold", "bold_italic"]:
-        if style in required_styles:
-            font_path = font_variants.get(style)
-            if font_path:
-                log_message(f"Loading {style}: {font_path.name}", verbose=verbose)
-                _, typeface, hb_face = load_font_resources(str(font_path), style=style)
-                if typeface and hb_face:
-                    loaded_typefaces[style] = typeface
-                    loaded_hb_faces[style] = hb_face
-                else:
-                    log_message(
-                        f"Failed to load {style} variant, using regular",
-                        verbose=verbose,
-                    )
-            else:
-                log_message(
-                    f"Style '{style}' not found, using regular",
-                    verbose=verbose,
-                )
+    loaded_typefaces, loaded_hb_faces = _load_style_variants(
+        clean_text, font_variants, regular_typeface, regular_hb_face, verbose
+    )
+    fonts = (
+        loaded_typefaces,
+        loaded_hb_faces,
+        regular_typeface,
+        regular_hb_face,
+        features_to_enable,
+    )
 
     # Determine text color contrast based on sampled background brightness
-    text_color = skia.ColorBLACK
-    if text_color_rgb is not None:
-        text_color = skia.Color(text_color_rgb[0], text_color_rgb[1], text_color_rgb[2])
-    elif bubble_color_bgr is not None:
-        try:
-            # bubble_color_bgr may be a grayscale proxy; treat as BGR
-            bg_brightness = (
-                bubble_color_bgr[0] + bubble_color_bgr[1] + bubble_color_bgr[2]
-            ) / 3.0
-            # If background is dark, use white text; if light, use black
-            text_color = (
-                skia.ColorWHITE
-                if bg_brightness < GRAYSCALE_MIDPOINT
-                else skia.ColorBLACK
-            )
-        except Exception:
-            text_color = skia.ColorBLACK
+    text_color = _resolve_text_color(text_color_rgb, bubble_color_bgr)
 
     skia_bg_color = None
     if text_background_color is not None:
@@ -389,213 +620,44 @@ def render_text_skia(
         )
 
     # Apply supersampling if enabled
-    if config.supersampling_factor > 1:
-        log_message(
-            f"Using supersampling factor {config.supersampling_factor}", verbose=verbose
-        )
-
-        # Crop the bbox region from the original image
-        # Ensure bbox coordinates are within image bounds
-        img_width, img_height = pil_image.size
-        tilt_margin = 0
-        if rotation_deg and abs(rotation_deg) > 0.01:
-            tilt_margin = (
-                math.ceil(
-                    max(bubble_width, bubble_height)
-                    * math.sin(math.radians(abs(rotation_deg)))
-                    / 2
-                )
-                + OSB_TILT_SUPERSAMPLE_MARGIN
-            )
-        crop_x1 = max(0, x1 - tilt_margin)
-        crop_y1 = max(0, y1 - tilt_margin)
-        crop_x2 = min(img_width, x2 + tilt_margin)
-        crop_y2 = min(img_height, y2 + tilt_margin)
-
-        cropped_region = pil_image.crop((crop_x1, crop_y1, crop_x2, crop_y2))
-        crop_width = crop_x2 - crop_x1
-        crop_height = crop_y2 - crop_y1
-
-        # Upscale the cropped region
-        factor = config.supersampling_factor
-        scaled_width = int(crop_width * factor)
-        scaled_height = int(crop_height * factor)
-        upscaled_region = cropped_region.resize(
-            (scaled_width, scaled_height), Image.Resampling.LANCZOS
-        )
-
-        # Scale coordinates relative to bbox origin
-        scaled_target_center_x = (target_center_x - crop_x1) * factor
-        scaled_target_center_y = (target_center_y - crop_y1) * factor
-
-        # Scale font size in layout_data for rendering
-        scaled_layout_data = layout_data.copy()
-        scaled_layout_data["lines"] = [
-            line_data.copy() for line_data in layout_data["lines"]
-        ]
-        scaled_layout_data["font_size"] = layout_data["font_size"] * factor
-        scaled_layout_data["line_height"] = layout_data["line_height"] * factor
-        scaled_layout_data["max_line_width"] = layout_data["max_line_width"] * factor
-        if layout_data.get("block_height") is not None:
-            scaled_layout_data["block_height"] = layout_data["block_height"] * factor
-
-        # Scale per-line and per-glyph measurements
-        for line_data in scaled_layout_data["lines"]:
-            for key in (
-                "width",
-                "height",
-                "advance_height",
-                "baseline_offset_y",
-                "left",
-                "right",
-                "top",
-                "bottom",
-                "origin_y",
-            ):
-                if key in line_data:
-                    line_data[key] = line_data[key] * factor
-
-        # Scale metrics - create a simple object with scaled attributes
-        original_metrics = layout_data["metrics"]
-
-        class ScaledMetrics:
-            def __init__(self, original, scale_factor):
-                self.fAscent = original.fAscent * scale_factor
-                self.fDescent = original.fDescent * scale_factor
-                # Preserve other attributes if they exist
-                if hasattr(original, "fLeading"):
-                    self.fLeading = original.fLeading * scale_factor
-                if hasattr(original, "fXMin"):
-                    self.fXMin = original.fXMin * scale_factor
-                if hasattr(original, "fXMax"):
-                    self.fXMax = original.fXMax * scale_factor
-                if hasattr(original, "fYMin"):
-                    self.fYMin = original.fYMin * scale_factor
-                if hasattr(original, "fYMax"):
-                    self.fYMax = original.fYMax * scale_factor
-
-        scaled_metrics = ScaledMetrics(original_metrics, factor)
-        scaled_layout_data["metrics"] = scaled_metrics
-
-        # Create Skia surface from upscaled region
-        try:
-            scaled_surface = pil_to_skia_surface(upscaled_region)
-        except RenderingError as e:
-            raise RenderingError(f"Scaled surface preparation failed: {e}") from e
-
-        # Render text at high resolution
-        base_outline = resolve_outline_width(
-            layout_data["font_size"], config.outline_ratio
-        )
-        success = draw_layout(
-            scaled_surface,
-            scaled_layout_data,
-            (
-                0.0
-                if (rotation_deg and abs(rotation_deg) > 0.01)
-                else scaled_target_center_x
-            ),
-            (
-                0.0
-                if (rotation_deg and abs(rotation_deg) > 0.01)
-                else scaled_target_center_y
-            ),
-            loaded_typefaces,
-            loaded_hb_faces,
-            regular_typeface,
-            regular_hb_face,
-            features_to_enable,
+    outline_px = resolve_outline_width(layout_data["font_size"], config.outline_ratio)
+    factor = config.supersampling_factor
+    if factor > 1:
+        log_message(f"Using supersampling factor {factor}", verbose=verbose)
+        final_pil_image = _render_supersampled(
+            pil_image,
+            bbox,
+            layout_data,
+            (target_center_x, target_center_y),
+            rotation_deg,
+            factor,
+            fonts,
             text_color,
-            base_outline * factor,
+            outline_px,
             verbose,
-            pre_translate_x=(
-                float(scaled_target_center_x)
-                if (rotation_deg and abs(rotation_deg) > 0.01)
-                else 0.0
-            ),
-            pre_translate_y=(
-                float(scaled_target_center_y)
-                if (rotation_deg and abs(rotation_deg) > 0.01)
-                else 0.0
-            ),
-            pre_rotate_deg=(
-                float(rotation_deg)
-                if (rotation_deg and abs(rotation_deg) > 0.01)
-                else 0.0
-            ),
-            text_background_color=skia_bg_color,
+            skia_bg_color,
         )
-
-        if not success:
-            log_message("Drawing failed", always_print=True)
-            raise RenderingError("Text drawing failed")
-
-        # Convert back to PIL and downscale
-        try:
-            scaled_pil_result = skia_surface_to_pil(scaled_surface)
-        except RenderingError as e:
-            raise RenderingError(f"Scaled conversion failed: {e}") from e
-
-        # Downscale using LANCZOS for high quality
-        downscaled_result = scaled_pil_result.resize(
-            (crop_width, crop_height), Image.Resampling.LANCZOS
-        )
-
-        # Paste the result back onto the original image
-        final_pil_image = pil_image.copy()
-        final_pil_image.paste(downscaled_result, (crop_x1, crop_y1))
-
         log_message(
             f"Rendered at size {layout_data['font_size']} with {factor}x supersampling",
             verbose=verbose,
         )
-        final_pil_image.info["font_size"] = layout_data["font_size"]
-        return final_pil_image
     else:
-        # Normal rendering path (no supersampling)
         try:
             surface = pil_to_skia_surface(pil_image)
         except RenderingError as e:
             raise RenderingError(f"Surface preparation failed: {e}") from e
 
-        # Delegate rotation/translate to drawing_engine so Skia state is consistent
-        outline_px = resolve_outline_width(
-            layout_data["font_size"], config.outline_ratio
-        )
-        success = draw_layout(
+        _draw_text(
             surface,
             layout_data,
-            0.0 if (rotation_deg and abs(rotation_deg) > 0.01) else target_center_x,
-            0.0 if (rotation_deg and abs(rotation_deg) > 0.01) else target_center_y,
-            loaded_typefaces,
-            loaded_hb_faces,
-            regular_typeface,
-            regular_hb_face,
-            features_to_enable,
+            (target_center_x, target_center_y),
+            rotation_deg,
+            fonts,
             text_color,
             outline_px,
             verbose,
-            pre_translate_x=(
-                float(target_center_x)
-                if (rotation_deg and abs(rotation_deg) > 0.01)
-                else 0.0
-            ),
-            pre_translate_y=(
-                float(target_center_y)
-                if (rotation_deg and abs(rotation_deg) > 0.01)
-                else 0.0
-            ),
-            pre_rotate_deg=(
-                float(rotation_deg)
-                if (rotation_deg and abs(rotation_deg) > 0.01)
-                else 0.0
-            ),
-            text_background_color=skia_bg_color,
+            skia_bg_color,
         )
-
-        if not success:
-            log_message("Drawing failed", always_print=True)
-            raise RenderingError("Text drawing failed")
 
         try:
             final_pil_image = skia_surface_to_pil(surface)
@@ -603,5 +665,6 @@ def render_text_skia(
             raise RenderingError(f"Final conversion failed: {e}") from e
 
         log_message(f"Rendered at size {layout_data['font_size']}", verbose=verbose)
-        final_pil_image.info["font_size"] = layout_data["font_size"]
-        return final_pil_image
+
+    final_pil_image.info["font_size"] = layout_data["font_size"]
+    return final_pil_image

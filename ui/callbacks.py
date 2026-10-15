@@ -2112,6 +2112,88 @@ def handle_luminance_correction_change(_enabled: bool):
     cache.clear_inpaint_cache()
 
 
+_STATIC_MODEL_PROVIDERS = (
+    "Z.ai",
+    "Moonshot AI",
+    "Xiaomi MiMo",
+    "Meta Model",
+    "QwenCloud",
+    "DeepSeek",
+)
+_VISION_MODEL_FILTERS = {
+    "Z.ai": is_zai_vision_model,
+    "Xiaomi MiMo": is_mimo_multimodal_model,
+    "DeepSeek": is_deepseek_vision_model,
+}
+
+
+def _ocr_method_model_update(
+    provider: str,
+    ocr_method: str,
+    current_model: str | None,
+    openai_compatible_url: str,
+    openai_compatible_api_key: str | None,
+    opencode_tier: str | None,
+    opencode_api_key: str | None,
+):
+    """Refreshes the model dropdown for a provider after the OCR method changes."""
+    text_only = ocr_method in ("manga-ocr", "paddleocr-vl-1.6")
+
+    if provider == "OpenRouter":
+        return utils.fetch_and_update_openrouter_models(
+            ocr_method="manga-ocr" if text_only else "LLM",
+            current_model=current_model,
+        )
+    if provider == "OpenAI-Compatible":
+        return utils.fetch_and_update_compatible_models(
+            openai_compatible_url, openai_compatible_api_key, current_model
+        )
+    if provider == "OpenCode":
+        saved_settings = settings_manager.get_saved_settings()
+        tier = opencode_tier or saved_settings.get("opencode_tier") or "zen"
+        key = opencode_api_key or saved_settings.get("opencode_api_key") or ""
+        return utils.fetch_and_update_opencode_models(
+            tier=tier,
+            api_key=key,
+            current_model=current_model,
+            ocr_method=ocr_method,
+        )
+    if provider not in _STATIC_MODEL_PROVIDERS:
+        return gr.update()
+
+    models = settings_manager.PROVIDER_MODELS.get(provider, [])
+    # Text-only OCR modes can use every model; LLM OCR needs vision models
+    vision_filter = _VISION_MODEL_FILTERS.get(provider)
+    if vision_filter and not text_only:
+        models = [m for m in models if vision_filter(m)]
+    provider_models_dict = settings_manager.get_saved_settings().get(
+        "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
+    )
+    remembered_model = provider_models_dict.get(provider)
+    selected_model = (
+        remembered_model
+        if remembered_model in models
+        else (models[0] if models else None)
+    )
+    return gr.update(choices=models, value=selected_model)
+
+
+def _text_only_ocr_control_updates() -> list:
+    """Disables the image-dependent controls when OCR runs locally (text-only mode)."""
+    return [
+        gr.update(value=False, interactive=False),
+        gr.update(value=0, interactive=False),
+        gr.update(),
+        # Disable code execution checkbox (Gemini 3+ only, disabled in text-only mode)
+        gr.update(value=False, interactive=False),
+        gr.update(interactive=False),
+        # Disable media resolution dropdowns (no images sent to LLM in text-only mode)
+        gr.update(interactive=False),
+        gr.update(interactive=False),
+        gr.update(interactive=False),
+    ]
+
+
 def handle_ocr_method_change(
     ocr_method: str,
     input_language: str,
@@ -2167,120 +2249,7 @@ def handle_ocr_method_change(
         )
         updates.append(batch_saved_language)
 
-        updates.append(gr.update(value=False, interactive=False))
-        updates.append(gr.update(value=0, interactive=False))
-        updates.append(gr.update())
-        # Disable code execution checkbox (Gemini 3+ only, disabled in text-only mode)
-        updates.append(gr.update(value=False, interactive=False))
-        updates.append(gr.update(interactive=False))
-        # Disable media resolution dropdowns (no images sent to LLM in text-only mode)
-        updates.append(gr.update(interactive=False))
-        updates.append(gr.update(interactive=False))
-        updates.append(gr.update(interactive=False))
-
-        # Trigger model list refresh for providers with dynamic model lists
-        if current_provider == "OpenRouter":
-            model_update = utils.fetch_and_update_openrouter_models(
-                ocr_method="manga-ocr", current_model=current_model
-            )
-            updates.append(model_update)
-        elif current_provider == "OpenAI-Compatible":
-            model_update = utils.fetch_and_update_compatible_models(
-                openai_compatible_url, openai_compatible_api_key, current_model
-            )
-            updates.append(model_update)
-        elif current_provider == "Z.ai":
-            # For manga-ocr mode, show all Z.ai models (text-only models work)
-            models = settings_manager.PROVIDER_MODELS.get("Z.ai", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Z.ai")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "Moonshot AI":
-            models = settings_manager.PROVIDER_MODELS.get("Moonshot AI", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Moonshot AI")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "Xiaomi MiMo":
-            models = settings_manager.PROVIDER_MODELS.get("Xiaomi MiMo", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Xiaomi MiMo")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "Meta Model":
-            models = settings_manager.PROVIDER_MODELS.get("Meta Model", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Meta Model")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "QwenCloud":
-            models = settings_manager.PROVIDER_MODELS.get("QwenCloud", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("QwenCloud")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "DeepSeek":
-            models = settings_manager.PROVIDER_MODELS.get("DeepSeek", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("DeepSeek")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "OpenCode":
-            saved_settings = settings_manager.get_saved_settings()
-            tier = opencode_tier or saved_settings.get("opencode_tier") or "zen"
-            key = opencode_api_key or saved_settings.get("opencode_api_key") or ""
-            model_update = utils.fetch_and_update_opencode_models(
-                tier=tier,
-                api_key=key,
-                current_model=current_model,
-                ocr_method=ocr_method,
-            )
-            updates.append(model_update)
-        else:
-            updates.append(gr.update())
+        updates.extend(_text_only_ocr_control_updates())
     elif ocr_method == "paddleocr-vl-1.6":
         # Restrict to PaddleOCR-VL-1.6 supported languages; keep current if supported
         paddle_langs = layout.PADDLE_OCR_VL_LANGUAGES
@@ -2312,117 +2281,7 @@ def handle_ocr_method_change(
         )
         updates.append(batch_saved_language)
 
-        updates.append(gr.update(value=False, interactive=False))
-        updates.append(gr.update(value=0, interactive=False))
-        updates.append(gr.update())
-        updates.append(gr.update(value=False, interactive=False))
-        updates.append(gr.update(interactive=False))
-        updates.append(gr.update(interactive=False))
-        updates.append(gr.update(interactive=False))
-        updates.append(gr.update(interactive=False))
-
-        # Model list refresh — same as manga-ocr (enables text-only providers)
-        if current_provider == "OpenRouter":
-            model_update = utils.fetch_and_update_openrouter_models(
-                ocr_method="manga-ocr", current_model=current_model
-            )
-            updates.append(model_update)
-        elif current_provider == "OpenAI-Compatible":
-            model_update = utils.fetch_and_update_compatible_models(
-                openai_compatible_url, openai_compatible_api_key, current_model
-            )
-            updates.append(model_update)
-        elif current_provider == "Z.ai":
-            models = settings_manager.PROVIDER_MODELS.get("Z.ai", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Z.ai")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "Moonshot AI":
-            models = settings_manager.PROVIDER_MODELS.get("Moonshot AI", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Moonshot AI")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "Xiaomi MiMo":
-            models = settings_manager.PROVIDER_MODELS.get("Xiaomi MiMo", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Xiaomi MiMo")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "Meta Model":
-            models = settings_manager.PROVIDER_MODELS.get("Meta Model", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Meta Model")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "QwenCloud":
-            models = settings_manager.PROVIDER_MODELS.get("QwenCloud", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("QwenCloud")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "DeepSeek":
-            models = settings_manager.PROVIDER_MODELS.get("DeepSeek", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("DeepSeek")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "OpenCode":
-            saved_settings = settings_manager.get_saved_settings()
-            tier = opencode_tier or saved_settings.get("opencode_tier") or "zen"
-            key = opencode_api_key or saved_settings.get("opencode_api_key") or ""
-            model_update = utils.fetch_and_update_opencode_models(
-                tier=tier,
-                api_key=key,
-                current_model=current_model,
-                ocr_method=ocr_method,
-            )
-            updates.append(model_update)
-        else:
-            updates.append(gr.update())
+        updates.extend(_text_only_ocr_control_updates())
     else:
         restored_language = (
             original_language_state if original_language_state else input_language
@@ -2478,122 +2337,17 @@ def handle_ocr_method_change(
         updates.append(gr.update(interactive=True))
         updates.append(gr.update(interactive=True))
 
-        # Trigger model list refresh for providers with dynamic or filtered model lists
-        if current_provider == "OpenRouter":
-            model_update = utils.fetch_and_update_openrouter_models(
-                ocr_method="LLM", current_model=current_model
-            )
-            updates.append(model_update)
-        elif current_provider == "OpenAI-Compatible":
-            model_update = utils.fetch_and_update_compatible_models(
-                openai_compatible_url, openai_compatible_api_key, current_model
-            )
-            updates.append(model_update)
-        elif current_provider == "Z.ai":
-            # For LLM OCR mode, only show Z.ai vision models
-            models = [
-                m
-                for m in settings_manager.PROVIDER_MODELS.get("Z.ai", [])
-                if is_zai_vision_model(m)
-            ]
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Z.ai")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "Moonshot AI":
-            models = settings_manager.PROVIDER_MODELS.get("Moonshot AI", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Moonshot AI")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "Xiaomi MiMo":
-            models = [
-                m
-                for m in settings_manager.PROVIDER_MODELS.get("Xiaomi MiMo", [])
-                if is_mimo_multimodal_model(m)
-            ]
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Xiaomi MiMo")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "Meta Model":
-            models = settings_manager.PROVIDER_MODELS.get("Meta Model", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("Meta Model")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "QwenCloud":
-            models = settings_manager.PROVIDER_MODELS.get("QwenCloud", [])
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("QwenCloud")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "DeepSeek":
-            models = [
-                m
-                for m in settings_manager.PROVIDER_MODELS.get("DeepSeek", [])
-                if is_deepseek_vision_model(m)
-            ]
-            saved_settings = settings_manager.get_saved_settings()
-            provider_models_dict = saved_settings.get(
-                "provider_models", settings_manager.DEFAULT_SETTINGS["provider_models"]
-            )
-            remembered_model = provider_models_dict.get("DeepSeek")
-            selected_model = (
-                remembered_model
-                if remembered_model in models
-                else (models[0] if models else None)
-            )
-            updates.append(gr.update(choices=models, value=selected_model))
-        elif current_provider == "OpenCode":
-            saved_settings = settings_manager.get_saved_settings()
-            tier = opencode_tier or saved_settings.get("opencode_tier") or "zen"
-            key = opencode_api_key or saved_settings.get("opencode_api_key") or ""
-            model_update = utils.fetch_and_update_opencode_models(
-                tier=tier,
-                api_key=key,
-                current_model=current_model,
-                ocr_method=ocr_method,
-            )
-            updates.append(model_update)
-        else:
-            updates.append(gr.update())
-
+    updates.append(
+        _ocr_method_model_update(
+            current_provider,
+            ocr_method,
+            current_model,
+            openai_compatible_url,
+            openai_compatible_api_key,
+            opencode_tier,
+            opencode_api_key,
+        )
+    )
     updates.append(current_provider)
 
     return updates

@@ -473,6 +473,336 @@ def _thinking_toggle(reasoning_effort: str | None) -> dict[str, str]:
     return {"type": "disabled" if reasoning_effort == "none" else "enabled"}
 
 
+def _normalized_image_detail(model_name: str, config: TranslationConfig) -> str:
+    """OpenAI image detail, falling back to "high" where "original" is unsupported."""
+    image_detail = (config.image_detail or "auto").lower()
+    if image_detail not in ("auto", "original", "high", "low"):
+        image_detail = "auto"
+    if image_detail == "original" and not supports_openai_original_image_detail(
+        model_name
+    ):
+        image_detail = "high"
+    return image_detail
+
+
+def _routed_model_config(
+    model_name: str, config: TranslationConfig, max_tokens: int
+) -> dict[str, Any]:
+    """Start the config for OpenRouter or OpenAI-Compatible, which route other vendors' models.
+
+    `_metadata` holds the model-family flags their endpoints adapt the request to.
+    """
+    is_openai_model = is_openai_model_family(model_name)
+    supports_verbosity = is_openai_model and supports_openai_verbosity(model_name)
+    claude_flags = anthropic_model_flags(model_name)
+    generation_config = {
+        "max_tokens": max_tokens,
+        "_metadata": {
+            "is_openai_model": is_openai_model,
+            "is_anthropic_model": is_anthropic_model_family(model_name),
+            "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
+            "is_gpt5_model": is_openai_model and is_gpt5_series(model_name),
+            "supports_verbosity": supports_verbosity,
+            **claude_flags,
+        },
+    }
+    if is_openai_model:
+        generation_config["image_detail"] = _normalized_image_detail(model_name, config)
+    if supports_verbosity:
+        generation_config["verbosity"] = config.verbosity or "low"
+    if claude_flags and config.effort:
+        generation_config["effort"] = config.effort
+    return generation_config
+
+
+def _google_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+    debug: bool,
+) -> dict[str, Any]:
+    generation_config = {"maxOutputTokens": max_tokens}
+    if config.use_custom_sampling and not is_gemini_no_sampling_model(model_name):
+        generation_config.update(
+            {
+                "temperature": config.temperature,
+                "topP": config.top_p,
+                "topK": config.top_k,
+            }
+        )
+    if not _supports_per_part_media_resolution("Google", model_name):
+        generation_config["media_resolution"] = _gemini_media_resolution(
+            config.media_resolution
+        )
+    thinking_config = _gemini_thinking_config(
+        model_name, config.reasoning_effort, max_tokens
+    )
+    if thinking_config:
+        generation_config["thinkingConfig"] = thinking_config
+    log_message(
+        f"Thinking config for {model_name}: {thinking_config or 'model default'}",
+        verbose=debug,
+    )
+    return generation_config
+
+
+def _openai_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    generation_config = {
+        "max_output_tokens": max_tokens,
+    }
+    if config.use_custom_sampling:
+        generation_config.update(
+            {
+                "temperature": config.temperature,
+                "top_p": config.top_p,
+            }
+        )  # top_k not supported by OpenAI
+    generation_config["image_detail"] = _normalized_image_detail(model_name, config)
+    is_chat = is_gpt5_chat_variant(model_name)
+    if is_openai_reasoning_model(model_name) and not is_chat:
+        generation_config["reasoning_effort"] = clamp_openai_reasoning_effort(
+            model_name, config.reasoning_effort or "high"
+        )
+        if is_openai_virtual_pro(model_name):
+            generation_config["reasoning_mode"] = "pro"
+    if supports_openai_verbosity(model_name):
+        generation_config["verbosity"] = config.verbosity or "low"
+    return generation_config
+
+
+def _anthropic_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    anthropic_flags = anthropic_model_flags(model_name)
+    generation_config = {
+        "max_tokens": max_tokens,
+        "_metadata": dict(anthropic_flags),
+    }
+    if config.use_custom_sampling:
+        generation_config.update(
+            {
+                "temperature": min(config.temperature, 1.0),
+                "top_k": config.top_k,
+            }
+        )
+    if is_anthropic_reasoning_model(model_name):
+        reasoning_effort = config.reasoning_effort or (
+            "auto" if anthropic_flags.get("is_claude_adaptive_default") else "none"
+        )
+        generation_config["reasoning_effort"] = reasoning_effort
+        thinking_type = _claude_thinking_type(anthropic_flags, reasoning_effort)
+        if thinking_type:
+            generation_config["thinking_type"] = thinking_type
+    if anthropic_flags and config.effort:
+        generation_config["effort"] = clamp_claude_effort(model_name, config.effort)
+    return generation_config
+
+
+def _xai_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+    prompt_cache_key: str | None,
+) -> dict[str, Any]:
+    generation_config = _sampling_config(config, max_tokens)
+    generation_config["media_resolution"] = config.media_resolution
+    if prompt_cache_key:
+        generation_config["prompt_cache_key"] = prompt_cache_key
+    if supports_xai_reasoning_parameter(model_name):
+        generation_config["reasoning_effort"] = clamp_xai_reasoning_effort(
+            model_name, config.reasoning_effort or "high"
+        )
+    return generation_config
+
+
+def _deepseek_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    generation_config = _sampling_config(config, max_tokens)
+    if is_deepseek_reasoning_model(model_name):
+        reasoning_effort = config.reasoning_effort or "high"
+        generation_config["thinking"] = _thinking_toggle(reasoning_effort)
+        if reasoning_effort != "none":
+            generation_config["reasoning_effort"] = reasoning_effort
+    return generation_config
+
+
+def _zai_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    generation_config = _sampling_config(config, max_tokens, 1.0)
+    if is_zai_reasoning_model(model_name):
+        if "glm-5.3" in model_name.lower():
+            # GLM-5.3 keeps thinking on and takes only "low", "high" and "max"
+            generation_config["thinking"] = {"type": "enabled"}
+            generation_config["reasoning_effort"] = clamp_zai_reasoning_effort(
+                model_name, config.reasoning_effort or "high"
+            )
+        else:
+            takes_effort = supports_zai_reasoning_effort(model_name)
+            reasoning_effort = config.reasoning_effort or (
+                "high" if takes_effort else "auto"
+            )
+            generation_config["thinking"] = _thinking_toggle(reasoning_effort)
+            if takes_effort and reasoning_effort != "none":
+                generation_config["reasoning_effort"] = reasoning_effort
+    return generation_config
+
+
+def _moonshot_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+    debug: bool,
+) -> dict[str, Any]:
+    generation_config = _sampling_config(config, max_tokens, 1.0)
+    if supports_moonshot_reasoning_effort(model_name):
+        # Kimi K3 takes an effort instead of the thinking switch
+        reasoning_effort = clamp_moonshot_reasoning_effort(
+            model_name, config.reasoning_effort or "high"
+        )
+        generation_config["reasoning_effort"] = reasoning_effort
+        log_message(
+            f"Using reasoning effort '{reasoning_effort}' for {model_name}",
+            verbose=debug,
+        )
+    elif is_moonshot_reasoning_model(model_name):
+        generation_config["thinking"] = _thinking_toggle(config.reasoning_effort)
+    return generation_config
+
+
+def _mimo_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    generation_config = _sampling_config(config, max_tokens, 1.0)
+    if is_mimo_reasoning_model(model_name):
+        generation_config["thinking"] = _thinking_toggle(config.reasoning_effort)
+    return generation_config
+
+
+def _qwencloud_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    generation_config = _sampling_config(config, max_tokens, 1.0)
+    if is_qwencloud_reasoning_model(model_name):
+        takes_effort = supports_qwencloud_reasoning_effort(model_name)
+        reasoning_effort = config.reasoning_effort or (
+            "xhigh" if takes_effort else "auto"
+        )
+        generation_config["thinking"] = _thinking_toggle(reasoning_effort)
+        if takes_effort and reasoning_effort not in ("auto", "none"):
+            generation_config["reasoning_effort"] = reasoning_effort
+    return generation_config
+
+
+def _meta_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    generation_config = _sampling_config(config, max_tokens, 1.0)
+    reasoning_effort = config.reasoning_effort or "auto"
+    # Meta has no thinking switch, so "auto" and "none" both send no effort
+    if supports_meta_reasoning_effort(model_name) and reasoning_effort not in (
+        "auto",
+        "none",
+    ):
+        generation_config["reasoning_effort"] = reasoning_effort
+    return generation_config
+
+
+def _opencode_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    generation_config = _sampling_config(config, max_tokens)
+    if (
+        is_opencode_reasoning_model(model_name)
+        and config.reasoning_effort
+        and config.reasoning_effort != "none"
+    ):
+        generation_config["reasoning_effort"] = config.reasoning_effort
+    return generation_config
+
+
+def _openrouter_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    generation_config = _routed_model_config(model_name, config, max_tokens)
+    # The endpoint leaves out the sampling parameters the model's family rejects
+    if config.use_custom_sampling:
+        generation_config.update(
+            {
+                "temperature": config.temperature,
+                "top_p": config.top_p,
+                "top_k": config.top_k,
+            }
+        )
+    reasoning_effort = _openrouter_reasoning_effort(model_name, config.reasoning_effort)
+    if reasoning_effort:
+        generation_config["reasoning_effort"] = reasoning_effort
+    return generation_config
+
+
+def _openai_compatible_generation_config(
+    model_name: str,
+    config: TranslationConfig,
+    max_tokens: int,
+) -> dict[str, Any]:
+    generation_config = _routed_model_config(model_name, config, max_tokens)
+    metadata = generation_config["_metadata"]
+    is_openai_model = metadata["is_openai_model"]
+    is_openai_reasoning = is_openai_model and is_openai_reasoning_model(model_name)
+    metadata["is_openai_reasoning"] = is_openai_reasoning
+    # The endpoint leaves out the sampling parameters the model's family rejects
+    if config.use_custom_sampling and not is_openai_reasoning:
+        generation_config.update(
+            {
+                "temperature": config.temperature,
+                "top_p": config.top_p,
+                "top_k": config.top_k,
+            }
+        )
+    reasoning_effort = config.reasoning_effort
+    if reasoning_effort and is_openai_compatible_reasoning_model(model_name):
+        if is_openai_model and is_gpt6_series(model_name):
+            reasoning_effort = clamp_gpt6_reasoning_effort(model_name, reasoning_effort)
+        generation_config["reasoning_effort"] = reasoning_effort
+    return generation_config
+
+
+# Providers whose config needs only the model, settings, and token limit
+_GENERATION_CONFIG_BUILDERS = {
+    "OpenAI": _openai_generation_config,
+    "Anthropic": _anthropic_generation_config,
+    "DeepSeek": _deepseek_generation_config,
+    "Z.ai": _zai_generation_config,
+    "Xiaomi MiMo": _mimo_generation_config,
+    "QwenCloud": _qwencloud_generation_config,
+    "Meta Model": _meta_generation_config,
+    "OpenCode": _opencode_generation_config,
+    "OpenRouter": _openrouter_generation_config,
+    "OpenAI-Compatible": _openai_compatible_generation_config,
+}
+
+
 def _build_generation_config(
     provider: str,
     model_name: str,
@@ -498,47 +828,6 @@ def _build_generation_config(
     Returns:
         Dictionary with generation config parameters for the specific provider
     """
-    temperature = config.temperature
-    top_p = config.top_p
-    top_k = config.top_k
-    use_sampling = config.use_custom_sampling
-
-    def normalize_image_detail() -> str:
-        image_detail = (config.image_detail or "auto").lower()
-        if image_detail not in ("auto", "original", "high", "low"):
-            image_detail = "auto"
-        if image_detail == "original" and not supports_openai_original_image_detail(
-            model_name
-        ):
-            image_detail = "high"
-        return image_detail
-
-    def routed_model_config(max_tokens: int) -> dict[str, Any]:
-        """Start the config for OpenRouter or OpenAI-Compatible, which route other vendors' models.
-
-        `_metadata` holds the model-family flags their endpoints adapt the request to.
-        """
-        is_openai_model = is_openai_model_family(model_name)
-        supports_verbosity = is_openai_model and supports_openai_verbosity(model_name)
-        claude_flags = anthropic_model_flags(model_name)
-        generation_config = {
-            "max_tokens": max_tokens,
-            "_metadata": {
-                "is_openai_model": is_openai_model,
-                "is_anthropic_model": is_anthropic_model_family(model_name),
-                "is_gemini_no_sampling": is_gemini_no_sampling_model(model_name),
-                "is_gpt5_model": is_openai_model and is_gpt5_series(model_name),
-                "supports_verbosity": supports_verbosity,
-                **claude_flags,
-            },
-        }
-        if is_openai_model:
-            generation_config["image_detail"] = normalize_image_detail()
-        if supports_verbosity:
-            generation_config["verbosity"] = config.verbosity or "low"
-        if claude_flags and config.effort:
-            generation_config["effort"] = config.effort
-        return generation_config
 
     if config.max_tokens is not None:
         max_tokens_value = config.max_tokens
@@ -556,208 +845,17 @@ def _build_generation_config(
         max_tokens_value = max_tokens_cap
 
     if provider == "Google":
-        generation_config = {"maxOutputTokens": max_tokens_value}
-        if use_sampling and not is_gemini_no_sampling_model(model_name):
-            generation_config.update(
-                {
-                    "temperature": temperature,
-                    "topP": top_p,
-                    "topK": top_k,
-                }
-            )
-        if not _supports_per_part_media_resolution(provider, model_name):
-            generation_config["media_resolution"] = _gemini_media_resolution(
-                config.media_resolution
-            )
-        thinking_config = _gemini_thinking_config(
-            model_name, config.reasoning_effort, max_tokens_value
+        return _google_generation_config(model_name, config, max_tokens_value, debug)
+    if provider == "Moonshot AI":
+        return _moonshot_generation_config(model_name, config, max_tokens_value, debug)
+    if provider == "SpaceXAI":
+        return _xai_generation_config(
+            model_name, config, max_tokens_value, prompt_cache_key
         )
-        if thinking_config:
-            generation_config["thinkingConfig"] = thinking_config
-        log_message(
-            f"Thinking config for {model_name}: {thinking_config or 'model default'}",
-            verbose=debug,
-        )
-        return generation_config
-
-    elif provider == "OpenAI":
-        generation_config = {
-            "max_output_tokens": max_tokens_value,
-        }
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": temperature,
-                    "top_p": top_p,
-                }
-            )  # top_k not supported by OpenAI
-        generation_config["image_detail"] = normalize_image_detail()
-        is_chat = is_gpt5_chat_variant(model_name)
-        if is_openai_reasoning_model(model_name) and not is_chat:
-            generation_config["reasoning_effort"] = clamp_openai_reasoning_effort(
-                model_name, config.reasoning_effort or "high"
-            )
-            if is_openai_virtual_pro(model_name):
-                generation_config["reasoning_mode"] = "pro"
-        if supports_openai_verbosity(model_name):
-            generation_config["verbosity"] = config.verbosity or "low"
-        return generation_config
-
-    elif provider == "Anthropic":
-        anthropic_flags = anthropic_model_flags(model_name)
-        generation_config = {
-            "max_tokens": max_tokens_value,
-            "_metadata": dict(anthropic_flags),
-        }
-        if use_sampling:
-            generation_config.update(
-                {
-                    "temperature": min(temperature, 1.0),
-                    "top_k": top_k,
-                }
-            )
-        if is_anthropic_reasoning_model(model_name):
-            reasoning_effort = config.reasoning_effort or (
-                "auto" if anthropic_flags.get("is_claude_adaptive_default") else "none"
-            )
-            generation_config["reasoning_effort"] = reasoning_effort
-            thinking_type = _claude_thinking_type(anthropic_flags, reasoning_effort)
-            if thinking_type:
-                generation_config["thinking_type"] = thinking_type
-        if anthropic_flags and config.effort:
-            generation_config["effort"] = clamp_claude_effort(model_name, config.effort)
-        return generation_config
-
-    elif provider == "SpaceXAI":
-        generation_config = _sampling_config(config, max_tokens_value)
-        generation_config["media_resolution"] = config.media_resolution
-        if prompt_cache_key:
-            generation_config["prompt_cache_key"] = prompt_cache_key
-        if supports_xai_reasoning_parameter(model_name):
-            generation_config["reasoning_effort"] = clamp_xai_reasoning_effort(
-                model_name, config.reasoning_effort or "high"
-            )
-        return generation_config
-
-    elif provider == "DeepSeek":
-        generation_config = _sampling_config(config, max_tokens_value)
-        if is_deepseek_reasoning_model(model_name):
-            reasoning_effort = config.reasoning_effort or "high"
-            generation_config["thinking"] = _thinking_toggle(reasoning_effort)
-            if reasoning_effort != "none":
-                generation_config["reasoning_effort"] = reasoning_effort
-        return generation_config
-
-    elif provider == "Z.ai":
-        generation_config = _sampling_config(config, max_tokens_value, 1.0)
-        if is_zai_reasoning_model(model_name):
-            if "glm-5.3" in model_name.lower():
-                # GLM-5.3 keeps thinking on and takes only "low", "high" and "max"
-                generation_config["thinking"] = {"type": "enabled"}
-                generation_config["reasoning_effort"] = clamp_zai_reasoning_effort(
-                    model_name, config.reasoning_effort or "high"
-                )
-            else:
-                takes_effort = supports_zai_reasoning_effort(model_name)
-                reasoning_effort = config.reasoning_effort or (
-                    "high" if takes_effort else "auto"
-                )
-                generation_config["thinking"] = _thinking_toggle(reasoning_effort)
-                if takes_effort and reasoning_effort != "none":
-                    generation_config["reasoning_effort"] = reasoning_effort
-        return generation_config
-
-    elif provider == "Moonshot AI":
-        generation_config = _sampling_config(config, max_tokens_value, 1.0)
-        if supports_moonshot_reasoning_effort(model_name):
-            # Kimi K3 takes an effort instead of the thinking switch
-            reasoning_effort = clamp_moonshot_reasoning_effort(
-                model_name, config.reasoning_effort or "high"
-            )
-            generation_config["reasoning_effort"] = reasoning_effort
-            log_message(
-                f"Using reasoning effort '{reasoning_effort}' for {model_name}",
-                verbose=debug,
-            )
-        elif is_moonshot_reasoning_model(model_name):
-            generation_config["thinking"] = _thinking_toggle(config.reasoning_effort)
-        return generation_config
-
-    elif provider == "Xiaomi MiMo":
-        generation_config = _sampling_config(config, max_tokens_value, 1.0)
-        if is_mimo_reasoning_model(model_name):
-            generation_config["thinking"] = _thinking_toggle(config.reasoning_effort)
-        return generation_config
-
-    elif provider == "QwenCloud":
-        generation_config = _sampling_config(config, max_tokens_value, 1.0)
-        if is_qwencloud_reasoning_model(model_name):
-            takes_effort = supports_qwencloud_reasoning_effort(model_name)
-            reasoning_effort = config.reasoning_effort or (
-                "xhigh" if takes_effort else "auto"
-            )
-            generation_config["thinking"] = _thinking_toggle(reasoning_effort)
-            if takes_effort and reasoning_effort not in ("auto", "none"):
-                generation_config["reasoning_effort"] = reasoning_effort
-        return generation_config
-
-    elif provider == "Meta Model":
-        generation_config = _sampling_config(config, max_tokens_value, 1.0)
-        reasoning_effort = config.reasoning_effort or "auto"
-        # Meta has no thinking switch, so "auto" and "none" both send no effort
-        if supports_meta_reasoning_effort(model_name) and reasoning_effort not in (
-            "auto",
-            "none",
-        ):
-            generation_config["reasoning_effort"] = reasoning_effort
-        return generation_config
-
-    elif provider == "OpenCode":
-        generation_config = _sampling_config(config, max_tokens_value)
-        if (
-            is_opencode_reasoning_model(model_name)
-            and config.reasoning_effort
-            and config.reasoning_effort != "none"
-        ):
-            generation_config["reasoning_effort"] = config.reasoning_effort
-        return generation_config
-
-    elif provider == "OpenRouter":
-        generation_config = routed_model_config(max_tokens_value)
-        # The endpoint leaves out the sampling parameters the model's family rejects
-        if use_sampling:
-            generation_config.update(
-                {"temperature": temperature, "top_p": top_p, "top_k": top_k}
-            )
-        reasoning_effort = _openrouter_reasoning_effort(
-            model_name, config.reasoning_effort
-        )
-        if reasoning_effort:
-            generation_config["reasoning_effort"] = reasoning_effort
-        return generation_config
-
-    elif provider == "OpenAI-Compatible":
-        generation_config = routed_model_config(max_tokens_value)
-        metadata = generation_config["_metadata"]
-        is_openai_model = metadata["is_openai_model"]
-        is_openai_reasoning = is_openai_model and is_openai_reasoning_model(model_name)
-        metadata["is_openai_reasoning"] = is_openai_reasoning
-        # The endpoint leaves out the sampling parameters the model's family rejects
-        if use_sampling and not is_openai_reasoning:
-            generation_config.update(
-                {"temperature": temperature, "top_p": top_p, "top_k": top_k}
-            )
-        reasoning_effort = config.reasoning_effort
-        if reasoning_effort and is_openai_compatible_reasoning_model(model_name):
-            if is_openai_model and is_gpt6_series(model_name):
-                reasoning_effort = clamp_gpt6_reasoning_effort(
-                    model_name, reasoning_effort
-                )
-            generation_config["reasoning_effort"] = reasoning_effort
-        return generation_config
-
-    else:
+    builder = _GENERATION_CONFIG_BUILDERS.get(provider)
+    if builder is None:
         raise TranslationError(f"Unknown provider for generation config: {provider}")
+    return builder(model_name, config, max_tokens_value)
 
 
 # provider: (config field holding its API key, name in the missing-key error, endpoint)
@@ -936,14 +1034,11 @@ def _parse_llm_response_unified(
         return [f"[{provider}: Parse error]"] * total_elements
 
 
-def _prepare_images_for_ocr(
-    images_b64: list[str], verbose: bool = False
-) -> list[Image.Image | None]:
+def _prepare_images_for_ocr(images_b64: list[str]) -> list[Image.Image | None]:
     """Prepare base64-encoded images for OCR by decoding and converting to RGB.
 
     Args:
         images_b64: List of base64-encoded image strings
-        verbose: Whether to print verbose logging
 
     Returns:
         List of PIL Images (or None for decode failures), all in RGB mode
@@ -1309,7 +1404,7 @@ def _perform_manga_ocr(
             return cached_ocr
         log_message("Discarding manga-ocr cache due to length mismatch", verbose=debug)
 
-    pil_images = _prepare_images_for_ocr(images_b64, verbose=debug)
+    pil_images = _prepare_images_for_ocr(images_b64)
     extracted_texts = extract_text_with_manga_ocr(pil_images, verbose=debug)
 
     formatted_texts = []
@@ -1379,7 +1474,7 @@ def _perform_paddle_ocr_vl(
             "Discarding PaddleOCR-VL-1.6 cache due to length mismatch", verbose=debug
         )
 
-    pil_images = _prepare_images_for_ocr(images_b64, verbose=debug)
+    pil_images = _prepare_images_for_ocr(images_b64)
     extracted_texts = extract_text_with_paddle_ocr_vl(pil_images, verbose=debug)
 
     formatted_texts = []
@@ -1487,6 +1582,157 @@ def _perform_llm_ocr(
     return extracted_texts
 
 
+def _clean_previous_context_texts(
+    previous_context_texts: list[list[str]] | None, max_pages: int
+) -> list[list[str]]:
+    """Drop empty and failed OCR lines and pages, keeping the newest `max_pages` pages.
+
+    Filtering before trimming keeps the request order matching the prompt order
+    regardless of upstream history gaps.
+    """
+    if not previous_context_texts or max_pages <= 0:
+        return []
+    cleaned = []
+    for page_texts in previous_context_texts:
+        usable = [
+            (t or "").strip()
+            for t in (page_texts or [])
+            if (t or "").strip() and (t or "").strip() != "[OCR FAILED]"
+        ]
+        if usable:
+            cleaned.append(usable)
+    return cleaned[-max_pages:]
+
+
+def _layout_hints(bubble_metadata: list[dict[str, Any]]) -> str:
+    """Prompt line saying which items are bubble dialogue and which are outside text."""
+    dialogue_indices = [
+        i + 1
+        for i, meta in enumerate(bubble_metadata)
+        if not meta.get("is_outside_text", False)
+    ]
+    osb_indices = [
+        i + 1
+        for i, meta in enumerate(bubble_metadata)
+        if meta.get("is_outside_text", False)
+    ]
+
+    hints = []
+    if dialogue_indices:
+        dialogue_list_str = ", ".join(map(str, dialogue_indices))
+        hints.append(
+            f"Items [{dialogue_list_str}] are inside speech bubbles or caption "
+            "boxes (dialogue, thoughts, or narration)."
+        )
+    if osb_indices:
+        osb_list_str = ", ".join(map(str, osb_indices))
+        hints.append(
+            f"Items [{osb_list_str}] are free-standing text outside bubbles "
+            "(usually sound effects or mimetic effects, sometimes narration or asides)."
+        )
+    return "\nLayout: " + " ".join(hints) if hints else ""
+
+
+def _previous_page_parts(
+    previous_context_images: list[dict[str, str]], context_res: str | None
+) -> list[dict[str, Any]]:
+    """Labeled image parts for the previous pages, oldest first."""
+    parts = []
+    for pages_back, image in zip(
+        range(len(previous_context_images), 0, -1),
+        previous_context_images,
+        strict=False,
+    ):
+        parts += [
+            {"text": _PREVIOUS_PAGE_LABEL.format(pages_back)},
+            _image_part(
+                image.get("mime_type", "image/jpeg"),
+                image.get("data", ""),
+                context_res,
+            ),
+        ]
+    return parts
+
+
+def _run_ocr_step(
+    config: TranslationConfig,
+    images_b64: list[str],
+    mime_types: list[str],
+    bubble_metadata: list[dict[str, Any]],
+    debug: bool,
+    prompt_cache_key: str,
+) -> list[str]:
+    """Two-step mode's OCR pass, with the configured local or LLM OCR method."""
+    log_message("Starting OCR step", verbose=debug)
+    if config.ocr_method == "manga-ocr":
+        return _perform_manga_ocr(images_b64, bubble_metadata, debug)
+    if config.ocr_method == "paddleocr-vl-1.6":
+        return _perform_paddle_ocr_vl(images_b64, bubble_metadata, debug)
+    return _perform_llm_ocr(
+        config,
+        images_b64,
+        mime_types,
+        f"Transcribe the {len(images_b64)} crops above.",
+        config.provider,
+        config.input_language,
+        debug,
+        prompt_cache_key=prompt_cache_key,
+    )
+
+
+def _mark_ocr_failures(
+    extracted_texts: list[str], provider: str
+) -> tuple[list[str], set[int]]:
+    """Normalize OCR errors to "[OCR FAILED]"; returns the texts and failed indices."""
+    formatted_texts = []
+    ocr_failed_indices = set()
+    for i, text in enumerate(extracted_texts):
+        if f"[{provider}-OCR:" in text or text == "[OCR FAILED]":
+            formatted_texts.append("[OCR FAILED]")
+            ocr_failed_indices.add(i)
+        else:
+            formatted_texts.append(text)
+    return formatted_texts, ocr_failed_indices
+
+
+def _keep_ocr_failures(
+    translations: list[str],
+    ocr_failed_indices: set[int],
+    total_elements: int,
+    debug: bool,
+) -> list[str]:
+    """Force "[OCR FAILED]" on items whose OCR failed, whatever the model returned."""
+    results = []
+    for i in range(total_elements):
+        if i not in ocr_failed_indices:
+            results.append(translations[i])
+            continue
+        if translations[i] != "[OCR FAILED]":
+            log_message(
+                f"Element {i + 1}: LLM ignored OCR failure instruction",
+                verbose=debug,
+            )
+        results.append("[OCR FAILED]")
+    return results
+
+
+def _split_one_step_lines(raw_lines: list[str]) -> tuple[list[str], list[str]]:
+    """Split one-step "Original || Translated" lines into (OCR texts, translations)."""
+    ocr_texts = []
+    translations = []
+    for line in raw_lines:
+        if "||" in line:
+            parts = line.split("||", 1)
+            ocr_texts.append(parts[0].strip())
+            translations.append(parts[1].strip())
+        else:
+            # Model violated the format — keep the line as the translation
+            # and mark OCR as failed so it isn't reused as prior context.
+            ocr_texts.append("[OCR FAILED]")
+            translations.append(line)
+    return ocr_texts, translations
+
+
 def call_translation_api_batch(
     config: TranslationConfig,
     images_b64: list[str],
@@ -1539,20 +1785,10 @@ def call_translation_api_batch(
     if not config.send_full_page_context or config.ocr_method != "LLM":
         previous_context_images = []
     previous_context_image_count = len(previous_context_images)
-    # Filter out empty pages (no usable OCR) and trim to configured cap so the
-    # request order matches the prompt order regardless of upstream history gaps.
-    cleaned_previous_texts: list[list[str]] = []
-    configured_text_count = int(getattr(config, "previous_context_text_count", 0) or 0)
-    if previous_context_texts and configured_text_count > 0:
-        for page_texts in previous_context_texts:
-            usable = [
-                (t or "").strip()
-                for t in (page_texts or [])
-                if (t or "").strip() and (t or "").strip() != "[OCR FAILED]"
-            ]
-            if usable:
-                cleaned_previous_texts.append(usable)
-        cleaned_previous_texts = cleaned_previous_texts[-configured_text_count:]
+    cleaned_previous_texts = _clean_previous_context_texts(
+        previous_context_texts,
+        int(getattr(config, "previous_context_text_count", 0) or 0),
+    )
     previous_context_text_count = len(cleaned_previous_texts)
     previous_text_section = _format_previous_context_texts(cleaned_previous_texts)
     glossary_path = (
@@ -1561,36 +1797,8 @@ def call_translation_api_batch(
     glossary_terms = load_terms(glossary_path) if glossary_path else {}
     previous_text_section += format_glossary_section(glossary_terms)
 
-    # Include conditional bubble hints
     total_elements = len(images_b64)
-    dialogue_indices = [
-        i + 1
-        for i, meta in enumerate(bubble_metadata)
-        if not meta.get("is_outside_text", False)
-    ]
-    osb_indices = [
-        i + 1
-        for i, meta in enumerate(bubble_metadata)
-        if meta.get("is_outside_text", False)
-    ]
-
-    hints = []
-    if dialogue_indices:
-        dialogue_list_str = ", ".join(map(str, dialogue_indices))
-        hints.append(
-            f"Items [{dialogue_list_str}] are inside speech bubbles or caption "
-            "boxes (dialogue, thoughts, or narration)."
-        )
-    if osb_indices:
-        osb_list_str = ", ".join(map(str, osb_indices))
-        hints.append(
-            f"Items [{osb_list_str}] are free-standing text outside bubbles "
-            "(usually sound effects or mimetic effects, sometimes narration or asides)."
-        )
-
-    context_hints = ""
-    if hints:
-        context_hints = "\nLayout: " + " ".join(hints)
+    context_hints = _layout_hints(bubble_metadata)
 
     cache = get_cache()
     cache_key = cache.get_translation_cache_key(
@@ -1642,60 +1850,24 @@ def call_translation_api_batch(
             _image_part(full_image_mime_type, full_image_b64, context_res),
         ]
 
-    for pages_back, image in zip(
-        range(previous_context_image_count, 0, -1),
-        previous_context_images,
-        strict=False,
-    ):
-        base_parts += [
-            {"text": _PREVIOUS_PAGE_LABEL.format(pages_back)},
-            _image_part(
-                image.get("mime_type", "image/jpeg"),
-                image.get("data", ""),
-                context_res,
-            ),
-        ]
+    base_parts += _previous_page_parts(previous_context_images, context_res)
 
     try:
         if translation_mode == "two-step":
-            ocr_prompt = f"Transcribe the {total_elements} crops above."
-
-            log_message("Starting OCR step", verbose=debug)
-
-            if config.ocr_method == "manga-ocr":
-                extracted_texts = _perform_manga_ocr(
-                    images_b64,
-                    bubble_metadata,
-                    debug,
-                )
-            elif config.ocr_method == "paddleocr-vl-1.6":
-                extracted_texts = _perform_paddle_ocr_vl(
-                    images_b64,
-                    bubble_metadata,
-                    debug,
-                )
-            else:
-                extracted_texts = _perform_llm_ocr(
-                    config,
-                    images_b64,
-                    mime_types,
-                    ocr_prompt,
-                    provider,
-                    input_language,
-                    debug,
-                    prompt_cache_key=session_prompt_cache_key,
-                )
+            extracted_texts = _run_ocr_step(
+                config,
+                images_b64,
+                mime_types,
+                bubble_metadata,
+                debug,
+                prompt_cache_key=session_prompt_cache_key,
+            )
 
             log_message("Starting translation step", verbose=debug)
 
-            formatted_texts = []
-            ocr_failed_indices = set()
-            for i, text in enumerate(extracted_texts):
-                if f"[{provider}-OCR:" in text or text == "[OCR FAILED]":
-                    formatted_texts.append("[OCR FAILED]")
-                    ocr_failed_indices.add(i)
-                else:
-                    formatted_texts.append(text)
+            formatted_texts, ocr_failed_indices = _mark_ocr_failures(
+                extracted_texts, provider
+            )
 
             ocr_input_section = """
 ## INPUT DATA
@@ -1729,20 +1901,9 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
                     {"text": _FULL_PAGE_LABEL},
                     _image_part(full_image_mime_type, full_image_b64, context_res),
                 ]
-
-            for pages_back, image in zip(
-                range(previous_context_image_count, 0, -1),
-                previous_context_images,
-                strict=False,
-            ):
-                translation_parts += [
-                    {"text": _PREVIOUS_PAGE_LABEL.format(pages_back)},
-                    _image_part(
-                        image.get("mime_type", "image/jpeg"),
-                        image.get("data", ""),
-                        context_res,
-                    ),
-                ]
+            translation_parts += _previous_page_parts(
+                previous_context_images, context_res
+            )
 
             use_rosetta = is_rosetta_model(model_name)
             use_hy_mt2 = is_hy_mt2_model(model_name)
@@ -1816,29 +1977,19 @@ Translate each item under `## INPUT DATA` into {output_language}.{special_instru
 
             if final_translations is None:
                 log_message("Translation API call failed", always_print=True)
-                combined_results = []
-                for i in range(total_elements):
-                    if i in ocr_failed_indices:
-                        combined_results.append(f"[{provider}: OCR Failed]")
-                    else:
-                        combined_results.append(f"[{provider}: Translation failed]")
+                combined_results = [
+                    f"[{provider}: OCR Failed]"
+                    if i in ocr_failed_indices
+                    else f"[{provider}: Translation failed]"
+                    for i in range(total_elements)
+                ]
                 if ocr_texts_output is not None:
                     ocr_texts_output.extend(extracted_texts)
                 return combined_results
 
-            combined_results = []
-            for i in range(total_elements):
-                if i in ocr_failed_indices:
-                    if final_translations[i] == "[OCR FAILED]":
-                        combined_results.append("[OCR FAILED]")
-                    else:
-                        log_message(
-                            f"Element {i + 1}: LLM ignored OCR failure instruction",
-                            verbose=debug,
-                        )
-                        combined_results.append("[OCR FAILED]")
-                else:
-                    combined_results.append(final_translations[i])
+            combined_results = _keep_ocr_failures(
+                final_translations, ocr_failed_indices, total_elements, debug
+            )
 
             if not _has_failed_items(combined_results, provider):
                 cache.set_translation(
@@ -1898,18 +2049,7 @@ Transcribe each crop, then translate that transcription into {output_language}.{
                 response_text, total_elements, provider, debug
             )
 
-            translations = []
-            ocr_texts = []
-            for line in raw_lines:
-                if "||" in line:
-                    parts = line.split("||", 1)
-                    ocr_texts.append(parts[0].strip())
-                    translations.append(parts[1].strip())
-                else:
-                    # Model violated the format — keep the line as the translation
-                    # and mark OCR as failed so it isn't reused as prior context.
-                    ocr_texts.append("[OCR FAILED]")
-                    translations.append(line)
+            ocr_texts, translations = _split_one_step_lines(raw_lines)
 
             if new_terms:
                 _record_glossary_terms(glossary_path, new_terms, ocr_texts, debug)
