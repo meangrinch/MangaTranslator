@@ -2149,7 +2149,7 @@ def prepare_bubble_images_for_translation(
                 original_cv_image[by1:by2, bx1:bx2].copy()
             )
 
-        x1, y1, x2, y2 = bubble["bbox"]
+        x1, y1, x2, y2 = (max(0, round(v)) for v in bubble["bbox"])
 
         # Use the tight bbox of the mask
         _mask = bubble.get("sam_mask")

@@ -1,5 +1,8 @@
+import base64
 from types import SimpleNamespace
 
+import cv2
+import numpy as np
 import pytest
 
 from core.services.translation import (
@@ -14,6 +17,7 @@ from core.services.translation import (
     _parse_llm_response_unified,
     _parse_rosetta_response,
     _uses_code_execution,
+    prepare_bubble_images_for_translation,
 )
 from utils.exceptions import TranslationError
 
@@ -240,3 +244,16 @@ def test_rosetta_instruction_merges_glossary_terms():
         "English", "王 -> King", glossary_terms={"猫猫": "Maomao"}
     )
     assert "Glossary:\n- 王 -> King\n- 猫猫 -> Maomao" in instruction
+
+
+def test_bubble_crop_is_clamped_when_bbox_starts_off_the_page():
+    page = np.full((100, 100, 3), 200, np.uint8)
+    bubbles = [{"bbox": (-2, -3, 40, 30)}]
+
+    prepared = prepare_bubble_images_for_translation(
+        bubbles, page, None, None, "image/png", 0, upscale_method="none"
+    )
+
+    png = base64.b64decode(prepared[0]["image_b64"])
+    crop = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_UNCHANGED)
+    assert crop.shape[:2] == (30, 40)

@@ -106,7 +106,11 @@ class RTDetrYOLOAdapter:
             conf_t = torch.empty((0,), dtype=torch.float32, device=run_device)
             cls_t = torch.empty((0,), dtype=torch.float32, device=run_device)
         else:
-            xyxy = boxes.to(device=run_device, dtype=torch.float32)
+            # Clone so the in-place clamp is allowed on an inference-mode tensor
+            xyxy = boxes.to(device=run_device, dtype=torch.float32).clone()
+            # HF post-processing doesn't clip to the image the way ultralytics does
+            xyxy[:, 0::2].clamp_(0, orig_w)
+            xyxy[:, 1::2].clamp_(0, orig_h)
             conf_t = scores.to(device=run_device, dtype=torch.float32)
             cls_t = labels.to(device=run_device, dtype=torch.float32)
 

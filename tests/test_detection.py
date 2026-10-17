@@ -1,4 +1,5 @@
 import os
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -9,6 +10,7 @@ from core.image.detection import (
     _remove_contained_boxes,
 )
 from core.ml.model_manager import ModelType, get_model_manager
+from core.ml.rtdetr_adapter import RTDetrYOLOAdapter
 
 
 def test_conjoined_child_box_is_padded_only_when_parent_mask_barely_covers_it():
@@ -45,3 +47,34 @@ def test_relative_bubble_model_path_resolves_to_its_own_model_type():
     for model_type in (ModelType.YOLO_SPEECH_BUBBLE, ModelType.YOLO_SPEECH_BUBBLE_2):
         relative = os.path.relpath(manager.model_paths[model_type])
         assert manager._resolve_speech_bubble_model_type(relative) is model_type
+
+
+def test_rtdetr_boxes_are_clipped_to_the_image_like_yolo():
+    class FakeProcessor:
+        def __call__(self, **_kwargs):
+            return {"pixel_values": torch.zeros(1)}
+
+        def post_process_object_detection(self, *_args, **_kwargs):
+            return [
+                {
+                    "boxes": torch.tensor([[-2.4, -1.0, 50.0, 130.0]]),
+                    "scores": torch.tensor([0.9]),
+                    "labels": torch.tensor([0]),
+                }
+            ]
+
+    class FakeModel:
+        training = False
+        config = SimpleNamespace(id2label={0: "bubble"})
+
+        def eval(self):
+            pass
+
+        def __call__(self, **_kwargs):
+            return None
+
+    adapter = RTDetrYOLOAdapter(FakeModel(), FakeProcessor(), torch.device("cpu"))
+
+    boxes = adapter(np.zeros((120, 80, 3), np.uint8))[0].boxes
+
+    assert boxes.xyxy.tolist() == [[0.0, 0.0, 50.0, 120.0]]
