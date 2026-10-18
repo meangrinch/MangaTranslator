@@ -44,6 +44,9 @@ OSB_COLOR_TOLERANCE = 15
 OSB_EXPANSION_PX = 2
 OSB_WHITE_SNAP_THRESH = 245
 OSB_BLACK_SNAP_THRESH = 10
+# Share of strongly colored pixels that marks a color page; B/W scans with stray tints
+# measured at most 1%, color pages 8% or more
+OSB_COLOR_PAGE_MIN_FRACTION = 0.05
 
 
 @dataclass
@@ -66,6 +69,7 @@ class OutsideTextWork:
     mime_type: str
     cv2_ext: str
     outside_text_data: list[dict[str, Any]] = field(default_factory=list)
+    is_color_page: bool = False
 
 
 def _build_outside_text_data(
@@ -296,13 +300,24 @@ def _border_color(pixels: np.ndarray) -> tuple[tuple[int, int, int], float]:
     return color, solid_ratio
 
 
+class _Glyph(NamedTuple):
+    """A solid component whose border mostly contrasts."""
+
+    area: int
+    ratio: float  # share of the border that contrasts
+    on_frame: bool  # touches the crop edge, so it may be background
+    x: int
+    y: int
+    mask: np.ndarray  # component pixels within its bounding box at (x, y)
+
+
 def _outlined_glyph_components(
     crop_gray: np.ndarray,
     glyph_mask: np.ndarray,
     is_contrasting,
     min_core_ratio: float = 0.0,
-) -> list[tuple[int, float]]:
-    """(area, contrasting-border ratio) of each solid glyph whose border mostly contrasts."""
+) -> list[_Glyph]:
+    """Each solid glyph in `glyph_mask` whose border mostly contrasts."""
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(glyph_mask)
     height, width = crop_gray.shape
     found = []
@@ -312,7 +327,7 @@ def _outlined_glyph_components(
             continue
         # Work inside the component's own box, padded for the 5x5 dilation; scanning
         # the whole region per component takes seconds on screentone
-        x, y, w, h = stats[label, :4]
+        x, y, w, h = (int(v) for v in stats[label, :4])
         y0, y1 = max(0, y - 3), min(height, y + h + 3)
         x0, x1 = max(0, x - 3), min(width, x + w + 3)
         comp = (labels[y0:y1, x0:x1] == label).astype(np.uint8) * 255
@@ -326,7 +341,9 @@ def _outlined_glyph_components(
             continue
         ratio = np.count_nonzero(is_contrasting(border)) / len(border)
         if ratio >= 0.40:
-            found.append((area, ratio))
+            on_frame = x == 0 or y == 0 or x + w >= width or y + h >= height
+            mask = labels[y : y + h, x : x + w] == label
+            found.append(_Glyph(area, ratio, on_frame, x, y, mask))
     return found
 
 
@@ -800,6 +817,7 @@ def prepare_outside_text_work(
             mime_type=mime_type,
             cv2_ext=cv2_ext,
             outside_text_data=outside_text_data,
+            is_color_page=_is_color_page(pil_image),
         )
 
     except Exception as e:
@@ -982,7 +1000,280 @@ def _border_pixels(
     return crop_np[ring]
 
 
+def _is_color_page(image: Image.Image) -> bool:
+    """Whether enough of the page is strongly colored to use the color-page text detector."""
+    hsv = cv2.cvtColor(np.array(image.convert("RGB")), cv2.COLOR_RGB2HSV)
+    colorful = (hsv[..., 1] > 60) & (hsv[..., 2] > 40)
+    return bool(colorful.mean() >= OSB_COLOR_PAGE_MIN_FRACTION)
+
+
+def _has_glyph_evidence(glyphs: list[_Glyph]) -> bool:
+    total = sum(g.area for g in glyphs)
+    return len(glyphs) >= 2 or (len(glyphs) == 1 and total >= 30) or total >= 50
+
+
+def _fill_holes(mask: np.ndarray) -> np.ndarray:
+    m8 = mask.astype(np.uint8)
+    contours, _ = cv2.findContours(m8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    filled = np.zeros_like(m8)
+    cv2.drawContours(filled, contours, -1, 1, cv2.FILLED)
+    return filled.astype(bool)
+
+
+def _overlap(a: np.ndarray, ax: int, ay: int, b: np.ndarray, bx: int, by: int) -> int:
+    """Pixels set in both masks, each placed with its top-left corner at (x, y)."""
+    x0, y0 = max(ax, bx), max(ay, by)
+    x1 = min(ax + a.shape[1], bx + b.shape[1])
+    y1 = min(ay + a.shape[0], by + b.shape[0])
+    if x1 <= x0 or y1 <= y0:
+        return 0
+    return int(
+        np.count_nonzero(
+            a[y0 - ay : y1 - ay, x0 - ax : x1 - ax]
+            & b[y0 - by : y1 - by, x0 - bx : x1 - bx]
+        )
+    )
+
+
+def _drop_containers(own: list[_Glyph], other: list[_Glyph]) -> list[_Glyph]:
+    """Drop glyphs whose interior holds several glyphs and most of the other polarity's area.
+
+    A caption frame or bubble interior is not a glyph. Glyphs that enclose the candidate
+    (the frame around an interior) are its border, not its content, so their area is left
+    out of the other polarity's total."""
+    if not own or not other:
+        return own
+    total = sum(o.area for o in other)
+    kept = []
+    for glyph in own:
+        h, w = glyph.mask.shape
+        nearby = [
+            o
+            for o in other
+            if o.x < glyph.x + w
+            and glyph.x < o.x + o.mask.shape[1]
+            and o.y < glyph.y + h
+            and glyph.y < o.y + o.mask.shape[0]
+        ]
+        if len(nearby) < 3:
+            kept.append(glyph)
+            continue
+        solid = _fill_holes(glyph.mask)
+        inside = enclosing = n_inside = 0
+        for o in nearby:
+            if _overlap(o.mask, o.x, o.y, solid, glyph.x, glyph.y) >= 0.5 * o.area:
+                inside += o.area
+                n_inside += 1
+            elif (
+                _overlap(glyph.mask, glyph.x, glyph.y, _fill_holes(o.mask), o.x, o.y)
+                >= 0.5 * glyph.area
+            ):
+                enclosing += o.area
+        if n_inside < 3 or inside < 0.5 * (total - enclosing):
+            kept.append(glyph)
+    return kept
+
+
+def _hollow_fill_area(gray: np.ndarray) -> int:
+    """Area of white regions shaped like the fills of hollow (outlined white) letters.
+
+    A fill is a solid, stroke-shaped white region ringed by clearly darker pixels. Compact
+    regions (counters), rings around dark letters (white outlines) and interiors holding most
+    of the ink (caption frames) are not fills. Unlike the glyph border test, the 1px ring
+    still catches outlines too thin or gray to pass it."""
+    height, width = gray.shape
+    ink = gray < 128
+    ink_labels = None
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(
+        (gray > 200).astype(np.uint8), connectivity=4
+    )
+    total = 0
+    for label in range(1, n):
+        x, y, w, h, area = (int(v) for v in stats[label])
+        if area < 20 or x == 0 or y == 0 or x + w >= width or y + h >= height:
+            continue
+        y0, y1 = max(0, y - 2), min(height, y + h + 2)
+        x0, x1 = max(0, x - 2), min(width, x + w + 2)
+        m = (labels[y0:y1, x0:x1] == label).astype(np.uint8)
+        sub = gray[y0:y1, x0:x1]
+        ring = cv2.dilate(m, np.ones((3, 3), np.uint8)) & (1 - m)
+        fill_median = float(np.median(sub[m == 1]))
+        if np.mean(sub[ring == 1] <= fill_median - 80) < 0.6:
+            continue
+        radius = float(cv2.distanceTransform(m, cv2.DIST_L2, 3).max())
+        if area / (4 * radius * radius) < 2.5:
+            continue
+        solid = _fill_holes(m)
+        if solid.sum() - area >= 0.5 * area:
+            continue
+        _, hierarchy = cv2.findContours(m, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+        holes = int((hierarchy[0][:, 3] >= 0).sum()) if hierarchy is not None else 0
+        if holes > 2:
+            if ink_labels is None:
+                _, ink_labels = cv2.connectedComponents(ink.astype(np.uint8))
+            sub_ink = ink[y0:y1, x0:x1]
+            enclosed = int((sub_ink & solid & (m == 0)).sum())
+            # Ink just outside the region (its frame, or its own outline) is not its content
+            outside = cv2.dilate(m, np.ones((3, 3), np.uint8)).astype(bool) & ~solid
+            border_ids = np.unique(ink_labels[y0:y1, x0:x1][outside & sub_ink])
+            border_ids = border_ids[border_ids > 0]
+            border = (
+                int(np.isin(ink_labels, border_ids).sum()) if border_ids.size else 0
+            )
+            if enclosed >= 0.5 * max(1, int(ink.sum()) - border):
+                continue
+        total += area
+    return total
+
+
+def _hole_test_text_color(rgb: np.ndarray) -> tuple[int, int, int]:
+    """Text color from an Otsu split: ink enclosing large holes is an outline around the text."""
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    _, light = cv2.threshold(gray, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    frame = np.concatenate([light[0], light[-1], light[:, 0], light[:, -1]])
+    bg_cls = int(frame.mean() >= 0.5)
+    min_area = max(8, gray.size // 2000)
+
+    # Background-class regions not connected to the frame: counters or outlined fills
+    _, labels, stats, _ = cv2.connectedComponentsWithStats(
+        (light == bg_cls).astype(np.uint8), connectivity=4
+    )
+    is_hole = stats[:, cv2.CC_STAT_AREA] >= min_area
+    is_hole[0] = False
+    is_hole[
+        np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+    ] = False
+    holes = is_hole[labels]
+    _, labels, stats, _ = cv2.connectedComponentsWithStats(
+        (light != bg_cls).astype(np.uint8), connectivity=8
+    )
+    is_ink = stats[:, cv2.CC_STAT_AREA] >= min_area
+    is_ink[0] = False
+    ink = is_ink[labels]
+
+    use_holes = holes.sum() / max(1, ink.sum()) >= 0.4
+    text_mask = holes if use_holes else ink
+    text_cls = bg_cls if use_holes else 1 - bg_cls
+    core = cv2.erode(text_mask.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+    pixels = rgb[core] if core.sum() >= 10 else rgb[text_mask]
+    if len(pixels):
+        median = np.median(pixels, axis=0).astype(int)
+        if cv2.cvtColor(np.uint8([[median]]), cv2.COLOR_RGB2HSV)[0][0][1] >= 25:
+            return tuple(int(c) for c in median)
+    # Snap by Otsu class, not luminance: small JPEG text is often mid-gray
+    return (255, 255, 255) if text_cls == 1 else (0, 0, 0)
+
+
+def _bw_page_text_color(
+    pil_image: Image.Image, text_bounds: tuple[int, int, int, int]
+) -> tuple[int, int, int]:
+    """Text color of an OSB region on a B/W page."""
+    x0, y0, x1, y1 = text_bounds
+    img_w, img_h = pil_image.size
+    pad = 4
+    rgb = np.array(
+        pil_image.crop(
+            (
+                max(0, x0 - pad),
+                max(0, y0 - pad),
+                min(img_w, x1 + pad),
+                min(img_h, y1 + pad),
+            )
+        ).convert("RGB")
+    )
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+
+    # Glyphs touching the padded crop edge are background, not text
+    dark = [
+        g
+        for g in _outlined_glyph_components(
+            gray, (gray < 50).astype(np.uint8) * 255, lambda border: border > 150
+        )
+        if not g.on_frame
+    ]
+    white = [
+        g
+        for g in _outlined_glyph_components(
+            gray,
+            (gray > 200).astype(np.uint8) * 255,
+            lambda border: border < 90,
+            min_core_ratio=0.05,
+        )
+        if not g.on_frame
+    ]
+    dark, white = _drop_containers(dark, white), _drop_containers(white, dark)
+    # Strict borders keep enclosed patches of art from passing as glyphs
+    dark = [g for g in dark if g.ratio >= 0.6]
+    white = [g for g in white if g.ratio >= 0.6]
+    dark_area = sum(g.area for g in dark)
+    white_area = sum(g.area for g in white)
+    min_area = 0.02 * gray.size
+    has_dark = len(dark) >= 2 or dark_area >= min_area
+    has_white = len(white) >= 2 or white_area >= min_area
+
+    if has_dark and not has_white:
+        return (0, 0, 0)
+    if has_white and not has_dark:
+        return (255, 255, 255)
+    fill_area = _hollow_fill_area(gray)
+    if has_dark and has_white:
+        return (0, 0, 0) if dark_area >= max(white_area, fill_area) else (255, 255, 255)
+    if fill_area >= 0.01 * gray.size:
+        return (255, 255, 255)
+    return _hole_test_text_color(rgb)
+
+
+def _color_page_text_color(
+    pil_image: Image.Image,
+    text_bounds: tuple[int, int, int, int],
+    ref_bg_rgb: np.ndarray,
+    fallback_fill_color: tuple[int, int, int] | None,
+) -> tuple[int, int, int]:
+    """Text color of an OSB region on a color page."""
+    rgb = np.array(pil_image.crop(text_bounds).convert("RGB"))
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    # Light saturated colors (a yellow banner) clear the gray cutoff but aren't white text
+    neutral = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)[..., 1] <= 40
+    dark = _outlined_glyph_components(
+        gray, (gray < 50).astype(np.uint8) * 255, lambda border: border > 150
+    )
+    white = _outlined_glyph_components(
+        gray,
+        ((gray > 200) & neutral).astype(np.uint8) * 255,
+        lambda border: border < 90,
+        min_core_ratio=0.05,
+    )
+    has_dark, has_white = _has_glyph_evidence(dark), _has_glyph_evidence(white)
+    if has_dark and not has_white:
+        return (0, 0, 0)
+    if has_white and not has_dark:
+        return (255, 255, 255)
+    if has_dark and has_white:
+        # By area, not count: dark specks of art outnumber letters; glyphs on the crop
+        # edge are mostly background
+        dark_area = sum(g.area for g in dark if not g.on_frame)
+        white_area = sum(g.area for g in white if not g.on_frame)
+        if dark_area != white_area:
+            return (0, 0, 0) if dark_area > white_area else (255, 255, 255)
+    return _general_text_color(pil_image, text_bounds, ref_bg_rgb, fallback_fill_color)
+
+
 def _detect_osb_text_color(
+    pil_image: Image.Image,
+    text_bounds: tuple[int, int, int, int],
+    ref_bg_rgb: np.ndarray,
+    fallback_fill_color: tuple[int, int, int] | None,
+    is_color_page: bool,
+) -> tuple[int, int, int]:
+    """Text color of an OSB region, using the detector suited to the page type."""
+    if is_color_page:
+        return _color_page_text_color(
+            pil_image, text_bounds, ref_bg_rgb, fallback_fill_color
+        )
+    return _bw_page_text_color(pil_image, text_bounds)
+
+
+def _general_text_color(
     pil_image: Image.Image,
     text_bounds: tuple[int, int, int, int],
     ref_bg_rgb: np.ndarray,
@@ -1008,27 +1299,16 @@ def _detect_osb_text_color(
         lambda border: border < 90,
         min_core_ratio=0.05,
     )
-    total_dark_glyph_area = sum(a for a, _ in dark_glyph_comps)
-    total_white_glyph_area = sum(a for a, _ in white_glyph_comps)
-
-    has_dark_outlines = (
-        len(dark_glyph_comps) >= 2
-        or (len(dark_glyph_comps) == 1 and total_dark_glyph_area >= 30)
-        or total_dark_glyph_area >= 50
-    )
-    has_white_outlines = (
-        len(white_glyph_comps) >= 2
-        or (len(white_glyph_comps) == 1 and total_white_glyph_area >= 30)
-        or total_white_glyph_area >= 50
-    )
+    has_dark_outlines = _has_glyph_evidence(dark_glyph_comps)
+    has_white_outlines = _has_glyph_evidence(white_glyph_comps)
 
     if has_dark_outlines and not has_white_outlines:
         detected_text_color = (0, 0, 0)
     elif has_white_outlines and not has_dark_outlines:
         detected_text_color = (255, 255, 255)
     elif has_dark_outlines and has_white_outlines:
-        avg_dark_ratio = float(np.mean([r for _, r in dark_glyph_comps]))
-        avg_white_ratio = float(np.mean([r for _, r in white_glyph_comps]))
+        avg_dark_ratio = float(np.mean([g.ratio for g in dark_glyph_comps]))
+        avg_white_ratio = float(np.mean([g.ratio for g in white_glyph_comps]))
         if (
             len(dark_glyph_comps) > len(white_glyph_comps)
             and avg_dark_ratio >= avg_white_ratio * 0.8
@@ -1199,7 +1479,11 @@ def _decide_osb_region_fill(
         dtype=np.uint8,
     )
     text_color = _detect_osb_text_color(
-        work.pil_image, text_bounds, ref_bg_rgb, fallback_fill_color
+        work.pil_image,
+        text_bounds,
+        ref_bg_rgb,
+        fallback_fill_color,
+        work.is_color_page,
     )
 
     force_fill = work.config.outside_text.inpainting_method == "opencv"
