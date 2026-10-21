@@ -14,7 +14,6 @@ __pycache__/
 # Tool caches
 /.pytest_cache/
 /.ruff_cache/
-/.mypy_cache/
 
 # Editors and OS
 /.vscode/
@@ -34,8 +33,6 @@ start-webui.sh
 # Models (downloaded at runtime)
 /models/*
 !/models/models_are_downloaded_here.txt
-*.pt
-*.onnx
 
 # Fonts (user-supplied packs)
 /fonts/*
