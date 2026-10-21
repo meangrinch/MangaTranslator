@@ -148,8 +148,8 @@ def get_max_tokens_cap(provider: str, model_name: str | None) -> int | None:
     Get the maximum allowed max_tokens value for a specific provider/model combination.
 
     Returns:
-        - 32768 for OpenAI GPT 4.1 models
-        - 16384 for OpenAI GPT 4o models and models with "chat" in the name
+        - 16384 for OpenAI models with "chat" in the name
+        - 32768 for Moonshot Kimi K2.x models
         - None for all other models (no cap, use existing 63488 max)
     """
     if not model_name:
@@ -157,32 +157,19 @@ def get_max_tokens_cap(provider: str, model_name: str | None) -> int | None:
 
     model_lower = model_name.lower()
 
-    if provider == "OpenAI":
-        if "gpt-4.1" in model_lower:
-            return 32768
-        if "gpt-4o" in model_lower:
-            return 16384
-        if "chat" in model_lower:
-            return 16384
-    elif provider == "OpenRouter":
-        is_openai_model = "openai/" in model_lower or model_lower.startswith("gpt-")
-
-        if is_openai_model:
-            if "gpt-4.1" in model_lower:
-                return 32768
-            if "gpt-4o" in model_lower:
-                return 16384
-            if "chat" in model_lower:
-                return 16384
-    elif provider == "Moonshot AI":
-        if "kimi-k2." in model_lower:
-            return 32768
-
+    is_openai_model = provider == "OpenAI" or (
+        provider == "OpenRouter"
+        and ("openai/" in model_lower or model_lower.startswith("gpt-"))
+    )
+    if is_openai_model and "chat" in model_lower:
+        return 16384
+    if provider == "Moonshot AI" and "kimi-k2." in model_lower:
+        return 32768
     return None
 
 
 def is_gpt5_series(model_name: str | None) -> bool:
-    """Check if a model is any GPT-5 variant (5, 5.1, 5.2, etc.)."""
+    """Check if a model is any GPT-5 variant (5, 5.2, 5.4, etc.)."""
     if not model_name:
         return False
     lm = model_name.lower()
@@ -229,7 +216,7 @@ _GPT5_GEN_RE = re.compile(r"gpt-(5(?:\.\d+)?)", re.IGNORECASE)
 def get_gpt5_generation(model_name: str | None) -> str | None:
     """Extract the GPT-5 generation string.
 
-    Returns '5.1', '5.2', '5.3', '5.4', '5.5', '5.6', etc. or None if not a GPT-5 model.
+    Returns '5.2', '5.3', '5.4', '5.5', '5.6', etc. or None if not a GPT-5 model.
     """
     if not model_name:
         return None
@@ -351,7 +338,7 @@ def supports_openai_original_image_detail(model_name: str | None) -> bool:
 
     if is_gpt5_series(model_name):
         lm = (model_name or "").lower()
-        if any(token in lm for token in ("mini", "nano", "chat")):
+        if any(token in lm for token in ("mini", "chat")):
             return False
 
         parts = _parse_gpt5_gen_parts(get_gpt5_generation(model_name))
@@ -540,16 +527,13 @@ def is_anthropic_reasoning_model(model_name: str | None) -> bool:
     """Check if an Anthropic model is reasoning-capable.
 
     Uses `in` (not `startswith`) so OpenRouter-prefixed names also match.
-    Checks both hyphen and dot variants for haiku (4-5 vs 4.5).
     """
     if not model_name:
         return False
     lm = model_name.lower()
     return (
         "claude-opus-4" in lm
-        or "claude-sonnet-4" in lm
-        or "claude-haiku-4-5" in lm
-        or "claude-haiku-4.5" in lm
+        or is_sonnet_46_model(model_name)
         or is_sonnet_5_model(model_name)
         or is_sonnet_55_model(model_name)
         or is_opus_5_model(model_name)

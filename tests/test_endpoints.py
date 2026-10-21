@@ -223,9 +223,7 @@ def test_anthropic_drops_sampling_params_while_thinking(post, thinking_type):
 def test_anthropic_skips_thinking_when_no_budget_fits_under_max_tokens(post):
     post.body = {"content": [{"type": "text", "text": "ok"}]}
     config = {"max_tokens": 1024, "thinking_type": "enabled", "reasoning_effort": "low"}
-    call_anthropic_endpoint(
-        "key", "claude-sonnet-4-5-20250929", [{"text": "go"}], config
-    )
+    call_anthropic_endpoint("key", "claude-opus-4-5-20251101", [{"text": "go"}], config)
     assert "thinking" not in post.sent
 
 
@@ -274,7 +272,6 @@ def test_anthropic_returns_partial_text_when_turn_keeps_pausing(post):
         ("claude-opus-5-5", "web_search_20260209"),
         ("claude-sonnet-4-6", "web_search_20260209"),
         ("claude-opus-4-5-20251101", "web_search_20250305"),
-        ("claude-haiku-4-5-20251001", "web_search_20250305"),
     ],
 )
 def test_anthropic_web_search_tool_version(post, model, tool_type):
@@ -339,8 +336,8 @@ def test_gemini_resumes_response_capped_per_request(post):
 @pytest.mark.parametrize(
     ("model", "effort", "sends_temperature"),
     [
-        ("anthropic/claude-sonnet-4.5", "low", False),
-        ("anthropic/claude-sonnet-4.5", "none", True),
+        ("anthropic/claude-opus-4.5", "low", False),
+        ("anthropic/claude-opus-4.5", "none", True),
         ("anthropic/claude-sonnet-4.6", "auto", False),
         ("anthropic/claude-sonnet-4.6", "high", False),
         ("anthropic/claude-sonnet-4.6", "none", True),

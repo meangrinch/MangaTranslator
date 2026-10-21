@@ -6,8 +6,8 @@ from ui import callbacks, utils
 @pytest.mark.parametrize(
     ("provider", "model"),
     [
-        ("Anthropic", "claude-sonnet-4-5-20250929"),
-        ("OpenRouter", "anthropic/claude-sonnet-4.5"),
+        ("Anthropic", "claude-opus-4-5-20251101"),
+        ("OpenRouter", "anthropic/claude-opus-4.5"),
     ],
 )
 @pytest.mark.parametrize(
@@ -29,7 +29,7 @@ def test_model_change_sliders_follow_the_effort_it_selects(monkeypatch):
         "get_reasoning_effort_config",
         lambda provider, model_name: (True, ["low", "none"], "none"),
     )
-    temp = callbacks.handle_model_change(
-        "Anthropic", "claude-sonnet-4-5-20250929", 0.1
-    )[0]
+    temp = callbacks.handle_model_change("Anthropic", "claude-opus-4-5-20251101", 0.1)[
+        0
+    ]
     assert temp["interactive"] is True

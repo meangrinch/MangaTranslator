@@ -103,7 +103,7 @@ def call_openrouter_endpoint(
 
     Args:
         api_key (str): OpenRouter API key.
-        model_name (str): OpenRouter model ID (e.g., "openai/gpt-4o", "anthropic/claude-3-haiku").
+        model_name (str): OpenRouter model ID (e.g., "openai/gpt-6.1-sol", "anthropic/claude-haiku-5.5").
         parts (List[Dict[str, Any]]): List of content parts (text, images).
                                       # Assumes the first part is the text prompt, subsequent are images.
         generation_config (Dict[str, Any]): Configuration for generation (temp, top_p, top_k, max_tokens).

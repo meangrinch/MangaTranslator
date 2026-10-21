@@ -32,11 +32,9 @@ from utils.model_metadata import (
 @pytest.mark.parametrize(
     ("provider", "model", "expected"),
     [
-        ("OpenAI", "gpt-4.1-mini", 32768),
-        ("OpenAI", "gpt-4o", 16384),
-        ("OpenAI", "gpt-5.1-chat-latest", 16384),
+        ("OpenAI", "gpt-5.2-chat-latest", 16384),
         ("OpenAI", "gpt-5.5", None),
-        ("OpenRouter", "openai/gpt-4o", 16384),
+        ("OpenRouter", "openai/gpt-5.2-chat", 16384),
         ("OpenRouter", "anthropic/claude-sonnet-4-6", None),
         ("Moonshot AI", "kimi-k2.5", 32768),
         ("Google", "gemini-4-argon", None),
@@ -53,13 +51,12 @@ def test_get_max_tokens_cap(provider, model, expected):
     ("model", "xhigh", "max_"),
     [
         ("gpt-5", False, False),
-        ("gpt-5.1", False, False),
         ("gpt-5.2", True, False),
         ("gpt-5.6-sol", True, True),
         # Minor versions must compare numerically, not lexically.
         ("gpt-5.10", True, True),
         ("openai/gpt-5.4", True, False),
-        ("gpt-4o", False, False),
+        ("claude-opus-5", False, False),
     ],
 )
 def test_gpt5_effort_support(model, xhigh, max_):
@@ -70,11 +67,11 @@ def test_gpt5_effort_support(model, xhigh, max_):
 @pytest.mark.parametrize(
     ("model", "effort", "expected"),
     [
-        ("gpt-5.1", "max", "high"),
+        ("gpt-5", "max", "high"),
         ("gpt-5.2", "max", "xhigh"),
-        ("gpt-5.1", "xhigh", "high"),
+        ("gpt-5", "xhigh", "high"),
         ("gpt-5.6-sol", "max", "max"),
-        ("gpt-5.1", "none", "none"),
+        ("gpt-5", "none", "none"),
         ("gpt-6-sol", "minimal", "low"),
         ("gpt-6-sol", "none", "none"),
         ("gpt-6-astra", "none", "low"),
@@ -92,7 +89,7 @@ def test_clamp_openai_reasoning_effort(model, effort, expected):
         ("gpt-5.6-sol-pro", "gpt-5.6-sol"),
         ("gpt-6-astra-pro", "gpt-6-astra"),
         ("gpt-5.5-pro", "gpt-5.5-pro"),
-        ("gpt-4o", "gpt-4o"),
+        ("gpt-5.4", "gpt-5.4"),
         (None, None),
     ],
 )
@@ -107,7 +104,6 @@ def test_resolve_openai_api_model_name(model, expected):
         ("gpt-5.4", True),
         ("gpt-5.3", False),
         ("gpt-5.5-mini", False),
-        ("gpt-4o", False),
     ],
 )
 def test_supports_openai_original_image_detail(model, expected):
@@ -139,7 +135,6 @@ def test_supports_openai_original_image_detail(model, expected):
                 "is_claude_adaptive_default": True,
             },
         ),
-        ("claude-sonnet-4-5", {}),
         (None, {}),
     ],
 )
@@ -159,7 +154,7 @@ def test_sonnet_5_and_55_are_distinct():
         ("claude-opus-4-7", True),
         ("claude-fable-5-1", True),
         ("claude-sonnet-4-6", False),
-        ("claude-sonnet-4-5", False),
+        ("claude-opus-4-5-20251101", False),
     ],
 )
 def test_is_anthropic_no_sampling_model(model, expected):
@@ -172,7 +167,10 @@ def test_is_anthropic_no_sampling_model(model, expected):
         ("claude-fable-5-1", (False, [], None)),
         ("claude-haiku-5-5", (True, ["auto", "none"], "auto")),
         ("claude-sonnet-4-6", (True, ["auto", "none"], "auto")),
-        ("claude-sonnet-4-5", (True, ["high", "medium", "low", "none"], "low")),
+        (
+            "claude-opus-4-5-20251101",
+            (True, ["high", "medium", "low", "none"], "low"),
+        ),
         ("gpt-5.5", (False, [], None)),
     ],
 )
@@ -189,7 +187,6 @@ def test_anthropic_reasoning_effort_config(model, expected):
             "claude-opus-4-7",
             (True, ["max", "xhigh", "high", "medium", "low"], "high"),
         ),
-        ("claude-sonnet-4-5", (False, [], None)),
     ],
 )
 def test_anthropic_effort_config(model, expected):
