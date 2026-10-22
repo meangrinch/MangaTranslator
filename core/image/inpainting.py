@@ -1141,10 +1141,8 @@ class FluxKleinInpainter:
     # Distilled models bake guidance into weights and require CFG 1.0
     KLEIN_GUIDANCE_SCALE = 1.0
     KLEIN_PROMPT = (
-        "Remove all text, including hand-drawn Japanese sound effects and onomatopoeia. "
-        "Preserve character line art, screentones, panel borders, and background details "
-        "exactly as they appear. Maintain the original contrast and shading, leaving every "
-        "area where text or a sound effect was completely blank."
+        "Erase only the Japanese lettering and sound effect characters. "
+        "Do not remove or alter any other lines or marks in the artwork."
     )
 
     # DiT patch requirements (multiples of 16) and VRAM cap (~4MP max inference)
