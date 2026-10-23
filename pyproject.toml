@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "manga-translator"
 description = "A tool for translating manga pages using AI"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "grinnch" }]
@@ -25,7 +25,7 @@ manga-translator-web = "app:main"
 dev = ["ruff", "pytest"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 extend-select = ["I"]

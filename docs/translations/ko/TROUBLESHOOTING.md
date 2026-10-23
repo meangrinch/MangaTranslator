@@ -12,7 +12,7 @@
   - GPU 감지에 실패하는 경우 언제든지 CPU 모드를 선택하여 실행할 수 있습니다.
 
 - **"Python not found" (Python을 찾을 수 없음) 오류 (Linux/macOS):**
-  - Python 3.10 이상 버전을 설치하세요:
+  - Python 3.11 이상 버전을 설치하세요:
     - Ubuntu/Debian: `sudo apt install python3 python3-pip python3-venv`
     - Fedora: `sudo dnf install python3 python3-pip`
     - Arch: `sudo pacman -S python python-pip`
@@ -26,20 +26,8 @@
     - macOS: `xcode-select --install` 또는 `brew install git`
 
 - **Nunchaku 설치 실패:**
-  - Nunchaku는 NVIDIA CUDA 및 Python 3.10+ 환경이 필요합니다.
+  - Nunchaku는 NVIDIA CUDA, Python 3.11+ 및 PyTorch 2.12 이하 환경이 필요합니다.
   - 설치에 실패하더라도 다른 인페인팅 방식을 사용할 수 있습니다.
-
-- **NVIDIA GTX 10 시리즈 GPU:**
-  - 포터블 빌드 설정 스크립트는 NVIDIA GPU용으로 CUDA 12.8/13.0 버전의 PyTorch 2.11.0을 설치하지만, 10 시리즈 그래픽 카드와는 호환되지 않습니다.
-  - 정상 작동을 위해 포터블 환경에서 CUDA 12.4 버전의 PyTorch 2.6.0을 수동으로 설치해야 합니다:
-    - **Windows** (`MangaTranslator` 디렉터리에서 실행):
-      ```cmd
-      runtime\python.exe -m pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
-      ```
-    - **Linux** (`MangaTranslator` 디렉터리에서 실행):
-      ```bash
-      ./runtime/bin/python3 -m pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
-      ```
 
 ### 렌더링 (Rendering)
 

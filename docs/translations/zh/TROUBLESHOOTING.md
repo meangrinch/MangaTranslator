@@ -12,7 +12,7 @@
   - 如果 GPU 检测失败，您随时可以选择 CPU 模式
 
 - **“Python not found”（未找到 Python）错误 (Linux/macOS)：**
-  - 安装 Python 3.10 或更高版本：
+  - 安装 Python 3.11 或更高版本：
     - Ubuntu/Debian: `sudo apt install python3 python3-pip python3-venv`
     - Fedora: `sudo dnf install python3 python3-pip`
     - Arch: `sudo pacman -S python python-pip`
@@ -26,20 +26,8 @@
     - macOS: `xcode-select --install` 或 `brew install git`
 
 - **Nunchaku 安装失败：**
-  - Nunchaku 需要 NVIDIA CUDA 和 Python 3.10+
+  - Nunchaku 需要 NVIDIA CUDA、Python 3.11+ 和 PyTorch ≤2.12
   - 如果安装失败，其他重绘方法仍然可用
-
-- **NVIDIA GTX 10 系列 GPU：**
-  - 便携版设置脚本会为 NVIDIA GPU 安装支持 CUDA 12.8/13.0 的 PyTorch 2.11.0，但这与 10 系列显卡不兼容。
-  - 要使其正常运行，需要在便携版环境中手动安装支持 CUDA 12.4 的 PyTorch 2.6.0：
-    - **Windows**（在 `MangaTranslator` 目录下运行）：
-      ```cmd
-      runtime\python.exe -m pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
-      ```
-    - **Linux**（在 `MangaTranslator` 目录下运行）：
-      ```bash
-      ./runtime/bin/python3 -m pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
-      ```
 
 ### 渲染 (Rendering)
 

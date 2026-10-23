@@ -12,7 +12,7 @@
   - You can always choose CPU mode if GPU detection fails
 
 - **"Python not found" error (Linux/macOS):**
-  - Install Python 3.10 or higher:
+  - Install Python 3.11 or higher:
     - Ubuntu/Debian: `sudo apt install python3 python3-pip python3-venv`
     - Fedora: `sudo dnf install python3 python3-pip`
     - Arch: `sudo pacman -S python python-pip`
@@ -26,20 +26,8 @@
     - macOS: `xcode-select --install` or `brew install git`
 
 - **Nunchaku installation fails:**
-  - Nunchaku requires NVIDIA CUDA and Python 3.10+
+  - Nunchaku requires NVIDIA CUDA, Python 3.11+, and PyTorch ≤2.12
   - If installation fails, other inpainting methods will still be available
-
-- **NVIDIA GTX 10 series GPUs:**
-  - The portable build setup script installs PyTorch 2.11.0 with CUDA 12.8/13.0 for NVIDIA GPUs, which is incompatible with 10 series cards.
-  - Manually install PyTorch 2.6.0 with CUDA 12.4 into the portable environment for it to work:
-    - **Windows** (from the `MangaTranslator` directory):
-      ```cmd
-      runtime\python.exe -m pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
-      ```
-    - **Linux** (from the `MangaTranslator` directory):
-      ```bash
-      ./runtime/bin/python3 -m pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
-      ```
 
 ### Rendering
 

@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/github/v/release/meangrinch/MangaTranslator?label=Release&labelColor=181717&color=0877d2" />
   <img src="https://img.shields.io/github/downloads/meangrinch/MangaTranslator/total?label=Downloads&labelColor=181717&color=0877d2" />
   <img src="https://img.shields.io/github/license/meangrinch/MangaTranslator?labelColor=181717&color=2ea44f" />
-  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&labelColor=181717" />
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white&labelColor=181717" />
 </p>
 
 <div align="center">
@@ -38,14 +38,14 @@ ML 모델을 활용하여 일본 만화, 웹툰(Manhwa), 중국 만화(Manhua), 
 
 - **포터블 패키지 (권장):** [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable)에서 포터블 빌드를 다운로드합니다.
   - Windows: 추가 요구 사항 없음.
-  - Linux / macOS: Python 3.10+ 및 Git 설치 필요.
+  - Linux / macOS: Python 3.11+ 및 Git 설치 필요.
 - **소스 코드 설치:**
   ```bash
   git clone https://github.com/meangrinch/MangaTranslator.git
   cd MangaTranslator
   python -m venv venv
   .\venv\Scripts\activate # 또는 source venv/bin/activate (Linux/macOS)
-  pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130 # 또는 pip install torch==2.11.0 torchvision==0.26.0 (macOS)
+  pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --extra-index-url https://download.pytorch.org/whl/cu130 # 또는 pip install torch==2.14.1 torchvision==0.29.1 (macOS)
   pip install -r requirements.txt
   ```
 

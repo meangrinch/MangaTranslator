@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/github/v/release/meangrinch/MangaTranslator?label=Release&labelColor=181717&color=0877d2" />
   <img src="https://img.shields.io/github/downloads/meangrinch/MangaTranslator/total?label=Downloads&labelColor=181717&color=0877d2" />
   <img src="https://img.shields.io/github/license/meangrinch/MangaTranslator?labelColor=181717&color=2ea44f" />
-  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&labelColor=181717" />
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white&labelColor=181717" />
 </p>
 
 <div align="center">
@@ -38,14 +38,14 @@ One-click app that translates manga, manhwa, manhua, and comics using ML models.
 
 - **Portable Package (Recommended):** Download the portable build from [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable).
   - Windows: No requirements.
-  - Linux / macOS: Requires Python 3.10+ and Git.
+  - Linux / macOS: Requires Python 3.11+ and Git.
 - **From Source:**
   ```bash
   git clone https://github.com/meangrinch/MangaTranslator.git
   cd MangaTranslator
   python -m venv venv
   .\venv\Scripts\activate # or source venv/bin/activate (Linux/macOS)
-  pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130 # or pip install torch==2.11.0 torchvision==0.26.0 (macOS)
+  pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --extra-index-url https://download.pytorch.org/whl/cu130 # or pip install torch==2.14.1 torchvision==0.29.1 (macOS)
   pip install -r requirements.txt
   ```
 

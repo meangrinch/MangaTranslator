@@ -7,7 +7,7 @@
 ### 系统要求
 
 - **Windows：** 内置 Python 和 Git，无需额外依赖。
-- **Linux/macOS：** 系统必须安装 Python 3.10+ 和 Git。
+- **Linux/macOS：** 系统必须安装 Python 3.11+ 和 Git。
 
 ### 更新
 
@@ -47,21 +47,24 @@ source venv/bin/activate
 
 ```bash
 # NVIDIA CUDA 13.0
-pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
+pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --extra-index-url https://download.pytorch.org/whl/cu130
 
-# AMD ROCm 7.1
-pip install torch==2.11.0+rocm7.1 torchvision==0.26.0+rocm7.1 --extra-index-url https://download.pytorch.org/whl/rocm7.1
+# AMD ROCm 7.2 (Linux)
+pip install torch==2.14.1+rocm7.2 torchvision==0.29.1+rocm7.2 --extra-index-url https://download.pytorch.org/whl/rocm7.2
+
+# AMD ROCm 10.1 (Windows)
+pip install --index-url https://stable.repo.amd.com/rocm/whl-next/ "torch[device-all]==2.14.0+rocm10.1.0" "torchvision[device-all]==0.29.0a0+rocm10.1.0"
 
 # Intel XPU
-pip install torch==2.11.0+xpu torchvision==0.26.0+xpu --extra-index-url https://download.pytorch.org/whl/xpu
+pip install torch==2.14.1+xpu torchvision==0.29.1+xpu --extra-index-url https://download.pytorch.org/whl/xpu
 
 # Apple Silicon (MPS) / CPU
-pip install torch==2.11.0 torchvision==0.26.0
+pip install torch==2.14.1 torchvision==0.29.1
 ```
 
 ### 4. 安装 Nunchaku（可选）
 
-通过 Nunchaku 后端使用 FLUX.1 Kontext 时需要。仅支持 CUDA，需要 RTX 2000 系列或更高版本的显卡。Nunchaku wheel 包直接从 GitHub releases 安装：
+通过 Nunchaku 后端使用 FLUX.1 Kontext 时需要。仅支持 CUDA，需要 RTX 2000 系列或更高版本的显卡。Nunchaku 需要 PyTorch ≤2.12，因此请在第 3 步改为安装 2.11.0（`torch==2.11.0+cu130 torchvision==0.26.0+cu130`）。Nunchaku wheel 包直接从 GitHub releases 安装：
 
 ```bash
 # Windows (Python 3.13, PyTorch 2.11.0, CUDA 13.0)

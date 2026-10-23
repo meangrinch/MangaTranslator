@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/github/v/release/meangrinch/MangaTranslator?label=Release&labelColor=181717&color=0877d2" />
   <img src="https://img.shields.io/github/downloads/meangrinch/MangaTranslator/total?label=Downloads&labelColor=181717&color=0877d2" />
   <img src="https://img.shields.io/github/license/meangrinch/MangaTranslator?labelColor=181717&color=2ea44f" />
-  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white&labelColor=181717" />
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white&labelColor=181717" />
 </p>
 
 <div align="center">
@@ -38,14 +38,14 @@
 
 - **便携版（推荐）：** 从 [Releases](https://github.com/meangrinch/MangaTranslator/releases/tag/portable) 下载便携版构建。
   - Windows：无需额外系统要求。
-  - Linux / macOS：需要系统安装 Python 3.10+ 和 Git。
+  - Linux / macOS：需要系统安装 Python 3.11+ 和 Git。
 - **源码安装：**
   ```bash
   git clone https://github.com/meangrinch/MangaTranslator.git
   cd MangaTranslator
   python -m venv venv
   .\venv\Scripts\activate # 或 source venv/bin/activate (Linux/macOS)
-  pip install torch==2.11.0+cu130 torchvision==0.26.0+cu130 --extra-index-url https://download.pytorch.org/whl/cu130 # 或 pip install torch==2.11.0 torchvision==0.26.0 (macOS)
+  pip install torch==2.14.1+cu130 torchvision==0.29.1+cu130 --extra-index-url https://download.pytorch.org/whl/cu130 # 或 pip install torch==2.14.1 torchvision==0.29.1 (macOS)
   pip install -r requirements.txt
   ```
 
