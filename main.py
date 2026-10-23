@@ -424,10 +424,11 @@ def main():
     parser.add_argument(
         "--reasoning-effort",
         type=str,
-        default="high",
+        default=None,
         choices=["max", "xhigh", "high", "medium", "low", "minimal", "none"],
         help=(
             "Controls reasoning effort level or thinking token budget. "
+            "Defaults to the model's own default when omitted. "
             "For models supporting native reasoning effort: "
             "controls the internal reasoning effort level. "
             "For budget-based models: allocates reasoning tokens relative to "
