@@ -753,6 +753,15 @@ def create_layout(
                                 info="Order for sorting bubbles (rtl=Manga, ltr=Comic/Manhwa/Manhua).",
                                 elem_id="config_reading_direction",
                             )
+                            split_long_strips = gr.Checkbox(
+                                value=saved_settings.get("split_long_strips", True),
+                                label="Split Long Strips",
+                                info=(
+                                    "Translate manhwa/manhua strips taller than 8x their width "
+                                    "in sections and stitch them back together. Improves bubble "
+                                    "detection on very long images."
+                                ),
+                            )
                         setting_groups.append(group_detection)
 
                         # --- Cleaning Settings ---
@@ -2381,15 +2390,6 @@ def create_layout(
                                     "Automatically scale pipeline parameters (fonts, kernels, etc.) "
                                     "to input image size, treating it as 1MP. Ensures consistent behavior "
                                     "across different image resolutions."
-                                ),
-                            )
-                            split_long_strips = gr.Checkbox(
-                                value=saved_settings.get("split_long_strips", True),
-                                label="Split Long Strips",
-                                info=(
-                                    "Translate manhwa/manhua strips taller than 8x their width "
-                                    "in sections and stitch them back together. Improves bubble "
-                                    "detection on very long images."
                                 ),
                             )
                         setting_groups.append(group_output)

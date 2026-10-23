@@ -334,6 +334,15 @@ def main():
         choices=["rtl", "ltr"],
         help="Reading direction for sorting bubbles (rtl or ltr)",
     )
+    parser.add_argument(
+        "--no-split-long-strips",
+        action="store_false",
+        dest="split_long_strips",
+        help=(
+            "Disable splitting of long manhwa/manhua strips (taller than 8x their width) "
+            "into sections that are translated separately and stitched back together."
+        ),
+    )
     # Cleaning args
     parser.add_argument(
         "--use-otsu-threshold",
@@ -607,15 +616,6 @@ def main():
         help=(
             "Disable automatic scaling of pipeline parameters (fonts, kernels, etc.) "
             "based on image size relative to 1MP. Prevents consistent behavior across different image resolutions."
-        ),
-    )
-    parser.add_argument(
-        "--no-split-long-strips",
-        action="store_false",
-        dest="split_long_strips",
-        help=(
-            "Disable splitting of long manhwa/manhua strips (taller than 8x their width) "
-            "into sections that are translated separately and stitched back together."
         ),
     )
     # General args
