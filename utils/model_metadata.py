@@ -544,7 +544,7 @@ def is_anthropic_reasoning_model(model_name: str | None) -> bool:
 
 
 def is_moonshot_k3_model(model_name: str | None) -> bool:
-    """Check if a model is Kimi K3 (kimi-k3 or future kimi-k3-* variants)."""
+    """Check if a model is in the Kimi K3 family (kimi-k3, kimi-k3.1-pro, and other variants)."""
     if not model_name:
         return False
     lm = model_name.lower()

@@ -23,6 +23,8 @@ from core.services.translation import _build_generation_config
         ("Moonshot AI", "kimi-k3", "none", "reasoning_effort", "low"),
         ("Moonshot AI", "kimi-k3", "xhigh", "reasoning_effort", "max"),
         ("Moonshot AI", "kimi-k3", "medium", "reasoning_effort", "high"),
+        ("Moonshot AI", "kimi-k3.1-pro", "none", "reasoning_effort", "low"),
+        ("Moonshot AI", "kimi-k3.1-pro", "xhigh", "reasoning_effort", "max"),
         ("Z.ai", "glm-5.3", "auto", "reasoning_effort", "high"),
         ("Google", "gemini-4-argon", "minimal", "thinkingLevel", "low"),
         ("Google", "gemini-4-argon", "none", "thinkingLevel", "low"),

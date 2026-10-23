@@ -360,7 +360,7 @@ def test_openrouter_drops_claude_temperature_while_thinking(
     assert ("temperature" in post.sent) is sends_temperature
 
 
-@pytest.mark.parametrize("model", ["kimi-k2.6", "kimi-k3"])
+@pytest.mark.parametrize("model", ["kimi-k2.6", "kimi-k3", "kimi-k3.1-pro"])
 def test_moonshot_leaves_fixed_sampling_params_unset(post, model):
     post.body = {"choices": [{"message": {"content": "ok"}}]}
     call_moonshot_endpoint(

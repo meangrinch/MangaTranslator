@@ -97,6 +97,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "glm-4.7",
     ],
     "Moonshot AI": [
+        "kimi-k3.1-pro",
         "kimi-k3",
         "kimi-k2.6",
     ],

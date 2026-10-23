@@ -27,7 +27,7 @@ CLI_DEFAULT_MODELS = {
     "Meta Model": "muse-spark-1.3-contributor",
     "DeepSeek": "deepseek-flash",
     "Z.ai": "glm-5.3-flash",
-    "Moonshot AI": "kimi-k3",
+    "Moonshot AI": "kimi-k3.1-pro",
     "Xiaomi MiMo": "mimo-v2.6-flash",
     "QwenCloud": "qwen3.8-flash",
     "OpenCode": "deepseek-v4.1-flash",
