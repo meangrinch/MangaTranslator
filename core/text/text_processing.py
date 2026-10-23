@@ -65,12 +65,18 @@ def is_rtl_script(text: str) -> bool:
         # Arabic (0600–06FF), Arabic Supplement (0750–077F), Arabic Extended-A (08A0–08FF),
         # Arabic Presentation Forms A/B (FB50–FDFF, FE70–FEFF)
         if (
-            0x0600 <= cp <= 0x06FF
-            or 0x0750 <= cp <= 0x077F
-            or 0x08A0 <= cp <= 0x08FF
-            or 0xFB50 <= cp <= 0xFDFF
-            or 0xFE70 <= cp <= 0xFEFF
-        ) or 0x0590 <= cp <= 0x05FF or 0xFB1D <= cp <= 0xFB4F or 0x0780 <= cp <= 0x07BF or 0x07C0 <= cp <= 0x07FA:
+            (
+                0x0600 <= cp <= 0x06FF
+                or 0x0750 <= cp <= 0x077F
+                or 0x08A0 <= cp <= 0x08FF
+                or 0xFB50 <= cp <= 0xFDFF
+                or 0xFE70 <= cp <= 0xFEFF
+            )
+            or 0x0590 <= cp <= 0x05FF
+            or 0xFB1D <= cp <= 0xFB4F
+            or 0x0780 <= cp <= 0x07BF
+            or 0x07C0 <= cp <= 0x07FA
+        ):
             rtl_count += 1
         else:
             ltr_count += 1
