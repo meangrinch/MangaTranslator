@@ -380,7 +380,7 @@ def get_enable_web_search_label_and_info(provider: str) -> tuple[str, str]:
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
         "OpenRouter": (
-            "Use OpenRouter's web search (Exa) for up-to-date information. "
+            "Use the model's built-in web search through OpenRouter for up-to-date information. "
             "Might improve translation quality. Can be used with 'special instructions' to discover more information."
         ),
     }
