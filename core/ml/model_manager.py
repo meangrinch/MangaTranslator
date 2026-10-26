@@ -1541,6 +1541,10 @@ class ModelManager:
                     repo_id, components_manager=components_manager
                 )
                 pipeline.load_components(dtype=self.dtype, cache_dir=cache_dir)
+                # Flux.3 encodes text only (the reference goes through the VAE), so
+                # Qwen3-VL's vision tower would just hold memory and, under group
+                # offload, trigger diffusers' "layers were not executed" warning
+                del pipeline.text_encoder.model.visual
                 self._apply_sdnq_options(
                     (pipeline.transformer, pipeline.text_encoder), verbose=verbose
                 )
