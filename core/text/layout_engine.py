@@ -1,3 +1,4 @@
+import math
 import re
 import unicodedata
 
@@ -11,6 +12,7 @@ from core.text.text_processing import (
     WORD_CORE_PATTERN,
     find_optimal_breaks_dp,
     is_detached_trailing_punctuation,
+    is_rtl_script,
     parse_styled_segments,
     split_hangul_word_for_wrapping,
     split_thai_word_for_wrapping,
@@ -126,6 +128,117 @@ def calculate_styled_line_width(
     visual_width_fixed_all = total_advance_fixed_all + offset_delta_fixed
     visual_width_all = float(visual_width_fixed_all / HB_26_6_SCALE_FACTOR)
     return visual_width_all + VISUAL_WIDTH_EPSILON
+
+
+class _SkiaPathPen:
+    """Pen for HarfBuzz glyph outlines that appends them to a skia.Path in pixels (y down)."""
+
+    def __init__(self, path: skia.Path, origin_x: float, origin_y: float):
+        self.path = path
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+
+    def _point(self, point: tuple[float, float]) -> tuple[float, float]:
+        return (
+            self.origin_x + point[0] / HB_26_6_SCALE_FACTOR,
+            self.origin_y - point[1] / HB_26_6_SCALE_FACTOR,
+        )
+
+    def moveTo(self, point):
+        self.path.moveTo(*self._point(point))
+
+    def lineTo(self, point):
+        self.path.lineTo(*self._point(point))
+
+    def qCurveTo(self, control, point):
+        self.path.quadTo(*self._point(control), *self._point(point))
+
+    def curveTo(self, control_1, control_2, point):
+        self.path.cubicTo(
+            *self._point(control_1), *self._point(control_2), *self._point(point)
+        )
+
+    def closePath(self):
+        self.path.close()
+
+
+def _styled_line_ink_path(
+    line_with_markers: str,
+    line_width: float,
+    font_size: int,
+    loaded_hb_faces: dict[str, hb.Face | None],
+    features: dict[str, bool],
+) -> skia.Path | None:
+    """Glyph outlines of a styled line, positioned as draw_layout positions its glyphs.
+
+    The path is in pixels relative to the line's start x and baseline (y down). Returns
+    None when no regular face is loaded, so the caller can fall back to the layout box.
+    """
+    regular_face = loaded_hb_faces.get("regular")
+    if regular_face is None:
+        return None
+
+    path = skia.Path()
+    is_rtl = is_rtl_script(line_with_markers)
+    cursor_x = line_width if is_rtl else 0.0
+
+    for segment_text, style_name in parse_styled_segments(line_with_markers):
+        hb_face_to_use = (
+            loaded_hb_faces.get(style_name)
+            if style_name in ("regular", "italic", "bold", "bold_italic")
+            else None
+        ) or regular_face
+        hb_font = hb.Font(hb_face_to_use)
+        hb_font.ptem = float(font_size)
+        hb_scale = int(font_size * 64)
+        hb_font.scale = (hb_scale, hb_scale)
+
+        infos, positions, _ = shape_line(segment_text, hb_font, features)
+        if not infos:
+            continue
+        segment_width = sum(pos.x_advance for pos in positions) / HB_26_6_SCALE_FACTOR
+        if is_rtl:
+            cursor_x -= segment_width
+        glyph_cursor_x = cursor_x
+
+        for info, pos in zip(infos, positions, strict=False):
+            pen = _SkiaPathPen(
+                path,
+                glyph_cursor_x + pos.x_offset / HB_26_6_SCALE_FACTOR,
+                -pos.y_offset / HB_26_6_SCALE_FACTOR,
+            )
+            hb_font.draw_glyph_with_pen(info.codepoint, pen)
+            glyph_cursor_x += pos.x_advance / HB_26_6_SCALE_FACTOR
+
+        if not is_rtl:
+            cursor_x += segment_width
+
+    return path
+
+
+def _ink_leaves_safe_area(
+    ink_path: skia.Path,
+    origin_x: float,
+    origin_y: float,
+    safe_area_mask: np.ndarray,
+) -> bool:
+    """Rasterize a line's glyphs at (origin_x, origin_y) and test them against the mask."""
+    bounds = ink_path.computeTightBounds()
+    x1 = math.floor(origin_x + bounds.left())
+    y1 = math.floor(origin_y + bounds.top())
+    x2 = math.ceil(origin_x + bounds.right())
+    y2 = math.ceil(origin_y + bounds.bottom())
+    mask_h, mask_w = safe_area_mask.shape
+    if x1 < 0 or y1 < 0 or x2 > mask_w or y2 > mask_h:
+        return True
+
+    surface = skia.Surface(max(1, x2 - x1), max(1, y2 - y1))
+    with surface as canvas:
+        canvas.translate(origin_x - x1, origin_y - y1)
+        canvas.drawPath(ink_path, skia.Paint(AntiAlias=True))
+    # Pixels the ink covers by less than half are antialiasing fringe, not text
+    ink = surface.toarray()[: y2 - y1, : x2 - x1, 3] >= 128
+    return bool(np.any(ink & (safe_area_mask[y1:y2, x1:x2] == 0)))
 
 
 def _is_separator_or_space(ch: str) -> bool:
@@ -598,49 +711,57 @@ def check_fit(
 
 def _check_collision(
     lines_data: list[dict],
+    line_ink_paths: list[skia.Path | None],
     box_top_left: tuple[int, int],
-    cleaned_mask: np.ndarray,
+    safe_area_mask: np.ndarray,
     line_height: float,
-    render_size: tuple[float, float],
+    metrics: skia.FontMetrics,
+    box_size: tuple[float, float],
 ) -> bool:
     """
-    Check if any text pixel overlaps with background (0) in mask.
+    Check whether any line's glyph ink leaves the padded safe area.
+
+    Lines are placed as draw_layout places them: each centered on the box's
+    center, with the block centered vertically on its visual height.
 
     Args:
         lines_data: List of dictionaries containing line width and text.
-        box_top_left: (x, y) coordinates of the bounding box top-left corner.
-        cleaned_mask: Binary mask of the bubble (0=background, 255=bubble).
-        line_height: Height of a single line of text.
-        render_size: (width, height) of the render box.
+        line_ink_paths: Per line glyph outlines relative to the line's start x and
+            baseline; None tests the line's full layout box instead.
+        box_top_left: (x, y) coordinates of the layout box top-left corner.
+        safe_area_mask: Bubble pixels far enough from the outline (255), else 0.
+        line_height: Distance between consecutive baselines.
+        metrics: Font metrics providing fAscent (negative) and fDescent.
+        box_size: (width, height) of the full layout box, not a squeezed width.
 
     Returns:
         True if collision detected, False otherwise.
     """
     box_x, box_y = box_top_left
-    mask_h, mask_w = cleaned_mask.shape
-    max_w, max_h = render_size
+    mask_h, mask_w = safe_area_mask.shape
+    box_w, box_h = box_size
+    center_x = box_x + box_w / 2.0
+    center_y = box_y + box_h / 2.0
 
-    total_text_height = len(lines_data) * line_height
-    start_y = box_y + (max_h - total_text_height) / 2
+    glyph_height = metrics.fDescent - metrics.fAscent
+    total_visual_height = (len(lines_data) - 1) * line_height + glyph_height
+    baseline_y = center_y - total_visual_height / 2.0 - metrics.fAscent
 
-    current_y = start_y
-    for line in lines_data:
-        line_w = line["width"]
-        line_x = box_x + (max_w - line_w) / 2
-
-        y1, y2 = int(current_y), int(current_y + line_height)
-        x1, x2 = int(line_x), int(line_x + line_w)
-
-        points_to_check = [(x1, y1), (x2, y1), (x1, y2), (x2, y2)]
-
-        for px, py in points_to_check:
-            px = max(0, min(px, mask_w - 1))
-            py = max(0, min(py, mask_h - 1))
-
-            if cleaned_mask[py, px] == 0:
+    for line, ink_path in zip(lines_data, line_ink_paths, strict=True):
+        line_left = center_x - line["width"] / 2.0
+        if ink_path is None:
+            x1, x2 = round(line_left), round(line_left + line["width"])
+            y1 = round(baseline_y + metrics.fAscent)
+            y2 = round(baseline_y + metrics.fDescent)
+            if x1 < 0 or y1 < 0 or x2 > mask_w or y2 > mask_h:
                 return True
-
-        current_y += line_height
+            if not np.all(safe_area_mask[y1:y2, x1:x2]):
+                return True
+        elif not ink_path.isEmpty() and _ink_leaves_safe_area(
+            ink_path, line_left, baseline_y, safe_area_mask
+        ):
+            return True
+        baseline_y += line_height
 
     return False
 
@@ -661,7 +782,7 @@ def find_optimal_layout(
     badness_exponent: float = 3.0,
     verbose: bool = False,
     bubble_id: str | None = None,
-    cleaned_mask: np.ndarray | None = None,
+    safe_area_mask: np.ndarray | None = None,
     box_top_left: tuple[int, int] | None = None,
     detach_trailing_punctuation: bool = True,
     vertical_stack: bool = False,
@@ -687,7 +808,7 @@ def find_optimal_layout(
         badness_exponent: Exponent for line breaking badness calculation
         verbose: Whether to print detailed logs
         bubble_id: Optional identifier for the bubble (for logging purposes)
-        cleaned_mask: Optional binary mask of the bubble for collision detection
+        safe_area_mask: Optional padded safe-area mask of the bubble for collision detection
         box_top_left: Optional (x, y) coordinates of the bounding box top-left corner
         hyphenation_language: Target language name for syllable-aware hyphenation
 
@@ -727,7 +848,7 @@ def find_optimal_layout(
 
         succeeded_at_current_size = False
         current_width_attempt = max_render_width
-        max_squeezes = 3 if cleaned_mask is not None else 1
+        max_squeezes = 3 if safe_area_mask is not None else 1
 
         for _ in range(max_squeezes):
             fit_data = check_fit(
@@ -755,16 +876,28 @@ def find_optimal_layout(
                 break
 
             if (
-                cleaned_mask is not None
+                safe_area_mask is not None
                 and box_top_left is not None
                 and not vertical_stack
             ):
+                line_ink_paths = [
+                    _styled_line_ink_path(
+                        line.get("text_with_markers", ""),
+                        line["width"],
+                        mid,
+                        loaded_hb_faces,
+                        features_to_enable,
+                    )
+                    for line in fit_data["lines"]
+                ]
                 has_collision = _check_collision(
                     fit_data["lines"],
+                    line_ink_paths,
                     box_top_left,
-                    cleaned_mask,
+                    safe_area_mask,
                     fit_data["line_height"],
-                    (current_width_attempt, max_render_height),
+                    fit_data["metrics"],
+                    (max_render_width, max_render_height),
                 )
 
                 if not has_collision:

@@ -224,6 +224,31 @@ def estimate_glyph_size(
     return float(np.percentile(sizes, 90)), len(parts)
 
 
+def _edge_distance_map(cleaned_mask: np.ndarray) -> np.ndarray:
+    """Distance from each mask pixel to the nearest non-mask pixel or image edge."""
+    distance_map = np.zeros(cleaned_mask.shape, dtype=np.float32)
+    x, y, w, h = cv2.boundingRect(cleaned_mask)
+    if w == 0 or h == 0:
+        return distance_map
+    # Everything outside the mask's bounding box is background, so transforming just the
+    # box inside a zero ring is exact. The ring also makes image edges hard boundaries;
+    # without that, bubbles touching the border get inflated distance values, pushing the
+    # anchor to the edge and collapsing the safe area.
+    padded_crop = np.zeros((h + 2, w + 2), dtype=np.uint8)
+    padded_crop[1:-1, 1:-1] = cleaned_mask[y : y + h, x : x + w]
+    distance_map[y : y + h, x : x + w] = cv2.distanceTransform(
+        padded_crop, cv2.DIST_L2, cv2.DIST_MASK_PRECISE
+    )[1:-1, 1:-1]
+    return distance_map
+
+
+def padded_safe_area_mask(
+    cleaned_mask: np.ndarray, padding_pixels: float
+) -> np.ndarray:
+    """Mask (0/255) of the bubble pixels at least padding_pixels from its outline."""
+    return (_edge_distance_map(cleaned_mask) >= padding_pixels).astype(np.uint8) * 255
+
+
 def calculate_centroid_expansion_box(
     cleaned_mask: np.ndarray, padding_pixels: float = 4.0, verbose: bool = False
 ) -> tuple[tuple[int, int, int, int], tuple[float, float]]:
@@ -259,16 +284,7 @@ def calculate_centroid_expansion_box(
         raise ImageProcessingError("Invalid or empty mask provided")
 
     try:
-        # Treat image edges as hard boundaries. Without this, bubbles touching the border
-        # get inflated distance values, pushing the anchor to the edge and collapsing the safe area.
-        padded_mask = np.zeros(
-            (cleaned_mask.shape[0] + 2, cleaned_mask.shape[1] + 2), dtype=np.uint8
-        )
-        padded_mask[1:-1, 1:-1] = cleaned_mask
-        distance_map_padded = cv2.distanceTransform(
-            padded_mask, cv2.DIST_L2, cv2.DIST_MASK_PRECISE
-        )
-        distance_map = distance_map_padded[1:-1, 1:-1]
+        distance_map = _edge_distance_map(cleaned_mask)
         safe_area_mask = (distance_map >= padding_pixels).astype(np.uint8) * 255
 
         if not np.any(safe_area_mask):

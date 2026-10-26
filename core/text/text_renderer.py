@@ -5,7 +5,10 @@ import skia
 from PIL import Image
 
 from core.config import RenderingConfig
-from core.image.image_utils import calculate_centroid_expansion_box
+from core.image.image_utils import (
+    calculate_centroid_expansion_box,
+    padded_safe_area_mask,
+)
 from core.text.drawing_engine import (
     draw_layout,
     load_font_resources,
@@ -316,12 +319,14 @@ def _text_area(
 ):
     """Where text may go: the mask's centered safe box, else a padded bbox.
 
-    Returns (layout box top-left or None, max width, max height, center x, center y).
+    Returns (layout box top-left or None, max width, max height, center x, center y,
+    padded safe-area mask or None).
     """
     x1, y1, x2, y2 = bbox
     bubble_width = x2 - x1
     bubble_height = y2 - y1
     layout_box_top_left = None
+    safe_area_mask = None
     safe_area_result = None
     safe_area_fallback_logged = False
     if cleaned_mask is not None:
@@ -344,6 +349,9 @@ def _text_area(
         guaranteed_box, _ = safe_area_result
         box_x, box_y, box_w, box_h = guaranteed_box
         layout_box_top_left = (box_x, box_y)
+        # The box only clears the outline along the centroid's row and column, so
+        # layout checks each line against the full padded area to catch inward spikes
+        safe_area_mask = padded_safe_area_mask(cleaned_mask, config.padding_pixels)
         max_render_width = float(box_w)
         max_render_height = float(box_h)
         target_center_x = box_x + box_w / 2.0
@@ -377,6 +385,7 @@ def _text_area(
         max_render_height,
         target_center_x,
         target_center_y,
+        safe_area_mask,
     )
 
 
@@ -463,6 +472,7 @@ def render_text_skia(
         max_render_height,
         target_center_x,
         target_center_y,
+        safe_area_mask,
     ) = _text_area(
         bbox,
         cleaned_mask,
@@ -546,7 +556,7 @@ def render_text_skia(
             config.badness_exponent,
             verbose,
             bubble_id,
-            cleaned_mask,
+            safe_area_mask,
             layout_box_top_left,
             config.detach_trailing_punctuation,
             use_vertical_stack,
