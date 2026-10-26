@@ -4,7 +4,7 @@
 
 필요한 모든 모델은 처음 사용할 때 자동으로 다운로드됩니다.
 
-기본적으로 `models/`에 저장됩니다. `--hf-cache` 옵션으로 실행하면(예: `python app.py --hf-cache`) 대신 Hugging Face 기본 캐시(`~/.cache/huggingface/hub`, `HF_HOME`이 설정된 경우 해당 경로)를 사용합니다. sd.cpp 서버 실행 파일도 `models/`에 저장되며, 이전 빌드는 자동으로 정리됩니다.
+기본적으로 `models/`에 저장됩니다. `--hf-cache` 옵션으로 실행하면(예: `python app.py --hf-cache`) 대신 Hugging Face 기본 캐시(`~/.cache/huggingface/hub`, `HF_HOME`이 설정된 경우 해당 경로)를 사용합니다. sd.cpp 서버 실행 파일은 `models/runtime/sdcpp/`에 저장되며, 이전 빌드는 자동으로 정리됩니다.
 
 ---
 

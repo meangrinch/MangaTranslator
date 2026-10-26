@@ -92,6 +92,43 @@ class ModelType(Enum):
     FLUX_KONTEXT_SDCPP_VAE = "flux_kontext_sdcpp_vae"
 
 
+# Old flat folder -> its place in the task-grouped layout (flux/sdcpp moves before flux)
+_LEGACY_MODEL_DIRS = (
+    ("flux/sdcpp", "inpainting/sdcpp"),
+    ("flux", "inpainting/diffusers"),
+    ("lama", "inpainting/lama"),
+    ("yolo", "detection/yolo"),
+    ("rtdetr", "detection/rtdetr"),
+    ("sam", "detection/sam"),
+    ("manga-ocr-base", "ocr/manga-ocr-base"),
+    ("paddleocr-vl-1.6", "ocr/paddleocr-vl-1.6"),
+    ("sdcpp", "runtime/sdcpp"),
+)
+
+
+def migrate_model_dirs(models_dir: Path | str = "./models") -> None:
+    """Move downloads from the old flat models/ layout into the task-grouped one.
+
+    A folder is left where it is when its new location already exists.
+    """
+    models_dir = Path(models_dir)
+    for old, new in _LEGACY_MODEL_DIRS:
+        src, dst = models_dir / old, models_dir / new
+        if not src.is_dir() or dst.exists():
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            src.rename(dst)
+        except OSError as e:
+            log_message(
+                f"Could not move {src} to {dst} ({e}). Move it by hand to avoid "
+                "downloading its models again.",
+                always_print=True,
+            )
+            continue
+        log_message(f"Moved {src} to {dst}", always_print=True)
+
+
 class ModelManager:
     """Singleton model manager for MangaTranslator."""
 
@@ -117,12 +154,11 @@ class ModelManager:
 
             # Model storage
             self.models = {}
-            self.model_paths = self._init_model_paths()
+            self._apply_models_dir(Path("./models"))
             self.model_urls = self._init_model_urls()
             self.model_hf_repos = self._init_hf_repos()
 
             # Flux-specific configuration
-            self.flux_cache_dir = Path("./models/flux")
             self.use_hf_cache = False
             self.hf_token = None
             self.flux_hf_token = None
@@ -139,14 +175,20 @@ class ModelManager:
                 f"Model Manager initialized on device: {self.device}", always_print=True
             )
 
-    @staticmethod
-    def _flux_sdcpp_base_dir() -> Path:
-        """Base directory for sd.cpp Flux GGUF assets."""
-        return Path("./models").resolve() / "flux" / "sdcpp"
+    def _apply_models_dir(self, models_dir: Path) -> None:
+        self.models_dir = Path(models_dir).resolve()
+        self.diffusers_cache_dir = self.models_dir / "inpainting" / "diffusers"
+        self.sam_cache_dir = self.models_dir / "detection" / "sam"
+        self.model_paths = self._init_model_paths()
+
+    def _flux_sdcpp_base_dir(self) -> Path:
+        """Base directory for sd.cpp model weights."""
+        return self.models_dir / "inpainting" / "sdcpp"
 
     def _init_model_paths(self):
         """Initialize model file paths."""
-        model_dir = Path("./models").resolve()
+        model_dir = self.models_dir
+        detection_dir = model_dir / "detection"
         flux_sdcpp_dir = self._flux_sdcpp_base_dir()
         flux_kontext_sdcpp_dir = flux_sdcpp_dir / "kontext"
         return {
@@ -157,23 +199,25 @@ class ModelManager:
                 model_dir / "upscale" / "2x-AnimeSharpV4_Fast_RCAN_PU.safetensors"
             ),
             ModelType.YOLO_SPEECH_BUBBLE: (
-                model_dir / "yolo" / "yolov8m_seg-speech-bubble.pt"
+                detection_dir / "yolo" / "yolov8m_seg-speech-bubble.pt"
             ),
             ModelType.YOLO_SPEECH_BUBBLE_2: (
-                model_dir / "yolo" / "manga109-segmentation-bubble.pt"
+                detection_dir / "yolo" / "manga109-segmentation-bubble.pt"
             ),
             ModelType.RTDETR_CONJOINED_BUBBLE: (
-                model_dir / "rtdetr" / "comic-text-and-bubble-detector"
+                detection_dir / "rtdetr" / "comic-text-and-bubble-detector"
             ),
-            ModelType.YOLO_OSBTEXT: (model_dir / "yolo" / "animetext_yolov12x.pt"),
+            ModelType.YOLO_OSBTEXT: (detection_dir / "yolo" / "animetext_yolov12x.pt"),
             ModelType.YOLO_PANEL: (
-                model_dir / "yolo" / "manga109_v2023.12.07_l_yolov11.pt"
+                detection_dir / "yolo" / "manga109_v2023.12.07_l_yolov11.pt"
             ),
-            ModelType.LAMA_MANGA: (model_dir / "lama" / "lama-manga.safetensors"),
-            ModelType.MANGA_OCR: (model_dir / "manga-ocr-base"),
-            ModelType.PADDLE_OCR_VL: (model_dir / "paddleocr-vl-1.6"),
+            ModelType.LAMA_MANGA: (
+                model_dir / "inpainting" / "lama" / "lama-manga.safetensors"
+            ),
+            ModelType.MANGA_OCR: (model_dir / "ocr" / "manga-ocr-base"),
+            ModelType.PADDLE_OCR_VL: (model_dir / "ocr" / "paddleocr-vl-1.6"),
             ModelType.SDCPP_SERVER: (
-                model_dir / "sdcpp" / SDCppServerManager.RELEASE_TAG
+                model_dir / "runtime" / "sdcpp" / SDCppServerManager.RELEASE_TAG
             ),
             ModelType.FLUX2_SDCPP_VAE: (flux_sdcpp_dir / "flux2-vae.safetensors"),
             ModelType.QWEN_IMAGE_21_SDCPP_VAE: (
@@ -659,10 +703,9 @@ class ModelManager:
             )
         except Exception as e:
             if target_dir.exists():
-                models_dir = Path("./models").resolve()
                 target_resolved = target_dir.resolve()
                 try:
-                    target_resolved.relative_to(models_dir)
+                    target_resolved.relative_to(self.models_dir)
                     # Safe to delete
                     with contextlib.suppress(Exception):
                         shutil.rmtree(target_dir)
@@ -1077,7 +1120,7 @@ class ModelManager:
 
             log_message("Loading SAM 2.1 model...", verbose=verbose)
             hf_info = self.model_hf_repos[ModelType.SAM2]
-            cache_dir = self._hf_cache_dir("models/sam")
+            cache_dir = self._hf_cache_dir(self.sam_cache_dir)
 
             processor = Sam2Processor.from_pretrained(
                 hf_info["repo_id"], cache_dir=cache_dir, token=self.hf_token
@@ -1113,7 +1156,7 @@ class ModelManager:
 
             log_message("Loading SAM 3 Tracker model...", verbose=verbose)
             hf_info = self.model_hf_repos[ModelType.SAM3]
-            cache_dir = self._hf_cache_dir("models/sam")
+            cache_dir = self._hf_cache_dir(self.sam_cache_dir)
 
             effective_token = token if token is not None else self.hf_token
             processor = Sam3TrackerProcessor.from_pretrained(
@@ -1136,6 +1179,14 @@ class ModelManager:
         with self._lock:
             self.device = device
             self.dtype = get_best_dtype(device)
+
+    def set_models_dir(self, models_dir: Path | str):
+        """Store downloads under `models_dir` (e.g. --models). Call before loading models."""
+        with self._lock:
+            self._apply_models_dir(Path(models_dir))
+            self.sdcpp_server_manager.install_dir = self.model_paths[
+                ModelType.SDCPP_SERVER
+            ]
 
     def set_hf_token(self, token: str, enable_fast_download: bool = True):
         """Set the global HuggingFace token for model downloads.
@@ -1208,7 +1259,7 @@ class ModelManager:
                 transformer_path = self._ensure_hf_file(
                     hf_info["repo_id"],
                     hf_info["filename"],
-                    self.flux_cache_dir / hf_info["filename"],
+                    self.diffusers_cache_dir / hf_info["filename"],
                     verbose=verbose,
                 )
                 transformer = NunchakuFluxTransformer2dModel.from_pretrained(
@@ -1225,7 +1276,7 @@ class ModelManager:
                 text_encoder_path = self._ensure_hf_file(
                     hf_info["repo_id"],
                     hf_info["filename"],
-                    self.flux_cache_dir / hf_info["filename"],
+                    self.diffusers_cache_dir / hf_info["filename"],
                     verbose=verbose,
                 )
                 text_encoder = NunchakuT5EncoderModel.from_pretrained(
@@ -1244,7 +1295,7 @@ class ModelManager:
                     transformer=transformer,
                     text_encoder_2=text_encoder,
                     dtype=self.dtype,
-                    cache_dir=self._hf_cache_dir(self.flux_cache_dir),
+                    cache_dir=self._hf_cache_dir(self.diffusers_cache_dir),
                     token=effective_token,
                 ).to(self.device)
 
@@ -1302,7 +1353,7 @@ class ModelManager:
                 pipeline = FluxKontextPipeline.from_pretrained(
                     repo_id,
                     dtype=self.dtype,
-                    cache_dir=self._hf_cache_dir(self.flux_cache_dir),
+                    cache_dir=self._hf_cache_dir(self.diffusers_cache_dir),
                 )
 
                 # Enable INT8 MatMul for GPU acceleration (AMD, Intel ARC, NVIDIA)
@@ -1396,7 +1447,7 @@ class ModelManager:
                 pipeline = Flux2KleinPipeline.from_pretrained(
                     repo_id,
                     dtype=self.dtype,
-                    cache_dir=self._hf_cache_dir(self.flux_cache_dir),
+                    cache_dir=self._hf_cache_dir(self.diffusers_cache_dir),
                 )
 
                 # Enable INT8 MatMul for GPU acceleration (AMD, Intel ARC, NVIDIA)
@@ -1528,7 +1579,7 @@ class ModelManager:
                 repo_id = self.model_hf_repos[ModelType.FLUX3_KLEIN_SDNQ_PIPELINE][
                     "repo_id"
                 ]
-                cache_dir = self._hf_cache_dir(self.flux_cache_dir)
+                cache_dir = self._hf_cache_dir(self.diffusers_cache_dir)
                 log_message(f"Loading SDNQ pipeline from {repo_id}...", verbose=verbose)
                 blocks = ModularPipeline.from_pretrained(
                     repo_id, cache_dir=cache_dir
@@ -1604,7 +1655,7 @@ class ModelManager:
                 pipeline = QwenImage21Pipeline.from_pretrained(
                     repo_id,
                     dtype=self.dtype,
-                    cache_dir=self._hf_cache_dir(self.flux_cache_dir),
+                    cache_dir=self._hf_cache_dir(self.diffusers_cache_dir),
                 )
                 self._apply_sdnq_options(
                     (pipeline.transformer, pipeline.text_encoder), verbose=verbose

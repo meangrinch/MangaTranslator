@@ -121,7 +121,10 @@ def test_validate_core_inputs_ok(dirs):
     yolo, font_dir = validate_core_inputs(
         TranslationConfig(), RenderingConfig(font_dir="Pack"), models, fonts
     )
-    assert yolo == (models / "yolo" / "manga109-segmentation-bubble.pt").resolve()
+    assert (
+        yolo
+        == (models / "detection" / "yolo" / "manga109-segmentation-bubble.pt").resolve()
+    )
     assert font_dir == (fonts / "Pack").resolve()
 
 

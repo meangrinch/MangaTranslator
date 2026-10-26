@@ -36,7 +36,7 @@ def main():
         "--models",
         type=str,
         default="./models",
-        help="Directory containing YOLO model files",
+        help="Directory where downloaded models are stored",
     )
     parser.add_argument(
         "--fonts",
@@ -91,14 +91,15 @@ def main():
     os.makedirs(MODELS_DIR, exist_ok=True)
     os.makedirs(FONTS_BASE_DIR, exist_ok=True)
 
+    from core.ml.model_manager import get_model_manager, migrate_model_dirs
+
+    migrate_model_dirs(MODELS_DIR)
+    get_model_manager().set_models_dir(MODELS_DIR)
+
     target_device = torch.device("cpu") if args.cpu else get_best_device()
     if args.cpu:
-        from core.ml.model_manager import get_model_manager
-
         get_model_manager().set_device(target_device)
     if args.hf_cache:
-        from core.ml.model_manager import get_model_manager
-
         get_model_manager().use_hf_cache = True
 
     device_info_str = "CPU"

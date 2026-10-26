@@ -199,7 +199,7 @@ def autodetect_yolo_model_path(
     validate file existence here. This function previously scanned for any .pt
     file, but now returns a deterministic path to align with auto-downloading.
     """
-    yolo_dir = models_dir / "yolo"
+    yolo_dir = models_dir / "detection" / "yolo"
     if bubble_detector_model == "yolo_2":
         return yolo_dir / "manga109-segmentation-bubble.pt"
     return yolo_dir / "yolov8m_seg-speech-bubble.pt"

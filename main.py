@@ -258,7 +258,7 @@ def main():
         "--models",
         type=str,
         default="./models",
-        help="Directory containing YOLO model files",
+        help="Directory where downloaded models are stored",
     )
     parser.add_argument(
         "--font-dir",
@@ -1181,6 +1181,14 @@ def main():
     if not args.model_name:
         log_message(f"Using default model for {provider}: {model_name}", verbose=True)
 
+    from core.ml.model_manager import get_model_manager, migrate_model_dirs
+
+    models_dir = Path(args.models).resolve()
+    # Create models directory if it doesn't exist (model manager will handle model downloads)
+    models_dir.mkdir(parents=True, exist_ok=True)
+    migrate_model_dirs(models_dir)
+    get_model_manager().set_models_dir(models_dir)
+
     target_device = (
         torch.device("cpu")
         if args.cpu
@@ -1193,12 +1201,8 @@ def main():
         )
     )
     if args.cpu:
-        from core.ml.model_manager import get_model_manager
-
         get_model_manager().set_device(target_device)
     if args.hf_cache:
-        from core.ml.model_manager import get_model_manager
-
         get_model_manager().use_hf_cache = True
     log_message(
         f"Using {target_device.type.upper()} device.",
@@ -1207,10 +1211,6 @@ def main():
 
     use_otsu_config_val = args.use_otsu_threshold
 
-    # Determine YOLO model path
-    models_dir = Path(args.models).resolve()
-    # Create models directory if it doesn't exist (model manager will handle model downloads)
-    models_dir.mkdir(parents=True, exist_ok=True)
     yolo_model_path = autodetect_yolo_model_path(models_dir, args.bubble_detector_model)
 
     config = MangaTranslatorConfig(
