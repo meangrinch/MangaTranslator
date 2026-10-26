@@ -1981,6 +1981,30 @@ class LamaInpainter(_CropInpainter):
             verbose=verbose,
         )
 
+    def inpaint_mask(
+        self,
+        image_pil: Image.Image,
+        mask_np: np.ndarray,
+        *args,
+        composite_clip_bbox: tuple[int, int, int, int] | None = None,
+        **kwargs,
+    ) -> Image.Image:
+        # LaMa invents every masked pixel, so mask margin past the text box would
+        # erase art that the diffusion models redraw and the composite discards
+        if composite_clip_bbox is not None:
+            x1, y1, x2, y2 = composite_clip_bbox
+            x1, y1 = max(0, x1), max(0, y1)
+            clipped = np.zeros(np.shape(mask_np), dtype=bool)
+            clipped[y1:y2, x1:x2] = np.asarray(mask_np, dtype=bool)[y1:y2, x1:x2]
+            mask_np = clipped
+        return super().inpaint_mask(
+            image_pil,
+            mask_np,
+            *args,
+            composite_clip_bbox=composite_clip_bbox,
+            **kwargs,
+        )
+
     def load_models(self):
         if self.pipeline is None:
             self.pipeline = self.manager.load_lama_manga(verbose=self.verbose)

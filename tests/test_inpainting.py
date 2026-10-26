@@ -215,6 +215,28 @@ def test_lama_gets_the_crop_mask_at_native_size(monkeypatch):
     assert result[10, 10].max() == 0
 
 
+def test_lama_only_erases_inside_the_composite_clip_box(monkeypatch):
+    inpainter = _make("lama_manga")
+    seen = {}
+
+    def fake_model(image, mask):
+        seen["mask_sum"] = float(mask.sum())
+        return torch.ones_like(image)
+
+    fake_model.device = torch.device("cpu")
+    monkeypatch.setattr(
+        inpainter, "load_models", lambda: setattr(inpainter, "pipeline", fake_model)
+    )
+    page = Image.new("RGB", (400, 300), "black")
+    mask = np.zeros((300, 400), dtype=bool)
+    mask[100:140, 150:250] = True
+
+    inpainter.inpaint_mask(page, mask, seed=-1, composite_clip_bbox=(170, 90, 230, 150))
+
+    # LaMa fills whatever it is told to erase, so the margin beyond the text box stays
+    assert seen["mask_sum"] == 40 * 60
+
+
 def test_lama_checkpoint_loads_through_spandrel(tmp_path, monkeypatch):
     from safetensors.torch import save_file
     from spandrel.architectures.LaMa import LaMa
