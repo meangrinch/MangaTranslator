@@ -5,6 +5,7 @@ import io
 import json
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -17,6 +18,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 
+from core.device import empty_cache
 from utils.cancellation import is_cancelled, raise_if_cancelled
 from utils.download import download_file
 from utils.exceptions import CancellationError, ModelError
@@ -105,6 +107,26 @@ def _read_log_lines(log_path, offset: int) -> tuple[list[str], int]:
     return lines, new_offset
 
 
+_FATAL_LOG_LINE = re.compile(r"\b(?:CUDA|ROCm|MUSA) error\b|GGML_ASSERT")
+
+
+def _is_fatal_log_line(line: str) -> bool:
+    # ggml prints these right before it aborts the server process
+    return _FATAL_LOG_LINE.search(line) is not None
+
+
+def _failure_reason(lines: list[str]) -> str:
+    """Pick the line that explains a failed job; sd.cpp's job error is generic."""
+    reason = next(
+        (line for line in lines if "cannot make enough memory available" in line),
+        None,
+    ) or next((line for line in lines if line.startswith("[E]")), None)
+    if reason is None:
+        return ""
+    reason = reason.split(" --- ", 1)[0].removeprefix("[W] ").removeprefix("[E] ")
+    return f" ({reason.strip()})"
+
+
 def run_image_job(
     server: dict, payload: dict, verbose: bool = False, timeout_sec: int = 900
 ) -> Image.Image:
@@ -113,6 +135,9 @@ def run_image_job(
     log_suffix = f" Log: {log_path}" if log_path else ""
     log_offset = _log_offset(log_path)
     start = time.monotonic()
+    # sd.cpp runs in its own process and can't use blocks torch keeps cached here;
+    # Qwen-Image 2.1's text encoder fails its capacity check over a few MB
+    empty_cache()
     log_message("  - Submitting sd.cpp inference job...", always_print=True)
     job = _json_request(f"{base_url}/sdcpp/v1/img_gen", payload=payload, timeout=30)
     if job.get("status") == "completed" or job.get("result") or job.get("images"):
@@ -131,15 +156,44 @@ def run_image_job(
         poll_url = f"{base_url}{poll_url}"
 
     log_message("  - Waiting for sd.cpp server job...", always_print=True)
+    process = server.get("process")
     deadline = time.monotonic() + timeout_sec
     next_log = time.monotonic() + 10
+    unshown_lines = []
+    job_lines = []  # sd.cpp warnings and errors logged during this job
+    last_line = "no output"
     while time.monotonic() < deadline:
         if is_cancelled():
             # sd.cpp only cancels queued jobs; a generating one answers 409
             with contextlib.suppress(OSError):
                 _json_request(f"{poll_url}/cancel", payload={}, timeout=5)
             raise CancellationError("Process cancelled by user.")
-        status = _json_request(poll_url, timeout=30)
+        lines, log_offset = _read_log_lines(log_path, log_offset)
+        job_lines.extend(line for line in lines if line.startswith(("[W]", "[E]")))
+        if lines:
+            unshown_lines = (unshown_lines + lines)[-3:]
+            last_line = lines[-1]
+        fatal = next((line for line in lines if _is_fatal_log_line(line)), None)
+        if fatal is not None:
+            # On Windows a ggml abort can leave the process alive for minutes
+            # while Windows Error Reporting dumps it, so don't wait for the exit
+            if process is not None:
+                with contextlib.suppress(OSError):
+                    process.kill()
+            raise ModelError(f"sd.cpp server crashed: {fatal}.{log_suffix}")
+        if process is not None and process.poll() is not None:
+            raise ModelError(
+                f"sd.cpp server exited during the job (code {process.returncode}): "
+                f"{last_line}.{log_suffix}"
+            )
+        try:
+            status = _json_request(poll_url, timeout=30)
+        except OSError:
+            # The checks above report a crashed server on the next pass
+            if process is None:
+                raise
+            time.sleep(0.5)
+            continue
         state = status.get("status")
         if state == "completed":
             log_message(
@@ -150,13 +204,19 @@ def run_image_job(
         if state in ("failed", "cancelled"):
             error = status.get("error") or {}
             message = error.get("message") or state
-            raise ModelError(f"sd.cpp job {state}: {message}.{log_suffix}")
+            # The reason is often logged after this pass's read
+            lines, _ = _read_log_lines(log_path, log_offset)
+            job_lines.extend(line for line in lines if line.startswith(("[W]", "[E]")))
+            raise ModelError(
+                f"sd.cpp job {state}: {message}{_failure_reason(job_lines)}."
+                f"{log_suffix}"
+            )
         now = time.monotonic()
         if now >= next_log:
-            lines, log_offset = _read_log_lines(log_path, log_offset)
-            if lines:
-                for line in lines[-3:]:
+            if unshown_lines:
+                for line in unshown_lines:
                     log_message(f"  - sd.cpp: {line}", always_print=True)
+                unshown_lines = []
             else:
                 log_message(
                     f"  - Waiting for sd.cpp server output "
