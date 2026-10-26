@@ -140,7 +140,7 @@ class UIOutsideTextSettings:
     inpainting_method: str = "flux_klein_4b"
     flux_backend: str = "sdnq"  # "sdcpp", "sdnq", "nunchaku"; see FLUX_METHOD_BACKENDS
     flux_low_vram: bool = True  # Use CPU offload for SDNQ
-    flux_sdcpp_cache_mode: str = "none"
+    flux_sdcpp_cache_mode: str = "step-skip"
     flux_sdcpp_diffusion_quant: str = "Q4_K_M"
     flux_sdcpp_text_encoder_quant: str = "Q4_K_XL"
     flux_num_inference_steps: int = 4
@@ -505,7 +505,7 @@ class UIConfigState:
                 flux_low_vram=data.get("outside_text_flux_low_vram", True),
                 flux_sdcpp_cache_mode=data.get(
                     "outside_text_flux_sdcpp_cache_mode",
-                    defaults.get("outside_text_flux_sdcpp_cache_mode", "none"),
+                    defaults.get("outside_text_flux_sdcpp_cache_mode", "step-skip"),
                 ),
                 flux_sdcpp_diffusion_quant=data.get(
                     "outside_text_flux_sdcpp_diffusion_quant",

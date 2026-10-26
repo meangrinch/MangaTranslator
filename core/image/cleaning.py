@@ -628,7 +628,7 @@ def clean_speech_bubbles(
     inpaint_method: str = "flux_kontext",
     flux_backend: str = "sdnq",
     flux_low_vram: bool = True,
-    flux_sdcpp_cache_mode: str = "none",
+    flux_sdcpp_cache_mode: str = "step-skip",
     flux_sdcpp_diffusion_quant: str = "Q4_K_M",
     flux_sdcpp_text_encoder_quant: str = "",
     flux_luminance_correction: bool = True,

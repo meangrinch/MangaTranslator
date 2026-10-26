@@ -412,7 +412,7 @@ class FluxKontextInpainter:
         backend: str = "nunchaku",
         low_vram: bool = False,
         luminance_correction: bool = True,
-        sdcpp_cache_mode: str = "none",
+        sdcpp_cache_mode: str = "step-skip",
         sdcpp_diffusion_quant: str = "",
         sdcpp_text_encoder_quant: str = "",
     ):
@@ -1647,7 +1647,7 @@ class _EditModelInpainter(_CropInpainter):
         luminance_correction: bool = True,
         upscale_small_crops: bool = True,
         backend: str = "sdnq",
-        sdcpp_cache_mode: str = "none",
+        sdcpp_cache_mode: str = "step-skip",
         sdcpp_diffusion_quant: str = "",
         sdcpp_text_encoder_quant: str = "",
         verbose: bool = False,

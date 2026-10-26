@@ -792,7 +792,7 @@ def main():
         "--osb-flux-sdcpp-cache-mode",
         type=str,
         choices=["spectrum", "step-skip", "none"],
-        default="none",
+        default="step-skip",
         help=(
             "Step caching for sd.cpp. 'spectrum' predicts skipped steps from earlier ones; "
             "'step-skip' reuses the last step's change when the image barely moved. "

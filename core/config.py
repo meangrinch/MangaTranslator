@@ -174,7 +174,7 @@ class OutsideTextConfig:
     inpainting_method: str = "flux_klein_4b"
     flux_backend: str = "sdnq"  # "sdcpp", "sdnq", "nunchaku"; see FLUX_METHOD_BACKENDS
     flux_low_vram: bool = True  # Use CPU offload for SDNQ
-    flux_sdcpp_cache_mode: str = "none"
+    flux_sdcpp_cache_mode: str = "step-skip"
     flux_sdcpp_diffusion_quant: str = "Q4_K_M"
     flux_sdcpp_text_encoder_quant: str = ""
     flux_num_inference_steps: int = 4

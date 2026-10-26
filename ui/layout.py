@@ -1867,7 +1867,7 @@ def create_layout(
                                     ],
                                     value=saved_settings.get(
                                         "outside_text_flux_sdcpp_cache_mode",
-                                        "none",
+                                        "step-skip",
                                     ),
                                     label="Cache Method",
                                     info=(
