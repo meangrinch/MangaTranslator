@@ -85,7 +85,7 @@
   - 启用“初始 (initial)”图像超分辨率并调整放大倍数（例如 2.0-4.0x），同时禁用“自动缩放 (Auto-Scale to Image Size)”
 
 - **彩色/灰度气泡未能保留内部颜色：**
-  - 启用“使用 Flux 重绘彩色气泡 (Use Flux to Inpaint Colored Bubbles)”
+  - 启用“使用重绘模型处理彩色气泡 (Use Inpainting Model for Colored Bubbles)”
 
 - **气泡分割效果较差：**
   - 尝试切换到 `sam3`（需要设置 `hf_token`）
@@ -135,24 +135,24 @@
   - 确保已设置 `hf_token`（参见 配置/对话框外文本设置）
 
 - **显存不足 (Out of VRAM) / CUDA 错误：**
-  - 选择较低的 Flux/文本编码器量化版本（仅限 sd.cpp）
-  - 禁用“将 Klein 裁剪块放大到约 100万像素 (Upscale Klein Crops to ~1MP)”
-  - 切换至 Flux.2 Klein 4B（最小的模型）
+  - 选择较低的扩散模型/文本编码器量化版本（仅限 sd.cpp）
+  - 禁用“将裁剪块放大到约 100万像素 (Upscale Crops to ~1MP)”
+  - 切换至 Flux.2 Klein 4B（最小的扩散模型）或 LaMa Manga（显存低于 1 GB）
   - 使用 OpenCV（不需要显存）
 
-- **Flux OSB 重绘速度过慢：**
+- **OSB 重绘速度过慢：**
   - 如果显存充足，请禁用“低显存模式 (Low VRAM Mode)”（仅限 SDNQ）
-  - 启用“合并 Flux 区域 (Group Flux Regions)”以在单次 Flux 运行中重绘多个 OSB 掩码（代价是会降低质量）
-  - 禁用“将 Klein 裁剪块放大到约 100万像素 (Upscale Klein Crops to ~1MP)”（代价是会降低质量）
-  - 尝试切换到其他模型/后端
+  - 启用“合并重绘区域 (Group Inpainting Regions)”以在单次运行中重绘多个 OSB 掩码（代价是会降低质量）
+  - 禁用“将裁剪块放大到约 100万像素 (Upscale Crops to ~1MP)”（代价是会降低质量）
+  - 尝试切换到其他模型/后端；LaMa Manga 快得多，但还原的细节较少
 
 - **重绘区域出现轻微色差：**
   - Flux.2 Klein 模型可能会引入轻微的颜色变化；尝试启用/禁用“亮度校正 (Luminance Correction)”
   - 使用 Flux.1 Kontext 以获得不明显的色差效果
 
 - **重绘质量较差：**
-  - 选择较高的 Flux/文本编码器量化版本（仅限 sd.cpp）
-  - 保持启用“将 Klein 裁剪块放大到约 100万像素 (Upscale Klein Crops to ~1MP)”
+  - 选择较高的扩散模型/文本编码器量化版本（仅限 sd.cpp）
+  - 保持启用“将裁剪块放大到约 100万像素 (Upscale Crops to ~1MP)”
   - 增加推理步数（对于 Flux.1 Kontext）
 
 - **Flux.1 Kontext Nunchaku 后端不可用：**

@@ -10,7 +10,14 @@ from .caching import UnifiedCache, get_cache
 from .image.cleaning import clean_speech_bubbles
 from .image.detection import detect_speech_bubbles
 from .image.image_utils import cv2_to_pil, pil_to_cv2, save_image_with_compression
-from .image.inpainting import FluxKleinInpainter, FluxKontextInpainter
+from .image.inpainting import (
+    Fibo2Inpainter,
+    Flux3KleinInpainter,
+    FluxKleinInpainter,
+    FluxKontextInpainter,
+    LamaInpainter,
+    QwenImage21Inpainter,
+)
 from .image.ocr_detection import OutsideTextDetector
 from .image.sorting import sort_bubbles_by_reading_order
 from .ml.model_manager import ModelManager, get_model_manager
@@ -19,10 +26,14 @@ from .services.translation import call_translation_api_batch
 from .text.text_renderer import render_text_skia
 
 __all__ = [
+    "Fibo2Inpainter",
+    "Flux3KleinInpainter",
     "FluxKleinInpainter",
     "FluxKontextInpainter",
+    "LamaInpainter",
     "ModelManager",
     "OutsideTextDetector",
+    "QwenImage21Inpainter",
     "UnifiedCache",
     "__version__",
     "__version_info__",

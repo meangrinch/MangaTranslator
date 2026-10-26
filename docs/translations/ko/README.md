@@ -80,7 +80,7 @@ ML 모델을 활용하여 일본 만화, 웹툰(Manhwa), 중국 만화(Manhua), 
 - **인터페이스**: Web UI (Gradio) 및 CLI
 - **처리**: 단일 이미지, 폴더 및 ZIP/CBZ 압축 파일 배치 처리 (디렉터리 구조 보존)
 - **감지**: 말풍선 및 말풍선 외부 텍스트 감지 (YOLO, SAM 2.1/3)
-- **클리닝**: 말풍선 및 배경 텍스트 인페인팅 (FLUX.2 Klein, FLUX.1 Kontext 또는 OpenCV)
+- **클리닝**: 말풍선 및 배경 텍스트 인페인팅 (Fibo 2.0, FLUX.3 Image Klein, Qwen-Image 2.1, FLUX.2 Klein, FLUX.1 Kontext, LaMa 또는 OpenCV)
 - **번역**: 60개 이상의 언어를 지원하는 OCR 및 번역 (클라우드 API 또는 로컬 LLM)
 - **렌더링**: 텍스트 정렬, 자동 줄바꿈 및 커스텀 폰트 팩을 지원하는 커스텀 텍스트 렌더링
 - **업스케일링**: 텍스트 영역 및 전체 페이지 아트워크 업스케일링 (2x-AnimeSharpV4)
@@ -131,9 +131,14 @@ MangaTranslator는 오픈 소스이며 무료입니다. 이 프로젝트가 시�
 - FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
 - FLUX.2 Klein 4B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
 - FLUX.2 Klein 9B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B)
+- FLUX.3 Image Klein: [Black Forest Labs](https://huggingface.co/black-forest-labs/flux-3-image-klein)
+- Fibo 2.0 Edit Turbo: [Bria AI](https://huggingface.co/briaai/Fibo-2.0-edit-turbo)
+- Qwen-Image-2.1-Turbo: [Qwen](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo)
+- LaMa Manga: [mayocream](https://huggingface.co/mayocream/lama-manga)
 - Nunchaku: [Nunchaku AI](https://github.com/nunchaku-ai/nunchaku)
-- SDNQ Quants: [Disty0](https://huggingface.co/Disty0)
+- SDNQ Quants: [Disty0](https://huggingface.co/Disty0), [OzzyGT](https://huggingface.co/OzzyGT), [SamuelTallet](https://huggingface.co/SamuelTallet)
 - Unsloth Quants: [Unsloth](https://huggingface.co/unsloth)
+- INT8 ConvRot Weights: [Comfy-Org](https://huggingface.co/Comfy-Org), [ml-resources](https://huggingface.co/ml-resources)
 - stable-diffusion.cpp: [leejet](https://github.com/leejet/stable-diffusion.cpp)
 - 2x-AnimeSharpV4: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
 

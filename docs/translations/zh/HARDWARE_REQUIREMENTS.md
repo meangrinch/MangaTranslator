@@ -7,7 +7,7 @@
 - **显存 (VRAM):** 0 GB (推荐 4 GB 及以上)
 - **存储空间:** 5 GB
 
-## 对话框外 (OSB) 擦除重绘 (Flux 模型)
+## 对话框外 (OSB) 擦除重绘模型
 
 基础要求之上的附加要求。显存 (VRAM) 数据为近似值，且取决于具体硬件。
 
@@ -18,6 +18,8 @@
 | FLUX.2 Klein 4B | +5.0 GB | +2.0 GB | +6 GB | +5.1 GB |
 | FLUX.2 Klein 9B | +8.0 GB | +3.0 GB | +13 GB | +11.7 GB |
 | FLUX.1 Kontext | +9.0 GB | +4.0 GB | +14 GB | +12.6 GB |
+| FLUX.3 Image Klein | +5.1 GB | +3.0 GB | TBD | +6.2 GB |
+| Qwen-Image 2.1 Turbo | TBD | +4.3 GB | TBD | +10.7 GB |
 
 ### sd.cpp 后端
 
@@ -253,8 +255,262 @@
   </tbody>
 </table>
 
+---
+
+TBD：尚未测量。sd.cpp 运行 FLUX.3 Image Klein 时不分段执行，因此整个扩散模型必须装入显存。视觉投影器仅在使用 GGUF 文本编码器时下载（Fibo 2.0 和 Qwen-Image 2.1）。
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Quant</th>
+      <th>VRAM</th>
+      <th>RAM</th>
+      <th>Storage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="6" valign="middle"><strong>FLUX.3 Image Klein</strong></td>
+      <td>INT8-ConvRot</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+5.4 GB</td>
+    </tr>
+    <tr>
+      <td>Q8_0</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+5.7 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+4.5 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_M</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+3.9 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_M</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+3.4 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_M</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+2.8 GB</td>
+    </tr>
+    <tr>
+      <td rowspan="6" valign="middle"><strong>Qwen3-VL-4B</strong><br><small>(Text Encoder)</small></td>
+      <td>INT8-ConvRot</td>
+      <td>-</td>
+      <td>+4.9 GB</td>
+      <td>+4.9 GB</td>
+    </tr>
+    <tr>
+      <td>Q8_0</td>
+      <td>-</td>
+      <td>+4.0 GB</td>
+      <td>+4.0 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K_XL</td>
+      <td>-</td>
+      <td>+3.4 GB</td>
+      <td>+3.4 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_XL</td>
+      <td>-</td>
+      <td>+2.7 GB</td>
+      <td>+2.7 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_XL</td>
+      <td>-</td>
+      <td>+2.4 GB</td>
+      <td>+2.4 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_XL</td>
+      <td>-</td>
+      <td>+2.0 GB</td>
+      <td>+2.0 GB</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Quant</th>
+      <th>VRAM</th>
+      <th>RAM</th>
+      <th>Storage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="1" valign="middle"><strong>Fibo 2.0 Edit Turbo</strong></td>
+      <td>INT8-ConvRot</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+7.8 GB</td>
+    </tr>
+    <tr>
+      <td rowspan="6" valign="middle"><strong>Qwen3-VL-4B</strong><br><small>(Text Encoder)</small></td>
+      <td>Q8_0</td>
+      <td>-</td>
+      <td>+4.0 GB</td>
+      <td>+4.0 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K_XL</td>
+      <td>-</td>
+      <td>+3.4 GB</td>
+      <td>+3.4 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_XL</td>
+      <td>-</td>
+      <td>+2.7 GB</td>
+      <td>+2.7 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_XL</td>
+      <td>-</td>
+      <td>+2.4 GB</td>
+      <td>+2.4 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_XL</td>
+      <td>-</td>
+      <td>+2.0 GB</td>
+      <td>+2.0 GB</td>
+    </tr>
+    <tr>
+      <td>Vision (GGUF)</td>
+      <td>-</td>
+      <td>+0.8 GB</td>
+      <td>+0.8 GB</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Quant</th>
+      <th>VRAM</th>
+      <th>RAM</th>
+      <th>Storage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="6" valign="middle"><strong>Qwen-Image 2.1 Turbo</strong></td>
+      <td>INT8-ConvRot</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+6.8 GB</td>
+    </tr>
+    <tr>
+      <td>Q8_0</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+7.1 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+5.8 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_M</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+5.0 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_M</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+3.9 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_M</td>
+      <td>TBD</td>
+      <td>TBD</td>
+      <td>+3.0 GB</td>
+    </tr>
+    <tr>
+      <td rowspan="7" valign="middle"><strong>Qwen3-VL-8B</strong><br><small>(Text Encoder)</small></td>
+      <td>INT8-ConvRot</td>
+      <td>-</td>
+      <td>+8.7 GB</td>
+      <td>+8.7 GB</td>
+    </tr>
+    <tr>
+      <td>Q8_0</td>
+      <td>-</td>
+      <td>+8.1 GB</td>
+      <td>+8.1 GB</td>
+    </tr>
+    <tr>
+      <td>Q6_K_XL</td>
+      <td>-</td>
+      <td>+7.0 GB</td>
+      <td>+7.0 GB</td>
+    </tr>
+    <tr>
+      <td>Q5_K_XL</td>
+      <td>-</td>
+      <td>+5.5 GB</td>
+      <td>+5.5 GB</td>
+    </tr>
+    <tr>
+      <td>Q4_K_XL</td>
+      <td>-</td>
+      <td>+4.8 GB</td>
+      <td>+4.8 GB</td>
+    </tr>
+    <tr>
+      <td>Q3_K_XL</td>
+      <td>-</td>
+      <td>+4.0 GB</td>
+      <td>+4.0 GB</td>
+    </tr>
+    <tr>
+      <td>Vision (GGUF)</td>
+      <td>-</td>
+      <td>+1.1 GB</td>
+      <td>+1.1 GB</td>
+    </tr>
+  </tbody>
+</table>
+
 ### Nunchaku 后端
 
 | 模型 | 显存 (VRAM) | 内存 (RAM) | 存储空间 |
 | --- | --- | --- | --- |
 | FLUX.1 Kontext | +6.0 GB | +11 GB | +9.7 GB |
+
+### LaMa
+
+| 模型 | 显存 (VRAM) | 内存 (RAM) | 存储空间 |
+| --- | --- | --- | --- |
+| LaMa Manga | +0.9 GB | TBD | +0.2 GB |

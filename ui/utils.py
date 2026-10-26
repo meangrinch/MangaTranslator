@@ -13,6 +13,7 @@ from utils.endpoints import openrouter_is_reasoning_model
 from utils.endpoints.openai_compatible import build_openai_compatible_url
 from utils.logging import log_message
 from utils.model_metadata import (
+    FLUX_BACKENDS,
     NO_WEB_SEARCH_PROVIDERS,
     REASONING_MODEL_CHECKS,
     anthropic_effort_config,
@@ -20,6 +21,7 @@ from utils.model_metadata import (
     anthropic_omits_thinking_config,
     anthropic_reasoning_effort_config,
     anthropic_uses_adaptive_thinking_info,
+    flux_method_backends,
     gemini_thinking_levels,
     get_gpt5_generation,
     get_hy_mt2_sampling_defaults,
@@ -71,6 +73,22 @@ from utils.model_metadata import (
 )
 
 from .settings_manager import DEFAULT_SETTINGS, PROVIDER_MODELS, get_saved_settings
+
+_FLUX_BACKEND_LABELS = {
+    "sdcpp": "sd.cpp",
+    "sdnq": "SDNQ",
+    "nunchaku": "Nunchaku (CUDA)",
+}
+
+
+def flux_backend_choices(method: str) -> list[tuple[str, str]]:
+    """Backend radio choices for an inpainting method.
+
+    Methods without a backend hide the radio but offer every backend, so the saved
+    choice stays valid until a Flux method is selected again.
+    """
+    backends = flux_method_backends(method) or FLUX_BACKENDS
+    return [(_FLUX_BACKEND_LABELS[backend], backend) for backend in backends]
 
 
 def get_available_providers(ocr_method: str) -> list[str]:

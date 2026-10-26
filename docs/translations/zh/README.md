@@ -80,7 +80,7 @@
 - **界面**：Web UI (Gradio) 和命令行界面 (CLI)
 - **处理**：单图、文件夹和 ZIP/CBZ 压缩包批量处理（保留目录结构）
 - **检测**：对话框与对话框外文本检测（YOLO、SAM 2.1/3）
-- **擦除**：对话框与背景文本的重绘擦除（FLUX.2 Klein、FLUX.1 Kontext 或 OpenCV）
+- **擦除**：对话框与背景文本的重绘擦除（Fibo 2.0、FLUX.3 Image Klein、Qwen-Image 2.1、FLUX.2 Klein、FLUX.1 Kontext、LaMa 或 OpenCV）
 - **翻译**：支持 60 多种语言的 OCR 与翻译（云端 API 或本地 LLM）
 - **渲染**：支持对齐、自动换行和自定义字体包的自定义文本渲染
 - **超分辨率**：文本区域与整页原画超分辨率放大（2x-AnimeSharpV4）
@@ -131,9 +131,14 @@ MangaTranslator 是免费且开源的。如果它为您节省了时间或改善�
 - FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
 - FLUX.2 Klein 4B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
 - FLUX.2 Klein 9B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B)
+- FLUX.3 Image Klein: [Black Forest Labs](https://huggingface.co/black-forest-labs/flux-3-image-klein)
+- Fibo 2.0 Edit Turbo: [Bria AI](https://huggingface.co/briaai/Fibo-2.0-edit-turbo)
+- Qwen-Image-2.1-Turbo: [Qwen](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo)
+- LaMa Manga: [mayocream](https://huggingface.co/mayocream/lama-manga)
 - Nunchaku: [Nunchaku AI](https://github.com/nunchaku-ai/nunchaku)
-- SDNQ Quants: [Disty0](https://huggingface.co/Disty0)
+- SDNQ Quants: [Disty0](https://huggingface.co/Disty0), [OzzyGT](https://huggingface.co/OzzyGT), [SamuelTallet](https://huggingface.co/SamuelTallet)
 - Unsloth Quants: [Unsloth](https://huggingface.co/unsloth)
+- INT8 ConvRot Weights: [Comfy-Org](https://huggingface.co/Comfy-Org), [ml-resources](https://huggingface.co/ml-resources)
 - stable-diffusion.cpp: [leejet](https://github.com/leejet/stable-diffusion.cpp)
 - 2x-AnimeSharpV4: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
 

@@ -1,5 +1,6 @@
 import re
 
+import gradio as gr
 import pytest
 import torch
 
@@ -66,3 +67,84 @@ def test_reset_defaults_sends_choices_with_every_choice_radio_value(tmp_path):
         choice_values = [c[1] if isinstance(c, tuple) else c for c in update["choices"]]
         assert update["value"] in choice_values, component.elem_id
     assert checked == model_dependent_radios
+
+
+INPAINTING_METHODS = (
+    "flux_klein_9b",
+    "flux_klein_4b",
+    "flux_kontext",
+    "flux3_klein",
+    "fibo2_edit_turbo",
+    "qwen_image_2_1_turbo",
+    "lama_manga",
+    "opencv",
+    "none",
+)
+
+
+@pytest.mark.parametrize("method", INPAINTING_METHODS)
+def test_inpainting_method_change_keeps_radio_values_in_their_choices(tmp_path, method):
+    app = layout.create_layout(
+        models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
+    )
+    handler = next(
+        dep.fn
+        for dep in app.fns.values()
+        if getattr(dep.fn, "__name__", "") == "_update_inpainting_controls"
+    )
+
+    # Start from settings another method left behind
+    updates = handler(method, "nunchaku", "INT8-ConvRot", "Q4_K_XL", 4, True, False)
+
+    backend, _, _, diffusion, text_encoder, steps, *_ = updates
+    for radio in (backend, diffusion, text_encoder):
+        assert radio["value"] in [value for _, value in radio["choices"]]
+    assert steps["value"] <= steps["maximum"]
+    has_backend = method not in ("lama_manga", "opencv", "none")
+    assert backend["visible"] is has_backend
+    assert steps["visible"] is has_backend
+    assert steps["interactive"] is (has_backend and method != "qwen_image_2_1_turbo")
+
+
+def test_a_forced_backend_does_not_replace_the_saved_choice(tmp_path):
+    """Fibo forces sd.cpp; the user's SDNQ and quant choices must survive it."""
+    app = layout.create_layout(
+        models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
+    )
+    dep = next(
+        dep
+        for dep in app.fns.values()
+        if getattr(dep.fn, "__name__", "") == "_update_inpainting_controls"
+    )
+    assert not any(isinstance(block, gr.State) for block in dep.outputs)
+
+    fibo = dep.fn("fibo2_edit_turbo", "sdnq", "Q6_K", "Q6_K_XL", 4, True, False)
+    assert fibo[0]["value"] == "sdcpp"
+    assert fibo[3]["value"] == "INT8-ConvRot"
+
+    flux3 = dep.fn("flux3_klein", "sdnq", "Q6_K", "Q6_K_XL", 4, True, False)
+    assert flux3[0]["value"] == "sdnq"
+    assert flux3[3]["value"] == "Q6_K"
+
+
+def test_backend_and_quant_radios_store_only_user_choices(tmp_path):
+    """Gradio fires .change for programmatic updates too, which would store forced values."""
+    app = layout.create_layout(
+        models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
+    )
+    radio_ids = {
+        block_id
+        for block_id, block in app.blocks.items()
+        if getattr(block, "label", None)
+        in ("Backend", "Diffusion Model Quant", "Text Encoder Model Quant")
+    }
+    assert len(radio_ids) == 3
+
+    events = [
+        event
+        for dep in app.fns.values()
+        for block_id, event in dep.targets
+        if block_id in radio_ids
+    ]
+    assert events
+    assert set(events) == {"input"}

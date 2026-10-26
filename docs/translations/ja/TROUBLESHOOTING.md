@@ -84,7 +84,7 @@
   - 「初期（initial）」画像アップスケーリングを有効にしてアップスケール倍率を調整（例: 2.0x-4.0x）し、「自動スケール（Auto-Scale to Image Size）」を無効にしてください。
 
 - **カラー/グレースケールの吹き出しで、内部の色が保持されない:**
-  - 「カラー吹き出しに Flux インペイントを使用（Use Flux to Inpaint Colored Bubbles）」を有効にしてください。
+  - 「カラー吹き出しにインペインティングモデルを使用（Use Inpainting Model for Colored Bubbles）」を有効にしてください。
 
 - **吹き出しのセグメンテーション品質が低い:**
   - `sam3` に切り替えてみてください（`hf_token` が必要です）。
@@ -134,24 +134,24 @@
   - `hf_token` が設定されていることを確認してください（設定/吹き出し外テキスト設定を参照）。
 
 - **VRAM 不足 / CUDA エラー:**
-  - より低い Flux/text_encoder 量子化を選択してください（sd.cpp のみ）。
-  - 「Klein クロップ領域を ~1MP にアップスケール（Upscale Klein Crops to ~1MP）」を無効にしてください。
-  - Flux.2 Klein 4B（最も小さいモデル）に切り替えてください。
+  - より低い拡散モデル/テキストエンコーダーの量子化を選択してください（sd.cpp のみ）。
+  - 「クロップ領域を ~1MP にアップスケール（Upscale Crops to ~1MP）」を無効にしてください。
+  - Flux.2 Klein 4B（最も小さい拡散モデル）または LaMa Manga（VRAM 1 GB 未満）に切り替えてください。
   - OpenCV を使用してください（VRAM 不要）。
 
-- **Flux OSB インペイントが遅い:**
+- **OSB インペイントが遅い:**
   - 十分な VRAM がある場合は「低 VRAM モード（Low VRAM Mode）」を無効にしてください（SDNQ のみ）。
-  - 「Flux 領域のグループ化（Group Flux Regions）」を有効にして、1回の Flux パスで複数の OSB マスクをインペイントします（品質が低下する場合があります）。
-  - 「Klein クロップ領域を ~1MP にアップスケール（Upscale Klein Crops to ~1MP）」を無効にしてください（品質が低下する場合があります）。
-  - 別のモデル/バックエンドに切り替えてみてください。
+  - 「インペインティング領域のグループ化（Group Inpainting Regions）」を有効にして、1回のパスで複数の OSB マスクをインペイントします（品質が低下する場合があります）。
+  - 「クロップ領域を ~1MP にアップスケール（Upscale Crops to ~1MP）」を無効にしてください（品質が低下する場合があります）。
+  - 別のモデル/バックエンドに切り替えてみてください。LaMa Manga ははるかに高速ですが、再現される細部は少なくなります。
 
 - **インペイント領域のわずかな色ズレ:**
   - Flux.2 Klein モデルはわずかな色の変化を導入する場合があります。「輝度補正（Luminance Correction）」の有効/無効を切り替えてみてください。
   - 色ズレを目立たなくするために、Flux.1 Kontext を使用してください。
 
 - **インペイントの品質が低い:**
-  - より高い Flux/text_encoder 量子化を選択してください（sd.cpp のみ）。
-  - 「Klein クロップ領域を ~1MP にアップスケール（Upscale Klein Crops to ~1MP）」を有効のままにしてください。
+  - より高い拡散モデル/テキストエンコーダーの量子化を選択してください（sd.cpp のみ）。
+  - 「クロップ領域を ~1MP にアップスケール（Upscale Crops to ~1MP）」を有効のままにしてください。
   - 推論ステップ（inference steps）数を増やしてください（Flux.1 Kontext の場合）。
 
 - **Flux.1 Kontext Nunchaku バックエンドが利用できない:**

@@ -34,6 +34,7 @@ from core.ml.model_manager import get_model_manager
 from utils.cancellation import raise_if_cancelled
 from utils.exceptions import CancellationError
 from utils.logging import log_message
+from utils.model_metadata import flux_method_backends
 
 # OSB Expansion and Classification Constants
 OSB_EXPANSION_PIXEL_BUFFER = 5  # for bubbles, nearby OSB regions, panels
@@ -926,17 +927,21 @@ def _build_osb_simple_fill_mask(
 
 
 def _create_osb_inpainter(config: MangaTranslatorConfig, verbose: bool):
-    """Create the Flux inpainter for the configured OSB method, or None for OpenCV/none."""
+    """Create the inpainter for the configured OSB method, or None for OpenCV/none."""
     inpainting_method = config.outside_text.inpainting_method
     inpainter = None
-    flux_labels = {
+    model_labels = {
         "flux_klein_9b": "Flux.2 Klein 9B",
         "flux_klein_4b": "Flux.2 Klein 4B",
         "flux_kontext": "Flux.1 Kontext",
+        "flux3_klein": "Flux.3 Image Klein",
+        "fibo2_edit_turbo": "Fibo 2.0 Edit Turbo",
+        "qwen_image_2_1_turbo": "Qwen-Image 2.1 Turbo",
+        "lama_manga": "LaMa Manga",
     }
-    if inpainting_method in flux_labels:
+    if inpainting_method in model_labels:
         osb = config.outside_text
-        label = flux_labels[inpainting_method]
+        label = model_labels[inpainting_method]
         try:
             inpainter = make_flux_inpainter(
                 inpainting_method,
@@ -953,14 +958,14 @@ def _create_osb_inpainter(config: MangaTranslatorConfig, verbose: bool):
                 sdcpp_text_encoder_quant=osb.flux_sdcpp_text_encoder_quant,
                 verbose=verbose,
             )
-            backend_label = {
-                "sdnq": "SDNQ",
-                "sdcpp": "sd.cpp",
-                "nunchaku": "Nunchaku",
-            }.get(osb.flux_backend, osb.flux_backend)
-            log_message(
-                f"Using {label} ({backend_label}) for inpainting", verbose=verbose
-            )
+            if flux_method_backends(inpainting_method):
+                backend_label = {
+                    "sdnq": "SDNQ",
+                    "sdcpp": "sd.cpp",
+                    "nunchaku": "Nunchaku",
+                }.get(osb.flux_backend, osb.flux_backend)
+                label = f"{label} ({backend_label})"
+            log_message(f"Using {label} for inpainting", verbose=verbose)
         except Exception as e:
             log_message(
                 f"{label} unavailable ({e}), falling back to OpenCV",

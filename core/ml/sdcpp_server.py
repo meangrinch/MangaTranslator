@@ -170,8 +170,8 @@ def run_image_job(
 
 
 class SDCppServerManager:
-    RELEASE_TAG = "master-778-c00a9e9"
-    RELEASE_COMMIT = "c00a9e9"
+    RELEASE_TAG = "master-1015-e41fbcf"
+    RELEASE_COMMIT = "e41fbcf"
     RELEASE_BASE_URL = (
         "https://github.com/leejet/stable-diffusion.cpp/releases/download"
     )
@@ -181,9 +181,9 @@ class SDCppServerManager:
     SERVER_BINARY_ENV = "MANGATRANSLATOR_SDCPP_SERVER_BINARY"
     RELEASE_ASSET_ENV = "MANGATRANSLATOR_SDCPP_RELEASE_ASSET"
     # Prefer the newer matching ROCm build
-    WIN_ROCM_ASSET = "bin-win-rocm-7.13.0-x64.zip"
-    LINUX_ROCM_ASSET = "bin-Linux-Ubuntu-24.04-x86_64-rocm-7.13.0.zip"
-    DARWIN_ARM64_ASSET = "bin-Darwin-macOS-26.4-arm64.zip"
+    WIN_ROCM_ASSET = "bin-win-rocm-10.1.0-x64.zip"
+    LINUX_ROCM_ASSET = "bin-Linux-Ubuntu-24.04-x86_64-rocm-10.1.0.zip"
+    DARWIN_ARM64_ASSET = "bin-Darwin-macOS-26.6.2-arm64.zip"
 
     def __init__(self, install_dir: Path):
         self.install_dir = Path(install_dir)
@@ -624,6 +624,51 @@ class SDCppServerManager:
         detail = self._log_tail(log_path)
         raise ModelError(f"Timed out waiting for sd.cpp server. {detail}")
 
+    def _server_command(
+        self,
+        model_key: str,
+        assets: dict,
+        port: int,
+        cache_args: list[str],
+        steps: int,
+        verbose: bool = False,
+    ) -> list[str]:
+        # Scheduler / ref-image mode left to sd.cpp model auto-detect
+        cmd = [
+            str(assets["executable"]),
+            "--listen-ip",
+            "127.0.0.1",
+            "--listen-port",
+            str(port),
+            "--diffusion-model",
+            str(assets["diffusion_model"]),
+            "--vae",
+            str(assets["vae"]),
+            "--flash-attn",
+            "on",
+            "--eager-load",
+            "--cfg-scale",
+            "1.0",
+            "--img-cfg-scale",
+            "1.0",
+            "--guidance",
+            "2.5" if model_key == "flux_kontext" else "1.0",
+            "--sampling-method",
+            "euler",
+            "--steps",
+            str(steps),
+            "--offload-to-cpu",
+        ]
+        cmd.extend(cache_args)
+        for flag, key in zip(
+            assets["server_args"][::2], assets["server_args"][1::2], strict=False
+        ):
+            cmd.extend([flag, str(assets[key])])
+        cmd.extend(assets["extra_args"])
+        if verbose:
+            cmd.append("-v")
+        return cmd
+
     def ensure_flux_server(
         self,
         model_key: str,
@@ -661,38 +706,9 @@ class SDCppServerManager:
                 cache_mode, num_inference_steps
             )
 
-            # Scheduler / ref-image mode left to sd.cpp model auto-detect
-            cmd = [
-                str(assets["executable"]),
-                "--listen-ip",
-                "127.0.0.1",
-                "--listen-port",
-                str(port),
-                "--diffusion-model",
-                str(assets["diffusion_model"]),
-                "--vae",
-                str(assets["vae"]),
-                "--fa",
-                "--eager-load",
-                "--cfg-scale",
-                "1.0",
-                "--img-cfg-scale",
-                "1.0",
-                "--guidance",
-                "2.5" if model_key == "flux_kontext" else "1.0",
-                "--sampling-method",
-                "euler",
-                "--steps",
-                str(steps),
-                "--offload-to-cpu",
-            ]
-            cmd.extend(cache_args)
-            for flag, key in zip(
-                assets["server_args"][::2], assets["server_args"][1::2], strict=False
-            ):
-                cmd.extend([flag, str(assets[key])])
-            if verbose:
-                cmd.append("-v")
+            cmd = self._server_command(
+                model_key, assets, port, cache_args, steps, verbose=verbose
+            )
 
             creationflags = (
                 subprocess.CREATE_NO_WINDOW

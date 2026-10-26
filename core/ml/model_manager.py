@@ -22,10 +22,44 @@ from ultralytics import YOLO
 from core.device import empty_cache, get_best_device, get_best_dtype, get_device_info
 from core.ml.rtdetr_adapter import RTDetrYOLOAdapter
 from core.ml.sdcpp_server import SDCppServerManager
+from utils.cancellation import raise_if_cancelled
 from utils.download import download_file
 from utils.exceptions import ModelError
 from utils.logging import log_message
 from utils.model_metadata import FLUX_SDCPP_QUANT_FILES
+
+
+def _add_cancel_check_to_denoise_loops(blocks) -> None:
+    """Raise CancellationError after each denoising step of a modular pipeline.
+
+    Modular pipelines have no step callback or interrupt flag; a raising block is the
+    documented way to stop them, and the pipeline stays usable afterwards.
+    """
+    from diffusers.modular_pipelines import (
+        LoopSequentialPipelineBlocks,
+        ModularPipelineBlocks,
+    )
+
+    class CancelCheck(ModularPipelineBlocks):
+        @property
+        def inputs(self):
+            return []
+
+        def __call__(self, components, block_state, i, t):
+            raise_if_cancelled()
+            return components, block_state
+
+    def denoise_loops(block):
+        if (
+            isinstance(block, LoopSequentialPipelineBlocks)
+            and "denoiser" in block.sub_blocks
+        ):
+            yield block
+        for sub_block in getattr(block, "sub_blocks", {}).values():
+            yield from denoise_loops(sub_block)
+
+    for loop in denoise_loops(blocks):
+        loop.sub_blocks["cancel_check"] = CancelCheck()
 
 
 class ModelType(Enum):
@@ -48,8 +82,12 @@ class ModelType(Enum):
     FLUX_KONTEXT_SDNQ_PIPELINE = "flux_kontext_sdnq_pipeline"
     FLUX_KLEIN_9B_PIPELINE = "flux_klein_9b_pipeline"
     FLUX_KLEIN_4B_PIPELINE = "flux_klein_4b_pipeline"
+    FLUX3_KLEIN_SDNQ_PIPELINE = "flux3_klein_sdnq_pipeline"
+    QWEN_IMAGE_21_SDNQ_PIPELINE = "qwen_image_21_sdnq_pipeline"
+    LAMA_MANGA = "lama_manga"
     SDCPP_SERVER = "sdcpp_server"
-    FLUX_KLEIN_SDCPP_VAE = "flux_klein_sdcpp_vae"
+    FLUX2_SDCPP_VAE = "flux2_sdcpp_vae"
+    QWEN_IMAGE_21_SDCPP_VAE = "qwen_image_21_sdcpp_vae"
     FLUX_KONTEXT_SDCPP_CLIP_L = "flux_kontext_sdcpp_clip_l"
     FLUX_KONTEXT_SDCPP_VAE = "flux_kontext_sdcpp_vae"
 
@@ -131,12 +169,16 @@ class ModelManager:
             ModelType.YOLO_PANEL: (
                 model_dir / "yolo" / "manga109_v2023.12.07_l_yolov11.pt"
             ),
+            ModelType.LAMA_MANGA: (model_dir / "lama" / "lama-manga.safetensors"),
             ModelType.MANGA_OCR: (model_dir / "manga-ocr-base"),
             ModelType.PADDLE_OCR_VL: (model_dir / "paddleocr-vl-1.6"),
             ModelType.SDCPP_SERVER: (
                 model_dir / "sdcpp" / SDCppServerManager.RELEASE_TAG
             ),
-            ModelType.FLUX_KLEIN_SDCPP_VAE: (flux_sdcpp_dir / "flux2-vae.safetensors"),
+            ModelType.FLUX2_SDCPP_VAE: (flux_sdcpp_dir / "flux2-vae.safetensors"),
+            ModelType.QWEN_IMAGE_21_SDCPP_VAE: (
+                flux_sdcpp_dir / "qwen_image_2.1_vae_bf16.safetensors"
+            ),
             ModelType.FLUX_KONTEXT_SDCPP_CLIP_L: (
                 flux_kontext_sdcpp_dir / "clip_l.safetensors"
             ),
@@ -156,9 +198,13 @@ class ModelManager:
                 "https://huggingface.co/Kim2091/2x-AnimeSharpV4/resolve/main/"
                 "2x-AnimeSharpV4_Fast_RCAN_PU.safetensors"
             ),
-            ModelType.FLUX_KLEIN_SDCPP_VAE: (
+            ModelType.FLUX2_SDCPP_VAE: (
                 "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/"
                 "split_files/vae/flux2-vae.safetensors"
+            ),
+            ModelType.QWEN_IMAGE_21_SDCPP_VAE: (
+                "https://huggingface.co/unsloth/Qwen-Image-2.1-FP8/resolve/main/"
+                "vae/qwen_image_2.1_vae_bf16.safetensors"
             ),
             ModelType.FLUX_KONTEXT_SDCPP_CLIP_L: (
                 "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/"
@@ -239,9 +285,24 @@ class ModelManager:
         repos[ModelType.FLUX_KLEIN_4B_PIPELINE] = {
             "repo_id": "Disty0/FLUX.2-klein-4B-SDNQ-4bit-dynamic",
         }
-        repos[ModelType.FLUX_KLEIN_SDCPP_VAE] = {
+        repos[ModelType.FLUX3_KLEIN_SDNQ_PIPELINE] = {
+            "repo_id": "OzzyGT/Flux_3_Image_Klein_sdnq_dynamic_4bit",
+        }
+        repos[ModelType.QWEN_IMAGE_21_SDNQ_PIPELINE] = {
+            "repo_id": "SamuelTallet/Qwen-Image-2.1-Turbo-SDNQ-4bit-dynamic-hadamard256",
+        }
+        repos[ModelType.LAMA_MANGA] = {
+            "repo_id": "mayocream/lama-manga",
+            "filename": "lama-manga.safetensors",
+        }
+        # The FLUX.2 VAE, shared by Flux.2 Klein, Flux.3 Image Klein, and Fibo 2.0
+        repos[ModelType.FLUX2_SDCPP_VAE] = {
             "repo_id": "Comfy-Org/flux2-dev",
             "filename": "split_files/vae/flux2-vae.safetensors",
+        }
+        repos[ModelType.QWEN_IMAGE_21_SDCPP_VAE] = {
+            "repo_id": "unsloth/Qwen-Image-2.1-FP8",
+            "filename": "vae/qwen_image_2.1_vae_bf16.safetensors",
         }
         repos[ModelType.FLUX_KONTEXT_SDCPP_CLIP_L] = {
             "repo_id": "comfyanonymous/flux_text_encoders",
@@ -295,12 +356,22 @@ class ModelManager:
         if quant_spec.get("subdir"):
             base_dir = base_dir / quant_spec["subdir"]
         filename = filenames[selected_quant]
-        return {
-            "repo_id": quant_spec["repo_id"],
+        asset = {
+            "repo_id": quant_spec.get("quant_repos", {}).get(
+                selected_quant, quant_spec["repo_id"]
+            ),
             "filename": filename,
-            "path": base_dir / filename,
+            "path": base_dir / Path(filename).name,
             "quant": selected_quant,
         }
+        vision = quant_spec.get("vision")
+        if vision is not None and filename.endswith(".gguf"):
+            asset["vision"] = {
+                "repo_id": vision["repo_id"],
+                "filename": vision["filename"],
+                "path": base_dir / vision["local_name"],
+            }
+        return asset
 
     def _flux_sdcpp_asset_spec(
         self,
@@ -308,27 +379,21 @@ class ModelManager:
         diffusion_quant: str = "",
         text_encoder_quant: str = "",
     ) -> dict:
+        qwen_llm_models = {
+            "diffusion_model": diffusion_quant,
+            "llm": text_encoder_quant,
+        }
         specs = {
             "flux_klein_4b": {
                 "label": "Flux.2 Klein 4B",
-                "quant_models": {
-                    "diffusion_model": diffusion_quant,
-                    "llm": text_encoder_quant,
-                },
-                "fixed_model_types": {
-                    "vae": ModelType.FLUX_KLEIN_SDCPP_VAE,
-                },
+                "quant_models": qwen_llm_models,
+                "fixed_model_types": {"vae": ModelType.FLUX2_SDCPP_VAE},
                 "server_args": ("--llm", "llm"),
             },
             "flux_klein_9b": {
                 "label": "Flux.2 Klein 9B",
-                "quant_models": {
-                    "diffusion_model": diffusion_quant,
-                    "llm": text_encoder_quant,
-                },
-                "fixed_model_types": {
-                    "vae": ModelType.FLUX_KLEIN_SDCPP_VAE,
-                },
+                "quant_models": qwen_llm_models,
+                "fixed_model_types": {"vae": ModelType.FLUX2_SDCPP_VAE},
                 "server_args": ("--llm", "llm"),
             },
             "flux_kontext": {
@@ -343,6 +408,25 @@ class ModelManager:
                 },
                 "server_args": ("--clip_l", "clip_l", "--t5xxl", "t5xxl"),
             },
+            "flux3_klein": {
+                "label": "Flux.3 Image Klein",
+                "quant_models": qwen_llm_models,
+                "fixed_model_types": {"vae": ModelType.FLUX2_SDCPP_VAE},
+                "server_args": ("--llm", "llm"),
+            },
+            "fibo2_edit_turbo": {
+                "label": "Fibo 2.0 Edit Turbo",
+                "quant_models": qwen_llm_models,
+                "fixed_model_types": {"vae": ModelType.FLUX2_SDCPP_VAE},
+                "server_args": ("--llm", "llm"),
+            },
+            "qwen_image_2_1_turbo": {
+                "label": "Qwen-Image 2.1 Turbo",
+                "quant_models": qwen_llm_models,
+                "fixed_model_types": {"vae": ModelType.QWEN_IMAGE_21_SDCPP_VAE},
+                "server_args": ("--llm", "llm"),
+                "extra_args": ("--sigmas", "qwen-image-2.1-turbo"),
+            },
         }
         if model_key not in specs:
             raise ModelError(f"Unknown sd.cpp Flux model key: {model_key}")
@@ -351,6 +435,11 @@ class ModelManager:
             key: self._flux_sdcpp_quant_asset(model_key, key, quant)
             for key, quant in spec["quant_models"].items()
         }
+        spec["extra_assets"] = {}
+        vision = spec["quant_assets"].get("llm", {}).get("vision")
+        if vision is not None:
+            spec["extra_assets"]["llm_vision"] = vision
+            spec["server_args"] = (*spec["server_args"], "--llm_vision", "llm_vision")
         return spec
 
     def ensure_flux_sdcpp_assets(
@@ -384,9 +473,13 @@ class ModelManager:
                 "model_key": model_key,
                 "label": spec["label"],
                 "server_args": spec["server_args"],
+                "extra_args": spec.get("extra_args", ()),
                 "server_model_key": f"{model_key}-{server_quant_key}",
             }
-            for key, asset in spec["quant_assets"].items():
+            for key, asset in (
+                *spec["quant_assets"].items(),
+                *spec["extra_assets"].items(),
+            ):
                 assets[key] = self._ensure_hf_file(
                     asset["repo_id"],
                     asset["filename"],
@@ -1381,6 +1474,196 @@ class ModelManager:
             ModelType.FLUX_KLEIN_4B_PIPELINE, "4b", low_vram=low_vram, verbose=verbose
         )
 
+    def _apply_sdnq_options(self, models, verbose: bool = False) -> None:
+        """Enable SDNQ's INT8 MatMul on GPUs with Triton; sdnq updates the models in place."""
+        from sdnq.common import use_torch_compile as triton_is_available
+        from sdnq.loader import apply_sdnq_options_to_model
+
+        has_gpu = torch.cuda.is_available() or (
+            hasattr(torch, "xpu") and torch.xpu.is_available()
+        )
+        use_quantized_matmul = triton_is_available and has_gpu
+        if use_quantized_matmul:
+            log_message("Applying SDNQ INT8 MatMul optimization...", verbose=verbose)
+        for model in models:
+            apply_sdnq_options_to_model(
+                model, dtype=self.dtype, use_quantized_matmul=use_quantized_matmul
+            )
+
+    def _group_offload(self, *modules) -> None:
+        """Leaf-level group offload, the lowest-VRAM diffusers option (streamed on CUDA)."""
+        from diffusers.hooks import apply_group_offloading
+
+        for module in modules:
+            apply_group_offloading(
+                module,
+                onload_device=self.device,
+                offload_device=torch.device("cpu"),
+                offload_type="leaf_level",
+                use_stream=self.device.type == "cuda",
+            )
+
+    def load_flux3_klein_sdnq(self, low_vram: bool = False, verbose: bool = False):
+        """Load the Flux.3 Image Klein SDNQ 4-bit modular pipeline.
+
+        Args:
+            low_vram: If True, use leaf-level group offload (slower but lower VRAM)
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Flux3DistilledModularPipeline instance
+        """
+        with self._lock:
+            if self.is_loaded(ModelType.FLUX3_KLEIN_SDNQ_PIPELINE):
+                return self.models[ModelType.FLUX3_KLEIN_SDNQ_PIPELINE]
+
+            log_message("Loading Flux.3 Image Klein SDNQ model...", verbose=verbose)
+            try:
+                logging.getLogger("sdnq").setLevel(
+                    logging.WARNING if verbose else logging.ERROR
+                )
+                from diffusers import ComponentsManager, ModularPipeline
+                from sdnq import SDNQConfig  # noqa: F401 - registers into diffusers
+
+                repo_id = self.model_hf_repos[ModelType.FLUX3_KLEIN_SDNQ_PIPELINE][
+                    "repo_id"
+                ]
+                cache_dir = self._hf_cache_dir(self.flux_cache_dir)
+                log_message(f"Loading SDNQ pipeline from {repo_id}...", verbose=verbose)
+                blocks = ModularPipeline.from_pretrained(
+                    repo_id, cache_dir=cache_dir
+                ).blocks
+                # The app sends its own prompt, so BFL's 9B prompt upsampler is never loaded
+                blocks.sub_blocks.pop("prompt_upsampler")
+                _add_cancel_check_to_denoise_loops(blocks)
+                components_manager = None if low_vram else ComponentsManager()
+                pipeline = blocks.init_pipeline(
+                    repo_id, components_manager=components_manager
+                )
+                pipeline.load_components(dtype=self.dtype, cache_dir=cache_dir)
+                self._apply_sdnq_options(
+                    (pipeline.transformer, pipeline.text_encoder), verbose=verbose
+                )
+
+                if low_vram:
+                    log_message(
+                        "Using group offload (low VRAM mode)...", verbose=verbose
+                    )
+                    self._group_offload(pipeline.transformer, pipeline.text_encoder)
+                    pipeline.vae.to(self.device)
+                else:
+                    components_manager.enable_auto_cpu_offload(device=self.device)
+
+                self.models[ModelType.FLUX3_KLEIN_SDNQ_PIPELINE] = pipeline
+                log_message(
+                    "Flux.3 Image Klein SDNQ model loaded successfully.",
+                    verbose=verbose,
+                )
+                return pipeline
+
+            except ImportError as e:
+                raise ModelError(
+                    "diffusers or sdnq not installed or incompatible. "
+                    "Flux.3 Image Klein requires diffusers>=0.42.0 and sdnq>=0.2.8."
+                ) from e
+            except Exception as e:
+                raise ModelError(
+                    f"Failed to load Flux.3 Image Klein SDNQ model: {e}"
+                ) from e
+
+    def load_qwen_image_21_sdnq(self, low_vram: bool = False, verbose: bool = False):
+        """Load the Qwen-Image 2.1 Turbo SDNQ 4-bit pipeline.
+
+        Args:
+            low_vram: If True, use leaf-level group offload and VAE tiling
+            verbose: Whether to print verbose logging
+
+        Returns:
+            QwenImage21Pipeline instance
+        """
+        with self._lock:
+            if self.is_loaded(ModelType.QWEN_IMAGE_21_SDNQ_PIPELINE):
+                return self.models[ModelType.QWEN_IMAGE_21_SDNQ_PIPELINE]
+
+            log_message("Loading Qwen-Image 2.1 Turbo SDNQ model...", verbose=verbose)
+            try:
+                logging.getLogger("sdnq").setLevel(
+                    logging.WARNING if verbose else logging.ERROR
+                )
+                from diffusers import QwenImage21Pipeline
+                from sdnq import SDNQConfig  # noqa: F401 - registers into diffusers
+
+                repo_id = self.model_hf_repos[ModelType.QWEN_IMAGE_21_SDNQ_PIPELINE][
+                    "repo_id"
+                ]
+                log_message(f"Loading SDNQ pipeline from {repo_id}...", verbose=verbose)
+                pipeline = QwenImage21Pipeline.from_pretrained(
+                    repo_id,
+                    dtype=self.dtype,
+                    cache_dir=self._hf_cache_dir(self.flux_cache_dir),
+                )
+                self._apply_sdnq_options(
+                    (pipeline.transformer, pipeline.text_encoder), verbose=verbose
+                )
+
+                if low_vram:
+                    log_message(
+                        "Using group offload (low VRAM mode)...", verbose=verbose
+                    )
+                    self._group_offload(pipeline.transformer, pipeline.text_encoder)
+                    pipeline.vae.to(self.device)
+                    # An untiled ~1MP decode alone peaks above 8 GB
+                    pipeline.vae.enable_tiling(
+                        tile_sample_min_height=512, tile_sample_min_width=512
+                    )
+                else:
+                    pipeline.enable_model_cpu_offload()
+
+                self.models[ModelType.QWEN_IMAGE_21_SDNQ_PIPELINE] = pipeline
+                log_message(
+                    "Qwen-Image 2.1 Turbo SDNQ model loaded successfully.",
+                    verbose=verbose,
+                )
+                return pipeline
+
+            except ImportError as e:
+                raise ModelError(
+                    "diffusers or sdnq not installed or incompatible. "
+                    "Qwen-Image 2.1 Turbo requires diffusers>=0.41.0 and sdnq."
+                ) from e
+            except Exception as e:
+                raise ModelError(
+                    f"Failed to load Qwen-Image 2.1 Turbo SDNQ model: {e}"
+                ) from e
+
+    def load_lama_manga(self, verbose: bool = False):
+        """Load the manga-finetuned Big-LaMa inpainting model through spandrel."""
+        with self._lock:
+            if self.is_loaded(ModelType.LAMA_MANGA):
+                return self.models[ModelType.LAMA_MANGA]
+
+            log_message("Loading LaMa manga inpainting model...", verbose=verbose)
+            from safetensors.torch import load_file
+
+            hf_info = self.model_hf_repos[ModelType.LAMA_MANGA]
+            path = self._ensure_hf_file(
+                hf_info["repo_id"],
+                hf_info["filename"],
+                self.model_paths[ModelType.LAMA_MANGA],
+                verbose=verbose,
+            )
+            # The checkpoint dropped the "generator." prefix that spandrel detects LaMa by
+            state_dict = {
+                f"generator.{key}": tensor
+                for key, tensor in load_file(str(path)).items()
+            }
+            model = (
+                ModelLoader().load_from_state_dict(state_dict).to(self.device).eval()
+            )
+            self.models[ModelType.LAMA_MANGA] = model
+            log_message("LaMa manga inpainting model loaded.", verbose=verbose)
+            return model
+
     def unload_model(
         self, model_type: ModelType, force_gc: bool = True, verbose: bool = False
     ):
@@ -1463,6 +1746,27 @@ class ModelManager:
         self.shutdown_sdcpp_server("flux_klein_4b", verbose=verbose)
         if unloaded:
             log_message("Flux.2 Klein models unloaded.", verbose=verbose)
+
+    def unload_flux3_klein_models(self, verbose: bool = False):
+        """Unload Flux.3 Image Klein (SDNQ pipeline and sd.cpp server)."""
+        unloaded = self._unload_models((ModelType.FLUX3_KLEIN_SDNQ_PIPELINE,), verbose)
+        self.shutdown_sdcpp_server("flux3_klein", verbose=verbose)
+        if unloaded:
+            log_message("Flux.3 Image Klein model unloaded.", verbose=verbose)
+
+    def unload_qwen_image_21_models(self, verbose: bool = False):
+        """Unload Qwen-Image 2.1 Turbo (SDNQ pipeline and sd.cpp server)."""
+        unloaded = self._unload_models(
+            (ModelType.QWEN_IMAGE_21_SDNQ_PIPELINE,), verbose
+        )
+        self.shutdown_sdcpp_server("qwen_image_2_1_turbo", verbose=verbose)
+        if unloaded:
+            log_message("Qwen-Image 2.1 Turbo model unloaded.", verbose=verbose)
+
+    def unload_lama_manga(self, verbose: bool = False):
+        """Unload the LaMa manga inpainting model."""
+        if self._unload_models((ModelType.LAMA_MANGA,), verbose):
+            log_message("LaMa manga inpainting model unloaded.", verbose=verbose)
 
     def unload_all(self, verbose: bool = False):
         """Unload all models and free all GPU memory."""

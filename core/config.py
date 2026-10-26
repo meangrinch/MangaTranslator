@@ -168,10 +168,10 @@ class OutsideTextConfig:
     min_area_ignore_ratio: float = 0.0
     seed: int = 1  # -1 = random
     huggingface_token: str = ""  # Required for Flux Kontext model downloads
-    inpainting_method: str = (
-        "flux_klein_4b"  # flux_klein_9b, flux_klein_4b, flux_kontext, opencv, none
-    )
-    flux_backend: str = "sdnq"  # "sdcpp", "sdnq", "nunchaku" (Kontext only)
+    # flux_klein_9b, flux_klein_4b, flux_kontext, flux3_klein, fibo2_edit_turbo,
+    # qwen_image_2_1_turbo, lama_manga, opencv, none
+    inpainting_method: str = "flux_klein_4b"
+    flux_backend: str = "sdnq"  # "sdcpp", "sdnq", "nunchaku"; see FLUX_METHOD_BACKENDS
     flux_low_vram: bool = True  # Use CPU offload for SDNQ
     flux_sdcpp_cache_mode: str = "none"
     flux_sdcpp_diffusion_quant: str = "Q4_K_M"

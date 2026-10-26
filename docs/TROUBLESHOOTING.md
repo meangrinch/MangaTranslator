@@ -85,7 +85,7 @@
   - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x), also disable "Auto-Scale to Image Size"
 
 - **Colored/grayscale bubbles not preserving interior color:**
-  - Enable "Use Flux to Inpaint Colored Bubbles"
+  - Enable "Use Inpainting Model for Colored Bubbles"
 
 - **Poor segmentation of speech bubbles:**
   - Try switching to `sam3` (requires hf_token)
@@ -135,24 +135,24 @@
   - Ensure hf_token is set (see Configuration/OSB Text Setup)
 
 - **Out of VRAM / CUDA errors:**
-  - Select a lower Flux/text_encoder quant (sd.cpp only)
-  - Disable "Upscale Klein Crops to ~1MP"
-  - Switch to Flux.2 Klein 4B (smallest model)
+  - Select a lower diffusion/text encoder quant (sd.cpp only)
+  - Disable "Upscale Crops to ~1MP"
+  - Switch to Flux.2 Klein 4B (smallest diffusion model) or LaMa Manga (under 1 GB VRAM)
   - Use OpenCV (no VRAM required)
 
-- **Slow Flux OSB inpainting:**
+- **Slow OSB inpainting:**
   - Disable "Low VRAM Mode" if you have sufficient VRAM (SDNQ only)
-  - Enable "Group Flux Regions" to inpaint multiple OSB masks in one Flux pass (at the cost of quality)
-  - Disable "Upscale Klein Crops to ~1MP" (at the cost of quality)
-  - Try switching to a different model/backend
+  - Enable "Group Inpainting Regions" to inpaint multiple OSB masks in one pass (at the cost of quality)
+  - Disable "Upscale Crops to ~1MP" (at the cost of quality)
+  - Try switching to a different model/backend; LaMa Manga is much faster, but rebuilds less detail
 
 - **Minor color shifts in inpainted regions:**
   - Flux.2 Klein models may introduce slight color changes; try enabling/disabling "Luminance Correction"
   - Use Flux.1 Kontext for less noticeable color shifts
 
 - **Poor inpainting quality:**
-  - Select a higher Flux/text_encoder quant (sd.cpp only)
-  - Keep "Upscale Klein Crops to ~1MP" enabled
+  - Select a higher diffusion/text encoder quant (sd.cpp only)
+  - Keep "Upscale Crops to ~1MP" enabled
   - Increase inference steps (for Flux.1 Kontext)
 
 - **Flux.1 Kontext Nunchaku backend not available:**

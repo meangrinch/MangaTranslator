@@ -70,6 +70,21 @@ def test_validate_config_rejects_nunchaku_with_klein():
     validate_config(config)
 
 
+def test_validate_config_rejects_sdnq_with_fibo():
+    config = _config()
+    config.outside_text.inpainting_method = "fibo2_edit_turbo"
+    config.outside_text.flux_backend = "sdnq"
+    with pytest.raises(ValidationError):
+        validate_config(config)
+
+    config.outside_text.flux_backend = "sdcpp"
+    validate_config(config)
+    # Methods without a backend ignore it
+    config.outside_text.inpainting_method = "lama_manga"
+    config.outside_text.flux_backend = "nunchaku"
+    validate_config(config)
+
+
 def test_validate_batch_input_path(tmp_path):
     assert validate_batch_input_path(tmp_path) == tmp_path
 

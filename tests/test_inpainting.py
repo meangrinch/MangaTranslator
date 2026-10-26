@@ -3,8 +3,17 @@ import pytest
 import torch
 from PIL import Image
 
-from core.image.inpainting import FluxKleinInpainter
+from core.image.inpainting import (
+    Fibo2Inpainter,
+    Flux3KleinInpainter,
+    FluxKleinInpainter,
+    FluxKontextInpainter,
+    LamaInpainter,
+    QwenImage21Inpainter,
+    make_flux_inpainter,
+)
 from core.image.ocr_detection import OutsideTextDetector
+from utils.model_metadata import FLUX_SDCPP_INT8_CONVROT
 
 
 def test_klein_inpaints_masks_wider_than_its_max_resolution(monkeypatch):
@@ -61,3 +70,110 @@ def test_osb_groups_keep_results_aligned_after_a_degenerate_box():
     assert groups[0]["mask_indices"] == [1]
     assert groups[0]["confidence"] == 0.5
     assert groups[0]["original_bbox"]["x"] == 100
+
+
+def _make(method, **overrides):
+    kwargs = {
+        "device": torch.device("cpu"),
+        "huggingface_token": "",
+        "num_inference_steps": 4,
+        "backend": "sdcpp",
+        "low_vram": True,
+        "residual_diff_threshold": 0.15,
+        "luminance_correction": False,
+        "upscale_small_crops": True,
+        "sdcpp_cache_mode": "none",
+        "sdcpp_diffusion_quant": "",
+        "sdcpp_text_encoder_quant": "",
+    }
+    kwargs.update(overrides)
+    return make_flux_inpainter(method, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("method", "cls"),
+    [
+        ("flux_klein_4b", FluxKleinInpainter),
+        ("flux3_klein", Flux3KleinInpainter),
+        ("fibo2_edit_turbo", Fibo2Inpainter),
+        ("qwen_image_2_1_turbo", QwenImage21Inpainter),
+        ("lama_manga", LamaInpainter),
+        ("flux_kontext", FluxKontextInpainter),
+    ],
+)
+def test_make_flux_inpainter_dispatches_each_method(method, cls):
+    assert type(_make(method)) is cls
+
+
+def test_fibo_rejects_sdnq_backend():
+    with pytest.raises(ValueError):
+        _make("fibo2_edit_turbo", backend="sdnq")
+
+
+def test_new_models_default_to_their_own_quants():
+    fibo = _make("fibo2_edit_turbo")
+    assert fibo.sdcpp_diffusion_quant == FLUX_SDCPP_INT8_CONVROT
+    assert fibo.sdcpp_text_encoder_quant == "Q4_K_XL"
+
+
+def test_qwen_runs_its_fixed_steps_on_a_32px_grid():
+    inpainter = _make("qwen_image_2_1_turbo", num_inference_steps=3)
+    assert inpainter.num_inference_steps == 8
+
+    prepared, _, _ = inpainter._prepare_image_for_inference(
+        Image.new("RGB", (700, 300))
+    )
+    assert prepared.size[0] % 32 == 0
+    assert prepared.size[1] % 32 == 0
+
+
+def test_lama_gets_the_crop_mask_at_native_size(monkeypatch):
+    inpainter = _make("lama_manga", upscale_small_crops=True)
+    seen = {}
+
+    def fake_model(image, mask):
+        seen["image"] = tuple(image.shape)
+        seen["mask"] = tuple(mask.shape)
+        seen["mask_sum"] = float(mask.sum())
+        return torch.ones_like(image)
+
+    fake_model.device = torch.device("cpu")
+    monkeypatch.setattr(
+        inpainter, "load_models", lambda: setattr(inpainter, "pipeline", fake_model)
+    )
+    page = Image.new("RGB", (400, 300), "black")
+    mask = np.zeros((300, 400), dtype=bool)
+    mask[100:140, 150:250] = True
+
+    result = np.asarray(inpainter.inpaint_mask(page, mask, seed=-1))
+
+    # No ~1MP upscale: LaMa sees the padded crop itself, mask channel included
+    _, _, height, width = seen["image"]
+    assert seen["mask"] == (1, 1, height, width)
+    assert width * height < 400 * 300 + 1
+    assert seen["mask_sum"] == mask.sum()
+    assert result[120, 200].min() > 200
+    assert result[10, 10].max() == 0
+
+
+def test_lama_checkpoint_loads_through_spandrel(tmp_path, monkeypatch):
+    from safetensors.torch import save_file
+    from spandrel.architectures.LaMa import LaMa
+
+    from core.ml.model_manager import ModelType, get_model_manager
+
+    # mayocream/lama-manga stores the generator's own keys ("model.1.ffc...")
+    state_dict = {
+        key.removeprefix("model."): tensor.contiguous()
+        for key, tensor in LaMa(in_nc=4, out_nc=3).state_dict().items()
+    }
+    checkpoint = tmp_path / "lama-manga.safetensors"
+    save_file(state_dict, str(checkpoint))
+    manager = get_model_manager()
+    monkeypatch.setattr(manager, "_ensure_hf_file", lambda *args, **kwargs: checkpoint)
+    monkeypatch.setitem(manager.models, ModelType.LAMA_MANGA, None)
+
+    model = manager.load_lama_manga()
+
+    assert model.architecture.id == "LaMa"
+    manager.unload_lama_manga()

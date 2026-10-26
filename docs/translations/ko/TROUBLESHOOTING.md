@@ -84,7 +84,7 @@
   - "초기 (initial)" 이미지 업스케일링을 활성화하고 업스케일 배율을 조절하세요 (예: 2.0x-4.0x). 이때 "자동 스케일 (Auto-Scale to Image Size)" 옵션은 비활성화해야 합니다.
 
 - **컬러/그레이스케일 말풍선의 내부 색상이 보존되지 않음:**
-  - "컬러 말풍선에 Flux 인페인팅 사용 (Use Flux to Inpaint Colored Bubbles)" 옵션을 활성화하세요.
+  - "컬러 말풍선에 인페인팅 모델 사용 (Use Inpainting Model for Colored Bubbles)" 옵션을 활성화하세요.
 
 - **말풍선 분할(세그멘테이션) 품질이 떨어짐:**
   - `sam3` 모델로 전환해 보세요 (`hf_token` 설정 필요).
@@ -134,24 +134,24 @@
   - `hf_token`이 설정되어 있는지 확인하세요 (설정/말풍선 외부 텍스트 설정 참고).
 
 - **VRAM 부족 / CUDA 에러 발생:**
-  - 더 낮은 Flux/text_encoder 양자화(quant) 버전을 선택하세요 (sd.cpp 전용).
-  - "Klein 자르기 영역을 ~1MP로 업스케일 (Upscale Klein Crops to ~1MP)" 옵션을 비활성화하세요.
-  - Flux.2 Klein 4B(가장 작고 가벼운 모델)로 전환하세요.
+  - 더 낮은 확산 모델/텍스트 인코더 양자화(quant) 버전을 선택하세요 (sd.cpp 전용).
+  - "자르기 영역을 ~1MP로 업스케일 (Upscale Crops to ~1MP)" 옵션을 비활성화하세요.
+  - Flux.2 Klein 4B(가장 작은 확산 모델) 또는 LaMa Manga(VRAM 1 GB 미만)로 전환하세요.
   - OpenCV를 사용하세요 (VRAM을 사용하지 않음).
 
-- **Flux OSB 인페인팅이 너무 느림:**
+- **OSB 인페인팅이 너무 느림:**
   - VRAM이 충분한 경우 "저비디오메모리 모드 (Low VRAM Mode)"를 비활성화하세요 (SDNQ 전용).
-  - "Flux 영역 그룹화 (Group Flux Regions)"를 활성화하여 한 번의 Flux 패스로 여러 OSB 마스크를 한 번에 처리하도록 하세요 (품질은 약간 저하될 수 있습니다).
-  - "Klein 자르기 영역을 ~1MP로 업스케일 (Upscale Klein Crops to ~1MP)" 옵션을 비활성화하세요 (품질 저하 가능).
-  - 다른 모델/백엔드로 전환해 보세요.
+  - "인페인팅 영역 그룹화 (Group Inpainting Regions)"를 활성화하여 한 번의 패스로 여러 OSB 마스크를 한 번에 처리하도록 하세요 (품질은 약간 저하될 수 있습니다).
+  - "자르기 영역을 ~1MP로 업스케일 (Upscale Crops to ~1MP)" 옵션을 비활성화하세요 (품질 저하 가능).
+  - 다른 모델/백엔드로 전환해 보세요. LaMa Manga는 훨씬 빠르지만 복원되는 디테일이 적습니다.
 
 - **인페인팅된 영역의 미세한 색감 차이:**
   - Flux.2 Klein 모델은 약간의 색감 변화를 일으킬 수 있습니다. "조도 보정 (Luminance Correction)" 옵션을 활성화하거나 비활성화해 보며 테스트하세요.
   - 색감 차이를 최소화하려면 Flux.1 Kontext를 사용하세요.
 
 - **인페인팅 결과물의 품질이 낮음:**
-  - 더 높은 Flux/text_encoder 양자화(quant) 버전을 선택하세요 (sd.cpp 전용).
-  - "Klein 자르기 영역을 ~1MP로 업스케일 (Upscale Klein Crops to ~1MP)" 옵션을 활성화 상태로 유지하세요.
+  - 더 높은 확산 모델/텍스트 인코더 양자화(quant) 버전을 선택하세요 (sd.cpp 전용).
+  - "자르기 영역을 ~1MP로 업스케일 (Upscale Crops to ~1MP)" 옵션을 활성화 상태로 유지하세요.
   - 추론 단계(inference steps) 수를 늘리세요 (Flux.1 Kontext 사용 시).
 
 - **Flux.1 Kontext Nunchaku 백엔드를 사용할 수 없음:**

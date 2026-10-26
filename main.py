@@ -15,7 +15,11 @@ from utils.model_metadata import (
     FLUX_SDCPP_DIFFUSION_QUANTS,
     FLUX_SDCPP_TEXT_ENCODER_QUANTS,
     NO_WEB_SEARCH_PROVIDERS,
+    flux_method_backends,
+    flux_sdcpp_diffusion_quants,
     flux_sdcpp_text_encoder_quants,
+    flux_steps_range,
+    flux_valid_backend,
 )
 
 # Model used when --model-name is not given; the keys are the --provider choices
@@ -758,7 +762,17 @@ def main():
     parser.add_argument(
         "--osb-inpainting-method",
         type=str,
-        choices=["flux_klein_9b", "flux_klein_4b", "flux_kontext", "opencv", "none"],
+        choices=[
+            "fibo2_edit_turbo",
+            "flux3_klein",
+            "qwen_image_2_1_turbo",
+            "flux_klein_9b",
+            "flux_klein_4b",
+            "flux_kontext",
+            "lama_manga",
+            "opencv",
+            "none",
+        ],
         default="flux_klein_4b",
         help="Inpainting method for outside text removal.",
     )
@@ -766,10 +780,10 @@ def main():
         "--osb-flux-backend",
         type=str,
         choices=["sdcpp", "sdnq", "nunchaku"],
-        default="sdnq",
+        default=None,
         help=(
-            "Backend for Flux inpainting. "
-            "'sdcpp' and 'sdnq' support Flux Klein/Kontext; "
+            "Backend for diffusion inpainting (default: sdnq, or sdcpp for Fibo). "
+            "'sdcpp' supports every diffusion model; 'sdnq' all but Fibo 2.0; "
             "'nunchaku' is CUDA-only and Kontext-only."
         ),
     )
@@ -777,7 +791,7 @@ def main():
         "--osb-no-flux-low-vram",
         dest="osb_flux_low_vram",
         action="store_false",
-        help="Disable CPU offload for Flux SDNQ models. Faster but uses more VRAM.)",
+        help="Disable CPU offload for SDNQ models. Faster but uses more VRAM.)",
     )
     parser.set_defaults(osb_flux_low_vram=True)
     parser.add_argument(
@@ -786,7 +800,7 @@ def main():
         choices=["spectrum", "cache-dit", "taylorseer", "dbcache", "none"],
         default="none",
         help=(
-            "Caching method for Flux via sd.cpp. Ordered from fastest/worst quality to slowest/best quality."
+            "Caching method for sd.cpp. Ordered from fastest/worst quality to slowest/best quality."
             "Warmup is 25%% of the selected step count."
         ),
     )
@@ -794,10 +808,11 @@ def main():
         "--osb-flux-sdcpp-diffusion-quant",
         type=str,
         choices=FLUX_SDCPP_DIFFUSION_QUANTS,
-        default="Q4_K_M",
+        default=None,
         help=(
-            "Quantization level for the Flux model via sd.cpp. "
-            "Ordered from largest/best quality to smallest/lowest quality."
+            "Quantization level for the diffusion model via sd.cpp. "
+            "Ordered from largest/best quality to smallest/lowest quality "
+            "(defaults: Q4_K_M, or INT8-ConvRot for Fibo 2.0)."
         ),
     )
     parser.add_argument(
@@ -808,37 +823,40 @@ def main():
         help=(
             "Quantization level for the text encoder model via sd.cpp. "
             "Ordered from largest/best quality to smallest/lowest quality. "
-            "(defaults: Q4_K_XL for Klein and Q4_K_M for Kontext)."
+            "(defaults: Q4_K_XL, or Q4_K_M for Kontext)."
         ),
     )
     parser.add_argument(
         "--osb-no-flux-upscale-small-crops",
         dest="osb_flux_upscale_small_crops",
         action="store_false",
-        help="Disable scaling small Flux Klein OSB crops to ~1MP before inference",
+        help="Disable scaling small OSB crops to ~1MP before inference (not Kontext or LaMa)",
     )
     parser.set_defaults(osb_flux_upscale_small_crops=True)
     parser.add_argument(
         "--osb-flux-group-regions",
         action="store_true",
-        help="Group non-solid OSB regions into one expanded Flux mask per page",
+        help="Group non-solid OSB regions into one expanded inpainting mask per page",
     )
 
     parser.add_argument(
         "--osb-flux-steps",
         type=int,
-        default=4,
+        default=None,
         help=(
-            "Number of denoising steps for Flux models. "
+            "Number of denoising steps for diffusion models (default: the model's). "
+            "Fibo: 4 is recommended (1-12). "
+            "Flux.3: 16 is recommended (1-16). "
+            "Qwen-Image Turbo: fixed at 8. "
             "Klein: 4 is recommended (1-12). "
-            "Kontext: 6-15 is recommended (1-30). "
+            "Kontext: 6-15 is recommended (1-30)."
         ),
     )
     parser.add_argument(
         "--osb-no-luminance-correction",
         dest="osb_flux_luminance_correction",
         action="store_false",
-        help="Disable luminance correction that matches generated patch brightness to surrounding context (Klein only)",
+        help="Disable luminance correction that matches generated patch brightness to surrounding context (not Kontext or LaMa)",
     )
     parser.set_defaults(osb_flux_luminance_correction=True)
     parser.add_argument(
@@ -1063,14 +1081,28 @@ def main():
 
     init_file_logging()
 
-    if args.osb_flux_backend == "nunchaku" and args.osb_inpainting_method in (
-        "flux_klein_9b",
-        "flux_klein_4b",
-    ):
+    osb_method = args.osb_inpainting_method
+    osb_backends = flux_method_backends(osb_method)
+    if args.osb_flux_backend is None:
+        args.osb_flux_backend = flux_valid_backend(osb_method, "sdnq")
+    elif osb_backends and args.osb_flux_backend not in osb_backends:
         parser.error(
-            "--osb-flux-backend nunchaku is only supported with "
-            "--osb-inpainting-method flux_kontext."
+            f"--osb-flux-backend {args.osb_flux_backend} is not supported with "
+            f"--osb-inpainting-method {osb_method}. "
+            f"Valid backends: {', '.join(osb_backends)}."
         )
+    if args.osb_flux_steps is None:
+        args.osb_flux_steps = flux_steps_range(osb_method)[0]
+    if args.osb_flux_backend == "sdcpp" and args.osb_flux_sdcpp_diffusion_quant:
+        valid_diffusion_quants = flux_sdcpp_diffusion_quants(osb_method)
+        if args.osb_flux_sdcpp_diffusion_quant not in valid_diffusion_quants:
+            parser.error(
+                "--osb-flux-sdcpp-diffusion-quant "
+                f"{args.osb_flux_sdcpp_diffusion_quant} is not available for "
+                f"{osb_method}. "
+                "Valid diffusion quants: "
+                f"{', '.join(valid_diffusion_quants) or 'none'}."
+            )
     if args.osb_flux_backend == "sdcpp" and args.osb_flux_sdcpp_text_encoder_quant:
         valid_text_encoder_quants = flux_sdcpp_text_encoder_quants(
             args.osb_inpainting_method
@@ -1307,7 +1339,7 @@ def main():
             flux_backend=args.osb_flux_backend,
             flux_low_vram=args.osb_flux_low_vram,
             flux_sdcpp_cache_mode=args.osb_flux_sdcpp_cache_mode,
-            flux_sdcpp_diffusion_quant=args.osb_flux_sdcpp_diffusion_quant,
+            flux_sdcpp_diffusion_quant=args.osb_flux_sdcpp_diffusion_quant or "",
             flux_sdcpp_text_encoder_quant=args.osb_flux_sdcpp_text_encoder_quant or "",
             flux_num_inference_steps=args.osb_flux_steps,
             flux_luminance_correction=args.osb_flux_luminance_correction,

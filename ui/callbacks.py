@@ -17,7 +17,7 @@ from core.validation import (
 from utils import cancellation
 from utils.exceptions import CancellationError, ValidationError
 from utils.model_metadata import (
-    FLUX_SDCPP_DIFFUSION_QUANTS,
+    flux_sdcpp_diffusion_quants,
     flux_sdcpp_text_encoder_quants,
     flux_sdcpp_valid_text_encoder_quant,
     is_anthropic_model_family,
@@ -49,18 +49,6 @@ SUCCESS_PREFIX = "✅ "
 
 def _radio_choices(values):
     return [(value, value) for value in values]
-
-
-def _flux_backend_choices(method: str):
-    if method in ("flux_klein_9b", "flux_klein_4b"):
-        return [("sd.cpp", "sdcpp"), ("SDNQ", "sdnq")]
-    if method == "flux_kontext":
-        return [
-            ("sd.cpp", "sdcpp"),
-            ("SDNQ", "sdnq"),
-            ("Nunchaku (CUDA)", "nunchaku"),
-        ]
-    return [("SDNQ", "sdnq")]
 
 
 def _clean_error_message(message: Any) -> str:
@@ -1768,7 +1756,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         gr.update(value=default_ui_state.outside_text.inpainting_method),
         gr.update(
             value=default_ui_state.outside_text.flux_backend,
-            choices=_flux_backend_choices(
+            choices=utils.flux_backend_choices(
                 default_ui_state.outside_text.inpainting_method
             ),
         ),
@@ -1777,7 +1765,11 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         default_ui_state.outside_text.flux_sdcpp_cache_mode,
         gr.update(
             value=default_ui_state.outside_text.flux_sdcpp_diffusion_quant,
-            choices=_radio_choices(FLUX_SDCPP_DIFFUSION_QUANTS),
+            choices=_radio_choices(
+                flux_sdcpp_diffusion_quants(
+                    default_ui_state.outside_text.inpainting_method
+                )
+            ),
         ),
         default_ui_state.outside_text.flux_sdcpp_diffusion_quant,
         gr.update(

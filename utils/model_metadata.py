@@ -1,5 +1,21 @@
 import re
 
+FLUX_SDCPP_INT8_CONVROT = "INT8-ConvRot"
+
+_QWEN3_VL_4B_GGUF = {
+    "repo_id": "unsloth/Qwen3-VL-4B-Instruct-GGUF",
+    "default": "Q4_K_XL",
+    "filenames": {
+        "Q8_0": "Qwen3-VL-4B-Instruct-Q8_0.gguf",
+        "Q6_K_XL": "Qwen3-VL-4B-Instruct-UD-Q6_K_XL.gguf",
+        "Q5_K_XL": "Qwen3-VL-4B-Instruct-UD-Q5_K_XL.gguf",
+        "Q4_K_XL": "Qwen3-VL-4B-Instruct-UD-Q4_K_XL.gguf",
+        "Q3_K_XL": "Qwen3-VL-4B-Instruct-UD-Q3_K_XL.gguf",
+    },
+}
+
+# "quant_repos" overrides "repo_id" for single quants. "vision" is the projector a GGUF text
+# encoder needs for reference-image editing; the INT8-ConvRot text encoders contain theirs.
 FLUX_SDCPP_QUANT_FILES = {
     "flux_klein_4b": {
         "diffusion_model": {
@@ -75,21 +91,144 @@ FLUX_SDCPP_QUANT_FILES = {
             },
         },
     },
+    "flux3_klein": {
+        "diffusion_model": {
+            "repo_id": "unsloth/flux-3-image-klein-GGUF",
+            "default": "Q4_K_M",
+            # unsloth's INT8 file is a torchao checkpoint, which sd.cpp can't read
+            "quant_repos": {
+                FLUX_SDCPP_INT8_CONVROT: "ml-resources/flux-3-image-klein-comfy"
+            },
+            "filenames": {
+                FLUX_SDCPP_INT8_CONVROT: (
+                    "diffusion_models/flux3-image-klein-int8-convrot.safetensors"
+                ),
+                "Q8_0": "flux-3-image-klein-Q8_0.gguf",
+                "Q6_K": "flux-3-image-klein-Q6_K.gguf",
+                "Q5_K_M": "flux-3-image-klein-Q5_K_M.gguf",
+                "Q4_K_M": "flux-3-image-klein-Q4_K_M.gguf",
+                "Q3_K_M": "flux-3-image-klein-Q3_K_M.gguf",
+            },
+        },
+        "llm": {
+            **_QWEN3_VL_4B_GGUF,
+            "quant_repos": {FLUX_SDCPP_INT8_CONVROT: "unsloth/flux-3-image-klein-FP8"},
+            "filenames": {
+                FLUX_SDCPP_INT8_CONVROT: (
+                    "flux-3-image-klein-text_encoder-INT8-ConvRot.safetensors"
+                ),
+                **_QWEN3_VL_4B_GGUF["filenames"],
+            },
+        },
+    },
+    "fibo2_edit_turbo": {
+        "diffusion_model": {
+            "repo_id": "Comfy-Org/Fibo-2.0",
+            "default": FLUX_SDCPP_INT8_CONVROT,
+            "filenames": {
+                FLUX_SDCPP_INT8_CONVROT: (
+                    "diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors"
+                ),
+            },
+        },
+        "llm": {
+            **_QWEN3_VL_4B_GGUF,
+            "vision": {
+                "repo_id": "unsloth/Qwen3-VL-4B-Instruct-GGUF",
+                "filename": "mmproj-F16.gguf",
+                "local_name": "Qwen3-VL-4B-Instruct-mmproj-F16.gguf",
+            },
+        },
+    },
+    "qwen_image_2_1_turbo": {
+        "diffusion_model": {
+            "repo_id": "unsloth/Qwen-Image-2.1-Turbo-GGUF",
+            "default": "Q4_K_M",
+            # unsloth's Turbo INT8-ConvRot is a torchao checkpoint, which sd.cpp can't read
+            "quant_repos": {FLUX_SDCPP_INT8_CONVROT: "Comfy-Org/Qwen-Image-2.1"},
+            "filenames": {
+                FLUX_SDCPP_INT8_CONVROT: (
+                    "diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors"
+                ),
+                "Q8_0": "qwen-image-2.1-turbo-Q8_0.gguf",
+                "Q6_K": "qwen-image-2.1-turbo-Q6_K.gguf",
+                "Q5_K_M": "qwen-image-2.1-turbo-Q5_K_M.gguf",
+                "Q4_K_M": "qwen-image-2.1-turbo-Q4_K_M.gguf",
+                "Q3_K_M": "qwen-image-2.1-turbo-Q3_K_M.gguf",
+            },
+        },
+        "llm": {
+            "repo_id": "unsloth/Qwen3-VL-8B-Instruct-GGUF",
+            "default": "Q4_K_XL",
+            # Turbo shares Qwen-Image-2.1's text encoder byte for byte
+            "quant_repos": {FLUX_SDCPP_INT8_CONVROT: "unsloth/Qwen-Image-2.1-FP8"},
+            "filenames": {
+                FLUX_SDCPP_INT8_CONVROT: (
+                    "Qwen-Image-2.1-text_encoder-INT8-ConvRot.safetensors"
+                ),
+                "Q8_0": "Qwen3-VL-8B-Instruct-Q8_0.gguf",
+                "Q6_K_XL": "Qwen3-VL-8B-Instruct-UD-Q6_K_XL.gguf",
+                "Q5_K_XL": "Qwen3-VL-8B-Instruct-UD-Q5_K_XL.gguf",
+                "Q4_K_XL": "Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf",
+                "Q3_K_XL": "Qwen3-VL-8B-Instruct-UD-Q3_K_XL.gguf",
+            },
+            "vision": {
+                "repo_id": "unsloth/Qwen3-VL-8B-Instruct-GGUF",
+                "filename": "mmproj-F16.gguf",
+                "local_name": "Qwen3-VL-8B-Instruct-mmproj-F16.gguf",
+            },
+        },
+    },
 }
 
-FLUX_SDCPP_DIFFUSION_QUANTS = tuple(
-    FLUX_SDCPP_QUANT_FILES["flux_klein_4b"]["diffusion_model"]["filenames"]
-)
-FLUX_SDCPP_QWEN_QUANTS = tuple(
-    FLUX_SDCPP_QUANT_FILES["flux_klein_4b"]["llm"]["filenames"]
-)
-FLUX_SDCPP_T5_QUANTS = tuple(
-    FLUX_SDCPP_QUANT_FILES["flux_kontext"]["t5xxl"]["filenames"]
-)
-FLUX_SDCPP_TEXT_ENCODER_QUANTS = FLUX_SDCPP_QWEN_QUANTS + tuple(
-    quant for quant in FLUX_SDCPP_T5_QUANTS if quant not in FLUX_SDCPP_QWEN_QUANTS
-)
+
+def _sdcpp_quant_union(*asset_keys: str) -> tuple[str, ...]:
+    """Every quant offered for the asset keys across models, INT8-ConvRot first, then
+    in first-seen order (matching the per-model lists)."""
+    quants = dict.fromkeys(
+        quant
+        for asset_key in asset_keys
+        for assets in FLUX_SDCPP_QUANT_FILES.values()
+        for quant in assets.get(asset_key, {}).get("filenames", ())
+    )
+    return tuple(sorted(quants, key=lambda quant: quant != FLUX_SDCPP_INT8_CONVROT))
+
+
+FLUX_SDCPP_DIFFUSION_QUANTS = _sdcpp_quant_union("diffusion_model")
+FLUX_SDCPP_TEXT_ENCODER_QUANTS = _sdcpp_quant_union("llm", "t5xxl")
 FLUX_BACKENDS = ("sdcpp", "sdnq", "nunchaku")
+
+# Backends each diffusion inpainting method supports
+FLUX_METHOD_BACKENDS = {
+    "flux_klein_9b": ("sdcpp", "sdnq"),
+    "flux_klein_4b": ("sdcpp", "sdnq"),
+    "flux_kontext": ("sdcpp", "sdnq", "nunchaku"),
+    "flux3_klein": ("sdcpp", "sdnq"),
+    "fibo2_edit_turbo": ("sdcpp",),
+    "qwen_image_2_1_turbo": ("sdcpp", "sdnq"),
+}
+
+# (default, maximum) denoising steps per diffusion inpainting method
+FLUX_METHOD_STEPS = {
+    "flux_klein_9b": (4, 12),
+    "flux_klein_4b": (4, 12),
+    "flux_kontext": (8, 30),
+    "flux3_klein": (16, 16),
+    "fibo2_edit_turbo": (4, 12),
+    "qwen_image_2_1_turbo": (8, 8),
+}
+
+# Sampled on the checkpoint's fixed sigma schedule, so the step count can't change
+FLUX_FIXED_STEP_METHODS = ("qwen_image_2_1_turbo",)
+
+# Inpainted through FluxKleinInpainter's crop pipeline (~1MP scaling, luminance correction)
+KLEIN_PIPELINE_METHODS = (
+    "flux_klein_9b",
+    "flux_klein_4b",
+    "flux3_klein",
+    "fibo2_edit_turbo",
+    "qwen_image_2_1_turbo",
+)
 
 # Providers whose API has no built-in web search tool this app can use
 NO_WEB_SEARCH_PROVIDERS = ("OpenAI-Compatible", "DeepSeek", "Moonshot AI", "OpenCode")
@@ -99,7 +238,7 @@ def flux_sdcpp_text_encoder_asset_key(model_key: str) -> str | None:
     """Map a Flux model key to its sd.cpp text-encoder asset key."""
     if model_key == "flux_kontext":
         return "t5xxl"
-    if model_key in ("flux_klein_4b", "flux_klein_9b"):
+    if model_key in FLUX_SDCPP_QUANT_FILES:
         return "llm"
     return None
 
@@ -108,6 +247,28 @@ def flux_sdcpp_quant_default(model_key: str, asset_key: str) -> str:
     """Default quant for a model/asset, sourced from FLUX_SDCPP_QUANT_FILES."""
     spec = FLUX_SDCPP_QUANT_FILES.get(model_key, {}).get(asset_key)
     return spec["default"] if spec else ""
+
+
+def _valid_quant(quants: tuple[str, ...], quant: str, default: str) -> str:
+    if quant in quants:
+        return quant
+    if default in quants:
+        return default
+    return quants[0] if quants else ""
+
+
+def flux_sdcpp_diffusion_quants(model_key: str) -> tuple[str, ...]:
+    spec = FLUX_SDCPP_QUANT_FILES.get(model_key, {}).get("diffusion_model")
+    return tuple(spec["filenames"]) if spec else ()
+
+
+def flux_sdcpp_valid_diffusion_quant(model_key: str, quant: str) -> str:
+    """Return a diffusion-model quant that is valid for the selected Flux model."""
+    quants = flux_sdcpp_diffusion_quants(model_key) or FLUX_SDCPP_DIFFUSION_QUANTS
+    default = flux_sdcpp_quant_default(
+        model_key, "diffusion_model"
+    ) or flux_sdcpp_quant_default("flux_klein_4b", "diffusion_model")
+    return _valid_quant(quants, quant, default)
 
 
 def flux_sdcpp_text_encoder_quants(model_key: str) -> tuple[str, ...]:
@@ -127,20 +288,28 @@ def flux_sdcpp_text_encoder_default(model_key: str) -> str:
 def flux_sdcpp_valid_text_encoder_quant(model_key: str, quant: str) -> str:
     """Return a text-encoder quant that is valid for the selected Flux model."""
     quants = flux_sdcpp_text_encoder_quants(model_key) or FLUX_SDCPP_TEXT_ENCODER_QUANTS
-    default = flux_sdcpp_text_encoder_default(model_key)
-    if quant in quants:
-        return quant
-    if default in quants:
-        return default
-    return quants[0] if quants else ""
+    return _valid_quant(quants, quant, flux_sdcpp_text_encoder_default(model_key))
+
+
+def flux_method_backends(model_key: str) -> tuple[str, ...]:
+    """Backends of a diffusion inpainting method; empty for LaMa, OpenCV, and none."""
+    return FLUX_METHOD_BACKENDS.get(model_key, ())
 
 
 def flux_valid_backend(model_key: str, backend: str) -> str:
-    if model_key in ("flux_klein_4b", "flux_klein_9b"):
-        return backend if backend in ("sdcpp", "sdnq") else "sdnq"
-    if model_key == "flux_kontext":
-        return backend if backend in FLUX_BACKENDS else "sdnq"
-    return backend if backend in FLUX_BACKENDS else "sdnq"
+    backends = flux_method_backends(model_key) or FLUX_BACKENDS
+    if backend in backends:
+        return backend
+    return "sdnq" if "sdnq" in backends else backends[0]
+
+
+def flux_steps_range(model_key: str) -> tuple[int, int]:
+    """(default, maximum) denoising steps; Klein's range for non-diffusion methods."""
+    return FLUX_METHOD_STEPS.get(model_key, FLUX_METHOD_STEPS["flux_klein_4b"])
+
+
+def flux_steps_fixed(model_key: str) -> bool:
+    return model_key in FLUX_FIXED_STEP_METHODS
 
 
 def get_max_tokens_cap(provider: str, model_name: str | None) -> int | None:

@@ -80,7 +80,7 @@ One-click app that translates manga, manhwa, manhua, and comics using ML models.
 - **Interfaces**: Web UI (Gradio) and CLI
 - **Processing**: Single image, folder, and ZIP/CBZ archive batch processing (with directory preservation)
 - **Detection**: Speech bubble and outside-bubble text detection (YOLO, SAM 2.1/3)
-- **Cleaning**: Inpaint speech bubbles and background text (FLUX.2 Klein, FLUX.1 Kontext, or OpenCV)
+- **Cleaning**: Inpaint speech bubbles and background text (Fibo 2.0, FLUX.3 Image Klein, Qwen-Image 2.1, FLUX.2 Klein, FLUX.1 Kontext, LaMa, or OpenCV)
 - **Translation**: OCR and translation supporting 60+ languages (cloud API or local LLM)
 - **Rendering**: Custom text rendering with alignment, word wrap, and custom font packs
 - **Upscaling**: Text region and full-page artwork upscaling (2x-AnimeSharpV4)
@@ -131,9 +131,14 @@ MangaTranslator is open-source and free. If it saves you time or enhances your r
 - FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
 - FLUX.2 Klein 4B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)
 - FLUX.2 Klein 9B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-9B)
+- FLUX.3 Image Klein: [Black Forest Labs](https://huggingface.co/black-forest-labs/flux-3-image-klein)
+- Fibo 2.0 Edit Turbo: [Bria AI](https://huggingface.co/briaai/Fibo-2.0-edit-turbo)
+- Qwen-Image-2.1-Turbo: [Qwen](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo)
+- LaMa Manga: [mayocream](https://huggingface.co/mayocream/lama-manga)
 - Nunchaku: [Nunchaku AI](https://github.com/nunchaku-ai/nunchaku)
-- SDNQ Quants: [Disty0](https://huggingface.co/Disty0)
+- SDNQ Quants: [Disty0](https://huggingface.co/Disty0), [OzzyGT](https://huggingface.co/OzzyGT), [SamuelTallet](https://huggingface.co/SamuelTallet)
 - Unsloth Quants: [Unsloth](https://huggingface.co/unsloth)
+- INT8 ConvRot Weights: [Comfy-Org](https://huggingface.co/Comfy-Org), [ml-resources](https://huggingface.co/ml-resources)
 - stable-diffusion.cpp: [leejet](https://github.com/leejet/stable-diffusion.cpp)
 - 2x-AnimeSharpV4: [Kim2091](https://huggingface.co/Kim2091/2x-AnimeSharpV4)
 

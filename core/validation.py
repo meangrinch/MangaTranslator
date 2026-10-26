@@ -4,6 +4,7 @@ from typing import Any
 from core.config import MangaTranslatorConfig, RenderingConfig, TranslationConfig
 from utils.archive import ARCHIVE_SUFFIXES
 from utils.exceptions import ValidationError
+from utils.model_metadata import flux_method_backends
 
 SETTING_CONSTRAINTS: dict[str, tuple[float, float]] = {
     "confidence": (0.1, 1.0),
@@ -324,11 +325,13 @@ def validate_config(config: MangaTranslatorConfig) -> None:
     validate_mutually_exclusive_modes(
         config.cleaning_only, config.upscaling_only, config.test_mode
     )
-    if (
-        config.outside_text.inpainting_method in ("flux_klein_9b", "flux_klein_4b")
-        and config.outside_text.flux_backend == "nunchaku"
-    ):
-        raise ValidationError("Nunchaku backend is only supported with Flux.1 Kontext.")
+    method = config.outside_text.inpainting_method
+    backends = flux_method_backends(method)
+    if backends and config.outside_text.flux_backend not in backends:
+        raise ValidationError(
+            f"The {config.outside_text.flux_backend} backend is not supported with "
+            f"{method}. Choose one of: {', '.join(backends)}."
+        )
 
 
 def validate_zip_file(zip_path: str | Path) -> Path:

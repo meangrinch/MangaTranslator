@@ -1,11 +1,19 @@
 import pytest
 
 from utils.model_metadata import (
+    FLUX_SDCPP_DIFFUSION_QUANTS,
+    FLUX_SDCPP_INT8_CONVROT,
+    FLUX_SDCPP_TEXT_ENCODER_QUANTS,
     anthropic_effort_config,
     anthropic_model_flags,
     anthropic_reasoning_effort_config,
     clamp_openai_reasoning_effort,
+    flux_method_backends,
+    flux_sdcpp_diffusion_quants,
+    flux_sdcpp_valid_diffusion_quant,
     flux_sdcpp_valid_text_encoder_quant,
+    flux_steps_fixed,
+    flux_steps_range,
     flux_valid_backend,
     get_max_tokens_cap,
     is_anthropic_no_sampling_model,
@@ -302,6 +310,17 @@ def test_flux_valid_backend():
     assert flux_valid_backend("flux_klein_9b", "sdcpp") == "sdcpp"
     assert flux_valid_backend("flux_kontext", "nunchaku") == "nunchaku"
     assert flux_valid_backend("flux_kontext", "bogus") == "sdnq"
+    assert flux_valid_backend("flux3_klein", "nunchaku") == "sdnq"
+    assert flux_valid_backend("qwen_image_2_1_turbo", "sdcpp") == "sdcpp"
+    # Fibo only ships sd.cpp weights, so the SDNQ default falls back to sd.cpp
+    assert flux_valid_backend("fibo2_edit_turbo", "sdnq") == "sdcpp"
+
+
+def test_flux_method_backends_cover_only_diffusion_methods():
+    assert flux_method_backends("fibo2_edit_turbo") == ("sdcpp",)
+    assert "nunchaku" in flux_method_backends("flux_kontext")
+    assert flux_method_backends("lama_manga") == ()
+    assert flux_method_backends("opencv") == ()
 
 
 def test_flux_text_encoder_quant_falls_back_to_model_default():
@@ -309,3 +328,45 @@ def test_flux_text_encoder_quant_falls_back_to_model_default():
     # Qwen-only quant is invalid for Kontext's T5 encoder.
     assert flux_sdcpp_valid_text_encoder_quant("flux_kontext", "Q4_K_XL") == "Q4_K_M"
     assert flux_sdcpp_valid_text_encoder_quant("flux_klein_9b", "nope") == "Q4_K_XL"
+
+
+def test_flux_diffusion_quants_are_per_model():
+    assert flux_sdcpp_diffusion_quants("fibo2_edit_turbo") == (FLUX_SDCPP_INT8_CONVROT,)
+    assert FLUX_SDCPP_INT8_CONVROT in flux_sdcpp_diffusion_quants("flux3_klein")
+    assert FLUX_SDCPP_INT8_CONVROT not in flux_sdcpp_diffusion_quants("flux_klein_4b")
+    assert FLUX_SDCPP_INT8_CONVROT in FLUX_SDCPP_DIFFUSION_QUANTS
+    assert FLUX_SDCPP_INT8_CONVROT in FLUX_SDCPP_TEXT_ENCODER_QUANTS
+    assert len(set(FLUX_SDCPP_DIFFUSION_QUANTS)) == len(FLUX_SDCPP_DIFFUSION_QUANTS)
+
+
+def test_flux_diffusion_quant_falls_back_to_model_default():
+    assert flux_sdcpp_valid_diffusion_quant("fibo2_edit_turbo", "Q4_K_M") == (
+        FLUX_SDCPP_INT8_CONVROT
+    )
+    assert flux_sdcpp_valid_diffusion_quant(
+        "flux_klein_4b", FLUX_SDCPP_INT8_CONVROT
+    ) == ("Q4_K_M")
+    assert flux_sdcpp_valid_diffusion_quant("flux3_klein", "Q8_0") == "Q8_0"
+    assert flux_sdcpp_valid_diffusion_quant("lama_manga", "Q6_K") == "Q6_K"
+
+
+def test_new_model_text_encoder_quants():
+    assert (
+        flux_sdcpp_valid_text_encoder_quant("flux3_klein", FLUX_SDCPP_INT8_CONVROT)
+        == FLUX_SDCPP_INT8_CONVROT
+    )
+    # Fibo's text encoder is GGUF only
+    assert (
+        flux_sdcpp_valid_text_encoder_quant("fibo2_edit_turbo", FLUX_SDCPP_INT8_CONVROT)
+        == "Q4_K_XL"
+    )
+    assert flux_sdcpp_valid_text_encoder_quant("qwen_image_2_1_turbo", "Q8_0") == "Q8_0"
+
+
+def test_flux_steps_per_method():
+    assert flux_steps_range("flux_klein_4b") == (4, 12)
+    assert flux_steps_range("flux_kontext") == (8, 30)
+    assert flux_steps_range("flux3_klein") == (16, 16)
+    assert flux_steps_range("fibo2_edit_turbo") == (4, 12)
+    assert flux_steps_fixed("qwen_image_2_1_turbo")
+    assert not flux_steps_fixed("flux3_klein")
