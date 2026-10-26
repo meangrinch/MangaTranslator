@@ -4,7 +4,7 @@
 
 All required models are downloaded automatically on first use.
 
-By default they are saved to `models/`. Launch with `--hf-cache` (e.g., `python app.py --hf-cache`) to use the default Hugging Face cache instead (`~/.cache/huggingface/hub`, or `HF_HOME` if set). The sd.cpp server binary still goes in `models/`.
+By default they are saved to `models/`. Launch with `--hf-cache` (e.g., `python app.py --hf-cache`) to use the default Hugging Face cache instead (`~/.cache/huggingface/hub`, or `HF_HOME` if set). The sd.cpp server binary also goes in `models/`, and older builds are automatically cleaned up.
 
 ---
 

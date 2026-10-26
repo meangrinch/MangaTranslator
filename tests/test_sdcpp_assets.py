@@ -153,3 +153,47 @@ def test_server_command_passes_model_specific_args(tmp_path):
     assert cmd[cmd.index("--llm_vision") + 1] == "mmproj.gguf"
     assert cmd[cmd.index("--sigmas") + 1] == "qwen-image-2.1-turbo"
     assert cmd[cmd.index("--guidance") + 1] == "1.0"
+
+
+def _install_current_build(tmp_path, monkeypatch) -> SDCppServerManager:
+    sdcpp_dir = tmp_path / "sdcpp"
+    server_manager = SDCppServerManager(sdcpp_dir / SDCppServerManager.RELEASE_TAG)
+    monkeypatch.setattr(
+        server_manager, "_select_archive_name", lambda: "sd-master-new-bin-win.zip"
+    )
+    build_dir = server_manager.install_dir / "sd-master-new-bin-win"
+    build_dir.mkdir(parents=True)
+    (build_dir / "sd-server.exe").write_bytes(b"")
+    (build_dir / "sd-server").write_bytes(b"")
+    return server_manager
+
+
+def test_outdated_sdcpp_builds_are_removed_once_current_build_is_ready(
+    tmp_path, monkeypatch
+):
+    server_manager = _install_current_build(tmp_path, monkeypatch)
+    sdcpp_dir = server_manager.install_dir.parent
+    old_build = sdcpp_dir / "master-778-c00a9e9" / "sd-master-c00a9e9-bin-win"
+    old_build.mkdir(parents=True)
+    (old_build / "sd-server.exe").write_bytes(b"old")
+    (sdcpp_dir / "my-custom-build").mkdir()
+    (sdcpp_dir / "notes.txt").write_text("keep", encoding="utf-8")
+
+    server_manager.ensure_server_executable()
+
+    assert not (sdcpp_dir / "master-778-c00a9e9").exists()
+    assert server_manager.install_dir.exists()
+    assert (sdcpp_dir / "my-custom-build").exists()
+    assert (sdcpp_dir / "notes.txt").exists()
+
+
+def test_sdcpp_binary_override_leaves_managed_builds_alone(tmp_path, monkeypatch):
+    server_manager = _install_current_build(tmp_path, monkeypatch)
+    old_build = server_manager.install_dir.parent / "master-778-c00a9e9"
+    old_build.mkdir()
+    override = tmp_path / "sd-server.exe"
+    override.write_bytes(b"")
+    monkeypatch.setenv(SDCppServerManager.SERVER_BINARY_ENV, str(override))
+
+    assert server_manager.ensure_server_executable() == override
+    assert old_build.exists()

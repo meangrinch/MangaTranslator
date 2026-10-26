@@ -232,6 +232,8 @@ def run_image_job(
 class SDCppServerManager:
     RELEASE_TAG = "master-1015-e41fbcf"
     RELEASE_COMMIT = "e41fbcf"
+    # Older builds sit beside install_dir in folders named after their release tag
+    RELEASE_TAG_PATTERN = re.compile(r"master-\d+-[0-9a-f]{7,}")
     RELEASE_BASE_URL = (
         "https://github.com/leejet/stable-diffusion.cpp/releases/download"
     )
@@ -304,6 +306,33 @@ class SDCppServerManager:
             log_message(
                 f"Removed {removed} stale sd.cpp server log file(s).",
                 verbose=verbose,
+            )
+
+    def _cleanup_outdated_builds(self, verbose: bool = False) -> None:
+        sdcpp_dir = self.install_dir.parent
+        if not sdcpp_dir.exists():
+            return
+
+        removed = []
+        for build_dir in sdcpp_dir.iterdir():
+            if (
+                build_dir.name == self.RELEASE_TAG
+                or not self.RELEASE_TAG_PATTERN.fullmatch(build_dir.name)
+                or not build_dir.is_dir()
+            ):
+                continue
+            try:
+                shutil.rmtree(build_dir)
+                removed.append(build_dir.name)
+            except OSError as e:
+                log_message(
+                    f"Warning: Could not remove outdated sd.cpp build {build_dir}: {e}",
+                    always_print=True,
+                )
+        if removed:
+            log_message(
+                f"Removed outdated sd.cpp build(s): {', '.join(sorted(removed))}.",
+                always_print=True,
             )
 
     def _release_asset(self, suffix: str) -> str:
@@ -410,6 +439,7 @@ class SDCppServerManager:
         if executable is not None:
             self._ensure_runtime_archives(archive_name, executable, verbose=verbose)
             self._remove_archive(archive_path, verbose=verbose)
+            self._cleanup_outdated_builds(verbose=verbose)
             return executable
 
         self.install_dir.mkdir(parents=True, exist_ok=True)
@@ -441,6 +471,7 @@ class SDCppServerManager:
                 executable.chmod(executable.stat().st_mode | 0o111)
 
         self._remove_archive(archive_path, verbose=verbose)
+        self._cleanup_outdated_builds(verbose=verbose)
         log_message("sd.cpp server is ready.", verbose=verbose)
         return executable
 
