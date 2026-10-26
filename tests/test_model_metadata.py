@@ -84,6 +84,8 @@ def test_gpt5_effort_support(model, xhigh, max_):
         ("gpt-6-sol", "none", "none"),
         ("gpt-6-astra", "none", "low"),
         ("gpt-6.1-sol", "none", "low"),
+        ("gpt-6.1-terra", "none", "none"),
+        ("gpt-6.1-terra", "minimal", "low"),
         ("gpt-6-sol", "max", "max"),
     ],
 )
@@ -96,6 +98,7 @@ def test_clamp_openai_reasoning_effort(model, effort, expected):
     [
         ("gpt-5.6-sol-pro", "gpt-5.6-sol"),
         ("gpt-6-astra-pro", "gpt-6-astra"),
+        ("gpt-6.1-terra-pro", "gpt-6.1-terra"),
         ("gpt-5.5-pro", "gpt-5.5-pro"),
         ("gpt-5.4", "gpt-5.4"),
         (None, None),

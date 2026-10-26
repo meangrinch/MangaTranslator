@@ -797,7 +797,7 @@ def get_sampling_interactivity_for_effort(
     """Whether temp/top_p sliders should be interactive given the current reasoning effort.
 
     For GPT-5 series (non-chat): only allowed when effort is 'none'.
-    For other OpenAI reasoning models (GPT-6): never allowed (except Sol and Luna when effort is 'none').
+    For other OpenAI reasoning models (GPT-6): never allowed (except Sol, Terra, and Luna when effort is 'none').
     For DeepSeek reasoning models: only allowed when effort is 'none'.
     For Claude models that accept sampling params: only allowed while thinking is off.
     Returns (temp_interactive, top_p_interactive).

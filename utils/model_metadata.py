@@ -427,7 +427,7 @@ def is_gpt56_virtual_pro(model_name: str | None) -> bool:
 
 
 def is_gpt6_series(model_name: str | None) -> bool:
-    """Check if a model is any GPT-6 variant (Astra, Sol, Luna)."""
+    """Check if a model is any GPT-6 variant (Astra, Sol, Terra, Luna)."""
     if not model_name:
         return False
     lm = model_name.lower()
