@@ -797,10 +797,11 @@ def main():
     parser.add_argument(
         "--osb-flux-sdcpp-cache-mode",
         type=str,
-        choices=["spectrum", "cache-dit", "taylorseer", "dbcache", "none"],
+        choices=["spectrum", "step-skip", "none"],
         default="none",
         help=(
-            "Caching method for sd.cpp. Ordered from fastest/worst quality to slowest/best quality."
+            "Step caching for sd.cpp. 'spectrum' predicts skipped steps from earlier ones; "
+            "'step-skip' reuses the last step's change when the image barely moved. "
             "Warmup is 25%% of the selected step count."
         ),
     )

@@ -404,39 +404,15 @@ class SDCppServerManager:
                 warmup,
                 steps,
             )
-        if mode == "cache-dit":
-            return (
-                [
-                    "--cache-mode",
-                    "cache-dit",
-                    "--cache-option",
-                    f"Fn=4,Bn=0,threshold=0.10,warmup={warmup}",
-                    "--scm-policy",
-                    "dynamic",
-                ],
-                mode,
-                warmup,
-                steps,
-            )
-        if mode == "taylorseer":
-            return (
-                [
-                    "--cache-mode",
-                    "taylorseer",
-                    "--cache-option",
-                    f"Fn=4,Bn=0,warmup={warmup}",
-                ],
-                mode,
-                warmup,
-                steps,
-            )
-        if mode == "dbcache":
+        if mode == "step-skip":
+            # sd.cpp's dbcache, taylorseer and cache-dit modes all run the same
+            # whole-step reuse for these DiTs and differ only in skip threshold
             return (
                 [
                     "--cache-mode",
                     "dbcache",
                     "--cache-option",
-                    f"Fn=8,Bn=0,threshold=0.08,warmup={warmup}",
+                    f"threshold=0.08,warmup={warmup}",
                 ],
                 mode,
                 warmup,

@@ -4,6 +4,7 @@ import pytest
 
 from core.ml.model_manager import get_model_manager
 from core.ml.sdcpp_server import SDCppServerManager
+from utils.exceptions import ModelError
 from utils.model_metadata import FLUX_SDCPP_INT8_CONVROT
 
 
@@ -111,6 +112,24 @@ def test_flux3_int8_diffusion_model_comes_from_the_comfy_mirror(downloads):
         "ml-resources/flux-3-image-klein-comfy",
         "diffusion_models/flux3-image-klein-int8-convrot.safetensors",
     ) in [call[:2] for call in calls]
+
+
+def test_step_skip_runs_sdcpp_step_cache_with_quarter_warmup(tmp_path):
+    args, mode, warmup, steps = SDCppServerManager(tmp_path)._cache_args("step-skip", 8)
+
+    assert args == [
+        "--cache-mode",
+        "dbcache",
+        "--cache-option",
+        "threshold=0.08,warmup=2",
+    ]
+    assert (mode, warmup, steps) == ("step-skip", 2, 8)
+
+
+@pytest.mark.parametrize("mode", ["cache-dit", "taylorseer", "dbcache"])
+def test_retired_dit_cache_modes_are_rejected(tmp_path, mode):
+    with pytest.raises(ModelError, match="Unknown sd.cpp cache mode"):
+        SDCppServerManager(tmp_path)._cache_args(mode, 4)
 
 
 def test_server_command_passes_model_specific_args(tmp_path):

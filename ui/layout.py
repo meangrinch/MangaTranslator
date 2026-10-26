@@ -1872,9 +1872,7 @@ def create_layout(
                                 outside_text_flux_sdcpp_cache_mode = gr.Radio(
                                     choices=[
                                         ("Spectrum", "spectrum"),
-                                        ("Cache-DiT", "cache-dit"),
-                                        ("TaylorSeer", "taylorseer"),
-                                        ("DBCache", "dbcache"),
+                                        ("Step Skip", "step-skip"),
                                         ("None", "none"),
                                     ],
                                     value=saved_settings.get(
@@ -1883,7 +1881,8 @@ def create_layout(
                                     ),
                                     label="Cache Method",
                                     info=(
-                                        "Caching methods for sd.cpp. Ordered fastest/worst quality -> slowest/best quality. "
+                                        "Step caching for sd.cpp. Spectrum predicts skipped steps from earlier ones; "
+                                        "Step Skip reuses the last step's change when the image barely moved. "
                                         "Warmup is 25% of the selected step count."
                                     ),
                                     visible=_show_sdcpp_quant,

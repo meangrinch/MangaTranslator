@@ -633,6 +633,14 @@ def get_saved_settings() -> dict[str, Any]:
                 # 4) ocr_method: paddleocr-vl -> paddleocr-vl-1.6
                 if settings.get("ocr_method") == "paddleocr-vl":
                     settings["ocr_method"] = "paddleocr-vl-1.6"
+
+                # 5) sd.cpp cache: cache-dit/taylorseer/dbcache -> step-skip
+                if settings.get("outside_text_flux_sdcpp_cache_mode") in (
+                    "cache-dit",
+                    "taylorseer",
+                    "dbcache",
+                ):
+                    settings["outside_text_flux_sdcpp_cache_mode"] = "step-skip"
             except Exception:
                 pass
 
