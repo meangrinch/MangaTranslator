@@ -1096,7 +1096,7 @@ def _text_render_config(
 ) -> RenderingConfig:
     rendering = config.rendering
     osb = config.outside_text
-    # Latin languages use hyphenation; Korean/Thai use
+    # Hyphenating languages insert hyphens; Korean/Thai use
     # no-hyphen emergency breaks under the same user setting.
     should_hyphenate = (
         rendering.hyphenate_before_scaling
@@ -1112,8 +1112,8 @@ def _text_render_config(
             osb.osb_use_ligatures if is_outside_text else rendering.use_ligatures
         ),
         hyphenate_before_scaling=should_hyphenate,
-        hyphen_penalty=rendering.hyphen_penalty,
         hyphenation_min_word_length=rendering.hyphenation_min_word_length,
+        hyphenation_language=config.translation.output_language,
         badness_exponent=rendering.badness_exponent,
         padding_pixels=(
             sizes.osb_padding_pixels if is_outside_text else sizes.padding_pixels

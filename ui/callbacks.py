@@ -158,7 +158,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         auto_vertical_text_val,
         vertical_line_spacing_mult_val,
         vertical_font_size_mult_val,
-        hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
         padding_pixels_val,
@@ -376,7 +375,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             auto_vertical_text=auto_vertical_text_val,
             vertical_line_spacing_mult=float(vertical_line_spacing_mult_val),
             vertical_font_size_mult=float(vertical_font_size_mult_val),
-            hyphen_penalty=hyphen_penalty_val,
             hyphenation_min_word_length=hyphenation_min_word_length_val,
             badness_exponent=badness_exponent_val,
             padding_pixels=padding_pixels_val,
@@ -1176,7 +1174,6 @@ def handle_save_config_click(*args: Any) -> str:
         batch_special_instructions_val,
         ero_doujinshi_mode_val,
         batch_ero_doujinshi_mode_val,
-        hyphen_penalty_val,
         hyphenation_min_word_length_val,
         badness_exponent_val,
         padding_pixels_val,
@@ -1373,7 +1370,6 @@ def handle_save_config_click(*args: Any) -> str:
             auto_vertical_text=auto_vertical_text_val,
             vertical_line_spacing_mult=float(vertical_line_spacing_mult_val),
             vertical_font_size_mult=float(vertical_font_size_mult_val),
-            hyphen_penalty=hyphen_penalty_val,
             hyphenation_min_word_length=hyphenation_min_word_length_val,
             badness_exponent=badness_exponent_val,
             padding_pixels=padding_pixels_val,
@@ -1740,10 +1736,6 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         default_ui_state.rendering.vertical_line_spacing_mult,
         default_ui_state.rendering.vertical_font_size_mult,
         gr.update(
-            value=default_ui_state.rendering.hyphen_penalty,
-            interactive=text_layout_flags["hyphen_penalty"],
-        ),
-        gr.update(
             value=default_ui_state.rendering.hyphenation_min_word_length,
             interactive=text_layout_flags["hyphenation_min_word_length"],
         ),
@@ -2053,7 +2045,6 @@ def handle_text_layout_language_change(
     hyphenate_value = restored_hyphenate if hyphenate_relevant else False
     return (
         gr.update(interactive=hyphenate_relevant, value=hyphenate_value),
-        gr.update(interactive=flags["hyphen_penalty"]),
         gr.update(interactive=flags["hyphenation_min_word_length"]),
     )
 
@@ -2063,14 +2054,11 @@ def handle_hyphenation_change(
     output_language: str,
     batch_output_language: str,
 ):
-    """Enable/disable hyphenation-related sliders from checkbox + target language(s)."""
+    """Enable/disable the min word length slider from checkbox + target language(s)."""
     flags = text_layout_control_interactivity(
         output_language, batch_output_language, hyphenate_before_scaling
     )
-    return (
-        gr.update(interactive=flags["hyphen_penalty"]),
-        gr.update(interactive=flags["hyphenation_min_word_length"]),
-    )
+    return gr.update(interactive=flags["hyphenation_min_word_length"])
 
 
 def handle_cleaning_only_change(cleaning_only: bool):

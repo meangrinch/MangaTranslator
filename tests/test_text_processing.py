@@ -6,9 +6,12 @@ from core.text.text_processing import (
     is_rtl_script,
     parse_styled_segments,
     split_hangul_word_for_wrapping,
+    split_thai_word_for_wrapping,
+    supports_long_word_breaking,
     text_layout_control_interactivity,
     tokenize_styled_text,
     try_hyphenate_word,
+    uses_true_hyphenation,
 )
 
 
@@ -102,6 +105,111 @@ def test_try_hyphenate_word_rejects_short_or_unfittable_words():
     assert try_hyphenate_word("internationalization", 6, lambda s: False) is None
 
 
+@pytest.mark.parametrize(
+    ("word", "expected"),
+    [
+        ("KURTARMAYA...!?", ["KURTAR-", "MAYA...!?"]),
+        ("DÜŞÜNDÜĞÜ", ["DÜŞÜN-", "DÜĞÜ"]),
+        ("AĞABEYİM", ["AĞA-", "BEYİM"]),
+        ("Türkçesi", ["Türk-", "çesi"]),
+        ("şiiri", ["şi-", "iri"]),
+    ],
+)
+def test_try_hyphenate_word_turkish_breaks_at_syllables(word, expected):
+    assert try_hyphenate_word(word, 4, lambda s: True, "Turkish") == expected
+
+
+def test_try_hyphenate_word_turkish_never_breaks_inside_syllable():
+    # "DÜŞÜ-NDÜĞÜ" would fit, but only syllable breaks are allowed.
+    assert try_hyphenate_word("DÜŞÜNDÜĞÜ", 4, lambda s: len(s) <= 5, "Turkish") is None
+
+
+def test_try_hyphenate_word_turkish_falls_back_without_syllables():
+    assert try_hyphenate_word("HMMMMMMMM", 4, lambda s: True, "Turkish") is not None
+
+
+def test_try_hyphenate_word_turkish_keeps_apostrophe_suffix_together():
+    assert try_hyphenate_word("İstanbul'dan", 4, lambda s: True, "Turkish") == [
+        "İstan-",
+        "bul'dan",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("language", "word", "expected"),
+    [
+        ("English", "UNDERSTANDING", ["UNDER-", "STANDING"]),
+        ("German", "Entschuldigung", ["Entschul-", "digung"]),
+        ("Spanish", "muchachos", ["mucha-", "chos"]),
+        ("Portuguese", "infelizmente", ["infeliz-", "mente"]),
+        ("French", "aujourd'hui", ["aujour-", "d'hui"]),
+        ("Malay", "menyenangkan", ["menye-", "nangkan"]),
+        ("Russian", "ДОСТОПРИМЕЧАТЕЛЬНОСТИ", ["ДОСТОПРИМЕ-", "ЧАТЕЛЬНОСТИ"]),
+        ("Serbian (Cyrillic)", "захваљујући", ["захва-", "љујући"]),
+        ("Greek", "ΕΥΧΑΡΙΣΤΩ", ["ΕΥΧΑ-", "ΡΙΣΤΩ"]),
+        # Breaks that change the spelling
+        ("Hungarian", "ASSZONY", ["ASZ-", "SZONY"]),
+        ("Catalan", "col·lecció", ["col-", "lecció"]),
+        ("Dutch", "ideeën", ["idee-", "en"]),
+    ],
+)
+def test_try_hyphenate_word_uses_dictionary_breaks(language, word, expected):
+    assert try_hyphenate_word(word, 4, lambda s: True, language) == expected
+
+
+def test_try_hyphenate_word_dictionary_never_breaks_inside_syllable():
+    # "UNDERS-TANDING" would fit, but the dictionary has no break there.
+    assert (
+        try_hyphenate_word("UNDERSTANDING", 4, lambda s: len(s) <= 7, "English") is None
+    )
+
+
+def test_try_hyphenate_word_dictionary_has_no_midpoint_fallback():
+    # The English dictionary leaves "stranger" unbroken; "STRA-NGER" is wrong.
+    assert try_hyphenate_word("STRANGER", 4, lambda s: True, "English") is None
+
+
+@pytest.mark.parametrize(
+    ("language", "word", "expected"),
+    [
+        ("Polish", "biało-czerwony", ["biało-", "-czerwony"]),
+        ("Spanish", "teórico-práctico", ["teórico-", "-práctico"]),
+        ("Spanish", "TEÓRICO-PRÁCTICO", ["TEÓRICO-", "-PRÁCTICO"]),
+        # RAE: no repeat before a capitalized proper name
+        ("Spanish", "Calvo-Sotelo", ["Calvo-", "Sotelo"]),
+        ("English", "well-known", ["well-", "known"]),
+    ],
+)
+def test_try_hyphenate_word_repeats_existing_hyphen(language, word, expected):
+    assert try_hyphenate_word(word, 4, lambda s: True, language) == expected
+
+
+def test_try_hyphenate_word_never_splits_at_apostrophe():
+    assert try_hyphenate_word("ng'ombe", 4, lambda s: True, "Swahili") == [
+        "ng'o-",
+        "mbe",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("language", "word_break", "true_hyphen"),
+    [
+        ("Russian", True, True),
+        ("Ukrainian", True, True),
+        ("Bulgarian", True, True),
+        ("Serbian (Cyrillic)", True, True),
+        ("Greek", True, True),
+        ("Turkish", True, True),
+        ("Vietnamese", False, False),
+        ("Korean", True, False),
+        ("Hindi", False, False),
+    ],
+)
+def test_word_breaking_language_gates(language, word_break, true_hyphen):
+    assert supports_long_word_breaking(language) is word_break
+    assert uses_true_hyphenation(language) is true_hyphen
+
+
 def test_find_optimal_breaks_fits_every_line():
     tokens = ["the", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"]
     lines = find_optimal_breaks_dp(tokens, 10, len, 1)
@@ -123,6 +231,19 @@ def test_find_optimal_breaks_joins_cjk_and_detached_punctuation_without_spaces()
         "こんにちは。"
     ]
     assert find_optimal_breaks_dp(["Wait", "..."], 100, len, 1) == ["Wait..."]
+
+
+def test_split_thai_word_breaks_between_syllables():
+    assert split_thai_word_for_wrapping("ความรับผิดชอบ!") == [
+        "ความ",
+        f"{NO_SPACE_BEFORE_MARKER}รับ",
+        f"{NO_SPACE_BEFORE_MARKER}ผิด",
+        f"{NO_SPACE_BEFORE_MARKER}ชอบ!",
+    ]
+
+
+def test_split_thai_word_keeps_single_syllable_whole():
+    assert split_thai_word_for_wrapping("ครับ") is None
 
 
 def test_thai_tokens_join_without_spaces():
@@ -147,7 +268,6 @@ def test_is_rtl_script(text, expected):
             ("Japanese", "English"),
             {
                 "hyphenate_before_scaling": True,
-                "hyphen_penalty": True,
                 "hyphenation_min_word_length": True,
             },
         ),
@@ -155,7 +275,6 @@ def test_is_rtl_script(text, expected):
             ("Korean", "Japanese"),
             {
                 "hyphenate_before_scaling": True,
-                "hyphen_penalty": False,
                 "hyphenation_min_word_length": True,
             },
         ),
@@ -163,7 +282,6 @@ def test_is_rtl_script(text, expected):
             ("Japanese", "Chinese"),
             {
                 "hyphenate_before_scaling": False,
-                "hyphen_penalty": False,
                 "hyphenation_min_word_length": False,
             },
         ),

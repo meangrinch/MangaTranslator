@@ -102,7 +102,6 @@ class UIRenderingSettings:
     line_spacing_mult: float = 1.0
     use_ligatures: bool = False
     hyphenate_before_scaling: bool = True
-    hyphen_penalty: float = 1000.0
     hyphenation_min_word_length: int = 8
     badness_exponent: float = 3.0
     padding_pixels: float = 4.0
@@ -314,7 +313,6 @@ class UIConfigState:
             "line_spacing_mult": self.rendering.line_spacing_mult,
             "use_ligatures": self.rendering.use_ligatures,
             "hyphenate_before_scaling": self.rendering.hyphenate_before_scaling,
-            "hyphen_penalty": self.rendering.hyphen_penalty,
             "hyphenation_min_word_length": self.rendering.hyphenation_min_word_length,
             "badness_exponent": self.rendering.badness_exponent,
             "padding_pixels": self.rendering.padding_pixels,
@@ -680,9 +678,6 @@ class UIConfigState:
                     "hyphenate_before_scaling",
                     defaults.get("hyphenate_before_scaling", True),
                 ),
-                hyphen_penalty=data.get(
-                    "hyphen_penalty", defaults.get("hyphen_penalty", 1000.0)
-                ),
                 hyphenation_min_word_length=data.get(
                     "hyphenation_min_word_length",
                     defaults.get("hyphenation_min_word_length", 8),
@@ -927,7 +922,6 @@ def map_ui_to_backend_config(
         line_spacing_mult=ui_state.rendering.line_spacing_mult,
         use_ligatures=ui_state.rendering.use_ligatures,
         hyphenate_before_scaling=ui_state.rendering.hyphenate_before_scaling,
-        hyphen_penalty=ui_state.rendering.hyphen_penalty,
         hyphenation_min_word_length=(ui_state.rendering.hyphenation_min_word_length),
         badness_exponent=ui_state.rendering.badness_exponent,
         padding_pixels=ui_state.rendering.padding_pixels,

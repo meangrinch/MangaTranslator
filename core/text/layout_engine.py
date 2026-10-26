@@ -8,6 +8,7 @@ import uharfbuzz as hb
 from core.text.text_processing import (
     NO_SPACE_BEFORE_MARKER,
     STYLE_PATTERN,
+    WORD_CORE_PATTERN,
     find_optimal_breaks_dp,
     is_detached_trailing_punctuation,
     parse_styled_segments,
@@ -329,13 +330,13 @@ def check_fit(
     features_to_enable: dict[str, bool],
     line_spacing_mult: float,
     hyphenate_before_scaling: bool,
-    hyphen_penalty: float,
     hyphenation_min_word_length: int,
     badness_exponent: float,
     word_width_cache: dict[tuple[str, int], float] | None = None,
     verbose: bool = False,
     detach_trailing_punctuation: bool = True,
     vertical_stack: bool = False,
+    hyphenation_language: str = "",
 ) -> dict | None:
     """Check if text fits within the given dimensions at the specified font size.
 
@@ -350,11 +351,11 @@ def check_fit(
         features_to_enable: HarfBuzz features to enable
         line_spacing_mult: Line spacing multiplier
         hyphenate_before_scaling: Whether to hyphenate before scaling
-        hyphen_penalty: Penalty for hyphenated lines
         hyphenation_min_word_length: Minimum word length for hyphenation
         badness_exponent: Exponent for line breaking badness calculation
         word_width_cache: Optional cache for word widths
         verbose: Whether to print detailed logs
+        hyphenation_language: Target language name for syllable-aware hyphenation
 
     Returns:
         Dict containing fit data if successful, None if doesn't fit
@@ -443,10 +444,10 @@ def check_fit(
                     marker = styled_match.group(1)
                     core_text = styled_match.group(2)
 
-                match = re.match(r"^(\W*)([\w\-]+)(\W*)$", core_text)
+                match = WORD_CORE_PATTERN.match(core_text)
                 core_word_length = len(match.group(2)) if match else len(core_text)
 
-                if core_word_length > hyphenation_min_word_length:
+                if core_word_length >= hyphenation_min_word_length:
                     word_width = calculate_styled_line_width(
                         token_text, font_size, loaded_hb_faces, features_to_enable
                     )
@@ -476,6 +477,7 @@ def check_fit(
                                 core_text,
                                 hyphenation_min_word_length,
                                 width_test_func,
+                                hyphenation_language,
                             )
 
                         if split_parts:
@@ -547,7 +549,6 @@ def check_fit(
             word_width_func,
             space_width,
             badness_exponent,
-            hyphen_penalty,
             detach_trailing_punctuation,
         )
 
@@ -656,7 +657,6 @@ def find_optimal_layout(
     max_font_size: int = 16,
     line_spacing_mult: float = 1.0,
     hyphenate_before_scaling: bool = True,
-    hyphen_penalty: float = 1000.0,
     hyphenation_min_word_length: int = 8,
     badness_exponent: float = 3.0,
     verbose: bool = False,
@@ -665,6 +665,7 @@ def find_optimal_layout(
     box_top_left: tuple[int, int] | None = None,
     detach_trailing_punctuation: bool = True,
     vertical_stack: bool = False,
+    hyphenation_language: str = "",
 ) -> dict:
     """Find the optimal font size and layout for text within given dimensions.
 
@@ -682,13 +683,13 @@ def find_optimal_layout(
         max_font_size: Maximum font size to try
         line_spacing_mult: Line spacing multiplier
         hyphenate_before_scaling: Whether to hyphenate before reducing font size
-        hyphen_penalty: Penalty for hyphenated lines
         hyphenation_min_word_length: Minimum word length for hyphenation
         badness_exponent: Exponent for line breaking badness calculation
         verbose: Whether to print detailed logs
         bubble_id: Optional identifier for the bubble (for logging purposes)
         cleaned_mask: Optional binary mask of the bubble for collision detection
         box_top_left: Optional (x, y) coordinates of the bounding box top-left corner
+        hyphenation_language: Target language name for syllable-aware hyphenation
 
     Returns:
         Dictionary containing layout data (font_size, lines, metrics, etc.)
@@ -740,13 +741,13 @@ def find_optimal_layout(
                 features_to_enable,
                 line_spacing_mult,
                 hyphenate_before_scaling,
-                hyphen_penalty,
                 hyphenation_min_word_length,
                 badness_exponent,
                 word_width_cache,
                 verbose,
                 detach_trailing_punctuation,
                 vertical_stack,
+                hyphenation_language,
             )
 
             if fit_data is None:

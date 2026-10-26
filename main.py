@@ -514,12 +514,6 @@ def main():
     )
     parser.set_defaults(hyphenate_before_scaling=True)
     parser.add_argument(
-        "--hyphen-penalty",
-        type=float,
-        default=1000.0,
-        help="Penalty for hyphenated line breaks in text layout (100-2000). Increase to discourage hyphenation.",
-    )
-    parser.add_argument(
         "--hyphenation-min-word-length",
         type=int,
         default=8,
@@ -1311,7 +1305,6 @@ def main():
             line_spacing_mult=args.line_spacing_mult,
             use_ligatures=args.use_ligatures,
             hyphenate_before_scaling=args.hyphenate_before_scaling,
-            hyphen_penalty=args.hyphen_penalty,
             hyphenation_min_word_length=args.hyphenation_min_word_length,
             badness_exponent=args.badness_exponent,
             padding_pixels=args.padding_pixels,

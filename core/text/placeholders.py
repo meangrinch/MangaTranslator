@@ -85,7 +85,6 @@ def generate_test_placeholders(
             line_spacing_mult=line_spacing,
             use_ligatures=use_ligs,
             hyphenate_before_scaling=config.rendering.hyphenate_before_scaling,
-            hyphen_penalty=config.rendering.hyphen_penalty,
             hyphenation_min_word_length=config.rendering.hyphenation_min_word_length,
             badness_exponent=config.rendering.badness_exponent,
             padding_pixels=padding_pixels_osb

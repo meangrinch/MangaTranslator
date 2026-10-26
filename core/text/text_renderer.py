@@ -542,7 +542,6 @@ def render_text_skia(
             max_font,
             line_spacing,
             False if use_vertical_stack else config.hyphenate_before_scaling,
-            config.hyphen_penalty,
             config.hyphenation_min_word_length,
             config.badness_exponent,
             verbose,
@@ -551,6 +550,7 @@ def render_text_skia(
             layout_box_top_left,
             config.detach_trailing_punctuation,
             use_vertical_stack,
+            config.hyphenation_language,
         )
 
     try:

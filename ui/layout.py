@@ -1578,16 +1578,6 @@ def create_layout(
                                 info="Try inserting hyphens when wrapping before reducing font size.",
                                 interactive=_hyphenate_relevant,
                             )
-                            hyphen_penalty = gr.Slider(
-                                100,
-                                2000,
-                                value=saved_settings.get("hyphen_penalty", 1000.0),
-                                step=50,
-                                label="Hyphen Penalty",
-                                info="Penalty for hyphenated line breaks in text layout. "
-                                "Increase to discourage hyphenation.",
-                                interactive=_text_layout_flags["hyphen_penalty"],
-                            )
                             hyphenation_min_word_length = gr.Slider(
                                 4,
                                 10,
@@ -2513,7 +2503,6 @@ def create_layout(
             batch_special_instructions,
             ero_doujinshi_mode,
             batch_ero_doujinshi_mode,
-            hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
             padding_pixels,
@@ -2655,7 +2644,6 @@ def create_layout(
             auto_vertical_text,
             vertical_line_spacing_mult,
             vertical_font_size_mult,
-            hyphen_penalty,
             hyphenation_min_word_length,
             special_instructions,
             batch_special_instructions,
@@ -2797,7 +2785,6 @@ def create_layout(
             auto_vertical_text,
             vertical_line_spacing_mult,
             vertical_font_size_mult,
-            hyphen_penalty,
             hyphenation_min_word_length,
             badness_exponent,
             padding_pixels,
@@ -3127,7 +3114,7 @@ def create_layout(
                 output_language,
                 batch_output_language,
             ],
-            outputs=[hyphen_penalty, hyphenation_min_word_length],
+            outputs=[hyphenation_min_word_length],
             queue=False,
         )
         output_language.change(
@@ -3135,7 +3122,6 @@ def create_layout(
             inputs=[output_language, batch_output_language],
             outputs=[
                 hyphenate_before_scaling,
-                hyphen_penalty,
                 hyphenation_min_word_length,
             ],
             queue=False,
@@ -3145,7 +3131,6 @@ def create_layout(
             inputs=[output_language, batch_output_language],
             outputs=[
                 hyphenate_before_scaling,
-                hyphen_penalty,
                 hyphenation_min_word_length,
             ],
             queue=False,

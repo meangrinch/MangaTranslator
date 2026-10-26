@@ -145,8 +145,9 @@ class RenderingConfig:
     line_spacing_mult: float = 1.0
     use_ligatures: bool = False
     hyphenate_before_scaling: bool = True
-    hyphen_penalty: float = 1000.0
     hyphenation_min_word_length: int = 8
+    # Set per render from the output language; not a user setting.
+    hyphenation_language: str = ""
     badness_exponent: float = 3.0
     padding_pixels: float = 4.0
     outline_ratio: float = 0.0

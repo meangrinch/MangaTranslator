@@ -1,8 +1,11 @@
 import re
 import unicodedata
 from collections.abc import Callable
+from functools import cache
+from itertools import pairwise
 
 import numpy as np
+import pyphen
 
 # Markdown-like style pattern: ***bold italic***, **bold**, *italic*
 STYLE_PATTERN = re.compile(r"(\*{1,3})(.*?)(\1)")
@@ -46,6 +49,8 @@ THAI_CODEPOINT_MAX = 0x0E7F
 # PyThaiNLP engines used for wrapping / orphan detection
 THAI_WORD_TOKENIZE_ENGINE = "newmm"
 THAI_TCC_ENGINE = "tcc_p"
+# pyphen dictionary for splitting Thai words wider than the bubble
+THAI_HYPHENATION_DICTIONARY = "th_TH"
 # Thai tokens at or below this many TCC clusters are short line-start orphans.
 # 3 covers ปกติ (3 clusters); 2 would not.
 THAI_SHORT_LINE_START_MAX_CLUSTERS = 3
@@ -83,67 +88,95 @@ def is_rtl_script(text: str) -> bool:
     return rtl_count > ltr_count
 
 
-def is_latin_style_language(language_name: str) -> bool:
-    """
-    Determines if a language typically uses Latin script and hyphenation.
-    This is used to decide whether to apply automatic hyphenation logic.
-    """
-    latin_style_languages = {
-        "afrikaans",
-        "albanian",
+# Target language -> pyphen dictionary. Malay and Bosnian share the Indonesian
+# and Croatian standards closely enough to borrow their dictionaries.
+HYPHENATION_DICTIONARIES = {
+    "afrikaans": "af_ZA",
+    "albanian": "sq_AL",
+    "bosnian": "hr_HR",
+    "bulgarian": "bg_BG",
+    "catalan": "ca",
+    "croatian": "hr_HR",
+    "czech": "cs_CZ",
+    "danish": "da_DK",
+    "dutch": "nl_NL",
+    "english": "en_US",
+    "estonian": "et_EE",
+    "french": "fr",
+    "galician": "gl",
+    "german": "de_DE",
+    "greek": "el_GR",
+    "hungarian": "hu_HU",
+    "icelandic": "is",
+    "indonesian": "id_ID",
+    "italian": "it_IT",
+    "latvian": "lv_LV",
+    "lithuanian": "lt",
+    "malay": "id_ID",
+    "norwegian": "nb_NO",
+    "polish": "pl_PL",
+    "portuguese": "pt_BR",
+    "romanian": "ro_RO",
+    "russian": "ru_RU",
+    "serbian (cyrillic)": "sr",
+    "serbian (latin)": "sr_Latn",
+    "slovak": "sk_SK",
+    "slovenian": "sl_SI",
+    "spanish": "es",
+    "swedish": "sv",
+    "ukrainian": "uk_UA",
+}
+
+# Languages that hyphenate long words. Those without a dictionary use
+# SYLLABLE_BREAK_RULES or the generic midpoint split.
+HYPHENATING_LANGUAGES = frozenset(HYPHENATION_DICTIONARIES) | {
+    "filipino (tagalog)",
+    "finnish",
+    "swahili",
+    "tagalog",
+    "turkish",
+    "uzbek",
+    "welsh",
+}
+
+# Breaking at an existing hyphen repeats it at the start of the next line
+# (biało-/-czerwony, léxico-/-semántico).
+REPEAT_HYPHEN_LANGUAGES = frozenset(
+    {
         "bosnian",
-        "catalan",
         "croatian",
         "czech",
-        "danish",
-        "dutch",
-        "english",
-        "estonian",
-        "filipino (tagalog)",
-        "finnish",
-        "french",
         "galician",
-        "german",
-        "hungarian",
-        "icelandic",
-        "indonesian",
-        "italian",
-        "latvian",
-        "lithuanian",
-        "malay",
-        "norwegian",
         "polish",
         "portuguese",
-        "romanian",
+        "serbian (cyrillic)",
         "serbian (latin)",
         "slovak",
         "slovenian",
         "spanish",
-        "swahili",
-        "swedish",
-        "tagalog",
-        "turkish",
-        "uzbek",
-        "vietnamese",
-        "welsh",
     }
-    return language_name.lower() in latin_style_languages
+)
+
+
+def _normalize_language(language_name: str) -> str:
+    return (language_name or "").strip().lower()
 
 
 def supports_long_word_breaking(language_name: str) -> bool:
     """
     Whether long-word emergency breaking is applied for this target language.
 
-    Latin-style languages may insert hyphens; Korean and Thai use no-hyphen
+    Hyphenating languages may insert hyphens; Korean and Thai use no-hyphen
     emergency splits under the same user setting.
     """
-    lang = (language_name or "").strip().lower()
-    return is_latin_style_language(language_name or "") or lang in ("korean", "thai")
+    return uses_true_hyphenation(language_name) or _normalize_language(
+        language_name
+    ) in ("korean", "thai")
 
 
 def uses_true_hyphenation(language_name: str) -> bool:
     """Whether wrapping may insert actual hyphen characters for this language."""
-    return is_latin_style_language(language_name or "")
+    return _normalize_language(language_name) in HYPHENATING_LANGUAGES
 
 
 def text_layout_control_interactivity(
@@ -155,18 +188,14 @@ def text_layout_control_interactivity(
     Interactive flags for Text Layout hyphenation controls.
 
     A control is enabled if it is relevant for either the single-tab or batch
-    target language (shared Config panel). Hyphen penalty only applies when
-    true Latin-style hyphenation can produce '-' breaks.
+    target language (shared Config panel).
     """
     languages = [output_language or "", batch_output_language or ""]
     word_break = any(supports_long_word_breaking(lang) for lang in languages)
-    true_hyphen = any(uses_true_hyphenation(lang) for lang in languages)
-    hyphen_on = bool(hyphenate_before_scaling)
 
     return {
         "hyphenate_before_scaling": word_break,
-        "hyphen_penalty": word_break and true_hyphen and hyphen_on,
-        "hyphenation_min_word_length": word_break and hyphen_on,
+        "hyphenation_min_word_length": word_break and bool(hyphenate_before_scaling),
     }
 
 
@@ -252,11 +281,11 @@ def split_hangul_word_for_wrapping(token: str) -> list[str] | None:
 
 def split_thai_word_for_wrapping(token: str) -> list[str] | None:
     """
-    Split a Thai-containing word into TCC units without adding hyphens.
+    Split a Thai-containing word into syllables without adding hyphens.
 
     Used as an emergency break when a single Thai word is wider than the
     bubble. Later units are marked so the wrapper can break before them
-    without inserting spaces.
+    without inserting spaces. Words the dictionary can't split stay whole.
     """
     normalized = unicodedata.normalize("NFC", token)
     match = re.match(r"^(\W*)(.+?)(\W*)$", normalized, flags=re.UNICODE)
@@ -268,11 +297,10 @@ def split_thai_word_for_wrapping(token: str) -> list[str] | None:
     if not _contains_thai(core_word):
         return None
 
-    from pythainlp.tokenize import subword_tokenize
-
-    units = [u for u in subword_tokenize(core_word, engine=THAI_TCC_ENGINE) if u]
-    if len(units) < 2:
+    breaks = [0, *_pyphen_dictionary(THAI_HYPHENATION_DICTIONARY).positions(core_word)]
+    if len(breaks) < 2:
         return None
+    units = [core_word[start:end] for start, end in pairwise([*breaks, len(core_word)])]
 
     units[0] = leading_punc + units[0]
     units[-1] = units[-1] + trailing_punc
@@ -475,10 +503,106 @@ def tokenize_styled_text(
     return tokens
 
 
+TURKISH_VOWELS = frozenset("aeıioöuüâîûAEIİOÖUÜÂÎÛ")
+
+
+def _turkish_syllable_breaks(word: str) -> list[int]:
+    """
+    Indices where a Turkish word may break between syllables.
+
+    Every syllable holds exactly one vowel, and the last consonant before a
+    vowel starts that vowel's syllable (kur-tar-ma-ya, Türk-çe, sa-at).
+    """
+    vowel_positions = [i for i, ch in enumerate(word) if ch in TURKISH_VOWELS]
+    breaks: list[int] = []
+    for prev, nxt in pairwise(vowel_positions):
+        if all(ch.isalpha() for ch in word[prev : nxt + 1]):
+            breaks.append(nxt if nxt - prev == 1 else nxt - 1)
+    return breaks
+
+
+SYLLABLE_BREAK_RULES: dict[str, Callable[[str], list[int]]] = {
+    "turkish": _turkish_syllable_breaks,
+}
+
+# A word's core may hold hyphens and internal apostrophes or Catalan middle
+# dots (aujourd'hui, İstanbul'dan, col·lecció); outer punctuation splits off.
+WORD_CORE_PATTERN = re.compile(r"^(\W*)([\w\-]+(?:['’‘·][\w\-]+)*)(\W*)$")
+_BREAK_SEPARATORS = "-'’‘·"
+
+
+@cache
+def _pyphen_dictionary(code: str) -> pyphen.Pyphen:
+    return pyphen.Pyphen(lang=code)
+
+
+def _hyphenation_dictionary(language: str) -> pyphen.Pyphen | None:
+    code = HYPHENATION_DICTIONARIES.get(language)
+    return _pyphen_dictionary(code) if code else None
+
+
+def _drop_leading_trema(text: str) -> str:
+    """Dutch drops the trema that starts the line after a break (idee-en)."""
+    if not text:
+        return text
+    first = unicodedata.normalize("NFD", text[0]).replace("\u0308", "")
+    return unicodedata.normalize("NFC", first) + text[1:]
+
+
+def _break_pairs(core_word: str, language: str) -> list[tuple[str, str]]:
+    """
+    Candidate (left, right) splits of a word, most balanced first.
+
+    Dictionary languages only break where the dictionary allows, since its
+    patterns leave some words unbroken on purpose (stranger). Syllable-rule
+    words that yield nothing (e.g. "HMMMMMMMM") and other languages fall back
+    to every position near the middle. Breaks touching an existing hyphen or
+    apostrophe are skipped; existing hyphens are tried separately.
+    """
+    dictionary = _hyphenation_dictionary(language)
+    syllable_rule = SYLLABLE_BREAK_RULES.get(language)
+    pairs: list[tuple[str, str]] = []
+    if dictionary is not None:
+        # iterate() applies spelling changes such as Hungarian asz-szony.
+        pairs = list(dictionary.iterate(core_word))
+    elif syllable_rule is not None:
+        pairs = [(core_word[:i], core_word[i:]) for i in syllable_rule(core_word)]
+    pairs = [
+        (left, right)
+        for left, right in pairs
+        if len(left) >= 2
+        and len(right) >= 2
+        and left[-1] not in _BREAK_SEPARATORS
+        and right[0] not in _BREAK_SEPARATORS
+    ]
+
+    if not pairs and dictionary is None:
+        pairs = [
+            (core_word[:i], core_word[i:])
+            for i in range(2, len(core_word) - 2)
+            if core_word[i - 1] not in _BREAK_SEPARATORS
+            and core_word[i] not in _BREAK_SEPARATORS
+        ]
+
+    # Ties favor the left split.
+    mid = len(core_word) // 2
+    return sorted(pairs, key=lambda p: (abs(len(p[0]) - mid), len(p[0])))
+
+
+def _repeats_hyphen(language: str, core_word: str, right_part: str) -> bool:
+    if language not in REPEAT_HYPHEN_LANGUAGES:
+        return False
+    # The RAE skips the repeat before a capitalized proper name (Calvo-/Sotelo).
+    return not (
+        language == "spanish" and right_part[:1].isupper() and not core_word.isupper()
+    )
+
+
 def try_hyphenate_word(
     word_str: str,
     min_word_length: int,
     width_test_func: Callable[[str], bool],
+    language: str = "",
 ) -> list[str] | None:
     """
     Attempts to split a word into two parts with a hyphen such that each part passes the width test.
@@ -490,11 +614,13 @@ def try_hyphenate_word(
         word_str: The word to potentially hyphenate
         min_word_length: Minimum word length to attempt hyphenation
         width_test_func: Function that takes a string and returns True if it fits
+        language: Target language name; languages with a hyphenation
+            dictionary or syllable rule only break between syllables
 
     Returns:
         List of two strings (the split parts) if successful, None otherwise
     """
-    match = re.match(r"^(\W*)([\w\-]+)(\W*)$", word_str)
+    match = WORD_CORE_PATTERN.match(word_str)
     if not match:
         return None
 
@@ -503,59 +629,39 @@ def try_hyphenate_word(
     if len(core_word) < min_word_length:
         return None
 
-    def _split_with_single_hyphen(base: str, idx: int) -> tuple[str, str]:
-        ch_before = base[idx - 1] if idx > 0 else ""
-        ch_at = base[idx] if idx < len(base) else ""
-        if ch_at == "-":
-            left = base[: idx + 1]
-            right = base[idx + 1 :]
-        elif ch_before == "-":
-            left = base[:idx]
-            right = base[idx:]
-        else:
-            left = base[:idx] + "-"
-            right = base[idx:]
-        if left.endswith("-") and right.startswith("-"):
-            right = right[1:]
-        return left, right
+    lang = _normalize_language(language)
 
-    # Try splitting at existing hyphens first
-    if "-" in core_word:
-        hyphen_positions = [i for i, ch in enumerate(core_word) if ch == "-"]
-        mid = len(core_word) // 2
-        hyphen_positions.sort(key=lambda i: abs(i - mid))
-        for pos in hyphen_positions:
-            if pos <= 0 or pos >= len(core_word) - 1:
-                continue
-            left_part = core_word[: pos + 1]
-            right_part = core_word[pos + 1 :]
-
-            final_left_part = leading_punc + left_part
-            final_right_part = right_part + trailing_punc
-
-            if width_test_func(final_left_part) and width_test_func(final_right_part):
-                return [final_left_part, final_right_part]
-
-    # Try splitting at various positions
-    mid = len(core_word) // 2
-    candidate_indices: list[int] = []
-    max_d = max(mid, len(core_word) - mid)
-    for d in range(max_d):
-        left_idx = mid - d
-        right_idx = mid + d
-        if 2 <= left_idx < len(core_word) - 2:
-            candidate_indices.append(left_idx)
-        if 2 <= right_idx < len(core_word) - 2 and right_idx != left_idx:
-            candidate_indices.append(right_idx)
-
-    for idx in candidate_indices:
-        left_part, right_part = _split_with_single_hyphen(core_word, idx)
-
+    def _fitting_split(left_part: str, right_part: str) -> list[str] | None:
         final_left_part = leading_punc + left_part
         final_right_part = right_part + trailing_punc
-
         if width_test_func(final_left_part) and width_test_func(final_right_part):
             return [final_left_part, final_right_part]
+        return None
+
+    # Try splitting at existing hyphens first
+    mid = len(core_word) // 2
+    hyphen_positions = sorted(
+        (
+            i
+            for i, ch in enumerate(core_word)
+            if ch == "-" and 0 < i < len(core_word) - 1
+        ),
+        key=lambda i: abs(i - mid),
+    )
+    for pos in hyphen_positions:
+        right_part = core_word[pos + 1 :]
+        if _repeats_hyphen(lang, core_word, right_part):
+            right_part = "-" + right_part
+        split = _fitting_split(core_word[: pos + 1], right_part)
+        if split:
+            return split
+
+    for left_part, right_part in _break_pairs(core_word, lang):
+        if lang == "dutch":
+            right_part = _drop_leading_trema(right_part)
+        split = _fitting_split(left_part + "-", right_part)
+        if split:
+            return split
 
     return None
 
@@ -692,7 +798,6 @@ def find_optimal_breaks_dp(
     word_width_func: Callable[[str], float],
     space_width: float,
     badness_exponent: float = 3.0,
-    hyphen_penalty: float = 1000.0,
     detach_trailing_punctuation: bool = True,
     thai_short_line_start_penalty: float = DEFAULT_THAI_SHORT_LINE_START_PENALTY,
     thai_short_line_start_max_clusters: int = THAI_SHORT_LINE_START_MAX_CLUSTERS,
@@ -709,7 +814,6 @@ def find_optimal_breaks_dp(
         word_width_func: Function that takes a word and returns its width
         space_width: Width of a space character
         badness_exponent: Exponent for badness calculation (higher = prefer tighter lines)
-        hyphen_penalty: Penalty for lines ending with hyphens
         thai_short_line_start_penalty: Extra cost when a continuation line would
             start with a short Thai token (orphan avoidance). 0 disables.
         thai_short_line_start_max_clusters: Thai tokens at or below this many
@@ -746,18 +850,6 @@ def find_optimal_breaks_dp(
 
                 slack = max_width - line_width
                 badness = pow(slack, badness_exponent)
-
-                # Add hyphen penalty if line ends with hyphen (support styled markers)
-                last_token = strip_no_space_before_marker(
-                    tokens[i - 1] if i > 0 else ""
-                )
-                ends_with_hyphen = last_token.endswith("-")
-                if not ends_with_hyphen:
-                    styled_match = STYLE_PATTERN.match(last_token)
-                    if styled_match:
-                        ends_with_hyphen = styled_match.group(2).endswith("-")
-                if ends_with_hyphen:
-                    badness += hyphen_penalty
 
                 # Avoid orphaning short Thai tokens at the start of a new line.
                 if j > 0:
