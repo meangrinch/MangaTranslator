@@ -94,7 +94,7 @@ def test_inpainting_method_change_keeps_radio_values_in_their_choices(tmp_path, 
     )
 
     # Start from settings another method left behind
-    updates = handler(method, "nunchaku", "INT8-ConvRot", "Q4_K_XL", 4, True, False)
+    updates = handler(method, "nunchaku", "INT8-ConvRot", "Q4_K_XL", 4, False)
 
     backend, _, _, diffusion, text_encoder, steps, *_ = updates
     for radio in (backend, diffusion, text_encoder):
@@ -104,6 +104,27 @@ def test_inpainting_method_change_keeps_radio_values_in_their_choices(tmp_path, 
     assert backend["visible"] is has_backend
     assert steps["visible"] is has_backend
     assert steps["interactive"] is (has_backend and method != "qwen_image_2_1_turbo")
+
+
+@pytest.mark.parametrize("method", INPAINTING_METHODS)
+@pytest.mark.parametrize("group_regions", [True, False])
+def test_luminance_correction_is_offered_for_every_model(
+    tmp_path, method, group_regions
+):
+    app = layout.create_layout(
+        models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
+    )
+    handler = next(
+        dep.fn
+        for dep in app.fns.values()
+        if getattr(dep.fn, "__name__", "") == "_update_inpainting_controls"
+    )
+
+    luminance = handler(method, "sdcpp", "", "", 4, group_regions)[6]
+
+    uses_model = method not in ("opencv", "none")
+    assert luminance["visible"] is uses_model
+    assert luminance["interactive"] is (uses_model and not group_regions)
 
 
 def test_a_forced_backend_does_not_replace_the_saved_choice(tmp_path):
@@ -118,11 +139,11 @@ def test_a_forced_backend_does_not_replace_the_saved_choice(tmp_path):
     )
     assert not any(isinstance(block, gr.State) for block in dep.outputs)
 
-    fibo = dep.fn("fibo2_edit_turbo", "sdnq", "Q6_K", "Q6_K_XL", 4, True, False)
+    fibo = dep.fn("fibo2_edit_turbo", "sdnq", "Q6_K", "Q6_K_XL", 4, False)
     assert fibo[0]["value"] == "sdcpp"
     assert fibo[3]["value"] == "INT8-ConvRot"
 
-    flux3 = dep.fn("flux3_klein", "sdnq", "Q6_K", "Q6_K_XL", 4, True, False)
+    flux3 = dep.fn("flux3_klein", "sdnq", "Q6_K", "Q6_K_XL", 4, False)
     assert flux3[0]["value"] == "sdnq"
     assert flux3[3]["value"] == "Q6_K"
 

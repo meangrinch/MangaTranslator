@@ -112,7 +112,9 @@ def make_flux_inpainter(
 ):
     """Build the inpainter for an inpainting method key; Flux.1 Kontext otherwise."""
     if method == "lama_manga":
-        return LamaInpainter(device=device, verbose=verbose)
+        return LamaInpainter(
+            device=device, luminance_correction=luminance_correction, verbose=verbose
+        )
     edit_model_kwargs = {
         "device": device,
         "huggingface_token": huggingface_token,
@@ -140,6 +142,7 @@ def make_flux_inpainter(
         backend=backend,
         # Only SDNQ offloads to the CPU
         low_vram=low_vram if backend == "sdnq" else False,
+        luminance_correction=luminance_correction,
         sdcpp_cache_mode=sdcpp_cache_mode,
         sdcpp_diffusion_quant=sdcpp_diffusion_quant,
         sdcpp_text_encoder_quant=sdcpp_text_encoder_quant,
@@ -312,6 +315,91 @@ def _paste_patch(
     return Image.fromarray((composited[0].cpu().numpy() * 255).astype("uint8"))
 
 
+def _match_luminance(
+    generated_pil: Image.Image,
+    original_crop_pil: Image.Image,
+    mask_crop_np: np.ndarray,
+    verbose: bool = False,
+    boundary_width: int = 12,
+) -> Image.Image:
+    """Match patch luminance and color to surrounding context.
+
+    Uses a local boundary band around the mask to avoid distant margin/gutter
+    contamination, applies an additive luminance shift to preserve internal
+    contrast without false scaling artifacts, and forces true neutral chroma
+    on monochrome manga to eliminate diffusion color casts.
+
+    Args:
+        generated_pil: Generated patch (at crop size)
+        original_crop_pil: Original cropped region
+        mask_crop_np: Boolean mask of inpaint region within crop
+        verbose: Whether to print verbose output
+        boundary_width: Width in pixels of the local reference boundary ring
+
+    Returns:
+        Luminance-corrected generated patch
+    """
+    mask_bool = np.asarray(mask_crop_np, dtype=bool)
+    if not np.any(mask_bool):
+        return generated_pil
+
+    # Prefer immediate boundary ring to avoid distant gutters/borders skewing statistics
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT, (boundary_width * 2 + 1, boundary_width * 2 + 1)
+    )
+    dilated_mask = cv2.dilate(mask_bool.astype(np.uint8), kernel) > 0
+    boundary_band = dilated_mask & (~mask_bool)
+
+    ref_mask = boundary_band if np.count_nonzero(boundary_band) >= 32 else (~mask_bool)
+    if not np.any(ref_mask):
+        return generated_pil
+
+    if original_crop_pil.mode != "RGB":
+        original_crop_pil = original_crop_pil.convert("RGB")
+    if generated_pil.mode != "RGB":
+        generated_pil = generated_pil.convert("RGB")
+
+    original_np = np.asarray(original_crop_pil)
+    generated_np = np.asarray(generated_pil).copy()
+
+    orig_lab = cv2.cvtColor(original_np, cv2.COLOR_RGB2LAB).astype(np.float32)
+    gen_lab = cv2.cvtColor(generated_np, cv2.COLOR_RGB2LAB).astype(np.float32)
+
+    orig_l_mean = float(np.mean(orig_lab[:, :, 0][ref_mask]))
+    gen_l_mean = float(np.mean(gen_lab[:, :, 0][ref_mask]))
+    l_shift = orig_l_mean - gen_l_mean
+
+    if abs(l_shift) >= 1.0:
+        log_message(
+            f"  - Luminance correction: L shift {l_shift:+.1f} (mean {gen_l_mean:.1f}->{orig_l_mean:.1f})",
+            verbose=verbose,
+        )
+        gen_lab[:, :, 0][mask_bool] = np.clip(
+            gen_lab[:, :, 0][mask_bool] + l_shift, 0, 255
+        )
+
+    # In OpenCV LAB, neutral gray is a=128, b=128
+    a_dev = float(np.mean(np.abs(orig_lab[:, :, 1][ref_mask] - 128.0)))
+    b_dev = float(np.mean(np.abs(orig_lab[:, :, 2][ref_mask] - 128.0)))
+    is_monochrome = (a_dev < 3.0) and (b_dev < 3.0)
+
+    if is_monochrome:
+        gen_lab[:, :, 1][mask_bool] = 128.0
+        gen_lab[:, :, 2][mask_bool] = 128.0
+    else:
+        for ch in (1, 2):
+            orig_ch_mean = float(np.mean(orig_lab[:, :, ch][ref_mask]))
+            gen_ch_mean = float(np.mean(gen_lab[:, :, ch][ref_mask]))
+            ch_shift = orig_ch_mean - gen_ch_mean
+            if abs(ch_shift) > 1.0:
+                gen_lab[:, :, ch][mask_bool] = np.clip(
+                    gen_lab[:, :, ch][mask_bool] + ch_shift, 0, 255
+                )
+
+    corrected_np = cv2.cvtColor(gen_lab.astype(np.uint8), cv2.COLOR_LAB2RGB)
+    return Image.fromarray(corrected_np)
+
+
 class FluxKontextInpainter:
     """Inpainter using Flux Kontext models for text removal."""
 
@@ -323,6 +411,7 @@ class FluxKontextInpainter:
         residual_diff_threshold: float = 0.15,
         backend: str = "nunchaku",
         low_vram: bool = False,
+        luminance_correction: bool = True,
         sdcpp_cache_mode: str = "none",
         sdcpp_diffusion_quant: str = "",
         sdcpp_text_encoder_quant: str = "",
@@ -336,6 +425,7 @@ class FluxKontextInpainter:
             residual_diff_threshold: Residual diff threshold for Flux caching (Nunchaku only).
             backend: "nunchaku" (CUDA + Nunchaku + HF token), "sdnq", or "sdcpp".
             low_vram: If True, use sequential CPU offload for SDNQ.
+            luminance_correction: If True, match patch luminance to surrounding context.
             sdcpp_cache_mode: sd.cpp cache mode to use when backend is "sdcpp".
             sdcpp_diffusion_quant: Flux sd.cpp diffusion model quant.
             sdcpp_text_encoder_quant: Flux sd.cpp T5 text encoder quant.
@@ -352,6 +442,7 @@ class FluxKontextInpainter:
                 "Must be 'nunchaku', 'sdnq', or 'sdcpp'."
             )
         self.low_vram = low_vram
+        self.luminance_correction = luminance_correction
         self.sdcpp_cache_mode = sdcpp_cache_mode
         self.sdcpp_diffusion_quant = sdcpp_diffusion_quant or flux_sdcpp_quant_default(
             "flux_kontext", "diffusion_model"
@@ -1048,6 +1139,7 @@ class FluxKontextInpainter:
             "bbox": (x, y, width, height),
             "padding": padding,
             "blur": blur_radius,
+            "lum_corr": self.luminance_correction,
             "backend": self.backend,
             **_inpaint_cache_options(
                 self, strict_mask_clipping, composite_clip_bbox, ocr_params
@@ -1104,6 +1196,14 @@ class FluxKontextInpainter:
             patch_pil = generated_patch_pil.resize(
                 (width, height), Image.Resampling.LANCZOS
             )
+
+            if self.luminance_correction:
+                patch_pil = _match_luminance(
+                    generated_pil=patch_pil,
+                    original_crop_pil=image_cropped_pil,
+                    mask_crop_np=mask_crop_np,
+                    verbose=verbose,
+                )
 
         dest_tensor = torch.from_numpy(
             np.asarray(image_pil, dtype=np.float32) / 255.0
@@ -1260,93 +1360,6 @@ class _CropInpainter:
         l_values = lab[:, :, 0][mask_np].astype(np.float32)
 
         return float(np.mean(l_values)), float(np.std(l_values)) + 1e-6
-
-    def _match_luminance(
-        self,
-        generated_pil: Image.Image,
-        original_crop_pil: Image.Image,
-        mask_crop_np: np.ndarray,
-        verbose: bool = False,
-        boundary_width: int = 12,
-    ) -> Image.Image:
-        """Match patch luminance and color to surrounding context.
-
-        Uses a local boundary band around the mask to avoid distant margin/gutter
-        contamination, applies an additive luminance shift to preserve internal
-        contrast without false scaling artifacts, and forces true neutral chroma
-        on monochrome manga to eliminate diffusion color casts.
-
-        Args:
-            generated_pil: Generated patch (at crop size)
-            original_crop_pil: Original cropped region
-            mask_crop_np: Boolean mask of inpaint region within crop
-            verbose: Whether to print verbose output
-            boundary_width: Width in pixels of the local reference boundary ring
-
-        Returns:
-            Luminance-corrected generated patch
-        """
-        mask_bool = np.asarray(mask_crop_np, dtype=bool)
-        if not np.any(mask_bool):
-            return generated_pil
-
-        # Prefer immediate boundary ring to avoid distant gutters/borders skewing statistics
-        kernel = cv2.getStructuringElement(
-            cv2.MORPH_RECT, (boundary_width * 2 + 1, boundary_width * 2 + 1)
-        )
-        dilated_mask = cv2.dilate(mask_bool.astype(np.uint8), kernel) > 0
-        boundary_band = dilated_mask & (~mask_bool)
-
-        ref_mask = (
-            boundary_band if np.count_nonzero(boundary_band) >= 32 else (~mask_bool)
-        )
-        if not np.any(ref_mask):
-            return generated_pil
-
-        if original_crop_pil.mode != "RGB":
-            original_crop_pil = original_crop_pil.convert("RGB")
-        if generated_pil.mode != "RGB":
-            generated_pil = generated_pil.convert("RGB")
-
-        original_np = np.asarray(original_crop_pil)
-        generated_np = np.asarray(generated_pil).copy()
-
-        orig_lab = cv2.cvtColor(original_np, cv2.COLOR_RGB2LAB).astype(np.float32)
-        gen_lab = cv2.cvtColor(generated_np, cv2.COLOR_RGB2LAB).astype(np.float32)
-
-        orig_l_mean = float(np.mean(orig_lab[:, :, 0][ref_mask]))
-        gen_l_mean = float(np.mean(gen_lab[:, :, 0][ref_mask]))
-        l_shift = orig_l_mean - gen_l_mean
-
-        if abs(l_shift) >= 1.0:
-            log_message(
-                f"  - Luminance correction: L shift {l_shift:+.1f} (mean {gen_l_mean:.1f}->{orig_l_mean:.1f})",
-                verbose=verbose,
-            )
-            gen_lab[:, :, 0][mask_bool] = np.clip(
-                gen_lab[:, :, 0][mask_bool] + l_shift, 0, 255
-            )
-
-        # In OpenCV LAB, neutral gray is a=128, b=128
-        a_dev = float(np.mean(np.abs(orig_lab[:, :, 1][ref_mask] - 128.0)))
-        b_dev = float(np.mean(np.abs(orig_lab[:, :, 2][ref_mask] - 128.0)))
-        is_monochrome = (a_dev < 3.0) and (b_dev < 3.0)
-
-        if is_monochrome:
-            gen_lab[:, :, 1][mask_bool] = 128.0
-            gen_lab[:, :, 2][mask_bool] = 128.0
-        else:
-            for ch in (1, 2):
-                orig_ch_mean = float(np.mean(orig_lab[:, :, ch][ref_mask]))
-                gen_ch_mean = float(np.mean(gen_lab[:, :, ch][ref_mask]))
-                ch_shift = orig_ch_mean - gen_ch_mean
-                if abs(ch_shift) > 1.0:
-                    gen_lab[:, :, ch][mask_bool] = np.clip(
-                        gen_lab[:, :, ch][mask_bool] + ch_shift, 0, 255
-                    )
-
-        corrected_np = cv2.cvtColor(gen_lab.astype(np.uint8), cv2.COLOR_LAB2RGB)
-        return Image.fromarray(corrected_np)
 
     def _prepare_image_for_inference(
         self,
@@ -1596,7 +1609,7 @@ class _CropInpainter:
                 patch_pil = generated_patch_pil
 
             if self.luminance_correction:
-                patch_pil = self._match_luminance(
+                patch_pil = _match_luminance(
                     generated_pil=patch_pil,
                     original_crop_pil=image_cropped_pil,
                     mask_crop_np=mask_crop_np,
@@ -1952,13 +1965,18 @@ class LamaInpainter(_CropInpainter):
     model_key = "lama_manga"
     label = "LaMa Manga"
 
-    def __init__(self, device: torch.device | None = None, verbose: bool = False):
+    def __init__(
+        self,
+        device: torch.device | None = None,
+        luminance_correction: bool = True,
+        verbose: bool = False,
+    ):
         # LaMa fills from the crop's own context, so it runs at native resolution
         super().__init__(
             backend="torch",
             device=device,
             num_inference_steps=1,
-            luminance_correction=False,
+            luminance_correction=luminance_correction,
             upscale_small_crops=False,
             verbose=verbose,
         )

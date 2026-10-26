@@ -851,7 +851,7 @@ def main():
         "--osb-no-luminance-correction",
         dest="osb_flux_luminance_correction",
         action="store_false",
-        help="Disable luminance correction that matches generated patch brightness to surrounding context (not Kontext or LaMa)",
+        help="Disable luminance correction that matches generated patch brightness to surrounding context",
     )
     parser.set_defaults(osb_flux_luminance_correction=True)
     parser.add_argument(

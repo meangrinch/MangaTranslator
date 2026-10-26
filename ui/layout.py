@@ -1974,12 +1974,6 @@ def create_layout(
                                         and not flux_steps_fixed(_initial_method)
                                     ),
                                 )
-                                _is_klein_for_lum = (
-                                    _initial_method in KLEIN_PIPELINE_METHODS
-                                )
-                                _upscale_small_crops_enabled = saved_settings.get(
-                                    "outside_text_flux_upscale_small_crops", True
-                                )
                                 _group_flux_regions_enabled = saved_settings.get(
                                     "outside_text_flux_group_regions", False
                                 )
@@ -1989,30 +1983,16 @@ def create_layout(
                                             "outside_text_flux_luminance_correction",
                                             True,
                                         )
-                                        if not _is_klein_for_lum
-                                        else (
-                                            saved_settings.get(
-                                                "outside_text_flux_luminance_correction",
-                                                True,
-                                            )
-                                            if (
-                                                _upscale_small_crops_enabled
-                                                and not _group_flux_regions_enabled
-                                            )
-                                            else False
-                                        )
+                                        and not _group_flux_regions_enabled
                                     ),
                                     label="Luminance Correction",
                                     info=(
                                         "Try and match generated patch brightness to surrounding context. "
-                                        "Only available for ungrouped crops scaled to ~1MP "
-                                        "(not Kontext or LaMa)."
+                                        "Unavailable for grouped regions."
                                     ),
-                                    visible=_is_klein_for_lum,
+                                    visible=_uses_model,
                                     interactive=(
-                                        _is_klein_for_lum
-                                        and _upscale_small_crops_enabled
-                                        and not _group_flux_regions_enabled
+                                        _uses_model and not _group_flux_regions_enabled
                                     ),
                                 )
                                 outside_text_flux_upscale_small_crops = gr.Checkbox(
@@ -2025,7 +2005,9 @@ def create_layout(
                                         "(not Kontext or LaMa)."
                                     ),
                                     visible=_uses_model,
-                                    interactive=_is_klein_for_lum,
+                                    interactive=(
+                                        _initial_method in KLEIN_PIPELINE_METHODS
+                                    ),
                                 )
                                 outside_text_flux_group_regions = gr.Checkbox(
                                     value=saved_settings.get(
@@ -3222,7 +3204,6 @@ def create_layout(
             current_diffusion_quant: str,
             current_text_encoder_quant: str,
             current_steps: int,
-            upscale_small_crops: bool,
             group_regions: bool,
         ):
             """Update controls based on inpainting method selection."""
@@ -3250,11 +3231,9 @@ def create_layout(
             residual_interactive = (
                 method == "flux_kontext" and backend_value == "nunchaku"
             )
-            luminance_interactive = (
-                is_klein and bool(upscale_small_crops) and not bool(group_regions)
-            )
+            luminance_interactive = uses_model and not bool(group_regions)
             luminance_update = gr.update(visible=False, interactive=False)
-            if is_klein:
+            if uses_model:
                 luminance_update = gr.update(
                     visible=True,
                     interactive=luminance_interactive,
@@ -3312,7 +3291,6 @@ def create_layout(
                 outside_text_flux_sdcpp_diffusion_quant_state,
                 outside_text_flux_sdcpp_text_encoder_quant_state,
                 outside_text_flux_num_inference_steps,
-                outside_text_flux_upscale_small_crops,
                 outside_text_flux_group_regions,
             ],
             outputs=[
@@ -3332,36 +3310,23 @@ def create_layout(
             queue=False,
         )
 
-        def _update_luminance_interactivity(
-            upscale_small_crops: bool, group_regions: bool, method: str
-        ):
-            """Luminance correction is calibrated for ungrouped ~1MP crops."""
-            is_klein = method in KLEIN_PIPELINE_METHODS
-            if not is_klein:
+        def _update_luminance_interactivity(group_regions: bool, method: str):
+            """Luminance correction is calibrated for single-region crops."""
+            if method in ("opencv", "none"):
                 return gr.update(interactive=False)
 
-            luminance_interactive = bool(upscale_small_crops) and not bool(
-                group_regions
-            )
+            luminance_interactive = not bool(group_regions)
             return gr.update(
                 interactive=luminance_interactive,
                 value=luminance_interactive,
             )
 
-        for control in (
-            outside_text_flux_upscale_small_crops,
-            outside_text_flux_group_regions,
-        ):
-            control.change(
-                fn=_update_luminance_interactivity,
-                inputs=[
-                    outside_text_flux_upscale_small_crops,
-                    outside_text_flux_group_regions,
-                    outside_text_inpainting_method,
-                ],
-                outputs=outside_text_flux_luminance_correction,
-                queue=False,
-            )
+        outside_text_flux_group_regions.change(
+            fn=_update_luminance_interactivity,
+            inputs=[outside_text_flux_group_regions, outside_text_inpainting_method],
+            outputs=outside_text_flux_luminance_correction,
+            queue=False,
+        )
 
         # Flux backend change -> update sd.cpp-specific, Low VRAM, and Residual diff visibility
         def _update_flux_backend_controls(

@@ -105,6 +105,65 @@ def test_make_flux_inpainter_dispatches_each_method(method, cls):
     assert type(_make(method)) is cls
 
 
+@pytest.mark.parametrize(
+    "method",
+    [
+        "flux_klein_4b",
+        "flux3_klein",
+        "fibo2_edit_turbo",
+        "qwen_image_2_1_turbo",
+        "lama_manga",
+        "flux_kontext",
+    ],
+)
+def test_every_model_takes_the_luminance_correction_setting(method):
+    assert _make(method, luminance_correction=True).luminance_correction is True
+    assert _make(method, luminance_correction=False).luminance_correction is False
+
+
+def _white_patch_inpainter(method, monkeypatch, luminance_correction):
+    """An inpainter whose model paints the whole crop white."""
+    inpainter = _make(method, luminance_correction=luminance_correction)
+    if method == "lama_manga":
+
+        def fake_model(image, mask):
+            return torch.ones_like(image)
+
+        fake_model.device = torch.device("cpu")
+        monkeypatch.setattr(
+            inpainter, "load_models", lambda: setattr(inpainter, "pipeline", fake_model)
+        )
+    else:
+        inpainter.pipeline = object()
+        monkeypatch.setattr(inpainter, "load_models", lambda: None)
+        monkeypatch.setattr(
+            inpainter,
+            "_generate_patch",
+            lambda image, width, height, seed, verbose: Image.new(
+                "RGB", (width, height), "white"
+            ),
+        )
+    return inpainter
+
+
+@pytest.mark.parametrize("method", ["lama_manga", "flux_kontext"])
+@pytest.mark.parametrize("luminance_correction", [True, False])
+def test_luminance_correction_matches_the_patch_to_its_context(
+    method, luminance_correction, monkeypatch
+):
+    inpainter = _white_patch_inpainter(method, monkeypatch, luminance_correction)
+    page = Image.new("RGB", (400, 300), (128, 128, 128))
+    mask = np.zeros((300, 400), dtype=bool)
+    mask[100:140, 150:250] = True
+
+    result = np.asarray(inpainter.inpaint_mask(page, mask, seed=-1))
+
+    if luminance_correction:
+        assert abs(int(result[120, 200].mean()) - 128) <= 3
+    else:
+        assert result[120, 200].min() > 250
+
+
 def test_fibo_rejects_sdnq_backend():
     with pytest.raises(ValueError):
         _make("fibo2_edit_turbo", backend="sdnq")

@@ -221,7 +221,7 @@ FLUX_METHOD_STEPS = {
 # Sampled on the checkpoint's fixed sigma schedule, so the step count can't change
 FLUX_FIXED_STEP_METHODS = ("qwen_image_2_1_turbo",)
 
-# Inpainted through FluxKleinInpainter's crop pipeline (~1MP scaling, luminance correction)
+# Inpainted through FluxKleinInpainter's crop pipeline (optional ~1MP scaling)
 KLEIN_PIPELINE_METHODS = (
     "flux_klein_9b",
     "flux_klein_4b",
