@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import pytest
 
 from core.image.tilt_detection import detect_crop_tilt_angle
 
@@ -13,3 +14,75 @@ def test_steep_ink_in_horizontal_crop_is_not_clamped_into_a_tilt():
     angle, conf, _, _ = detect_crop_tilt_angle(crop, max_tilt_deg=20.0)
 
     assert (angle, conf) == (0.0, 0.0)
+
+
+def _glyph_run(shape, center, direction_deg, count, step, glyph_deg):
+    """Mask of `count` glyph-sized blocks spaced along `direction_deg` (0 = rightward)."""
+    mask = np.zeros(shape, np.uint8)
+    t = np.radians(direction_deg)
+    for k in range(count):
+        offset = (k - (count - 1) / 2) * step
+        cx = center[0] + offset * np.cos(t)
+        cy = center[1] + offset * np.sin(t)
+        box = cv2.boxPoints(((cx, cy), (11, 15), glyph_deg))
+        cv2.fillPoly(mask, [box.astype(np.int32)], 1)
+    return mask.astype(bool)
+
+
+def _page_with_art(shape, text):
+    crop = np.full((*shape, 3), 235, np.uint8)
+    # Bold strokes of art crossing the crop at another angle
+    for x in range(-200, shape[1], 45):
+        cv2.line(crop, (x, shape[0]), (x + 160, 0), (20, 20, 20), 7)
+    crop[text] = 0
+    return crop
+
+
+def test_ink_mask_gives_the_angle_of_a_tilted_line_among_art():
+    text = _glyph_run((130, 240), (120, 65), 12, count=7, step=24, glyph_deg=12)
+    crop = _page_with_art((130, 240), text)
+
+    angle, conf, (length, thickness), axis = detect_crop_tilt_angle(
+        crop, max_tilt_deg=20.0, ink_mask=text
+    )
+
+    assert axis == "horizontal"
+    assert angle == pytest.approx(12, abs=2)
+    assert conf >= 0.5
+    assert length > 3 * thickness
+
+
+def test_ink_mask_gives_the_angle_of_a_tilted_vertical_column():
+    # Vertical tilt is positive when the column slopes down and to the left
+    text = _glyph_run((260, 110), (55, 130), 90 + 14, count=8, step=27, glyph_deg=14)
+    crop = _page_with_art((260, 110), text)
+
+    angle, conf, _, axis = detect_crop_tilt_angle(
+        crop, max_tilt_deg=20.0, ink_mask=text
+    )
+
+    assert axis == "vertical"
+    assert angle == pytest.approx(14, abs=2.5)
+    assert conf >= 0.5
+
+
+@pytest.mark.parametrize("ink_pixels", [0, 6])
+def test_ink_mask_with_too_little_text_falls_back_to_the_heuristic(ink_pixels):
+    text = _glyph_run((130, 240), (120, 65), 12, count=7, step=24, glyph_deg=12)
+    crop = _page_with_art((130, 240), text)
+    sparse = np.zeros_like(text)
+    sparse.flat[:ink_pixels] = True
+
+    assert detect_crop_tilt_angle(
+        crop, max_tilt_deg=20.0, ink_mask=sparse
+    ) == detect_crop_tilt_angle(crop, max_tilt_deg=20.0)
+
+
+def test_confidence_stays_within_one():
+    text = _glyph_run((260, 110), (55, 130), 90 + 14, count=8, step=27, glyph_deg=14)
+    crop = np.full((260, 110, 3), 255, np.uint8)
+    crop[text] = 0
+
+    _, conf, _, _ = detect_crop_tilt_angle(crop, max_tilt_deg=20.0)
+
+    assert 0.0 <= conf <= 1.0

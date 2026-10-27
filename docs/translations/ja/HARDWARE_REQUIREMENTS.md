@@ -514,3 +514,4 @@ TBD: 未計測。sd.cpp は FLUX.3 Image Klein を分割実行しないため、
 | モデル | VRAM | RAM | ストレージ |
 | --- | --- | --- | --- |
 | LaMa Manga | +0.9 GB | TBD | +0.2 GB |
+| Koharu Text SAM-TS-L | +3.9 GB | TBD | +1.4 GB |

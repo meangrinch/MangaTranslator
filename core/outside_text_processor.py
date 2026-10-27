@@ -4,6 +4,7 @@ import random
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -18,6 +19,12 @@ from core.batch_coordinator import (
     paste_image_region,
 )
 from core.config import MangaTranslatorConfig
+from core.image.glyph_mask import THRESHOLD as GLYPH_THRESHOLD
+from core.image.glyph_mask import (
+    glyph_dilation_radius,
+    page_glyph_probability,
+    refine_mask_to_glyphs,
+)
 from core.image.image_utils import (
     cv2_to_pil,
     pil_to_cv2,
@@ -30,6 +37,7 @@ from core.image.tilt_detection import (
     compute_effective_tilt_angle,
     detect_crop_tilt_angle,
 )
+from core.ml.hi_sam import predict_text_probability
 from core.ml.model_manager import get_model_manager
 from utils.cancellation import raise_if_cancelled
 from utils.exceptions import CancellationError
@@ -48,6 +56,78 @@ OSB_BLACK_SNAP_THRESH = 10
 # Share of strongly colored pixels that marks a color page; B/W scans with stray tints
 # measured at most 1%, color pages 8% or more
 OSB_COLOR_PAGE_MIN_FRACTION = 0.05
+
+
+@dataclass
+class _PageGlyphMap:
+    """Text probability of the original page, computed on first use.
+
+    Tilt detection and LaMa's glyph masks share it, so the text segmentation model runs
+    at most once per page, and not at all on pages that need neither.
+    """
+
+    image: Image.Image
+    # LaMa reuses the text model on every page; the diffusion inpainters need its VRAM
+    keep_model: bool
+    verbose: bool = False
+    prob: np.ndarray | None = None
+    failed: bool = False
+
+    @classmethod
+    def for_page(
+        cls, image: Image.Image, config: MangaTranslatorConfig, verbose: bool
+    ) -> "_PageGlyphMap":
+        return cls(
+            image,
+            keep_model=config.outside_text.inpainting_method == "lama_manga",
+            verbose=verbose,
+        )
+
+    def get(self) -> np.ndarray | None:
+        """The probability map, or None when the text model can't be loaded or run."""
+        if self.prob is None and not self.failed:
+            manager = get_model_manager()
+            with manager.flux_inference_lock:
+                try:
+                    self._compute(manager)
+                finally:
+                    if not self.keep_model:
+                        manager.unload_text_sam(verbose=self.verbose)
+        return self.prob
+
+    def _compute(self, manager) -> None:
+        try:
+            # No local reference to the model, so unloading it frees its memory
+            self.prob = page_glyph_probability(
+                self.image,
+                partial(
+                    predict_text_probability,
+                    manager.load_text_sam(verbose=self.verbose),
+                ),
+            )
+        except CancellationError:
+            raise
+        except Exception as e:
+            self.failed = True
+            log_message(
+                f"Text segmentation unavailable ({e}); using heuristic tilt and "
+                "whole text boxes for LaMa",
+                always_print=True,
+            )
+
+
+def _glyph_map_for_tilt(
+    glyph_map: _PageGlyphMap, config: MangaTranslatorConfig
+) -> _PageGlyphMap | None:
+    """The page map if tilt detection should use it, else None for the ink heuristic.
+
+    On the CPU the text model takes ~20 s per page, too slow to spend on tilt alone,
+    so there tilt only shares the map LaMa builds anyway.
+    """
+    if config.outside_text.inpainting_method == "lama_manga":
+        return glyph_map
+    device = config.device
+    return None if device is None or device.type == "cpu" else glyph_map
 
 
 @dataclass
@@ -71,6 +151,13 @@ class OutsideTextWork:
     cv2_ext: str
     outside_text_data: list[dict[str, Any]] = field(default_factory=list)
     is_color_page: bool = False
+    glyph_map: _PageGlyphMap | None = None
+
+    def __post_init__(self):
+        if self.glyph_map is None:
+            self.glyph_map = _PageGlyphMap.for_page(
+                self.pil_image, self.config, self.verbose
+            )
 
 
 def _build_outside_text_data(
@@ -84,6 +171,7 @@ def _build_outside_text_data(
     cv2_ext: str,
     config: MangaTranslatorConfig,
     verbose: bool,
+    glyph_map: _PageGlyphMap | None,
 ) -> list[dict[str, Any]]:
     outside_text_data = []
     original_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
@@ -179,18 +267,21 @@ def _build_outside_text_data(
             "none",
         )
         osb_tilt_estimation_side_pixels = 256
-        if config.outside_text.osb_follow_tilt and original_cv_image is not None:
-            rx1, ry1, rx2, ry2 = raw_bbox_tuple
-            raw_crop_cv = original_cv_image[ry1:ry2, rx1:rx2]
-            if raw_crop_cv.size > 0:
-                angle_deg, tilt_conf, obb_dims, tilt_axis = detect_crop_tilt_angle(
-                    crop_cv=raw_crop_cv,
-                    # original_text_colors flags a dark background, i.e. light ink
-                    is_dark_text=not original_text_colors.get(raw_bbox_tuple, False),
-                    max_side=osb_tilt_estimation_side_pixels,
-                    deadband_deg=config.outside_text.osb_min_tilt_deg,
-                    max_tilt_deg=config.outside_text.osb_max_tilt_deg,
-                )
+        if config.outside_text.osb_follow_tilt and rx2 > rx1 and ry2 > ry1:
+            glyph_prob = None if glyph_map is None else glyph_map.get()
+            angle_deg, tilt_conf, obb_dims, tilt_axis = detect_crop_tilt_angle(
+                crop_cv=original_cv_image[ry1:ry2, rx1:rx2],
+                # original_text_colors flags a dark background, i.e. light ink
+                is_dark_text=not original_text_colors.get(raw_bbox_tuple, False),
+                max_side=osb_tilt_estimation_side_pixels,
+                deadband_deg=config.outside_text.osb_min_tilt_deg,
+                max_tilt_deg=config.outside_text.osb_max_tilt_deg,
+                ink_mask=(
+                    None
+                    if glyph_prob is None
+                    else glyph_prob[ry1:ry2, rx1:rx2] > GLYPH_THRESHOLD
+                ),
+            )
 
         try:
             is_success, buffer = cv2.imencode(cv2_ext, outside_text_image_cv)
@@ -788,6 +879,7 @@ def prepare_outside_text_work(
             existing_results=raw_outside_text_results,
         )
 
+        glyph_map = _PageGlyphMap.for_page(pil_image, config, verbose)
         outside_text_data = _build_outside_text_data(
             pil_image=pil_image,
             outside_text_results=outside_text_results,
@@ -799,6 +891,7 @@ def prepare_outside_text_work(
             cv2_ext=cv2_ext,
             config=config,
             verbose=verbose,
+            glyph_map=_glyph_map_for_tilt(glyph_map, config),
         )
 
         return OutsideTextWork(
@@ -819,6 +912,7 @@ def prepare_outside_text_work(
             cv2_ext=cv2_ext,
             outside_text_data=outside_text_data,
             is_color_page=_is_color_page(pil_image),
+            glyph_map=glyph_map,
         )
 
     except Exception as e:
@@ -1534,6 +1628,36 @@ def _decide_osb_region_fill(
     )
 
 
+def _clip_mask_to_bbox(
+    mask: np.ndarray, bbox: tuple[int, int, int, int] | None
+) -> np.ndarray:
+    """Copy of `mask` with everything outside `bbox` cleared; a plain copy without one."""
+    if bbox is None:
+        return mask.copy()
+    img_h, img_w = mask.shape
+    x1, y1, x2, y2 = bbox
+    x1, x2 = max(0, min(img_w, x1)), max(0, min(img_w, x2))
+    y1, y2 = max(0, min(img_h, y1)), max(0, min(img_h, y2))
+    clipped = np.zeros_like(mask)
+    if x2 > x1 and y2 > y1:
+        clipped[y1:y2, x1:x2] = mask[y1:y2, x1:x2]
+    return clipped
+
+
+def _glyph_inpaint_mask(
+    work: OutsideTextWork,
+    combined_mask: np.ndarray,
+    composite_clip_bbox: tuple[int, int, int, int] | None,
+) -> np.ndarray:
+    """The region's mask clipped to its text box, then shrunk to the dilated glyphs."""
+    box_mask = _clip_mask_to_bbox(combined_mask, composite_clip_bbox)
+    glyph_prob = work.glyph_map.get()
+    if glyph_prob is None:
+        return box_mask
+    radius = glyph_dilation_radius(work.pil_image.size)
+    return refine_mask_to_glyphs(box_mask, glyph_prob, radius)
+
+
 def _run_grouped_flux(
     image: Image.Image,
     candidates: list[dict[str, Any]],
@@ -1593,7 +1717,7 @@ def _run_grouped_flux(
             for candidate in candidates:
                 image = _fill_mask(
                     image,
-                    candidate["mask"],
+                    candidate["fill_mask"],
                     candidate["fallback_color"],
                 )
         return image, 0, len(candidates)
@@ -1780,7 +1904,7 @@ def finish_outside_text_work(
                     image,
                     color_to_use,
                     candidate["group"],
-                    candidate["mask"],
+                    candidate["fill_mask"],
                     candidate["original_bbox_dict"],
                     candidate["original_bounds"],
                 )
@@ -1856,22 +1980,17 @@ def finish_outside_text_work(
                     )
                     continue
 
+                # LaMa erases every masked pixel, so give it only the letters
+                inpaint_mask = combined_mask
+                if inpainting_method == "lama_manga" and inpainter is not None:
+                    inpaint_mask = _glyph_inpaint_mask(
+                        work, combined_mask, composite_clip_bbox
+                    )
+
                 if group_flux_regions and inpainter is not None:
                     flush_pending_flux_candidates()
-                    grouped_mask = combined_mask.copy()
-                    if composite_clip_bbox is not None:
-                        clip_x1, clip_y1, clip_x2, clip_y2 = composite_clip_bbox
-                        clip_x1 = max(0, min(img_w, clip_x1))
-                        clip_x2 = max(0, min(img_w, clip_x2))
-                        clip_y1 = max(0, min(img_h, clip_y1))
-                        clip_y2 = max(0, min(img_h, clip_y2))
-
-                        clipped_grouped_mask = np.zeros_like(grouped_mask)
-                        if clip_x2 > clip_x1 and clip_y2 > clip_y1:
-                            clipped_grouped_mask[clip_y1:clip_y2, clip_x1:clip_x2] = (
-                                grouped_mask[clip_y1:clip_y2, clip_x1:clip_x2]
-                            )
-                        grouped_mask = clipped_grouped_mask
+                    fill_mask = _clip_mask_to_bbox(combined_mask, composite_clip_bbox)
+                    grouped_mask = _clip_mask_to_bbox(inpaint_mask, composite_clip_bbox)
 
                     if not np.any(grouped_mask):
                         log_message(
@@ -1884,6 +2003,7 @@ def finish_outside_text_work(
                         {
                             "index": i + 1,
                             "mask": grouped_mask,
+                            "fill_mask": fill_mask,
                             "fallback_color": (
                                 fallback_fill_color
                                 if fallback_fill_color
@@ -1904,7 +2024,8 @@ def finish_outside_text_work(
                     pending_flux_candidates.append(
                         {
                             "index": i + 1,
-                            "mask": combined_mask.copy(),
+                            "mask": inpaint_mask.copy(),
+                            "fill_mask": combined_mask.copy(),
                             "seed": region_seed,
                             "composite_clip_bbox": composite_clip_bbox,
                             "fallback_color": fallback_color_to_use,
@@ -1912,7 +2033,7 @@ def finish_outside_text_work(
                             "original_bbox_dict": original_bbox_dict,
                             "original_bounds": region.original_bounds,
                             "context_bbox": expanded_mask_bbox(
-                                combined_mask, current_image.size
+                                inpaint_mask, current_image.size
                             ),
                         }
                     )
@@ -1925,7 +2046,7 @@ def finish_outside_text_work(
                 inpainted_image, flux_fail_reason = _try_flux_inpaint(
                     inpainter,
                     current_image,
-                    combined_mask,
+                    inpaint_mask,
                     region_seed,
                     composite_clip_bbox,
                     verbose,

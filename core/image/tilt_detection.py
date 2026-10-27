@@ -2,12 +2,14 @@
 
 Implements computer vision angle estimation and oriented bounding dimensions
 extraction for outside-bubble text and sound effects in manga/comic images.
-Follows the technical specification in tests/osb_tilt_design_spec.md.
+The ink comes from a text segmentation mask when the caller has one, else from
+color heuristics.
 """
 
 from __future__ import annotations
 
 import math
+from typing import NamedTuple
 
 import cv2
 import numpy as np
@@ -16,64 +18,17 @@ DEFAULT_ESTIMATION_MAX_SIDE: int = 256
 MIN_INK_ELONGATION_RATIO: float = 1.25
 
 
-def detect_crop_tilt_angle(
-    crop_cv: np.ndarray,
-    is_dark_text: bool = True,
-    max_side: int = DEFAULT_ESTIMATION_MAX_SIDE,
-    deadband_deg: float = 3.0,
-    max_tilt_deg: float = 45.0,
-    min_ink_elongation: float = MIN_INK_ELONGATION_RATIO,
-) -> tuple[float, float, tuple[float, float], str]:
-    """Estimate tilt angle and oriented dimensions from an original raw crop.
+class _Ink(NamedTuple):
+    """Ink kept for angle estimation, with the stats of its connected components."""
 
-    Args:
-        crop_cv: Raw BGR or grayscale image crop from original_bbox.
-        is_dark_text: Prior indication of text polarity (True if ink is dark).
-        max_side: Longest edge downscale cap for performance budget.
-        deadband_deg: Threshold below which tilt snaps to 0.0 degrees.
-        max_tilt_deg: Hard clamp limit on estimated angle.
-        min_ink_elongation: Minimum ink elongation (r_pca / r_obb) required to detect tilt.
+    mask: np.ndarray  # uint8, 255 on ink
+    stats: np.ndarray  # cv2 component stats rows of the kept components
+    centroids: np.ndarray
 
-    Returns:
-        (angle_deg, confidence, (obb_length, obb_thickness), tilt_axis)
-        - angle_deg: Skia rotation angle in degrees.
-          Horizontal: +angle slopes down-and-right, -angle slopes up-and-right.
-          Vertical: +angle slopes down-and-left, -angle slopes down-and-right.
-        - confidence: Float in [0.0, 1.0].
-        - (obb_length, obb_thickness): Oriented dimensions in unscaled crop pixels.
-        - tilt_axis: 'horizontal', 'vertical', or 'none'.
-    """
-    if crop_cv is None or crop_cv.size == 0:
-        return 0.0, 0.0, (0.0, 0.0), "none"
 
-    if len(crop_cv.shape) == 2:
-        crop_cv = cv2.cvtColor(crop_cv, cv2.COLOR_GRAY2BGR)
-
-    orig_h, orig_w = crop_cv.shape[:2]
-    default_dims = (float(max(orig_w, orig_h)), float(min(orig_w, orig_h)))
-
-    # Step 1.1: Size gate
-    if (
-        orig_h < 8
-        or orig_w < 8
-        or (orig_h < 16 and orig_w < 8)
-        or (orig_w < 16 and orig_h < 8)
-    ):
-        return 0.0, 0.0, default_dims, "none"
-
-    # Step 1.1: Downscale for perf budget
-    max_dim = max(orig_h, orig_w)
-    if max_dim > max_side:
-        scale = float(max_side) / float(max_dim)
-        scaled_w = max(1, round(orig_w * scale))
-        scaled_h = max(1, round(orig_h * scale))
-        crop = cv2.resize(crop_cv, (scaled_w, scaled_h), interpolation=cv2.INTER_LINEAR)
-    else:
-        scale = 1.0
-        crop = crop_cv.copy()
-
+def _heuristic_ink_mask(crop: np.ndarray, is_dark_text: bool) -> np.ndarray:
+    """Guess the ink of a BGR crop from its colors: whichever polarity looks more like text."""
     h, w = crop.shape[:2]
-    scale_inv = 1.0 / scale
 
     # Step 1.2: Background color & luminance sampling around border
     border_mask = np.zeros((h, w), dtype=bool)
@@ -121,11 +76,11 @@ def detect_crop_tilt_angle(
     dark_mask = clean_mask(dark_raw)
     bright_mask = clean_mask(bright_raw)
 
-    def score_mask(m: np.ndarray, is_prior: bool) -> tuple[float, np.ndarray]:
+    def score_mask(m: np.ndarray, is_prior: bool) -> float:
         ys, xs = np.where(m > 0)
         num_fg = len(xs)
         if num_fg < 15:
-            return -1.0, m
+            return -1.0
         span_x = (np.max(xs) - np.min(xs) + 1) / float(w)
         span_y = (np.max(ys) - np.min(ys) + 1) / float(h)
         span_ratio = span_x * span_y
@@ -140,23 +95,26 @@ def detect_crop_tilt_angle(
         )
         if is_prior:
             score *= 1.2
-        return score, m
+        return score
 
-    score_dark, _ = score_mask(dark_mask, is_dark_text)
-    score_bright, _ = score_mask(bright_mask, not is_dark_text)
+    score_dark = score_mask(dark_mask, is_dark_text)
+    score_bright = score_mask(bright_mask, not is_dark_text)
 
     if score_dark <= 0.0 and score_bright <= 0.0:
-        winning_mask = dark_mask if is_dark_text else bright_mask
-    else:
-        winning_mask = dark_mask if score_dark >= score_bright else bright_mask
+        return dark_mask if is_dark_text else bright_mask
+    return dark_mask if score_dark >= score_bright else bright_mask
 
-    # Step 2: Component filtering & denoising
+
+def _filter_ink_components(mask: np.ndarray, from_text_model: bool) -> _Ink | None:
+    """Drop noise, speed lines and (for heuristic masks) background-like components.
+
+    Returns None when too little ink is left to estimate an angle."""
+    h, w = mask.shape
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-        winning_mask, connectivity=8
+        mask, connectivity=8
     )
     crop_area = float(w * h)
-    filtered_mask = np.zeros_like(winning_mask)
-    kept_comp_indices: list[int] = []
+    kept: list[int] = []
 
     for i in range(1, num_labels):
         area = stats[i, cv2.CC_STAT_AREA]
@@ -165,32 +123,37 @@ def detect_crop_tilt_angle(
         cx = stats[i, cv2.CC_STAT_LEFT]
         cy = stats[i, cv2.CC_STAT_TOP]
 
-        # Area gates
-        if area < max(10, 0.00008 * crop_area) or area > (0.35 * crop_area):
+        if area < max(10, 0.00008 * crop_area):
             continue
 
-        # Border touch gate
-        touches = 0
-        if cx == 0:
-            touches += 1
-        if cy == 0:
-            touches += 1
-        if cx + cw >= w:
-            touches += 1
-        if cy + ch >= h:
-            touches += 1
-        if touches >= 2:
-            continue
-        # Discard border-attached background framing (ceiling beams, wall pillars, panel frames)
-        if touches >= 1:
-            if (cx == 0 or cx + cw >= w) and (
-                ch / float(h) > 0.30 or area > 0.12 * crop_area
-            ):
+        # The text model already leaves out the art, and its letters often fill the
+        # tight OCR box, so these background gates would only drop real glyphs
+        if not from_text_model:
+            if area > (0.35 * crop_area):
                 continue
-            if (cy == 0 or cy + ch >= h) and (
-                cw / float(w) > 0.30 or area > 0.12 * crop_area
-            ):
+
+            # Border touch gate
+            touches = 0
+            if cx == 0:
+                touches += 1
+            if cy == 0:
+                touches += 1
+            if cx + cw >= w:
+                touches += 1
+            if cy + ch >= h:
+                touches += 1
+            if touches >= 2:
                 continue
+            # Discard border-attached background framing (ceiling beams, wall pillars, panel frames)
+            if touches >= 1:
+                if (cx == 0 or cx + cw >= w) and (
+                    ch / float(h) > 0.30 or area > 0.12 * crop_area
+                ):
+                    continue
+                if (cy == 0 or cy + ch >= h) and (
+                    cw / float(w) > 0.30 or area > 0.12 * crop_area
+                ):
+                    continue
 
         # Speed line filter: high aspect streak with small thickness
         aspect = max(cw, ch) / max(1.0, float(min(cw, ch)))
@@ -198,12 +161,100 @@ def detect_crop_tilt_angle(
         if aspect > 20.0 and thickness < 2.5:
             continue
 
-        kept_comp_indices.append(i)
-        filtered_mask[labels == i] = 255
+        kept.append(i)
 
+    filtered_mask = (np.isin(labels, kept) * 255).astype(np.uint8)
     valid_pixels = np.count_nonzero(filtered_mask)
     if valid_pixels < 20 or valid_pixels < (0.005 * crop_area):
+        return None
+    return _Ink(filtered_mask, stats[kept], centroids[kept])
+
+
+def _scaled_ink_mask(ink_mask: np.ndarray, size: tuple[int, int]) -> np.ndarray:
+    """`ink_mask` as a uint8 mask of (width, height) `size`."""
+    mask = np.asarray(ink_mask).astype(np.float32)
+    if mask.shape[1::-1] != size:
+        mask = cv2.resize(mask, size, interpolation=cv2.INTER_AREA)
+    return (mask >= 0.5).astype(np.uint8) * 255
+
+
+def detect_crop_tilt_angle(
+    crop_cv: np.ndarray,
+    is_dark_text: bool = True,
+    max_side: int = DEFAULT_ESTIMATION_MAX_SIDE,
+    deadband_deg: float = 3.0,
+    max_tilt_deg: float = 45.0,
+    min_ink_elongation: float = MIN_INK_ELONGATION_RATIO,
+    ink_mask: np.ndarray | None = None,
+) -> tuple[float, float, tuple[float, float], str]:
+    """Estimate tilt angle and oriented dimensions from an original raw crop.
+
+    Args:
+        crop_cv: Raw BGR or grayscale image crop from original_bbox.
+        is_dark_text: Prior indication of text polarity (True if ink is dark).
+        max_side: Longest edge downscale cap for performance budget.
+        deadband_deg: Threshold below which tilt snaps to 0.0 degrees.
+        max_tilt_deg: Hard clamp limit on estimated angle.
+        min_ink_elongation: Minimum ink elongation (r_pca / r_obb) required to detect tilt.
+        ink_mask: Text pixels of the crop (same height and width), e.g. from a text
+            segmentation model. It replaces the color heuristics that guess the ink;
+            when it holds too little text to measure, the heuristics are used instead.
+
+    Returns:
+        (angle_deg, confidence, (obb_length, obb_thickness), tilt_axis)
+        - angle_deg: Skia rotation angle in degrees.
+          Horizontal: +angle slopes down-and-right, -angle slopes up-and-right.
+          Vertical: +angle slopes down-and-left, -angle slopes down-and-right.
+        - confidence: Float in [0.0, 1.0].
+        - (obb_length, obb_thickness): Oriented dimensions in unscaled crop pixels.
+        - tilt_axis: 'horizontal', 'vertical', or 'none'.
+    """
+    if crop_cv is None or crop_cv.size == 0:
+        return 0.0, 0.0, (0.0, 0.0), "none"
+
+    if len(crop_cv.shape) == 2:
+        crop_cv = cv2.cvtColor(crop_cv, cv2.COLOR_GRAY2BGR)
+
+    orig_h, orig_w = crop_cv.shape[:2]
+    default_dims = (float(max(orig_w, orig_h)), float(min(orig_w, orig_h)))
+
+    # Step 1.1: Size gate
+    if (
+        orig_h < 8
+        or orig_w < 8
+        or (orig_h < 16 and orig_w < 8)
+        or (orig_w < 16 and orig_h < 8)
+    ):
         return 0.0, 0.0, default_dims, "none"
+
+    # Step 1.1: Downscale for perf budget
+    max_dim = max(orig_h, orig_w)
+    if max_dim > max_side:
+        scale = float(max_side) / float(max_dim)
+        scaled_w = max(1, round(orig_w * scale))
+        scaled_h = max(1, round(orig_h * scale))
+        crop = cv2.resize(crop_cv, (scaled_w, scaled_h), interpolation=cv2.INTER_LINEAR)
+    else:
+        scale = 1.0
+        crop = crop_cv.copy()
+
+    h, w = crop.shape[:2]
+    scale_inv = 1.0 / scale
+
+    # Steps 1.2-2: Find the ink and drop components that aren't text
+    ink = None
+    if ink_mask is not None:
+        ink = _filter_ink_components(
+            _scaled_ink_mask(ink_mask, (w, h)), from_text_model=True
+        )
+    if ink is None:
+        ink = _filter_ink_components(
+            _heuristic_ink_mask(crop, is_dark_text), from_text_model=False
+        )
+    if ink is None:
+        return 0.0, 0.0, default_dims, "none"
+    filtered_mask = ink.mask
+    crop_area = float(w * h)
 
     # Step 3: Aspect-Ratio Routing & Multi-Column CJK Guard
     ys, xs = np.where(filtered_mask > 0)
@@ -337,7 +388,7 @@ def detect_crop_tilt_angle(
                 layout_deg = -math.degrees(math.atan2(v1[0], v1[1]))
                 if best_s * layout_deg < 0 and abs(layout_deg) >= 10.0:
                     return 0.0, 0.0, oriented_dims, "vertical"
-                conf = max(0.60, (gain - 1.0) / 0.12)
+                conf = min(1.0, max(0.60, (gain - 1.0) / 0.12))
                 return float(best_s), conf, oriented_dims, "vertical"
 
         # Single-column vertical path fallback using PCA / linear regression
@@ -374,16 +425,12 @@ def detect_crop_tilt_angle(
     tilt_axis = "horizontal"
 
     # Method A: Centroid Regression
-    valid_comp = [
-        i
-        for i in kept_comp_indices
-        if stats[i, cv2.CC_STAT_AREA] >= max(8, int(crop_area * 0.0005))
-    ]
+    valid_comp = ink.stats[:, cv2.CC_STAT_AREA] >= max(8, int(crop_area * 0.0005))
     theta_a = None
-    if len(valid_comp) >= 3:
-        cxs = centroids[valid_comp, 0]
-        cys = centroids[valid_comp, 1]
-        weights = np.sqrt(stats[valid_comp, cv2.CC_STAT_AREA].astype(np.float32))
+    if np.count_nonzero(valid_comp) >= 3:
+        cxs = ink.centroids[valid_comp, 0]
+        cys = ink.centroids[valid_comp, 1]
+        weights = np.sqrt(ink.stats[valid_comp, cv2.CC_STAT_AREA].astype(np.float32))
         try:
             slope_a = np.polyfit(cxs, cys, 1, w=weights)[0]
             theta_a = math.degrees(math.atan(slope_a))

@@ -1794,7 +1794,8 @@ def create_layout(
                                     info=(
                                         "Klein models are newer, but may introduce minor color "
                                         "shifts. Kontext does not shift colors, but is more dated. "
-                                        "LaMa is much faster and lighter, but rebuilds less detail."
+                                        "LaMa is much faster and lighter and erases only the letters, but "
+                                        "rebuilds less detail."
                                     ),
                                 )
                                 _initial_method = saved_settings.get(
@@ -2139,7 +2140,11 @@ def create_layout(
                                         "outside_text_osb_follow_tilt", True
                                     ),
                                     label="Match Original Text Tilt",
-                                    info="Render outside-bubble text rotated to match the detected tilt angle of the original text.",
+                                    info=(
+                                        "Render outside-bubble text rotated to match the tilt of the "
+                                        "original text. On a GPU or with LaMa, the tilt is measured on the "
+                                        "letters found by the text segmentation model."
+                                    ),
                                 )
                                 outside_text_osb_max_tilt_deg = gr.Slider(
                                     5.0,

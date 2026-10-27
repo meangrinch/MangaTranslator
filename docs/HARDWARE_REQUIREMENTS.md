@@ -514,3 +514,4 @@ TBD: not measured yet. sd.cpp runs FLUX.3 Image Klein without segmented executio
 | Model | VRAM | RAM | Storage |
 | --- | --- | --- | --- |
 | LaMa Manga | +0.9 GB | TBD | +0.2 GB |
+| Koharu Text SAM-TS-L | +3.9 GB | TBD | +1.4 GB |

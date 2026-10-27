@@ -128,6 +128,7 @@ MangaTranslator 是免费且开源的。如果它为您节省了时间或改善�
 - SAM 3: [Meta AI](https://huggingface.co/facebook/sam3)
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)
 - PaddleOCR-VL-1.6: [PaddlePaddle](https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6)
+- Koharu Text SAM-TS-L: [mayocream](https://huggingface.co/mayocream/koharu-text-sam-ts-l), based on [Hi-SAM](https://github.com/ymy-k/Hi-SAM)
 - LaMa Manga: [mayocream](https://huggingface.co/mayocream/lama-manga)
 - FLUX.1 Kontext: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev)
 - FLUX.2 Klein 4B: [Black Forest Labs](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B)

@@ -85,6 +85,7 @@ class ModelType(Enum):
     FLUX3_KLEIN_SDNQ_PIPELINE = "flux3_klein_sdnq_pipeline"
     QWEN_IMAGE_21_SDNQ_PIPELINE = "qwen_image_21_sdnq_pipeline"
     LAMA_MANGA = "lama_manga"
+    TEXT_SAM = "text_sam"
     SDCPP_SERVER = "sdcpp_server"
     FLUX2_SDCPP_VAE = "flux2_sdcpp_vae"
     QWEN_IMAGE_21_SDCPP_VAE = "qwen_image_21_sdcpp_vae"
@@ -214,6 +215,9 @@ class ModelManager:
             ModelType.LAMA_MANGA: (
                 model_dir / "inpainting" / "lama" / "lama-manga.safetensors"
             ),
+            ModelType.TEXT_SAM: (
+                detection_dir / "text_sam" / "koharu-text-sam-ts-l.safetensors"
+            ),
             ModelType.MANGA_OCR: (model_dir / "ocr" / "manga-ocr-base"),
             ModelType.PADDLE_OCR_VL: (model_dir / "ocr" / "paddleocr-vl-1.6"),
             ModelType.SDCPP_SERVER: (
@@ -338,6 +342,10 @@ class ModelManager:
         repos[ModelType.LAMA_MANGA] = {
             "repo_id": "mayocream/lama-manga",
             "filename": "lama-manga.safetensors",
+        }
+        repos[ModelType.TEXT_SAM] = {
+            "repo_id": "mayocream/koharu-text-sam-ts-l",
+            "filename": "model.safetensors",
         }
         # The FLUX.2 VAE, shared by Flux.2 Klein, Flux.3 Image Klein, and Fibo 2.0
         repos[ModelType.FLUX2_SDCPP_VAE] = {
@@ -1719,6 +1727,32 @@ class ModelManager:
             log_message("LaMa manga inpainting model loaded.", verbose=verbose)
             return model
 
+    def load_text_sam(self, verbose: bool = False):
+        """Load Koharu's manga-tuned SAM-TS-L, which segments text pixels on a page."""
+        with self._lock:
+            if self.is_loaded(ModelType.TEXT_SAM):
+                return self.models[ModelType.TEXT_SAM]
+
+            log_message("Loading SAM-TS-L text segmentation model...", verbose=verbose)
+            from safetensors.torch import load_file
+
+            from core.ml.hi_sam import build_text_sam_ts_l
+
+            hf_info = self.model_hf_repos[ModelType.TEXT_SAM]
+            path = self._ensure_hf_file(
+                hf_info["repo_id"],
+                hf_info["filename"],
+                self.model_paths[ModelType.TEXT_SAM],
+                verbose=verbose,
+            )
+            model = build_text_sam_ts_l()
+            model.load_state_dict(load_file(str(path)), strict=True)
+            # fp32 weights; predict_text_probability autocasts to bf16 on CUDA
+            model = model.to(self.device).eval()
+            self.models[ModelType.TEXT_SAM] = model
+            log_message("SAM-TS-L text segmentation model loaded.", verbose=verbose)
+            return model
+
     def unload_model(
         self, model_type: ModelType, force_gc: bool = True, verbose: bool = False
     ):
@@ -1819,9 +1853,14 @@ class ModelManager:
             log_message("Qwen-Image 2.1 Turbo model unloaded.", verbose=verbose)
 
     def unload_lama_manga(self, verbose: bool = False):
-        """Unload the LaMa manga inpainting model."""
-        if self._unload_models((ModelType.LAMA_MANGA,), verbose):
+        """Unload the LaMa manga inpainting model and the text segmenter it uses."""
+        if self._unload_models((ModelType.LAMA_MANGA, ModelType.TEXT_SAM), verbose):
             log_message("LaMa manga inpainting model unloaded.", verbose=verbose)
+
+    def unload_text_sam(self, verbose: bool = False):
+        """Unload the SAM-TS-L text segmentation model."""
+        if self._unload_models((ModelType.TEXT_SAM,), verbose):
+            log_message("SAM-TS-L text segmentation model unloaded.", verbose=verbose)
 
     def unload_all(self, verbose: bool = False):
         """Unload all models and free all GPU memory."""

@@ -70,6 +70,7 @@ def test_model_paths_follow_the_task_layout():
     assert paths[ModelType.MANGA_OCR].parent == root / "ocr"
     assert paths[ModelType.PADDLE_OCR_VL].parent == root / "ocr"
     assert paths[ModelType.LAMA_MANGA].parent == root / "inpainting" / "lama"
+    assert paths[ModelType.TEXT_SAM].parent == root / "detection" / "text_sam"
     assert paths[ModelType.FLUX2_SDCPP_VAE].parent == root / "inpainting" / "sdcpp"
     assert paths[ModelType.SDCPP_SERVER].parent == root / "runtime" / "sdcpp"
     assert paths[ModelType.UPSCALE].parent == root / "upscale"

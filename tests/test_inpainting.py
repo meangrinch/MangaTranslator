@@ -258,3 +258,17 @@ def test_lama_checkpoint_loads_through_spandrel(tmp_path, monkeypatch):
 
     assert model.architecture.id == "LaMa"
     manager.unload_lama_manga()
+
+
+def test_text_sam_unloads_without_lama(monkeypatch):
+    from core.ml.model_manager import ModelType, get_model_manager
+
+    manager = get_model_manager()
+    monkeypatch.setitem(manager.models, ModelType.TEXT_SAM, object())
+    lama = object()
+    monkeypatch.setitem(manager.models, ModelType.LAMA_MANGA, lama)
+
+    manager.unload_text_sam()
+
+    assert not manager.is_loaded(ModelType.TEXT_SAM)
+    assert manager.models[ModelType.LAMA_MANGA] is lama
