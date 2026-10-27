@@ -154,5 +154,8 @@
   - 「クロップ領域を ~1MP にアップスケール（Upscale Crops to ~1MP）」を有効のままにしてください。
   - 推論ステップ（inference steps）数を増やしてください（Flux.1 Kontext の場合）。
 
+- **インペイント後に吹き出し外の文字の断片が残る（拡散モデル）:**
+  - 「周囲の作画を保持（Preserve Surrounding Art）」を無効にすると、テキストセグメンテーションモデルが検出した文字だけでなく、テキストボックス全体を貼り付けます。
+
 - **Flux.1 Kontext Nunchaku バックエンドが利用できない:**
   - Nunchaku には Nvidia GPU (CUDA) と個別のインストールが必要です。インストールするか、代わりに sd.cpp/SDNQ バックエンドを使用してください。

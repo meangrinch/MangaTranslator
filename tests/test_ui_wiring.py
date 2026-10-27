@@ -127,6 +127,24 @@ def test_luminance_correction_is_offered_for_every_model(
     assert luminance["interactive"] is (uses_model and not group_regions)
 
 
+@pytest.mark.parametrize("method", INPAINTING_METHODS)
+def test_preserve_art_is_offered_for_every_model_but_lama(tmp_path, method):
+    app = layout.create_layout(
+        models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
+    )
+    handler = next(
+        dep.fn
+        for dep in app.fns.values()
+        if getattr(dep.fn, "__name__", "") == "_update_inpainting_controls"
+    )
+
+    preserve = handler(method, "sdcpp", "", "", 4, False)[9]
+
+    uses_model = method not in ("opencv", "none")
+    assert preserve["visible"] is uses_model
+    assert preserve["interactive"] is (uses_model and method != "lama_manga")
+
+
 def test_a_forced_backend_does_not_replace_the_saved_choice(tmp_path):
     """Fibo forces sd.cpp; the user's SDNQ and quant choices must survive it."""
     app = layout.create_layout(

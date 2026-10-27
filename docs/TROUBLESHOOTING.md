@@ -155,5 +155,8 @@
   - Keep "Upscale Crops to ~1MP" enabled
   - Increase inference steps (for Flux.1 Kontext)
 
+- **Fragments of OSB letters left after inpainting (diffusion models):**
+  - Disable "Preserve Surrounding Art" to paste the whole text box instead of only the letters the text segmentation model finds
+
 - **Flux.1 Kontext Nunchaku backend not available:**
   - Nunchaku requires an Nvidia GPU (CUDA) and separate installation; install it or use the sd.cpp/SDNQ backends instead

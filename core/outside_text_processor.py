@@ -21,6 +21,7 @@ from core.batch_coordinator import (
 from core.config import MangaTranslatorConfig
 from core.image.glyph_mask import THRESHOLD as GLYPH_THRESHOLD
 from core.image.glyph_mask import (
+    composite_glyphs,
     glyph_dilation_radius,
     page_glyph_probability,
     refine_mask_to_glyphs,
@@ -62,8 +63,9 @@ OSB_COLOR_PAGE_MIN_FRACTION = 0.05
 class _PageGlyphMap:
     """Text probability of the original page, computed on first use.
 
-    Tilt detection and LaMa's glyph masks share it, so the text segmentation model runs
-    at most once per page, and not at all on pages that need neither.
+    Tilt detection, LaMa's glyph masks, and the edit models' glyph composites share it,
+    so the text segmentation model runs at most once per page, and not at all on pages
+    that need none of them.
     """
 
     image: Image.Image
@@ -111,9 +113,24 @@ class _PageGlyphMap:
             self.failed = True
             log_message(
                 f"Text segmentation unavailable ({e}); using heuristic tilt and "
-                "whole text boxes for LaMa",
+                "whole text boxes for inpainting",
                 always_print=True,
             )
+
+
+def _composites_glyphs(config: MangaTranslatorConfig) -> bool:
+    """Whether edit-model inpaints are pasted only over the letters."""
+    return config.outside_text.inpainting_method not in (
+        "lama_manga",
+        "opencv",
+        "none",
+    ) and bool(config.outside_text.flux_preserve_art)
+
+
+def _inpainting_uses_glyph_map(config: MangaTranslatorConfig) -> bool:
+    return config.outside_text.inpainting_method == "lama_manga" or _composites_glyphs(
+        config
+    )
 
 
 def _glyph_map_for_tilt(
@@ -122,9 +139,9 @@ def _glyph_map_for_tilt(
     """The page map if tilt detection should use it, else None for the ink heuristic.
 
     On the CPU the text model takes ~20 s per page, too slow to spend on tilt alone,
-    so there tilt only shares the map LaMa builds anyway.
+    so there tilt only shares the map that inpainting builds anyway.
     """
-    if config.outside_text.inpainting_method == "lama_manga":
+    if _inpainting_uses_glyph_map(config):
         return glyph_map
     device = config.device
     return None if device is None or device.type == "cpu" else glyph_map
@@ -1658,6 +1675,32 @@ def _glyph_inpaint_mask(
     return refine_mask_to_glyphs(box_mask, glyph_prob, radius)
 
 
+def _composite_to_glyphs(
+    work: OutsideTextWork,
+    before: Image.Image,
+    after: Image.Image,
+    box_mask: np.ndarray,
+) -> Image.Image:
+    """Keep the original art between and around the letters of an edit-model inpaint.
+
+    The edit models redraw their whole crop, so pasting the box would replace art
+    the text never covered. LaMa already inpaints only the glyphs.
+    """
+    if not _composites_glyphs(work.config):
+        return after
+    glyph_prob = work.glyph_map.get()
+    if glyph_prob is None:
+        return after
+    out = composite_glyphs(
+        np.asarray(before),
+        np.asarray(after),
+        box_mask,
+        glyph_prob,
+        glyph_dilation_radius(work.pil_image.size),
+    )
+    return Image.fromarray(out)
+
+
 def _run_grouped_flux(
     image: Image.Image,
     candidates: list[dict[str, Any]],
@@ -1759,11 +1802,13 @@ def _run_flux_waves(
     inpainter,
     request_coordinator,
     fill_candidate,
+    composite_candidate,
     verbose: bool,
 ) -> tuple[Image.Image, int, int]:
     """Run queued per-region Flux jobs in non-overlapping waves via the coordinator.
 
-    Regions whose job fails get `fill_candidate(image, candidate, color)` instead.
+    Each result goes through `composite_candidate(before, after, candidate)`; regions
+    whose job fails get `fill_candidate(image, candidate, color)` instead.
     Returns the image and the number of regions done by Flux and by CV2.
     """
     flux_count = 0
@@ -1827,13 +1872,14 @@ def _run_flux_waves(
                 cv2_count += 1
                 continue
 
+            result_image = composite_candidate(base_image, result["image"], candidate)
             context_bbox = candidate["context_bbox"]
             if context_bbox is None:
-                image = result["image"]
+                image = result_image
             else:
                 image = paste_image_region(
                     image,
-                    result["image"],
+                    result_image,
                     context_bbox,
                 )
             flux_count += 1
@@ -1922,6 +1968,9 @@ def finish_outside_text_work(
                     inpainter,
                     request_coordinator,
                     apply_candidate_simple_fill,
+                    lambda before, after, candidate: _composite_to_glyphs(
+                        work, before, after, candidate["box_mask"]
+                    ),
                     verbose,
                 )
                 flux_inpaints += flux_done
@@ -1980,16 +2029,20 @@ def finish_outside_text_work(
                     )
                     continue
 
-                # LaMa erases every masked pixel, so give it only the letters
+                # LaMa erases every masked pixel, so give it only the letters. The edit
+                # models still see the box; when they are composited through the
+                # glyphs, the map is built here, before their weights load.
                 inpaint_mask = combined_mask
+                box_mask = _clip_mask_to_bbox(combined_mask, composite_clip_bbox)
                 if inpainting_method == "lama_manga" and inpainter is not None:
                     inpaint_mask = _glyph_inpaint_mask(
                         work, combined_mask, composite_clip_bbox
                     )
+                elif inpainter is not None and _composites_glyphs(config):
+                    work.glyph_map.get()
 
                 if group_flux_regions and inpainter is not None:
                     flush_pending_flux_candidates()
-                    fill_mask = _clip_mask_to_bbox(combined_mask, composite_clip_bbox)
                     grouped_mask = _clip_mask_to_bbox(inpaint_mask, composite_clip_bbox)
 
                     if not np.any(grouped_mask):
@@ -2003,7 +2056,7 @@ def finish_outside_text_work(
                         {
                             "index": i + 1,
                             "mask": grouped_mask,
-                            "fill_mask": fill_mask,
+                            "fill_mask": box_mask,
                             "fallback_color": (
                                 fallback_fill_color
                                 if fallback_fill_color
@@ -2026,6 +2079,7 @@ def finish_outside_text_work(
                             "index": i + 1,
                             "mask": inpaint_mask.copy(),
                             "fill_mask": combined_mask.copy(),
+                            "box_mask": box_mask,
                             "seed": region_seed,
                             "composite_clip_bbox": composite_clip_bbox,
                             "fallback_color": fallback_color_to_use,
@@ -2068,11 +2122,14 @@ def finish_outside_text_work(
                     continue
 
                 flux_inpaints += 1
-                current_image = inpainted_image
+                current_image = _composite_to_glyphs(
+                    work, current_image, inpainted_image, box_mask
+                )
 
             flush_pending_flux_candidates()
 
             if grouped_flux_candidates:
+                before_grouped = current_image
                 current_image, grouped_flux, grouped_cv2 = _run_grouped_flux(
                     current_image,
                     grouped_flux_candidates,
@@ -2085,6 +2142,15 @@ def finish_outside_text_work(
                 )
                 flux_inpaints += grouped_flux
                 cv2_inpaints += grouped_cv2
+                if grouped_flux:
+                    current_image = _composite_to_glyphs(
+                        work,
+                        before_grouped,
+                        current_image,
+                        np.logical_or.reduce(
+                            [c["fill_mask"] for c in grouped_flux_candidates]
+                        ),
+                    )
 
             log_message("Outside text inpainting completed", verbose=verbose)
             parts = [

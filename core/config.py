@@ -183,6 +183,8 @@ class OutsideTextConfig:
     )
     flux_upscale_small_crops: bool = True
     flux_group_regions: bool = False
+    # Paste edit-model redraws only over the letters, keeping the art around them
+    flux_preserve_art: bool = True
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.5
     osb_text_free_only: bool = False  # Use the RT-DETR text_free class as OSB source

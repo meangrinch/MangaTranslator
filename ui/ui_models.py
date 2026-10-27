@@ -149,6 +149,7 @@ class UIOutsideTextSettings:
     )
     flux_upscale_small_crops: bool = True
     flux_group_regions: bool = False
+    flux_preserve_art: bool = True
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.5
     osb_text_free_only: bool = False
@@ -334,6 +335,7 @@ class UIConfigState:
             "outside_text_flux_luminance_correction": self.outside_text.flux_luminance_correction,
             "outside_text_flux_upscale_small_crops": self.outside_text.flux_upscale_small_crops,
             "outside_text_flux_group_regions": self.outside_text.flux_group_regions,
+            "outside_text_flux_preserve_art": self.outside_text.flux_preserve_art,
             "outside_text_flux_residual_diff_threshold": self.outside_text.flux_residual_diff_threshold,
             "outside_text_osb_confidence": self.outside_text.osb_confidence,
             "outside_text_osb_text_free_only": self.outside_text.osb_text_free_only,
@@ -527,6 +529,7 @@ class UIConfigState:
                     "outside_text_flux_upscale_small_crops", True
                 ),
                 flux_group_regions=data.get("outside_text_flux_group_regions", False),
+                flux_preserve_art=data.get("outside_text_flux_preserve_art", True),
                 flux_residual_diff_threshold=data.get(
                     "outside_text_flux_residual_diff_threshold", 0.15
                 ),
@@ -970,6 +973,7 @@ def map_ui_to_backend_config(
         flux_luminance_correction=ui_state.outside_text.flux_luminance_correction,
         flux_upscale_small_crops=ui_state.outside_text.flux_upscale_small_crops,
         flux_group_regions=ui_state.outside_text.flux_group_regions,
+        flux_preserve_art=ui_state.outside_text.flux_preserve_art,
         flux_residual_diff_threshold=ui_state.outside_text.flux_residual_diff_threshold,
         osb_confidence=ui_state.outside_text.osb_confidence,
         osb_text_free_only=ui_state.outside_text.osb_text_free_only,

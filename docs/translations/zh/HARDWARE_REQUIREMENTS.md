@@ -514,4 +514,9 @@ TBD：尚未测量。sd.cpp 运行 FLUX.3 Image Klein 时不分段执行，因�
 | 模型 | 显存 (VRAM) | 内存 (RAM) | 存储空间 |
 | --- | --- | --- | --- |
 | LaMa Manga | +0.9 GB | TBD | +0.2 GB |
+
+### 文字分割
+
+| 模型 | 显存 (VRAM) | 内存 (RAM) | 存储空间 |
+| --- | --- | --- | --- |
 | Koharu Text SAM-TS-L | +3.9 GB | TBD | +1.4 GB |

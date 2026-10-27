@@ -155,5 +155,8 @@
   - 保持启用“将裁剪块放大到约 100万像素 (Upscale Crops to ~1MP)”
   - 增加推理步数（对于 Flux.1 Kontext）
 
+- **擦除后残留对话框外文字碎片（扩散模型）：**
+  - 禁用“保留周围画面 (Preserve Surrounding Art)”，以粘贴整个文本框，而不只是文本分割模型找到的文字
+
 - **Flux.1 Kontext Nunchaku 后端不可用：**
   - Nunchaku 需要 Nvidia GPU (CUDA) 且需单独安装；请进行安装，或者改为使用 sd.cpp/SDNQ 后端

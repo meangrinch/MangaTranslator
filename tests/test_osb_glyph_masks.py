@@ -30,9 +30,10 @@ class _InlineCoordinator:
         return [job() for job in jobs]
 
 
-def _work(method, mode="direct"):
+def _work(method, mode="direct", preserve_art=True):
     config = MangaTranslatorConfig(yolo_model_path="unused.pt")
     config.outside_text.inpainting_method = method
+    config.outside_text.flux_preserve_art = preserve_art
     config.outside_text.flux_group_regions = mode == "grouped"
     if mode == "waves":
         config.request_coordinator = _InlineCoordinator()
@@ -72,13 +73,26 @@ def _work(method, mode="direct"):
 
 
 class _FakeInpainter:
+    """Paints white over the composite area like an edit model's redraw, which the
+    composite is clipped to (the box), or returns the input on failure."""
+
     def __init__(self, succeed=True):
         self.masks = []
         self.succeed = succeed
 
-    def inpaint_mask(self, image, mask, **kwargs):
-        self.masks.append(np.asarray(mask, bool).copy())
-        return image.copy() if self.succeed else image
+    def inpaint_mask(self, image, mask, composite_clip_bbox=None, **kwargs):
+        mask = np.asarray(mask, bool).copy()
+        self.masks.append(mask.copy())
+        if not self.succeed:
+            return image
+        if composite_clip_bbox is not None:
+            x0, y0, x1, y1 = composite_clip_bbox
+            clip = np.zeros_like(mask)
+            clip[y0:y1, x0:x1] = True
+            mask &= clip
+        out = np.asarray(image).copy()
+        out[mask] = 255
+        return Image.fromarray(out)
 
 
 class _FakeManager:
@@ -142,7 +156,7 @@ def test_lama_gets_glyph_masks_clipped_to_the_text_box(patched, mode):
     assert work.glyph_map.prob is not None
 
 
-def test_other_methods_keep_the_box_mask(patched):
+def test_edit_models_still_see_the_whole_box(patched):
     inpainter, manager = _FakeInpainter(), _FakeManager()
     patched(inpainter, manager)
     work = _work("flux_klein_4b")
@@ -151,7 +165,55 @@ def test_other_methods_keep_the_box_mask(patched):
 
     (mask,) = inpainter.masks
     np.testing.assert_array_equal(mask, work.mask_groups[0]["combined_mask"])
-    assert manager.loads == 0
+    # The map is built before the edit model loads, and its model freed for it
+    assert (manager.loads, manager.unloads) == (1, 1)
+
+
+@pytest.mark.parametrize("mode", ["direct", "grouped", "waves"])
+def test_edit_models_composite_only_the_glyphs(patched, mode):
+    patched(_FakeInpainter(), _FakeManager())
+    work = _work("flux_klein_4b", mode)
+    original = np.asarray(work.pil_image).copy()
+
+    result, _ = otp.finish_outside_text_work(work)
+
+    out = np.asarray(result)
+    assert (out[STROKE] == 255).all()  # the text is replaced by the redraw
+    # Art inside the box away from the text, and everything outside it, is original
+    np.testing.assert_array_equal(out[140:160, 100:300], original[140:160, 100:300])
+    np.testing.assert_array_equal(out[~_box_mask()], original[~_box_mask()])
+
+
+@pytest.mark.parametrize("mode", ["direct", "grouped", "waves"])
+def test_edit_models_paste_the_whole_box_without_preserve_art(patched, mode):
+    inpainter, manager = _FakeInpainter(), _FakeManager()
+    patched(inpainter, manager)
+    work = _work("flux_klein_4b", mode, preserve_art=False)
+
+    result, _ = otp.finish_outside_text_work(work)
+
+    assert (np.asarray(result)[_box_mask()] == 255).all()
+    assert manager.loads == 0  # the text model isn't needed
+
+
+def test_lama_keeps_glyph_masks_without_preserve_art(patched):
+    inpainter, manager = _FakeInpainter(), _FakeManager()
+    patched(inpainter, manager)
+    work = _work("lama_manga", preserve_art=False)
+
+    otp.finish_outside_text_work(work)
+
+    (mask,) = inpainter.masks
+    assert mask[128, 180] and not mask[150, 120]
+
+
+def test_edit_models_composite_the_whole_box_when_the_text_model_fails(patched):
+    patched(_FakeInpainter(), _FakeManager(fail=True))
+    work = _work("flux_klein_4b")
+
+    result, _ = otp.finish_outside_text_work(work)
+
+    assert (np.asarray(result)[_box_mask()] == 255).all()
 
 
 def test_lama_falls_back_to_box_masks_when_the_text_model_fails(patched):
@@ -301,16 +363,22 @@ def test_no_map_is_built_without_tilt_for_other_methods(patched):
 
 
 @pytest.mark.parametrize(
-    ("device", "method", "uses_map"),
+    ("device", "method", "preserve_art", "uses_map"),
     [
-        ("cuda", "flux_klein_4b", True),
-        ("cpu", "flux_klein_4b", False),
-        ("cpu", "lama_manga", True),
+        ("cuda", "flux_klein_4b", True, True),
+        ("cuda", "flux_klein_4b", False, True),
+        ("cuda", "opencv", True, True),
+        ("cpu", "flux_klein_4b", True, True),
+        ("cpu", "flux_klein_4b", False, False),
+        ("cpu", "lama_manga", False, True),
+        ("cpu", "opencv", True, False),
+        ("cpu", "none", True, False),
     ],
 )
-def test_cpu_tilt_only_shares_the_lama_map(device, method, uses_map):
+def test_cpu_tilt_only_shares_an_inpainting_map(device, method, preserve_art, uses_map):
     config = MangaTranslatorConfig(yolo_model_path="unused.pt")
     config.outside_text.inpainting_method = method
+    config.outside_text.flux_preserve_art = preserve_art
     config.device = torch.device(device)
     glyph_map = otp._PageGlyphMap.for_page(_tilted_text_page(), config, verbose=False)
 

@@ -3,6 +3,7 @@ import pytest
 from PIL import Image
 
 from core.image.glyph_mask import (
+    composite_glyphs,
     glyph_dilation_radius,
     glyph_scale,
     page_glyph_probability,
@@ -103,3 +104,72 @@ def test_refine_handles_each_region_of_a_grouped_mask_separately():
 
     assert mask[62, 90] and not mask[90, 140]
     np.testing.assert_array_equal(mask[second], np.ones(second.sum(), bool))
+
+
+def _composite_case():
+    """Original page with art and a stroke, and an edit-model redraw of it.
+
+    The redraw erased the stroke but drew the art 1 px off and its paper 6 levels darker.
+    """
+    before = np.full((200, 300, 3), 255, np.uint8)
+    before[60:100, 40:42] = 30  # art line crossing the box
+    before[78:82, 100:200] = 0  # text stroke
+    after = np.full_like(before, 249)
+    after[60:100, 41:43] = 30
+    prob = np.zeros((200, 300), np.float32)
+    prob[78:82, 100:200] = 1.0
+    return before, after, _box((200, 300), 30, 60, 230, 100), prob
+
+
+def test_composite_keeps_the_original_art_away_from_the_glyphs():
+    before, after, box, prob = _composite_case()
+
+    out = composite_glyphs(before, after, box, prob, radius=6)
+
+    np.testing.assert_array_equal(out[60:100, 30:60], before[60:100, 30:60])
+    np.testing.assert_array_equal(out[~box], before[~box])
+
+
+def test_composite_replaces_the_glyphs_with_the_redraw_matched_to_the_paper():
+    before, after, box, prob = _composite_case()
+
+    out = composite_glyphs(before, after, box, prob, radius=6)
+
+    # The stroke is gone and the redrawn paper takes the original's tone, so no
+    # letter-shaped ghost is left; the misplaced art line doesn't skew the match
+    assert (out[76:84, 100:200] >= 254).all()
+
+
+def test_composite_feathers_the_edge_of_the_dilated_glyphs():
+    before, after, box, prob = _composite_case()
+    after[:] = 128  # a redraw so far off that tone matching ignores it
+
+    out = composite_glyphs(before, after, box, prob, radius=6)
+
+    column = out[70:90, 150, 0].astype(int)
+    assert column[8:12].tolist() == [128] * 4  # the glyph core is fully redrawn
+    edge = out[73, 150, 0]  # 5 px out from the stroke, inside the 6 px dilation
+    assert 128 < edge < 255
+
+
+def test_composite_takes_the_whole_box_when_no_glyph_is_found():
+    before, after, box, _ = _composite_case()
+
+    out = composite_glyphs(before, after, box, np.zeros((200, 300), np.float32), 6)
+
+    np.testing.assert_array_equal(out[box], after[box])
+    np.testing.assert_array_equal(out[~box], before[~box])
+
+
+def test_refine_low_threshold_adds_faint_parts_connected_to_glyphs():
+    prob = np.zeros((300, 300), np.float32)
+    prob[100:104, 50:100] = 0.9  # confident stroke
+    prob[100:104, 100:140] = 0.3  # its faint outline tail
+    prob[200:204, 50:100] = 0.3  # faint marks with no confident part
+    box = _box(prob.shape, 30, 80, 250, 230)
+
+    strict = refine_mask_to_glyphs(box, prob, radius=3)
+    loose = refine_mask_to_glyphs(box, prob, radius=3, low_threshold=0.15)
+
+    assert not strict[102, 130] and loose[102, 130]
+    assert not loose[202, 75]

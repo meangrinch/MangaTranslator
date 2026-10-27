@@ -1794,8 +1794,7 @@ def create_layout(
                                     info=(
                                         "Klein models are newer, but may introduce minor color "
                                         "shifts. Kontext does not shift colors, but is more dated. "
-                                        "LaMa is much faster and lighter and erases only the letters, but "
-                                        "rebuilds less detail."
+                                        "LaMa is much faster and lighter, but rebuilds less detail."
                                     ),
                                 )
                                 _initial_method = saved_settings.get(
@@ -2021,6 +2020,21 @@ def create_layout(
                                     visible=_uses_model,
                                     interactive=_uses_model,
                                 )
+                                outside_text_flux_preserve_art = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_flux_preserve_art", True
+                                    ),
+                                    label="Preserve Surrounding Art",
+                                    info=(
+                                        "Paste the inpainted patch only over the letters found by the "
+                                        "text segmentation model, keeping the original art around them. "
+                                        "LaMa always erases only the letters."
+                                    ),
+                                    visible=_uses_model,
+                                    interactive=(
+                                        _uses_model and _initial_method != "lama_manga"
+                                    ),
+                                )
                                 outside_text_seed = gr.Number(
                                     value=saved_settings.get("outside_text_seed", 1),
                                     label="Seed",
@@ -2142,8 +2156,9 @@ def create_layout(
                                     label="Match Original Text Tilt",
                                     info=(
                                         "Render outside-bubble text rotated to match the tilt of the "
-                                        "original text. On a GPU or with LaMa, the tilt is measured on the "
-                                        "letters found by the text segmentation model."
+                                        "original text. On a GPU, or when inpainting already finds the "
+                                        "letters, the tilt is measured on the letters found by the text "
+                                        "segmentation model."
                                     ),
                                 )
                                 outside_text_osb_max_tilt_deg = gr.Slider(
@@ -2506,6 +2521,7 @@ def create_layout(
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
             outside_text_flux_group_regions,
+            outside_text_flux_preserve_art,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
@@ -2651,6 +2667,7 @@ def create_layout(
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
             outside_text_flux_group_regions,
+            outside_text_flux_preserve_art,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
@@ -2788,6 +2805,7 @@ def create_layout(
             outside_text_flux_luminance_correction,
             outside_text_flux_upscale_small_crops,
             outside_text_flux_group_regions,
+            outside_text_flux_preserve_art,
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
@@ -3273,6 +3291,10 @@ def create_layout(
                 gr.update(visible=uses_model, interactive=is_klein),
                 gr.update(visible=uses_model, interactive=uses_model),
                 gr.update(
+                    visible=uses_model,
+                    interactive=uses_model and method != "lama_manga",
+                ),
+                gr.update(
                     visible=residual_interactive,
                     interactive=residual_interactive,
                 ),
@@ -3308,6 +3330,7 @@ def create_layout(
                 outside_text_flux_luminance_correction,
                 outside_text_flux_upscale_small_crops,
                 outside_text_flux_group_regions,
+                outside_text_flux_preserve_art,
                 outside_text_flux_residual_diff_threshold,
                 outside_text_seed,
                 inpaint_colored_bubbles,

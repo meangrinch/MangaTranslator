@@ -154,5 +154,8 @@
   - "자르기 영역을 ~1MP로 업스케일 (Upscale Crops to ~1MP)" 옵션을 활성화 상태로 유지하세요.
   - 추론 단계(inference steps) 수를 늘리세요 (Flux.1 Kontext 사용 시).
 
+- **인페인팅 후 말풍선 외 글자 조각이 남음 (확산 모델):**
+  - "주변 그림 보존 (Preserve Surrounding Art)" 옵션을 비활성화하면 텍스트 분할 모델이 찾은 글자만이 아니라 텍스트 상자 전체를 붙여 넣습니다.
+
 - **Flux.1 Kontext Nunchaku 백엔드를 사용할 수 없음:**
   - Nunchaku 백엔드는 NVIDIA GPU (CUDA) 및 전용 별도 설치가 필요합니다. 별도로 설치하거나 대신 sd.cpp/SDNQ 백엔드를 사용하세요.

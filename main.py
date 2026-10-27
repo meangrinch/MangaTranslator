@@ -833,6 +833,16 @@ def main():
         action="store_true",
         help="Group non-solid OSB regions into one expanded inpainting mask per page",
     )
+    parser.add_argument(
+        "--osb-no-preserve-art",
+        dest="osb_flux_preserve_art",
+        action="store_false",
+        help=(
+            "Paste diffusion inpainting over the whole OSB text box instead of only "
+            "over the letters found by the text segmentation model (not LaMa)"
+        ),
+    )
+    parser.set_defaults(osb_flux_preserve_art=True)
 
     parser.add_argument(
         "--osb-flux-steps",
@@ -1339,6 +1349,7 @@ def main():
             flux_luminance_correction=args.osb_flux_luminance_correction,
             flux_upscale_small_crops=args.osb_flux_upscale_small_crops,
             flux_group_regions=args.osb_flux_group_regions,
+            flux_preserve_art=args.osb_flux_preserve_art,
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
             osb_confidence=args.osb_confidence,
             osb_text_free_only=args.osb_text_free_only,
