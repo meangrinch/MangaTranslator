@@ -172,3 +172,45 @@ def test_page_with_a_small_colored_stamp_is_not_a_color_page():
     page = Image.new("RGB", (400, 300), "white")
     ImageDraw.Draw(page).rectangle((10, 10, 40, 40), fill=(220, 20, 20))
     assert not _is_color_page(page)
+
+
+def _letter_prob(page, text, xy, size, stroke, grow=0):
+    """A text-model map covering whole letters, outlines included, like SAM-TS-L's."""
+    letters = Image.new("L", page.size, 0)
+    ImageDraw.Draw(letters).text(
+        xy,
+        text,
+        font=ImageFont.load_default(size=size),
+        fill=255,
+        stroke_width=stroke,
+        stroke_fill=255,
+    )
+    prob = np.asarray(letters, np.float32) / 255
+    if grow:
+        prob = cv2.dilate(prob, np.ones((2 * grow + 1,) * 2, np.uint8))
+    return prob
+
+
+def _colored_text_color(page, box, prob):
+    bg, _ = _border_color(_border_pixels(page, box, *page.size))
+    return _detect_osb_text_color(
+        page, box, np.array(bg, dtype=np.uint8), bg, True, glyph_prob=prob
+    )
+
+
+def test_colored_letters_on_a_color_page_keep_their_hue():
+    blue = (60, 140, 230)
+    page = _colorful_art()
+    box = _draw_text(page, "ZAP", (80, 90), 110, blue, 2, "black")
+
+    color = _colored_text_color(page, box, _letter_prob(page, "ZAP", (80, 90), 110, 2))
+
+    assert np.abs(np.subtract(color, blue)).max() <= 10
+
+
+def test_saturated_paper_inside_the_text_map_does_not_tint_black_letters():
+    page, box = _black_on_yellow_banner()
+    # Text maps of thin strokes spill onto the paper around them
+    prob = _letter_prob(page, "PUNCH", (60, 110), 70, 0, grow=2)
+
+    assert _colored_text_color(page, box, prob) == (0, 0, 0)

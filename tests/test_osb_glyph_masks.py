@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import pytest
 import torch
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 import core.outside_text_processor as otp
 from core.config import MangaTranslatorConfig
@@ -375,14 +375,16 @@ def test_no_map_is_built_without_tilt_for_other_methods(patched):
         ("cpu", "none", True, False),
     ],
 )
-def test_cpu_tilt_only_shares_an_inpainting_map(device, method, preserve_art, uses_map):
+def test_cpu_analysis_only_shares_an_inpainting_map(
+    device, method, preserve_art, uses_map
+):
     config = MangaTranslatorConfig(yolo_model_path="unused.pt")
     config.outside_text.inpainting_method = method
     config.outside_text.flux_preserve_art = preserve_art
     config.device = torch.device(device)
     glyph_map = otp._PageGlyphMap.for_page(_tilted_text_page(), config, verbose=False)
 
-    assert (otp._glyph_map_for_tilt(glyph_map, config) is glyph_map) == uses_map
+    assert (otp._glyph_map_for_analysis(glyph_map, config) is glyph_map) == uses_map
 
 
 def test_tilt_without_a_map_uses_the_ink_heuristic(patched):
@@ -413,3 +415,69 @@ def test_tilt_without_a_map_uses_the_ink_heuristic(patched):
         axis,
     )
     assert manager.loads == 0
+
+
+SFX_BLUE = (60, 140, 230)
+
+
+def _color_sfx_work(device, method):
+    """A color page with blue outlined SFX in BOX, and a text map covering its letters."""
+    rng = np.random.default_rng(0)
+    page = Image.fromarray(
+        np.repeat(np.repeat(rng.integers(0, 256, (30, 40, 3), np.uint8), 10, 0), 10, 1)
+    )
+    x0, y0, x1, y1 = BOX
+    font = ImageFont.load_default(size=50)
+    ImageDraw.Draw(page).text(
+        (x0 + 10, y0), "ZAP", font=font, fill=SFX_BLUE, stroke_width=2, stroke_fill=0
+    )
+    letters = Image.new("L", page.size, 0)
+    ImageDraw.Draw(letters).text(
+        (x0 + 10, y0), "ZAP", font=font, fill=255, stroke_width=2, stroke_fill=255
+    )
+    config = MangaTranslatorConfig(yolo_model_path="unused.pt")
+    config.outside_text.inpainting_method = method
+    config.device = torch.device(device)
+    work = otp.OutsideTextWork(
+        pil_image=page,
+        config=config,
+        image_path="page.png",
+        image_format="PNG",
+        verbose=False,
+        outside_text_results=[],
+        raw_outside_text_results=[],
+        original_text_colors={},
+        total_bubble_mask=np.zeros((300, 400), bool),
+        outside_detector=None,
+        mask_groups=[],
+        img_w=400,
+        img_h=300,
+        mime_type="image/png",
+        cv2_ext=".png",
+        is_color_page=True,
+    )
+    work.glyph_map.prob = np.asarray(letters, np.float32) / 255
+    group = {
+        "original_bbox": {"x": x0, "y": y0, "width": x1 - x0, "height": y1 - y0},
+        "mask_indices": [],
+    }
+    return work, group
+
+
+@pytest.mark.parametrize(
+    ("device", "method", "keeps_hue"),
+    [
+        ("cuda", "opencv", True),
+        ("cpu", "lama_manga", True),
+        # Building the map on the CPU only for text color is too slow
+        ("cpu", "opencv", False),
+    ],
+)
+def test_color_page_sfx_keep_their_hue_where_the_map_is_shared(
+    device, method, keeps_hue
+):
+    work, group = _color_sfx_work(device, method)
+
+    color = otp._decide_osb_region_fill(work, work.pil_image, group, 1).text_color
+
+    assert (np.abs(np.subtract(color, SFX_BLUE)).max() <= 10) == keeps_hue

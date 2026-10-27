@@ -57,6 +57,10 @@ OSB_BLACK_SNAP_THRESH = 10
 # Share of strongly colored pixels that marks a color page; B/W scans with stray tints
 # measured at most 1%, color pages 8% or more
 OSB_COLOR_PAGE_MIN_FRACTION = 0.05
+# Share of a color page's glyph cores that must be strongly colored for the letters to
+# keep that hue; colored SFX measured 0.79-0.99, black text whose glyph map spills onto
+# tinted paper, and mixed red and black captions, at most 0.36
+OSB_GLYPH_HUE_MIN_SHARE = 0.6
 
 
 @dataclass
@@ -133,13 +137,14 @@ def _inpainting_uses_glyph_map(config: MangaTranslatorConfig) -> bool:
     )
 
 
-def _glyph_map_for_tilt(
+def _glyph_map_for_analysis(
     glyph_map: _PageGlyphMap, config: MangaTranslatorConfig
 ) -> _PageGlyphMap | None:
-    """The page map if tilt detection should use it, else None for the ink heuristic.
+    """The page map if tilt and text color detection should use it, else None for
+    their heuristics.
 
-    On the CPU the text model takes ~20 s per page, too slow to spend on tilt alone,
-    so there tilt only shares the map that inpainting builds anyway.
+    On the CPU the text model takes ~20 s per page, too slow to spend on these alone,
+    so there they only share the map that inpainting builds anyway.
     """
     if _inpainting_uses_glyph_map(config):
         return glyph_map
@@ -908,7 +913,7 @@ def prepare_outside_text_work(
             cv2_ext=cv2_ext,
             config=config,
             verbose=verbose,
-            glyph_map=_glyph_map_for_tilt(glyph_map, config),
+            glyph_map=_glyph_map_for_analysis(glyph_map, config),
         )
 
         return OutsideTextWork(
@@ -1374,15 +1379,51 @@ def _color_page_text_color(
     return _general_text_color(pil_image, text_bounds, ref_bg_rgb, fallback_fill_color)
 
 
+def _glyph_hue(
+    pil_image: Image.Image,
+    text_bounds: tuple[int, int, int, int],
+    glyph_prob: np.ndarray,
+) -> tuple[int, int, int] | None:
+    """The hue of letters the text model marks, if most of their cores are colored.
+
+    The map covers whole letters, outlines included, so the colored fill of an outlined
+    SFX dominates its cores, while black text keeps them mostly dark."""
+    x0, y0, x1, y1 = text_bounds
+    img_w, img_h = pil_image.size
+    pad = 4
+    x0, y0 = max(0, x0 - pad), max(0, y0 - pad)
+    x1, y1 = min(img_w, x1 + pad), min(img_h, y1 + pad)
+    letters = (glyph_prob[y0:y1, x0:x1] > GLYPH_THRESHOLD).astype(np.uint8)
+    core = cv2.erode(letters, np.ones((3, 3), np.uint8)) > 0
+    if core.sum() < 30:
+        return None
+    rgb = np.array(pil_image.crop((x0, y0, x1, y1)).convert("RGB"))
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    colored = core & (hsv[..., 1] >= 60) & (hsv[..., 2] >= 60)
+    if colored.sum() < OSB_GLYPH_HUE_MIN_SHARE * core.sum():
+        return None
+    return tuple(int(c) for c in np.median(rgb[colored], axis=0))
+
+
 def _detect_osb_text_color(
     pil_image: Image.Image,
     text_bounds: tuple[int, int, int, int],
     ref_bg_rgb: np.ndarray,
     fallback_fill_color: tuple[int, int, int] | None,
     is_color_page: bool,
+    glyph_prob: np.ndarray | None = None,
 ) -> tuple[int, int, int]:
     """Text color of an OSB region, using the detector suited to the page type."""
     if is_color_page:
+        # The outline heuristics only tell dark from light, so colored letters with
+        # dark outlines would come out black
+        hue = (
+            None
+            if glyph_prob is None
+            else _glyph_hue(pil_image, text_bounds, glyph_prob)
+        )
+        if hue is not None:
+            return hue
         return _color_page_text_color(
             pil_image, text_bounds, ref_bg_rgb, fallback_fill_color
         )
@@ -1594,12 +1635,18 @@ def _decide_osb_region_fill(
         else (fallback_fill_color if fallback_fill_color is not None else (0, 0, 0)),
         dtype=np.uint8,
     )
+    glyph_map = (
+        _glyph_map_for_analysis(work.glyph_map, work.config)
+        if work.is_color_page
+        else None
+    )
     text_color = _detect_osb_text_color(
         work.pil_image,
         text_bounds,
         ref_bg_rgb,
         fallback_fill_color,
         work.is_color_page,
+        None if glyph_map is None else glyph_map.get(),
     )
 
     force_fill = work.config.outside_text.inpainting_method == "opencv"
