@@ -239,6 +239,7 @@ def detect_crop_tilt_angle(
         ink = _filter_ink_components(
             _scaled_ink_mask(ink_mask, (w, h)), from_text_model=True
         )
+    from_text_model = ink is not None
     if ink is None:
         ink = _filter_ink_components(
             _heuristic_ink_mask(crop, is_dark_text), from_text_model=False
@@ -270,6 +271,11 @@ def detect_crop_tilt_angle(
 
     aspect = float(h) / float(w)
     is_vertical = aspect > 1.3
+    # A near-square box can't tell a column from a line, but the text model's ink can,
+    # e.g. a staircase SFX that runs diagonally. Heuristic ink includes art, and there
+    # its main direction broke about as many regions as it fixed
+    if from_text_model and 1 / 1.3 <= aspect <= 1.3:
+        is_vertical = abs(eigenvectors[0][1]) > abs(eigenvectors[0][0])
 
     # Step 3.1: Vertical Path & Multi-Column Gutter Guard
     if is_vertical:

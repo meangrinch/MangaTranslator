@@ -260,15 +260,40 @@ def test_lama_checkpoint_loads_through_spandrel(tmp_path, monkeypatch):
     manager.unload_lama_manga()
 
 
-def test_text_sam_unloads_without_lama(monkeypatch):
+class _DeviceRecorder:
+    def __init__(self):
+        self.moves = []
+
+    def to(self, device):
+        self.moves.append(str(device))
+        return self
+
+
+def test_parked_text_sam_returns_from_ram_without_reloading(monkeypatch):
     from core.ml.model_manager import ModelType, get_model_manager
 
     manager = get_model_manager()
-    monkeypatch.setitem(manager.models, ModelType.TEXT_SAM, object())
+    model = _DeviceRecorder()
+    monkeypatch.setattr(manager, "device", torch.device("cuda"))
+    monkeypatch.setattr(manager, "_ensure_hf_file", lambda *a, **k: pytest.fail())
+    monkeypatch.setitem(manager.models, ModelType.TEXT_SAM, model)
+
+    manager.park_text_sam()
+    assert manager.load_text_sam() is model
+
+    assert model.moves == ["cpu", "cuda"]
+
+
+def test_text_sam_is_unloaded_instead_of_parked_on_cpu(monkeypatch):
+    from core.ml.model_manager import ModelType, get_model_manager
+
+    manager = get_model_manager()
+    monkeypatch.setattr(manager, "device", torch.device("cpu"))
+    monkeypatch.setitem(manager.models, ModelType.TEXT_SAM, _DeviceRecorder())
     lama = object()
     monkeypatch.setitem(manager.models, ModelType.LAMA_MANGA, lama)
 
-    manager.unload_text_sam()
+    manager.park_text_sam()
 
     assert not manager.is_loaded(ModelType.TEXT_SAM)
     assert manager.models[ModelType.LAMA_MANGA] is lama

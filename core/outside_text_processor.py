@@ -80,7 +80,8 @@ class _PageGlyphMap:
     """
 
     image: Image.Image
-    # LaMa reuses the text model on every page; the diffusion inpainters need its VRAM
+    # Stays on the device like the app's other models, unless a diffusion inpainter
+    # needs its VRAM
     keep_model: bool
     verbose: bool = False
     # LaMa masks add text found in each box at twice the text scale; a window there
@@ -94,11 +95,12 @@ class _PageGlyphMap:
     def for_page(
         cls, image: Image.Image, config: MangaTranslatorConfig, verbose: bool
     ) -> "_PageGlyphMap":
-        lama = config.outside_text.inpainting_method == "lama_manga"
+        method = config.outside_text.inpainting_method
+        lama = method == "lama_manga"
         device = config.device
         return cls(
             image,
-            keep_model=lama,
+            keep_model=method in ("lama_manga", "opencv", "none"),
             verbose=verbose,
             upscale_boxes=lama and device is not None and device.type != "cpu",
         )
@@ -112,7 +114,7 @@ class _PageGlyphMap:
                     self._compute(manager)
                 finally:
                     if not self.keep_model:
-                        manager.unload_text_sam(verbose=self.verbose)
+                        manager.park_text_sam(verbose=self.verbose)
         return self.prob
 
     def _compute(self, manager) -> None:

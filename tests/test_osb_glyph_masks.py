@@ -100,14 +100,15 @@ class _FakeInpainter:
 
 
 class _FakeManager:
-    """Counts text model loads; like the real manager, a loaded model is reused."""
+    """Counts text model loads from disk; like the real manager, a loaded or parked
+    model is reused."""
 
     def __init__(self, fail=False):
         self.flux_inference_lock = threading.Lock()
         self.fail = fail
         self.loaded = False
         self.loads = 0
-        self.unloads = 0
+        self.parks = 0
 
     def load_text_sam(self, verbose=False):
         if not self.loaded:
@@ -117,9 +118,8 @@ class _FakeManager:
         self.loaded = True
         return "text-sam"
 
-    def unload_text_sam(self, verbose=False):
-        self.loaded = False
-        self.unloads += 1
+    def park_text_sam(self, verbose=False):
+        self.parks += 1
 
 
 @pytest.fixture
@@ -232,8 +232,8 @@ def test_edit_models_still_see_the_whole_box(patched):
 
     (mask,) = inpainter.masks
     np.testing.assert_array_equal(mask, work.mask_groups[0]["combined_mask"])
-    # The map is built before the edit model loads, and its model freed for it
-    assert (manager.loads, manager.unloads) == (1, 1)
+    # The map is built before the edit model loads, and its model moved out of VRAM
+    assert (manager.loads, manager.parks) == (1, 1)
 
 
 @pytest.mark.parametrize("mode", ["direct", "grouped", "waves"])
@@ -331,7 +331,7 @@ def _tilt_data(image, method="lama_manga", follow_tilt=True, glyph_map=None):
     config.translation.upscale_method = "none"
     config.device = torch.device("cuda")  # never used by the fakes
     if glyph_map is None:
-        glyph_map = otp._PageGlyphMap(image, keep_model=method == "lama_manga")
+        glyph_map = otp._PageGlyphMap.for_page(image, config, verbose=False)
     (item,) = otp._build_outside_text_data(
         pil_image=image,
         outside_text_results=[(list(TILT_RAW_BOX), 0.9)],
@@ -395,18 +395,38 @@ def test_page_map_is_built_once_for_tilt_and_lama(patched):
     assert len(inpainter.masks) == 1
     assert manager.loads == 1
     assert windows == [(300, 400, 3), (600, 800, 3)]  # the page map, then the box pass
-    assert manager.unloads == 0  # LaMa keeps the text model for the next page
+    assert manager.parks == 0  # LaMa keeps the text model on the GPU for the next page
 
 
-@pytest.mark.parametrize("method", ["flux_klein_4b", "qwen_image_2_1_turbo", "opencv"])
-def test_text_model_is_freed_after_the_map_for_other_methods(patched, method):
+@pytest.mark.parametrize("method", ["flux_klein_4b", "qwen_image_2_1_turbo"])
+def test_text_model_is_freed_after_the_map_for_diffusion_methods(patched, method):
     manager = _FakeManager()
     patched(_FakeInpainter(), manager)
 
     _, glyph_map = _tilt_data(_tilted_text_page(), method=method)
 
     assert glyph_map.prob is not None
-    assert (manager.loads, manager.unloads) == (1, 1)
+    assert (manager.loads, manager.parks) == (1, 1)
+
+
+@pytest.mark.parametrize("method", ["opencv", "none"])
+def test_text_model_stays_on_the_device_without_a_diffusion_model(patched, method):
+    manager = _FakeManager()
+    patched(_FakeInpainter(), manager)
+
+    _tilt_data(_tilted_text_page(), method=method)
+
+    assert (manager.loads, manager.parks) == (1, 0)
+
+
+def test_next_page_reuses_the_parked_text_model(patched):
+    manager = _FakeManager()
+    patched(_FakeInpainter(), manager)
+
+    _tilt_data(_tilted_text_page(), method="flux_klein_4b")
+    _tilt_data(_tilted_text_page(), method="flux_klein_4b")
+
+    assert (manager.loads, manager.parks) == (1, 2)
 
 
 def test_text_model_is_freed_even_when_the_map_fails(patched):
@@ -415,7 +435,7 @@ def test_text_model_is_freed_even_when_the_map_fails(patched):
 
     _tilt_data(_tilted_text_page(), method="flux_klein_4b")
 
-    assert manager.unloads == 1
+    assert manager.parks == 1
 
 
 def test_no_map_is_built_without_tilt_for_other_methods(patched):

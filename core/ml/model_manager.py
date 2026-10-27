@@ -1731,7 +1731,8 @@ class ModelManager:
         """Load Koharu's manga-tuned SAM-TS-L, which segments text pixels on a page."""
         with self._lock:
             if self.is_loaded(ModelType.TEXT_SAM):
-                return self.models[ModelType.TEXT_SAM]
+                # A no-op unless park_text_sam moved it to RAM
+                return self.models[ModelType.TEXT_SAM].to(self.device)
 
             log_message("Loading SAM-TS-L text segmentation model...", verbose=verbose)
             from safetensors.torch import load_file
@@ -1856,10 +1857,26 @@ class ModelManager:
         if self._unload_models((ModelType.LAMA_MANGA, ModelType.TEXT_SAM), verbose):
             log_message("LaMa manga inpainting model unloaded.", verbose=verbose)
 
-    def unload_text_sam(self, verbose: bool = False):
-        """Unload the SAM-TS-L text segmentation model."""
-        if self._unload_models((ModelType.TEXT_SAM,), verbose):
-            log_message("SAM-TS-L text segmentation model unloaded.", verbose=verbose)
+    def park_text_sam(self, verbose: bool = False):
+        """Free the SAM-TS-L text model's VRAM, keeping it in RAM (~0.7 GB) for the next
+        page.
+
+        Moving it back takes ~0.15 s on CUDA, against ~2.2 s to reload it from disk. On
+        the CPU it is unloaded instead, since there it would stay in fp32 (~1.4 GB) while
+        a diffusion inpainter needs the RAM.
+        """
+        if self.device.type == "cpu":
+            if self._unload_models((ModelType.TEXT_SAM,), verbose):
+                log_message(
+                    "SAM-TS-L text segmentation model unloaded.", verbose=verbose
+                )
+            return
+        with self._lock:
+            if not self.is_loaded(ModelType.TEXT_SAM):
+                return
+            self.models[ModelType.TEXT_SAM].to("cpu")
+            empty_cache(self.device)
+        log_message("SAM-TS-L text segmentation model moved to RAM.", verbose=verbose)
 
     def unload_all(self, verbose: bool = False):
         """Unload all models and free all GPU memory."""

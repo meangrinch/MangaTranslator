@@ -86,3 +86,17 @@ def test_confidence_stays_within_one():
     _, conf, _, _ = detect_crop_tilt_angle(crop, max_tilt_deg=20.0)
 
     assert 0.0 <= conf <= 1.0
+
+
+def test_ink_mask_picks_the_column_axis_of_a_near_square_crop():
+    # A short column sloping down and to the right, in a box too square to say
+    text = _glyph_run((150, 140), (70, 75), 90 - 14, count=5, step=27, glyph_deg=-14)
+    crop = np.full((150, 140, 3), 255, np.uint8)
+    crop[text] = 0
+
+    angle, _, _, axis = detect_crop_tilt_angle(crop, max_tilt_deg=20.0, ink_mask=text)
+
+    assert axis == "vertical"
+    assert angle == pytest.approx(-14, abs=2.5)
+    # Heuristic ink keeps the axis from the box shape
+    assert detect_crop_tilt_angle(crop, max_tilt_deg=20.0)[3] == "horizontal"
