@@ -1,11 +1,3 @@
-"""Outside Speech Bubble (OSB) Text Tilt Detection.
-
-Implements computer vision angle estimation and oriented bounding dimensions
-extraction for outside-bubble text and sound effects in manga/comic images.
-The ink comes from a text segmentation mask when the caller has one, else from
-color heuristics.
-"""
-
 from __future__ import annotations
 
 import math

@@ -1,9 +1,3 @@
-"""Glyph-level text masks from a text segmentation model (Koharu SAM-TS-L).
-
-The model is injected as `predict(window_rgb) -> probability`, so this module only
-handles page scaling, tiling, and turning probabilities into inpainting masks.
-"""
-
 from collections.abc import Callable
 
 import cv2
