@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 from scipy.ndimage import distance_transform_edt
 
+Box = tuple[int, int, int, int]
+
 # SAM-TS-L was tuned on Manga109, whose single pages are ~830 px wide; pages are
 # shrunk toward that scale but never enlarged. At 2x it gave crisper strokes but
 # masked sweat marks and screentone as text, and LaMa results were no better
@@ -16,6 +18,10 @@ STRIDE = 768
 REFERENCE_DILATION = 7
 MIN_DILATION = 2
 THRESHOLD = 0.5
+# LaMa masks also take the glyphs the model finds inside each text box with the page at
+# twice its text scale. Hollow and outlined SFX that the reference scale half-misses
+# come out whole there, but outside text boxes that scale marks hair and hatching
+UPSCALED_FACTOR = 2
 # Composites also take fainter glyph parts connected to confident ones: a missed
 # outline tail would survive the paste, while extra coverage only costs a little art
 COMPOSITE_LOW_THRESHOLD = 0.15
@@ -85,6 +91,68 @@ def page_glyph_probability(
     return prob
 
 
+class UpscaledGlyphMap:
+    """Text probability of a page at UPSCALED_FACTOR times the model's text scale.
+
+    It is computed only in the windows that cover requested boxes, each at most once, so
+    a box's values match those of the whole page at that scale.
+    """
+
+    def __init__(self, image: Image.Image):
+        self.size = image.size
+        width, height = image.size
+        scale = UPSCALED_FACTOR * glyph_scale(image.size)
+        scaled_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+        interpolation = cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA
+        self._rgb = cv2.resize(
+            np.asarray(image.convert("RGB")), scaled_size, interpolation=interpolation
+        )
+        rows, cols = self._rgb.shape[:2]
+        self._total = np.zeros((rows, cols), np.float32)
+        self._counts = np.zeros((rows, cols), np.float32)
+        self._done: set[tuple[int, int]] = set()
+
+    def box_probability(
+        self, box: Box, predict: Callable[[np.ndarray], np.ndarray]
+    ) -> np.ndarray:
+        """Probability inside `box` (x0, y0, x1, y1), at the page's resolution."""
+        x0, y0, x1, y1 = box
+        width, height = self.size
+        rows, cols = self._total.shape
+        sx, sy = cols / width, rows / height
+        # Scaled pixels that linear interpolation back to the box reads
+        lo_x = max(0, int(np.floor((x0 + 0.5) * sx - 0.5)) - 1)
+        hi_x = min(cols, int(np.ceil((x1 - 0.5) * sx - 0.5)) + 2)
+        lo_y = max(0, int(np.floor((y0 + 0.5) * sy - 0.5)) - 1)
+        hi_y = min(rows, int(np.ceil((y1 - 0.5) * sy - 0.5)) + 2)
+        for y in _window_starts(rows):
+            if y >= hi_y or y + WINDOW <= lo_y:
+                continue
+            for x in _window_starts(cols):
+                if x >= hi_x or x + WINDOW <= lo_x or (y, x) in self._done:
+                    continue
+                window = self._rgb[y : y + WINDOW, x : x + WINDOW]
+                h, w = window.shape[:2]
+                self._total[y : y + h, x : x + w] += predict(window)
+                self._counts[y : y + h, x : x + w] += 1
+                self._done.add((y, x))
+        prob = self._total[lo_y:hi_y, lo_x:hi_x] / self._counts[lo_y:hi_y, lo_x:hi_x]
+        # Sampled like resizing the whole scaled map back to the page
+        to_scaled = np.float32(
+            [
+                [sx, 0, (x0 + 0.5) * sx - 0.5 - lo_x],
+                [0, sy, (y0 + 0.5) * sy - 0.5 - lo_y],
+            ]
+        )
+        return cv2.warpAffine(
+            prob,
+            to_scaled,
+            (x1 - x0, y1 - y0),
+            flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+            borderMode=cv2.BORDER_REPLICATE,
+        )
+
+
 def _glyph_pixels(prob: np.ndarray, low_threshold: float | None) -> np.ndarray:
     """Pixels above THRESHOLD, plus weaker ones connected to them if `low_threshold`."""
     strong = prob > THRESHOLD
@@ -127,6 +195,30 @@ def refine_mask_to_glyphs(
         glyphs = glyphs.astype(np.uint8)
         glyphs = cv2.dilate(glyphs, kernel).astype(bool) & region
         refined[y0:y1, x0:x1] |= glyphs if glyphs.any() else region
+    return refined
+
+
+def refine_box_mask_to_glyphs(
+    box_mask: np.ndarray,
+    glyph_prob: np.ndarray,
+    box: Box,
+    box_prob: np.ndarray,
+    radius: int,
+) -> np.ndarray:
+    """refine_mask_to_glyphs for a mask inside `box`, where `box_prob` (another pass's
+    probability over the box) raises the page map. `glyph_prob` is not changed."""
+    x0, y0, x1, y1 = box
+    img_h, img_w = box_mask.shape
+    # refine_mask_to_glyphs looks `radius` past each region, so this crop is exact
+    cx0, cy0 = max(0, x0 - radius), max(0, y0 - radius)
+    cx1, cy1 = min(img_w, x1 + radius), min(img_h, y1 + radius)
+    prob = glyph_prob[cy0:cy1, cx0:cx1].copy()
+    inside = prob[y0 - cy0 : y1 - cy0, x0 - cx0 : x1 - cx0]
+    np.maximum(inside, box_prob, out=inside)
+    refined = np.zeros_like(box_mask, dtype=bool)
+    refined[cy0:cy1, cx0:cx1] = refine_mask_to_glyphs(
+        box_mask[cy0:cy1, cx0:cx1], prob, radius
+    )
     return refined
 
 
@@ -210,9 +302,6 @@ def composite_glyphs(
             region[..., None], np.clip(blended, 0, 255).round(), out[crop]
         ).astype(out.dtype)
     return out
-
-
-Box = tuple[int, int, int, int]
 
 
 class GlyphGroup(NamedTuple):

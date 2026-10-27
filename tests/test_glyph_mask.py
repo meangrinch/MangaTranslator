@@ -3,11 +3,13 @@ import pytest
 from PIL import Image
 
 from core.image.glyph_mask import (
+    UpscaledGlyphMap,
     composite_glyphs,
     glyph_dilation_radius,
     glyph_scale,
     group_glyphs,
     page_glyph_probability,
+    refine_box_mask_to_glyphs,
     refine_mask_to_glyphs,
     verified_glyph_box,
 )
@@ -106,6 +108,97 @@ def test_refine_handles_each_region_of_a_grouped_mask_separately():
 
     assert mask[62, 90] and not mask[90, 140]
     np.testing.assert_array_equal(mask[second], np.ones(second.sum(), bool))
+
+
+def _window_predictor(calls):
+    """Fake text model whose output depends on the whole window it sees, so averages
+    over overlapping windows differ unless every covering window is run."""
+
+    def predict(window_rgb):
+        calls.append(window_rgb.shape)
+        dark = (window_rgb.mean(axis=2) < 64).astype(np.float32)
+        return 0.8 * dark + 0.2 * window_rgb.mean() / 255
+
+    return predict
+
+
+def _upscaled_page():
+    page = np.full((1200, 830, 3), 255, np.uint8)
+    page[300:340, 200:500] = 0
+    page[900:910, 100:700] = 40
+    return Image.fromarray(page)
+
+
+def test_upscaled_box_probability_matches_the_whole_upscaled_page_inside_the_box():
+    page = _upscaled_page()
+    full_calls, box_calls = [], []
+    whole = UpscaledGlyphMap(page).box_probability(
+        (0, 0, 830, 1200), _window_predictor(full_calls)
+    )
+    box = (180, 280, 520, 360)
+
+    prob = UpscaledGlyphMap(page).box_probability(box, _window_predictor(box_calls))
+
+    assert prob.shape == (80, 340)
+    np.testing.assert_allclose(prob, whole[280:360, 180:520], atol=1e-6)
+    # The 830 px page runs at 1660 px: windows of 1024 there, and only those near the box
+    assert all(h <= 1024 and w <= 1024 for h, w, _ in full_calls)
+    assert 0 < len(box_calls) < len(full_calls)
+
+
+def test_upscaled_box_probability_runs_each_window_once():
+    calls = []
+    upscaled = UpscaledGlyphMap(_upscaled_page())
+    predict = _window_predictor(calls)
+
+    upscaled.box_probability((180, 280, 520, 360), predict)
+    first = len(calls)
+    upscaled.box_probability((200, 300, 400, 330), predict)
+
+    assert len(calls) == first
+
+
+def test_upscaled_box_probability_finds_strokes_on_a_large_page():
+    page = np.full((3496, 2480, 3), 255, np.uint8)
+    page[2000:2040, 1500:1700] = 0
+    calls = []
+
+    prob = UpscaledGlyphMap(Image.fromarray(page)).box_probability(
+        (1480, 1980, 1720, 2060), _dark_predictor(calls)
+    )
+
+    assert calls and all(h <= 1024 and w <= 1024 for h, w, _ in calls)
+    assert prob[40, 120] > 0.5  # page (1600, 2020)
+    assert prob[5, 120] < 0.5
+
+
+def test_box_refine_adds_glyphs_only_the_box_probability_finds():
+    prob = np.zeros((300, 300), np.float32)
+    prob[100:104, 50:100] = 0.9  # found by the page map
+    box_prob = np.zeros((100, 200), np.float32)  # for box (30, 80, 230, 180)
+    box_prob[60:64, 120:160] = (
+        0.8  # a letter only the box pass finds, at (150-190, 140)
+    )
+    box = _box(prob.shape, 30, 80, 230, 180)
+
+    mask = refine_box_mask_to_glyphs(box, prob, (30, 80, 230, 180), box_prob, 3)
+
+    assert mask[102, 75] and mask[142, 170]
+    assert not mask[120, 120]
+    assert not mask[~box].any()
+    assert prob[142, 170] == 0  # the page map is left alone
+
+
+def test_box_refine_matches_the_page_refine_when_the_box_pass_finds_nothing():
+    prob = np.zeros((300, 300), np.float32)
+    prob[100:104, 25:100] = 0.9  # a stroke crossing the box edge
+    box = _box(prob.shape, 30, 80, 230, 180)
+
+    mask = refine_box_mask_to_glyphs(
+        box, prob, (30, 80, 230, 180), np.zeros((100, 200), np.float32), 3
+    )
+
+    np.testing.assert_array_equal(mask, refine_mask_to_glyphs(box, prob, 3))
 
 
 def _composite_case():

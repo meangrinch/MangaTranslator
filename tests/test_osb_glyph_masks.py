@@ -12,6 +12,8 @@ from core.image.tilt_detection import detect_crop_tilt_angle
 
 BOX = (100, 100, 300, 160)  # x0, y0, x1, y1 of the OCR text box
 STROKE = (slice(125, 131), slice(140, 220))  # dark text inside the box
+# Text inside the box that the fake text model finds only at twice the text scale
+FAINT = (slice(145, 149), slice(240, 290))
 
 
 def _page():
@@ -19,6 +21,7 @@ def _page():
     # Busy mid-gray texture, so the region is never treated as a solid background
     page = rng.integers(110, 190, size=(300, 400, 3), dtype=np.uint8)
     page[STROKE] = 0
+    page[FAINT] = 60
     page[20:26, 140:220] = 0  # dark art outside the box
     return Image.fromarray(page)
 
@@ -30,8 +33,9 @@ class _InlineCoordinator:
         return [job() for job in jobs]
 
 
-def _work(method, mode="direct", preserve_art=True):
+def _work(method, mode="direct", preserve_art=True, device="cuda"):
     config = MangaTranslatorConfig(yolo_model_path="unused.pt")
+    config.device = torch.device(device)  # never used by the fakes
     config.outside_text.inpainting_method = method
     config.outside_text.flux_preserve_art = preserve_art
     config.outside_text.flux_group_regions = mode == "grouped"
@@ -96,19 +100,25 @@ class _FakeInpainter:
 
 
 class _FakeManager:
+    """Counts text model loads; like the real manager, a loaded model is reused."""
+
     def __init__(self, fail=False):
         self.flux_inference_lock = threading.Lock()
         self.fail = fail
+        self.loaded = False
         self.loads = 0
         self.unloads = 0
 
     def load_text_sam(self, verbose=False):
-        self.loads += 1
+        if not self.loaded:
+            self.loads += 1
         if self.fail:
             raise OSError("offline")
+        self.loaded = True
         return "text-sam"
 
     def unload_text_sam(self, verbose=False):
+        self.loaded = False
         self.unloads += 1
 
 
@@ -119,7 +129,9 @@ def patched(monkeypatch):
 
     def predict(model, window):
         windows.append(window.shape)
-        return (window.mean(axis=2) < 40).astype(np.float32)
+        # Windows of the 300 x 400 test pages are bigger only at twice the text scale
+        cutoff = 80 if window.shape[0] > 300 else 40
+        return (window.mean(axis=2) < cutoff).astype(np.float32)
 
     def setup(inpainter, manager):
         monkeypatch.setattr(
@@ -154,6 +166,61 @@ def test_lama_gets_glyph_masks_clipped_to_the_text_box(patched, mode):
     assert not mask[~_box_mask()].any()  # nothing outside the OCR box, art included
     assert manager.loads == 1
     assert work.glyph_map.prob is not None
+
+
+@pytest.mark.parametrize("mode", ["direct", "grouped", "waves"])
+def test_lama_masks_add_glyphs_found_at_twice_the_scale_inside_the_box(patched, mode):
+    inpainter, manager = _FakeInpainter(), _FakeManager()
+    windows = patched(inpainter, manager)
+    work = _work("lama_manga", mode)
+
+    otp.finish_outside_text_work(work)
+
+    (mask,) = inpainter.masks
+    assert mask[147, 265] and mask[128, 180]
+    assert not mask[~_box_mask()].any()
+    assert work.glyph_map.prob[147, 265] < 0.5  # the shared page map is left alone
+    assert windows == [(300, 400, 3), (600, 800, 3)]
+
+
+def test_lama_skips_the_upscaled_pass_on_the_cpu(patched):
+    inpainter = _FakeInpainter()
+    windows = patched(inpainter, _FakeManager())
+
+    otp.finish_outside_text_work(_work("lama_manga", device="cpu"))
+
+    (mask,) = inpainter.masks
+    assert mask[128, 180] and not mask[147, 265]
+    assert windows == [(300, 400, 3)]
+
+
+def test_lama_keeps_the_page_map_when_the_upscaled_pass_fails(patched, monkeypatch):
+    inpainter = _FakeInpainter()
+    patched(inpainter, _FakeManager())
+    page_predict = otp.predict_text_probability
+
+    def predict(model, window):
+        if window.shape[0] > 300:
+            raise RuntimeError("CUDA out of memory")
+        return page_predict(model, window)
+
+    monkeypatch.setattr(otp, "predict_text_probability", predict)
+
+    otp.finish_outside_text_work(_work("lama_manga"))
+
+    (mask,) = inpainter.masks
+    assert mask[128, 180] and not mask[147, 265]
+
+
+def test_edit_model_composites_skip_the_upscaled_pass(patched):
+    windows = patched(_FakeInpainter(), _FakeManager())
+
+    result, _ = otp.finish_outside_text_work(_work("flux_klein_4b"))
+
+    assert (
+        np.asarray(result)[FAINT] == 60
+    ).all()  # pasted only on the page map's glyphs
+    assert windows == [(300, 400, 3)]
 
 
 def test_edit_models_still_see_the_whole_box(patched):
@@ -327,7 +394,7 @@ def test_page_map_is_built_once_for_tilt_and_lama(patched):
 
     assert len(inpainter.masks) == 1
     assert manager.loads == 1
-    assert len(windows) == 1
+    assert windows == [(300, 400, 3), (600, 800, 3)]  # the page map, then the box pass
     assert manager.unloads == 0  # LaMa keeps the text model for the next page
 
 

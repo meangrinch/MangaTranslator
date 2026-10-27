@@ -21,10 +21,12 @@ from core.batch_coordinator import (
 from core.config import MangaTranslatorConfig
 from core.image.glyph_mask import THRESHOLD as GLYPH_THRESHOLD
 from core.image.glyph_mask import (
+    UpscaledGlyphMap,
     composite_glyphs,
     glyph_dilation_radius,
     group_glyphs,
     page_glyph_probability,
+    refine_box_mask_to_glyphs,
     refine_mask_to_glyphs,
     verified_glyph_box,
 )
@@ -81,17 +83,24 @@ class _PageGlyphMap:
     # LaMa reuses the text model on every page; the diffusion inpainters need its VRAM
     keep_model: bool
     verbose: bool = False
+    # LaMa masks add text found in each box at twice the text scale; a window there
+    # takes ~10 s on the CPU, so only GPUs run it
+    upscale_boxes: bool = False
     prob: np.ndarray | None = None
     failed: bool = False
+    _upscaled: UpscaledGlyphMap | None = field(default=None, init=False, repr=False)
 
     @classmethod
     def for_page(
         cls, image: Image.Image, config: MangaTranslatorConfig, verbose: bool
     ) -> "_PageGlyphMap":
+        lama = config.outside_text.inpainting_method == "lama_manga"
+        device = config.device
         return cls(
             image,
-            keep_model=config.outside_text.inpainting_method == "lama_manga",
+            keep_model=lama,
             verbose=verbose,
+            upscale_boxes=lama and device is not None and device.type != "cpu",
         )
 
     def get(self) -> np.ndarray | None:
@@ -125,6 +134,35 @@ class _PageGlyphMap:
                 "whole text boxes for inpainting",
                 always_print=True,
             )
+
+    def box_probability(self, box: tuple[int, int, int, int]) -> np.ndarray | None:
+        """Text probability inside `box` at twice the text scale, or None when that
+        pass doesn't run for this page."""
+        if not self.upscale_boxes or self.get() is None:
+            return None
+        manager = get_model_manager()
+        with manager.flux_inference_lock:
+            try:
+                if self._upscaled is None:
+                    self._upscaled = UpscaledGlyphMap(self.image)
+                return self._upscaled.box_probability(
+                    box,
+                    partial(
+                        predict_text_probability,
+                        manager.load_text_sam(verbose=self.verbose),
+                    ),
+                )
+            except CancellationError:
+                raise
+            except Exception as e:
+                self.upscale_boxes = False
+                self._upscaled = None
+                log_message(
+                    f"Upscaled text segmentation failed ({e}); LaMa masks use the "
+                    "page map alone",
+                    always_print=True,
+                )
+                return None
 
 
 def _composites_glyphs(config: MangaTranslatorConfig) -> bool:
@@ -1807,13 +1845,19 @@ def _glyph_inpaint_mask(
     combined_mask: np.ndarray,
     composite_clip_bbox: tuple[int, int, int, int] | None,
 ) -> np.ndarray:
-    """The region's mask clipped to its text box, then shrunk to the dilated glyphs."""
+    """The region's mask clipped to its text box, then shrunk to the dilated glyphs,
+    including those found in the box at twice the text scale."""
     box_mask = _clip_mask_to_bbox(combined_mask, composite_clip_bbox)
     glyph_prob = work.glyph_map.get()
     if glyph_prob is None:
         return box_mask
     radius = glyph_dilation_radius(work.pil_image.size)
-    return refine_mask_to_glyphs(box_mask, glyph_prob, radius)
+    x, y, w, h = cv2.boundingRect(box_mask.astype(np.uint8))
+    box = (x, y, x + w, y + h)
+    box_prob = work.glyph_map.box_probability(box) if w and h else None
+    if box_prob is None:
+        return refine_mask_to_glyphs(box_mask, glyph_prob, radius)
+    return refine_box_mask_to_glyphs(box_mask, glyph_prob, box, box_prob, radius)
 
 
 def _composite_to_glyphs(
