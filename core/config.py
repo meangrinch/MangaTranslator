@@ -188,6 +188,9 @@ class OutsideTextConfig:
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.5
     osb_text_free_only: bool = False  # Use the RT-DETR text_free class as OSB source
+    # Add text the OSB model missed: letters the text segmentation model finds outside
+    # bubbles and OSB boxes, kept where the OSB model confirms them on crops
+    osb_recover_missed_text: bool = True
     osb_font_dir: str | None = None  # None = use main font as fallback
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10

@@ -187,3 +187,19 @@ def test_backend_and_quant_radios_store_only_user_choices(tmp_path):
     ]
     assert events
     assert set(events) == {"input"}
+
+
+@pytest.mark.parametrize("text_free_only", [False, True])
+def test_missed_text_recovery_is_greyed_out_for_caption_boxes_only(
+    tmp_path, text_free_only
+):
+    app = layout.create_layout(
+        models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
+    )
+    handler = next(
+        dep.fn
+        for dep in app.fns.values()
+        if getattr(dep.fn, "__name__", "") == "_update_recovery_interactivity"
+    )
+
+    assert handler(text_free_only)["interactive"] is not text_free_only

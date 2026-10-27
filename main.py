@@ -994,6 +994,16 @@ def main():
         ),
     )
     parser.add_argument(
+        "--osb-no-recover-missed-text",
+        dest="osb_recover_missed_text",
+        action="store_false",
+        help=(
+            "Don't add text the OSB model misses that the text segmentation model "
+            "finds and the OSB model confirms on crops (large SFX, captions)"
+        ),
+    )
+    parser.set_defaults(osb_recover_missed_text=True)
+    parser.add_argument(
         "--osb-filter-page-numbers",
         action="store_true",
         help=(
@@ -1353,6 +1363,7 @@ def main():
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
             osb_confidence=args.osb_confidence,
             osb_text_free_only=args.osb_text_free_only,
+            osb_recover_missed_text=args.osb_recover_missed_text,
             seed=args.osb_seed,
             osb_font_dir=args.osb_font_dir,
             osb_max_font_size=args.osb_max_font_size,

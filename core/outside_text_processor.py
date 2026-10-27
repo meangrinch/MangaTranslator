@@ -23,8 +23,10 @@ from core.image.glyph_mask import THRESHOLD as GLYPH_THRESHOLD
 from core.image.glyph_mask import (
     composite_glyphs,
     glyph_dilation_radius,
+    group_glyphs,
     page_glyph_probability,
     refine_mask_to_glyphs,
+    verified_glyph_box,
 )
 from core.image.image_utils import (
     cv2_to_pil,
@@ -61,6 +63,9 @@ OSB_COLOR_PAGE_MIN_FRACTION = 0.05
 # keep that hue; colored SFX measured 0.79-0.99, black text whose glyph map spills onto
 # tinted paper, and mixed red and black captions, at most 0.36
 OSB_GLYPH_HUE_MIN_SHARE = 0.6
+# OSB model confidence on crops that confirms a text region the page-level pass missed;
+# on 63 sample pages it kept 33 of 44 missed texts and 2 of 60 non-text regions
+OSB_RECOVERY_CONFIDENCE = 0.2
 
 
 @dataclass
@@ -815,6 +820,72 @@ def _probe_original_text_colors(
     return original_text_colors
 
 
+def _recovers_missed_text(config: MangaTranslatorConfig) -> bool:
+    # Caption-box-only mode deliberately ignores the SFX that recovery mostly finds
+    return bool(
+        config.outside_text.osb_recover_missed_text
+        and not config.outside_text.osb_text_free_only
+    )
+
+
+def _recover_missed_osb_text(
+    pil_image: Image.Image,
+    outside_text_results: list,
+    bubble_data: list[dict[str, Any]] | None,
+    glyph_prob: np.ndarray,
+    detector: OutsideTextDetector,
+    verbose: bool,
+) -> list:
+    """OSB results for text the OSB model missed: glyph-map letters outside every
+    bubble and OSB box, kept where the OSB model finds text on crops around them."""
+    img_w, img_h = pil_image.size
+    radius = glyph_dilation_radius((img_w, img_h))
+    covered = np.zeros((img_h, img_w), bool)
+    for bubble in bubble_data or []:
+        mask = bubble.get("sam_mask")
+        if mask is not None:
+            mask = np.asarray(mask)
+            if mask.ndim == 3:
+                mask = mask[..., 0]
+            if mask.shape == covered.shape:
+                covered |= mask > 0
+    covered = cv2.dilate(
+        covered.astype(np.uint8), np.ones((2 * radius + 1,) * 2, np.uint8)
+    ).astype(bool)
+    for bubble in bubble_data or []:
+        bbox = bubble.get("bbox")
+        if bbox is None or len(bbox) != 4:
+            continue
+        x0, y0, x1, y1 = (int(c) for c in bbox)
+        covered[max(0, y0) : y1, max(0, x0) : x1] = True
+    # Glyphs of found text spill past its box, so pad the box by the glyph dilation
+    pad = 2 * radius
+    for bbox, _ in outside_text_results:
+        x0, y0, x1, y1 = (int(c) for c in bbox)
+        covered[max(0, y0 - pad) : y1 + pad, max(0, x0 - pad) : x1 + pad] = True
+
+    groups = group_glyphs((glyph_prob > GLYPH_THRESHOLD) & ~covered)
+    if not groups:
+        return []
+    image_cv = cv2.cvtColor(np.array(pil_image.convert("RGB")), cv2.COLOR_RGB2BGR)
+    recovered = []
+    near = detector.detect_text_near(
+        image_cv, [group.box for group in groups], OSB_RECOVERY_CONFIDENCE
+    )
+    for group, detections in zip(groups, near, strict=True):
+        box = verified_glyph_box(group, [d for d, _ in detections])
+        if box is not None:
+            confidence = max(conf for _, conf in detections)
+            recovered.append((np.array(box, dtype=np.float32), confidence))
+    log_message(
+        f"Recovered {len(recovered)} OSB text region(s) the OSB model missed "
+        f"({len(groups)} checked)",
+        always_print=bool(recovered),
+        verbose=verbose,
+    )
+    return recovered
+
+
 def prepare_outside_text_work(
     pil_image: Image.Image,
     config: MangaTranslatorConfig,
@@ -848,6 +919,30 @@ def prepare_outside_text_work(
             min_area_ignore_ratio=config.outside_text.min_area_ignore_ratio,
             text_free_only=config.outside_text.osb_text_free_only,
         )
+
+        glyph_map = _PageGlyphMap.for_page(pil_image, config, verbose)
+        analysis_map = _glyph_map_for_analysis(glyph_map, config)
+        if _recovers_missed_text(config) and analysis_map is not None:
+            glyph_prob = analysis_map.get()
+            if glyph_prob is not None:
+                try:
+                    outside_text_results = list(
+                        outside_text_results
+                    ) + _recover_missed_osb_text(
+                        pil_image,
+                        outside_text_results,
+                        bubble_data,
+                        glyph_prob,
+                        outside_detector,
+                        verbose,
+                    )
+                except CancellationError:
+                    raise
+                except Exception as e:
+                    # The OSB model's own results are still usable
+                    log_message(
+                        f"Missed OSB text recovery failed: {e}", always_print=True
+                    )
 
         if not outside_text_results:
             log_message("No outside text regions found", verbose=verbose)
@@ -901,7 +996,6 @@ def prepare_outside_text_work(
             existing_results=raw_outside_text_results,
         )
 
-        glyph_map = _PageGlyphMap.for_page(pil_image, config, verbose)
         outside_text_data = _build_outside_text_data(
             pil_image=pil_image,
             outside_text_results=outside_text_results,
@@ -913,7 +1007,7 @@ def prepare_outside_text_work(
             cv2_ext=cv2_ext,
             config=config,
             verbose=verbose,
-            glyph_map=_glyph_map_for_analysis(glyph_map, config),
+            glyph_map=analysis_map,
         )
 
         return OutsideTextWork(

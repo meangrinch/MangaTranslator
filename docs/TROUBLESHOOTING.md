@@ -90,6 +90,12 @@
 - **Poor segmentation of speech bubbles:**
   - Try switching to `sam3` (requires hf_token)
 
+- **OSB text (large SFX, captions) not detected:**
+  - Lower "OSB Text Detection Confidence"
+
+- **Art erased or non-text translated as OSB text:**
+  - Disable "Recover Missed Text"
+
 ### Translation
 
 - **Poor translations:**

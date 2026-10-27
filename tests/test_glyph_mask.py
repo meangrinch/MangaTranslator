@@ -6,8 +6,10 @@ from core.image.glyph_mask import (
     composite_glyphs,
     glyph_dilation_radius,
     glyph_scale,
+    group_glyphs,
     page_glyph_probability,
     refine_mask_to_glyphs,
+    verified_glyph_box,
 )
 
 
@@ -173,3 +175,55 @@ def test_refine_low_threshold_adds_faint_parts_connected_to_glyphs():
 
     assert not strict[102, 130] and loose[102, 130]
     assert not loose[202, 75]
+
+
+def _letters(shape=(830, 830)):
+    glyph = np.zeros(shape, bool)
+    glyph[100:140, 100:130] = True  # three 30x40 letters with 10 px gaps
+    glyph[100:140, 140:170] = True
+    glyph[100:140, 180:210] = True
+    glyph[100:140, 600:630] = True  # a letter far from the others
+    glyph[400:402, 400:402] = True  # a speck
+    return glyph
+
+
+def test_group_glyphs_merges_nearby_letters_and_drops_specks():
+    groups = group_glyphs(_letters())
+
+    assert sorted(g.box for g in groups) == [(100, 100, 210, 140), (600, 100, 630, 140)]
+    (word,) = [g for g in groups if g.box[0] == 100]
+    assert sorted(word.components) == [
+        (100, 100, 130, 140),
+        (140, 100, 170, 140),
+        (180, 100, 210, 140),
+    ]
+
+
+def test_group_glyphs_sizes_long_strokes_by_their_width():
+    glyph = np.zeros((830, 830), bool)
+    glyph[100:104, 100:500] = True  # a long thin line
+    glyph[124:164, 300:330] = True  # a letter 20 px below it
+
+    # Measured by its 400 px length, the line would swallow the letter
+    assert len(group_glyphs(glyph)) == 2
+
+
+def test_group_glyphs_scales_the_minimum_area_with_the_page():
+    small = np.zeros((830, 830), bool)
+    small[100:113, 100:113] = True  # 169 px: a small letter at the reference scale
+    large = np.zeros((1660, 1660), bool)
+    large[100:113, 100:113] = True  # the same pixels are a speck on a page twice as big
+
+    assert len(group_glyphs(small)) == 1
+    assert group_glyphs(large) == []
+
+
+def test_verified_box_keeps_only_components_inside_a_detection():
+    glyph = _letters()
+    glyph[100:140, 220:300] = True  # a solid bar right after the word
+    (word,) = [g for g in group_glyphs(glyph) if g.box[0] == 100]
+
+    assert word.box == (100, 100, 300, 140)
+    assert verified_glyph_box(word, [(95, 95, 212, 145)]) == (100, 100, 210, 140)
+    assert verified_glyph_box(word, [(400, 95, 500, 145)]) is None
+    assert verified_glyph_box(word, []) is None

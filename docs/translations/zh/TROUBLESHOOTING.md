@@ -90,6 +90,12 @@
 - **气泡分割效果较差：**
   - 尝试切换到 `sam3`（需要设置 `hf_token`）
 
+- **未检测到 OSB 文本（大型拟声词、旁白框）：**
+  - 降低“OSB 文本检测置信度 (OSB Text Detection Confidence)”
+
+- **画面被擦除，或非文本内容被当作 OSB 文本翻译：**
+  - 禁用“找回遗漏文本 (Recover Missed Text)”
+
 ### 翻译 (Translation)
 
 - **翻译质量较差：**

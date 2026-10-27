@@ -481,3 +481,83 @@ def test_color_page_sfx_keep_their_hue_where_the_map_is_shared(
     color = otp._decide_osb_region_fill(work, work.pil_image, group, 1).text_color
 
     assert (np.abs(np.subtract(color, SFX_BLUE)).max() <= 10) == keeps_hue
+
+
+MISSED_LETTERS = [(50, 200, 62, 220), (66, 200, 78, 220), (82, 200, 94, 220)]
+BUBBLE_BOX = (240, 30, 300, 80)
+YOLO_BOX = (295, 195, 365, 220)
+
+
+def _missed_text_page():
+    page = np.full((300, 400, 3), 255, np.uint8)
+    for x0, y0, x1, y1 in MISSED_LETTERS:
+        page[y0:y1, x0:x1] = 0
+    page[40:60, 250:280] = 0  # dialogue inside the bubble
+    page[200:215, 300:360] = 0  # text the OSB model found
+    return Image.fromarray(page)
+
+
+class _FakeOsbDetector:
+    def __init__(self):
+        self.near_calls = []
+
+    def detect_outside_text(self, *args, **kwargs):
+        return [(np.array(YOLO_BOX, np.float32), 0.8)]
+
+    def get_text_masks(self, *args, **kwargs):
+        return [], None
+
+    def detect_text_near(self, image_cv, boxes, confidence):
+        self.near_calls += [tuple(box) for box in boxes]
+        return [
+            [((float(b[0]), float(b[1]), float(b[2]), float(b[3])), 0.7)]
+            if b[0] < 100
+            else []
+            for b in boxes
+        ]
+
+
+@pytest.fixture
+def recovery(patched, monkeypatch):
+    patched(_FakeInpainter(), _FakeManager())
+    detector = _FakeOsbDetector()
+    monkeypatch.setattr(otp, "OutsideTextDetector", lambda **kwargs: detector)
+
+    def run(**settings):
+        config = MangaTranslatorConfig(yolo_model_path="unused.pt")
+        config.outside_text.enabled = True
+        config.outside_text.inpainting_method = "lama_manga"
+        config.translation.upscale_method = "none"
+        for name, value in settings.items():
+            setattr(config.outside_text, name, value)
+        work = otp.prepare_outside_text_work(
+            _missed_text_page(),
+            config,
+            "page.png",
+            "PNG",
+            bubble_data=[{"bbox": list(BUBBLE_BOX)}],
+            text_free_boxes=[],
+        )
+        boxes = [tuple(int(c) for c in b) for b, _ in work.raw_outside_text_results]
+        return boxes, detector.near_calls
+
+    return run
+
+
+def test_text_the_osb_model_missed_is_recovered_from_the_glyph_map(recovery):
+    boxes, near_calls = recovery()
+
+    # Only the letters outside every bubble and OSB box are checked, as one group
+    assert near_calls == [(50, 200, 94, 220)]
+    assert boxes == [YOLO_BOX, (50, 200, 94, 220)]
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [{"osb_recover_missed_text": False}, {"osb_text_free_only": True}],
+)
+def test_missed_text_recovery_is_skipped(recovery, settings):
+    boxes, near_calls = recovery(**settings)
+
+    assert near_calls == []
+    assert boxes == [YOLO_BOX]

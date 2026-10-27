@@ -1671,6 +1671,22 @@ def create_layout(
                                         "text blocks), ignoring stray SFX and other detections."
                                     ),
                                 )
+                                outside_text_osb_recover_missed_text = gr.Checkbox(
+                                    value=saved_settings.get(
+                                        "outside_text_osb_recover_missed_text", True
+                                    ),
+                                    label="Recover Missed Text",
+                                    info=(
+                                        "Also translate text the OSB model misses, such as large "
+                                        "SFX and captions, when the text segmentation model finds "
+                                        "it and the OSB model confirms it up close. Disable if "
+                                        "art gets erased as text. On CPU, only with LaMa or "
+                                        "Preserve Surrounding Art."
+                                    ),
+                                    interactive=not saved_settings.get(
+                                        "outside_text_osb_text_free_only", False
+                                    ),
+                                )
                                 outside_text_min_area_ignore_ratio_percent = gr.Slider(
                                     0.0,
                                     5.0,
@@ -2525,6 +2541,7 @@ def create_layout(
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
+            outside_text_osb_recover_missed_text,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
@@ -2671,6 +2688,7 @@ def create_layout(
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
+            outside_text_osb_recover_missed_text,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
@@ -2809,6 +2827,7 @@ def create_layout(
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
+            outside_text_osb_recover_missed_text,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
             outside_text_page_filter_margin_threshold,
@@ -3335,6 +3354,17 @@ def create_layout(
                 outside_text_seed,
                 inpaint_colored_bubbles,
             ],
+            queue=False,
+        )
+
+        def _update_recovery_interactivity(text_free_only: bool):
+            """Recovery adds mostly SFX, which caption-box-only mode ignores."""
+            return gr.update(interactive=not text_free_only)
+
+        outside_text_osb_text_free_only.change(
+            fn=_update_recovery_interactivity,
+            inputs=[outside_text_osb_text_free_only],
+            outputs=[outside_text_osb_recover_missed_text],
             queue=False,
         )
 

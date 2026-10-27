@@ -18,6 +18,14 @@ OSB_BUBBLE_MATCH_IOA_THRESHOLD = (
 TEXT_FREE_BUBBLE_IOA_THRESHOLD = (
     0.5  # Bubble treated as text_free only with substantial overlap
 )
+# Rechecking a region on crops: the page-level pass misses text the model finds once
+# the crop changes the scale it sees. Pads are shares of the region's long side
+NEAR_CROP_PADS = (0.25, 0.5, 1.5)
+NEAR_CROP_MIN_PAD = 48
+NEAR_CROP_SIZES = (640, 320)
+# A detection belongs to the region when this share of either box lies in the other
+NEAR_REGION_IN_DETECTION = 0.4
+NEAR_DETECTION_IN_REGION = 0.3
 
 
 class OutsideTextDetector:
@@ -543,6 +551,68 @@ class OutsideTextDetector:
         log_message(f"Found {found_count} outside text regions", always_print=True)
 
         return final_results
+
+    def detect_text_near(
+        self, image_cv: np.ndarray, boxes: list, confidence: float
+    ) -> list[list[tuple[tuple[float, float, float, float], float]]]:
+        """OSB text detections for each region, from crops around it at several pads
+        and input sizes, as (box clipped to the region, confidence) pairs."""
+        model = self.manager.load_yolo_osbtext(token=self.hf_token)
+        img_h, img_w = image_cv.shape[:2]
+        regions = [tuple(int(c) for c in box) for box in boxes]
+        crops = []  # (region index, crop origin, crop)
+        for index, (x0, y0, x1, y1) in enumerate(regions):
+            side = max(x1 - x0, y1 - y0)
+            for pad_share in NEAR_CROP_PADS:
+                pad = max(NEAR_CROP_MIN_PAD, int(side * pad_share))
+                cx0, cy0 = max(0, x0 - pad), max(0, y0 - pad)
+                cx1, cy1 = min(img_w, x1 + pad), min(img_h, y1 + pad)
+                crops.append((index, (cx0, cy0), image_cv[cy0:cy1, cx0:cx1]))
+
+        found = [[] for _ in regions]
+        # One crop per call: batched crops are padded to squares, which found fewer
+        # texts on the sample pages and saved under a tenth of a second per page
+        for index, origin, crop in crops:
+            for size in NEAR_CROP_SIZES:
+                result = model(
+                    crop, conf=confidence, device=self.device, verbose=False, imgsz=size
+                )[0]
+                found[index] += self._near_detections(
+                    result, origin, regions[index], confidence
+                )
+        return found
+
+    def _near_detections(self, result, origin, region, confidence):
+        if result.boxes is None:
+            return []
+        ox, oy = origin
+        x0, y0, x1, y1 = region
+        kept = []
+        for det, conf in zip(
+            result.boxes.xyxy.detach().cpu().numpy(),
+            result.boxes.conf.detach().cpu().numpy(),
+            strict=True,
+        ):
+            conf = float(conf)
+            det = [
+                float(det[0]) + ox,
+                float(det[1]) + oy,
+                float(det[2]) + ox,
+                float(det[3]) + oy,
+            ]
+            if conf < confidence or not (
+                self.box_ioa(region, det) > NEAR_REGION_IN_DETECTION
+                or self.box_ioa(det, region) > NEAR_DETECTION_IN_REGION
+            ):
+                continue
+            clipped = (
+                max(det[0], x0),
+                max(det[1], y0),
+                min(det[2], x1),
+                min(det[3], y1),
+            )
+            kept.append((clipped, conf))
+        return kept
 
     def get_text_masks(
         self,

@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import NamedTuple
 
 import cv2
 import numpy as np
@@ -26,6 +27,15 @@ TONE_FLAT_WINDOW = 7
 TONE_MATCH_TOLERANCE = 24
 TONE_MATCH_MIN_SAMPLES = 16
 TONE_SIGMA_RADII = 3
+# Text the OSB model missed: letters merge into one region when the gap between them
+# is within this share of the larger one's letter size. Wider gaps reach art beside
+# the text, and verifying merged regions as one lets that art through
+TEXT_GROUP_GAP = 0.4
+# Specks and regions smaller than these areas (pixels at the reference scale) are noise
+MIN_LETTER_AREA = 20
+MIN_TEXT_AREA = 150
+# A letter belongs to a verified detection when this share of its box lies inside it
+VERIFIED_LETTER_OVERLAP = 0.5
 
 
 def glyph_scale(size: tuple[int, int]) -> float:
@@ -200,3 +210,95 @@ def composite_glyphs(
             region[..., None], np.clip(blended, 0, 255).round(), out[crop]
         ).astype(out.dtype)
     return out
+
+
+Box = tuple[int, int, int, int]
+
+
+class GlyphGroup(NamedTuple):
+    """Bounds (x0, y0, x1, y1) of a text region and of each of its letters."""
+
+    box: Box
+    components: list[Box]
+
+
+def _letter_size(box: Box) -> int:
+    # Long strokes are measured by their width, so a line doesn't reach far letters
+    w, h = box[2] - box[0], box[3] - box[1]
+    return min(max(w, h), 2 * min(w, h) + 2)
+
+
+def _gap(a: Box, b: Box) -> int:
+    return max(max(a[0], b[0]) - min(a[2], b[2]), max(a[1], b[1]) - min(a[3], b[3]))
+
+
+def group_glyphs(glyph: np.ndarray) -> list[GlyphGroup]:
+    """Connected glyph pixels grouped into text regions by the gaps between them."""
+    area_scale = (min(glyph.shape) / REFERENCE_SHORT_SIDE) ** 2
+    count, _, stats, _ = cv2.connectedComponentsWithStats(
+        np.asarray(glyph, np.uint8), connectivity=8
+    )
+    letters = [
+        (int(x), int(y), int(x + w), int(y + h), int(area))
+        for x, y, w, h, area in stats[1:count]
+        if area >= MIN_LETTER_AREA * area_scale
+    ]
+    letters.sort()
+    sizes = [_letter_size(letter[:4]) for letter in letters]
+    reach = TEXT_GROUP_GAP * max(sizes, default=0)
+    parent = list(range(len(letters)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, a in enumerate(letters):
+        for j in range(i + 1, len(letters)):
+            b = letters[j]
+            # Sorted by left edge, so no later letter can be within reach
+            if b[0] - a[2] > reach:
+                break
+            if _gap(a[:4], b[:4]) <= TEXT_GROUP_GAP * max(sizes[i], sizes[j]):
+                parent[root(i)] = root(j)
+
+    members: dict[int, list[int]] = {}
+    for i in range(len(letters)):
+        members.setdefault(root(i), []).append(i)
+    groups = []
+    for indices in members.values():
+        if sum(letters[i][4] for i in indices) < MIN_TEXT_AREA * area_scale:
+            continue
+        boxes = [letters[i][:4] for i in indices]
+        groups.append(GlyphGroup(_bounds(boxes), boxes))
+    return groups
+
+
+def _bounds(boxes: list[Box]) -> Box:
+    return (
+        min(b[0] for b in boxes),
+        min(b[1] for b in boxes),
+        max(b[2] for b in boxes),
+        max(b[3] for b in boxes),
+    )
+
+
+def _overlap_share(inner: Box, outer) -> float:
+    w = min(inner[2], outer[2]) - max(inner[0], outer[0])
+    h = min(inner[3], outer[3]) - max(inner[1], outer[1])
+    area = (inner[2] - inner[0]) * (inner[3] - inner[1])
+    return max(0, w) * max(0, h) / max(1, area)
+
+
+def verified_glyph_box(group: GlyphGroup, detections: list) -> Box | None:
+    """Bounds of the group's letters that lie inside a detection box, or None.
+
+    Art merged into the group, such as a censor bar beside the letters, stays out.
+    """
+    kept = [
+        box
+        for box in group.components
+        if any(_overlap_share(box, d) > VERIFIED_LETTER_OVERLAP for d in detections)
+    ]
+    return _bounds(kept) if kept else None
