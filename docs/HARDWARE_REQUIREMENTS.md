@@ -519,4 +519,4 @@ TBD: not measured yet. sd.cpp runs FLUX.3 Image Klein without segmented executio
 
 | Model | VRAM | RAM | Storage |
 | --- | --- | --- | --- |
-| Koharu Text SAM-TS-L | +3.9 GB | TBD | +1.4 GB |
+| Koharu Text SAM-TS-L | +0.9 GB | TBD | +1.4 GB |

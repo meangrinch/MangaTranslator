@@ -64,7 +64,7 @@ OSB_COLOR_PAGE_MIN_FRACTION = 0.05
 # tinted paper, and mixed red and black captions, at most 0.36
 OSB_GLYPH_HUE_MIN_SHARE = 0.6
 # OSB model confidence on crops that confirms a text region the page-level pass missed;
-# on 63 sample pages it kept 33 of 44 missed texts and 2 of 60 non-text regions
+# on 63 sample pages it kept 31 of 44 missed texts and 2 of 60 non-text regions
 OSB_RECOVERY_CONFIDENCE = 0.2
 
 

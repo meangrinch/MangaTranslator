@@ -94,6 +94,35 @@ def build_text_sam_ts_l() -> TextSamTS:
     )
 
 
+def autocast_dtype(device: torch.device) -> torch.dtype | None:
+    """Reduced precision the model runs in on `device`, or None to run in fp32.
+
+    On 14 sample pages fp16 came about 6x closer to fp32 than bf16, with no overflow,
+    and Recover Missed Text did as well or better; Apple (MPS) and Intel (XPU) GPUs are
+    untested on real hardware.
+    """
+    return torch.float16 if device.type in ("cuda", "mps", "xpu") else None
+
+
+def store_matmul_weights(model: nn.Module, dtype: torch.dtype) -> nn.Module:
+    """Store Linear and conv weights in `dtype`, which autocast casts them to on every
+    call anyway, so outputs are unchanged and their memory halves. Norms and position
+    embeddings stay fp32, as autocast runs them."""
+    for module in model.modules():
+        if isinstance(module, (nn.Linear, nn.Conv2d, nn.ConvTranspose2d)):
+            module.to(dtype)
+    return model
+
+
+def to_inference_device(model: nn.Module, device: torch.device) -> nn.Module:
+    """Move the model to `device` for predict_text_probability."""
+    dtype = autocast_dtype(device)
+    if dtype is not None:
+        # Before the move, so the fp32 copies never occupy device memory
+        store_matmul_weights(model, dtype)
+    return model.to(device)
+
+
 def predict_text_probability(model: nn.Module, window_rgb: np.ndarray) -> np.ndarray:
     """Per-pixel text probability for an RGB uint8 window of at most 1024 x 1024."""
     height, width = window_rgb.shape[:2]
@@ -101,13 +130,10 @@ def predict_text_probability(model: nn.Module, window_rgb: np.ndarray) -> np.nda
     canvas[:height, :width] = window_rgb
     device = next(model.parameters()).device
     images = torch.from_numpy(canvas).to(device).permute(2, 0, 1)[None].float()
+    dtype = autocast_dtype(device)
     with (
         torch.inference_mode(),
-        torch.autocast(
-            device_type=device.type,
-            dtype=torch.bfloat16,
-            enabled=device.type == "cuda",
-        ),
+        torch.autocast(device_type=device.type, dtype=dtype, enabled=dtype is not None),
     ):
         logits = model(images)
     prob = torch.sigmoid(logits[0, 0, :height, :width].float())

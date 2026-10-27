@@ -519,4 +519,4 @@ TBD: 아직 측정되지 않음. sd.cpp는 FLUX.3 Image Klein을 분할 실행�
 
 | 모델 | VRAM | RAM | 저장 공간 |
 | --- | --- | --- | --- |
-| Koharu Text SAM-TS-L | +3.9 GB | TBD | +1.4 GB |
+| Koharu Text SAM-TS-L | +0.9 GB | TBD | +1.4 GB |

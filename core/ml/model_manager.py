@@ -1736,7 +1736,7 @@ class ModelManager:
             log_message("Loading SAM-TS-L text segmentation model...", verbose=verbose)
             from safetensors.torch import load_file
 
-            from core.ml.hi_sam import build_text_sam_ts_l
+            from core.ml.hi_sam import build_text_sam_ts_l, to_inference_device
 
             hf_info = self.model_hf_repos[ModelType.TEXT_SAM]
             path = self._ensure_hf_file(
@@ -1747,8 +1747,7 @@ class ModelManager:
             )
             model = build_text_sam_ts_l()
             model.load_state_dict(load_file(str(path)), strict=True)
-            # fp32 weights; predict_text_probability autocasts to bf16 on CUDA
-            model = model.to(self.device).eval()
+            model = to_inference_device(model, self.device).eval()
             self.models[ModelType.TEXT_SAM] = model
             log_message("SAM-TS-L text segmentation model loaded.", verbose=verbose)
             return model

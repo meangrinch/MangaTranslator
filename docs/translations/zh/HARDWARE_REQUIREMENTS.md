@@ -519,4 +519,4 @@ TBD：尚未测量。sd.cpp 运行 FLUX.3 Image Klein 时不分段执行，因�
 
 | 模型 | 显存 (VRAM) | 内存 (RAM) | 存储空间 |
 | --- | --- | --- | --- |
-| Koharu Text SAM-TS-L | +3.9 GB | TBD | +1.4 GB |
+| Koharu Text SAM-TS-L | +0.9 GB | TBD | +1.4 GB |

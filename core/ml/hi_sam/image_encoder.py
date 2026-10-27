@@ -3,13 +3,22 @@
 #
 # Vendored from Hi-SAM (https://github.com/ymy-k/Hi-SAM, commit 6900943, Apache-2.0; see
 # the LICENSE file in the repository root). Changed: inference only, so the activation
-# checkpointing around attention and MLP calls is removed.
+# checkpointing around attention and MLP calls is removed, and global attention runs as
+# one fused kernel on GPUs (see fused_rel_pos_attention).
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from .common import Adapter, LayerNorm2d, MLPBlock
+
+# Devices that run the model under autocast, where the fused kernel replaces ~1 GiB
+# score tensors; the CPU keeps the explicit fp32 scores
+FUSED_DEVICE_TYPES = ("cuda", "mps", "xpu")
+
+
+def uses_fused_attention(device: torch.device) -> bool:
+    return device.type in FUSED_DEVICE_TYPES
 
 
 # This class and its supporting functions below lightly adapted from the ViTDet backbone available at: https://github.com/facebookresearch/detectron2/blob/main/detectron2/modeling/backbone/vit.py
@@ -157,6 +166,7 @@ class Block(nn.Module):
             use_rel_pos=use_rel_pos,
             rel_pos_zero_init=rel_pos_zero_init,
             input_size=input_size if window_size == 0 else (window_size, window_size),
+            fused=window_size == 0,
         )
 
         self.Space_Adapter = Adapter(dim)
@@ -204,6 +214,7 @@ class Attention(nn.Module):
         use_rel_pos: bool = False,
         rel_pos_zero_init: bool = True,
         input_size: tuple[int, int] | None = None,
+        fused: bool = False,
     ) -> None:
         """
         Args:
@@ -214,9 +225,11 @@ class Attention(nn.Module):
             rel_pos_zero_init (bool): If True, zero initialize relative positional parameters.
             input_size (int or None): Input resolution for calculating the relative positional
                 parameter size.
+            fused (bool): On GPUs, compute attention with fused_rel_pos_attention.
         """
         super().__init__()
         self.num_heads = num_heads
+        self.fused = fused
         head_dim = dim // num_heads
         self.scale = head_dim**-0.5
 
@@ -241,17 +254,21 @@ class Attention(nn.Module):
         # q, k, v with shape (B * nHead, H * W, C)
         q, k, v = qkv.reshape(3, B * self.num_heads, H * W, -1).unbind(0)
 
-        attn = (q * self.scale) @ k.transpose(-2, -1)
-
-        if self.use_rel_pos:
-            attn = add_decomposed_rel_pos(
-                attn, q, self.rel_pos_h, self.rel_pos_w, (H, W), (H, W)
+        if self.fused and self.use_rel_pos and uses_fused_attention(q.device):
+            out = fused_rel_pos_attention(
+                q, k, v, self.scale, self.rel_pos_h, self.rel_pos_w, (H, W)
             )
+        else:
+            attn = (q * self.scale) @ k.transpose(-2, -1)
 
-        attn = attn.softmax(dim=-1)
+            if self.use_rel_pos:
+                attn = add_decomposed_rel_pos(
+                    attn, q, self.rel_pos_h, self.rel_pos_w, (H, W), (H, W)
+                )
+
+            out = attn.softmax(dim=-1) @ v
         x = (
-            (attn @ v)
-            .view(B, self.num_heads, H, W, -1)
+            out.view(B, self.num_heads, H, W, -1)
             .permute(0, 2, 3, 1, 4)
             .reshape(B, H, W, -1)
         )
@@ -389,6 +406,45 @@ def add_decomposed_rel_pos(
     ).view(B, q_h * q_w, k_h * k_w)
 
     return attn
+
+
+def fused_rel_pos_attention(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    scale: float,
+    rel_pos_h: torch.Tensor,
+    rel_pos_w: torch.Tensor,
+    size: tuple[int, int],
+) -> torch.Tensor:
+    """Self-attention with decomposed relative positions, without materializing scores.
+
+    The bias is folded into the dot product: queries gain their per-row and per-column
+    position terms, keys a one-hot of their row and column, so
+    [q * scale, rel_h, rel_w] . [k, onehot(row), onehot(col)] is the biased score and
+    scaled_dot_product_attention can run as one kernel. On a 64 x 64 token grid this
+    avoids four ~1 GiB score tensors per global block, and it keeps the sum in fp32
+    instead of rounding the scores to the autocast dtype before the bias.
+
+    q, k, v: (B, H * W, C); returns (B, H * W, C).
+    """
+    h, w = size
+    batch, _, dim = q.shape
+    Rh = get_rel_pos(h, h, rel_pos_h).to(q.dtype)
+    Rw = get_rel_pos(w, w, rel_pos_w).to(q.dtype)
+    r_q = q.reshape(batch, h, w, dim)
+    rel_h = torch.einsum("bhwc,hkc->bhwk", r_q, Rh).reshape(batch, h * w, h)
+    rel_w = torch.einsum("bhwc,wkc->bhwk", r_q, Rw).reshape(batch, h * w, w)
+    tokens = torch.arange(h * w, device=q.device)
+    key_rows = F.one_hot(tokens // w, h).to(q.dtype).expand(batch, -1, -1)
+    key_cols = F.one_hot(tokens % w, w).to(q.dtype).expand(batch, -1, -1)
+    q_biased = torch.cat([q * scale, rel_h, rel_w], dim=-1)
+    k_biased = torch.cat([k, key_rows, key_cols], dim=-1)
+    # A leading batch dim of 1 makes these (1, heads, tokens, dim) for the fused kernels
+    out = F.scaled_dot_product_attention(
+        q_biased[None], k_biased[None], v[None], scale=1.0
+    )
+    return out[0]
 
 
 class PatchEmbed(nn.Module):
