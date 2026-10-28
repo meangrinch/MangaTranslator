@@ -1175,6 +1175,7 @@ class FluxKontextInpainter:
             # CPU offload moves weights between devices; serialize access across threads
             with self.manager.flux_inference_lock:
                 raise_if_cancelled()  # Jobs queued on the lock skip their inference
+                self.manager.park_text_sam(verbose=verbose)
                 self.load_models()
 
                 if self.pipeline is None:
@@ -1246,6 +1247,8 @@ class _CropInpainter:
     label = ""
     PROMPT = ""
     GUIDANCE_SCALE = 1.0
+    # Diffusion models need the VRAM the text segmentation model holds
+    PARKS_TEXT_SAM = True
 
     # DiT patch requirements (multiples of 16) and VRAM cap (~4MP max inference)
     MIN_RESOLUTION = 64
@@ -1582,6 +1585,8 @@ class _CropInpainter:
 
             with self.manager.flux_inference_lock:
                 raise_if_cancelled()  # Jobs queued on the lock skip their inference
+                if self.PARKS_TEXT_SAM:
+                    self.manager.park_text_sam(verbose=verbose)
                 self.load_models()
 
                 if self.pipeline is None:
@@ -1964,6 +1969,8 @@ class LamaInpainter(_CropInpainter):
 
     model_key = "lama_manga"
     label = "LaMa Manga"
+    # Small enough to share the device with the text segmentation model
+    PARKS_TEXT_SAM = False
 
     def __init__(
         self,

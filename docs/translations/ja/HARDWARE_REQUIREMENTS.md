@@ -517,4 +517,4 @@
 
 | モデル | VRAM | RAM | ストレージ |
 | --- | --- | --- | --- |
-| Koharu Text SAM-TS-L | +0.9 GB | TBD | +1.4 GB |
+| Koharu Text SAM-TS-L | +0.9 GB | +0.7 GB | +1.4 GB |

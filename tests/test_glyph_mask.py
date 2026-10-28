@@ -14,6 +14,8 @@ from core.image.glyph_mask import (
     texts_sharing_detections,
     verified_glyph_box,
 )
+from utils import cancellation
+from utils.exceptions import CancellationError
 
 
 def _dark_predictor(calls=None):
@@ -340,3 +342,39 @@ def test_a_box_mostly_outside_a_detection_stays_apart():
 
     # The detection holds all of the first word but only a sliver of the second
     assert sorted(texts_sharing_detections(words, [(95, 95, 200, 145)])) == [[0], [1]]
+
+
+@pytest.fixture
+def cancel_on_first_window():
+    """A predictor that cancels the run during its first window; returns its calls."""
+    manager = cancellation.CancellationManager()
+    cancellation.activate(manager)
+    calls = []
+
+    def predict(window):
+        calls.append(window.shape)
+        manager.cancel()
+        return np.zeros(window.shape[:2], np.float32)
+
+    yield predict, calls
+    cancellation.activate(cancellation.CancellationManager())
+
+
+def test_cancelling_stops_the_page_map_between_windows(cancel_on_first_window):
+    predict, calls = cancel_on_first_window
+    page = Image.new("RGB", (830, 2000), "white")  # three windows tall
+
+    with pytest.raises(CancellationError):
+        page_glyph_probability(page, predict)
+
+    assert len(calls) == 1
+
+
+def test_cancelling_stops_the_upscaled_pass_between_windows(cancel_on_first_window):
+    predict, calls = cancel_on_first_window
+    upscaled = UpscaledGlyphMap(Image.new("RGB", (830, 830), "white"))
+
+    with pytest.raises(CancellationError):
+        upscaled.box_probability((0, 0, 830, 830), predict)  # four windows at 2x
+
+    assert len(calls) == 1

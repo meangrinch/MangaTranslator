@@ -317,7 +317,7 @@ def _clean_colored(monkeypatch, method, preserve_art=True, coordinator=None):
     page, detections, prob = _colored_bubbles_page()
     inpainter = _WhiteInpainter()
     monkeypatch.setattr(cleaning, "make_flux_inpainter", lambda *a, **k: inpainter)
-    glyph_map = PageGlyphMap(page, keep_model=True, prob=prob)
+    glyph_map = PageGlyphMap(page, prob=prob)
     cleaned, info = clean_speech_bubbles(
         page,
         None,

@@ -297,3 +297,47 @@ def test_text_sam_is_unloaded_instead_of_parked_on_cpu(monkeypatch):
 
     assert not manager.is_loaded(ModelType.TEXT_SAM)
     assert manager.models[ModelType.LAMA_MANGA] is lama
+
+
+@pytest.mark.parametrize(
+    ("method", "parks"),
+    [
+        ("flux_klein_4b", True),
+        ("flux_kontext", True),
+        ("qwen_image_2_1_turbo", True),
+        ("lama_manga", False),
+    ],
+)
+def test_only_diffusion_inpainters_park_the_text_model_before_loading(
+    monkeypatch, method, parks
+):
+    inpainter = _make(method)
+    calls = []
+    monkeypatch.setattr(
+        inpainter.manager, "park_text_sam", lambda verbose=False: calls.append("park")
+    )
+    monkeypatch.setattr(inpainter, "load_models", lambda: calls.append("load"))
+    page = Image.new("RGB", (400, 300), "black")
+    mask = np.zeros((300, 400), dtype=bool)
+    mask[100:140, 150:250] = True
+
+    inpainter.inpaint_mask(page, mask, seed=-1)
+
+    assert calls == (["park", "load"] if parks else ["load"])
+
+
+def test_parking_twice_moves_the_text_sam_once(monkeypatch):
+    from core.ml.model_manager import ModelType, get_model_manager
+
+    manager = get_model_manager()
+    model = _DeviceRecorder()
+    monkeypatch.setattr(manager, "device", torch.device("cuda"))
+    monkeypatch.setitem(manager.models, ModelType.TEXT_SAM, model)
+    monkeypatch.setattr(manager, "_text_sam_parked", False)
+
+    manager.park_text_sam()
+    manager.park_text_sam()  # every diffusion job parks it
+    manager.load_text_sam()
+    manager.park_text_sam()
+
+    assert model.moves == ["cpu", "cuda", "cpu"]

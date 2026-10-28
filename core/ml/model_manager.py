@@ -168,6 +168,8 @@ class ModelManager:
 
             # Serializes Flux pipeline inference across threads (CPU offload is not thread-safe)
             self.flux_inference_lock = threading.Lock()
+            # SAM-TS-L sits in RAM after park_text_sam until load_text_sam returns it
+            self._text_sam_parked = False
 
             self._initialized = True
             log_message(
@@ -1722,6 +1724,7 @@ class ModelManager:
         with self._lock:
             if self.is_loaded(ModelType.TEXT_SAM):
                 # A no-op unless park_text_sam moved it to RAM
+                self._text_sam_parked = False
                 return self.models[ModelType.TEXT_SAM].to(self.device)
 
             log_message("Loading SAM-TS-L text segmentation model...", verbose=verbose)
@@ -1740,6 +1743,7 @@ class ModelManager:
             model.load_state_dict(load_file(str(path)), strict=True)
             model = to_inference_device(model, self.device).eval()
             self.models[ModelType.TEXT_SAM] = model
+            self._text_sam_parked = False
             log_message("SAM-TS-L text segmentation model loaded.", verbose=verbose)
             return model
 
@@ -1848,12 +1852,12 @@ class ModelManager:
             log_message("LaMa manga inpainting model unloaded.", verbose=verbose)
 
     def park_text_sam(self, verbose: bool = False):
-        """Free the SAM-TS-L text model's VRAM, keeping it in RAM (~0.7 GB) for the next
-        page.
+        """Free the SAM-TS-L text model's VRAM for a diffusion inpainter, keeping it in
+        RAM (~0.7 GB) for the next page; a no-op once parked.
 
         Moving it back takes ~0.15 s on CUDA, against ~2.2 s to reload it from disk. On
         the CPU it is unloaded instead, since there it would stay in fp32 (~1.4 GB) while
-        a diffusion inpainter needs the RAM.
+        the diffusion inpainter needs the RAM.
         """
         if self.device.type == "cpu":
             if self._unload_models((ModelType.TEXT_SAM,), verbose):
@@ -1862,9 +1866,10 @@ class ModelManager:
                 )
             return
         with self._lock:
-            if not self.is_loaded(ModelType.TEXT_SAM):
+            if not self.is_loaded(ModelType.TEXT_SAM) or self._text_sam_parked:
                 return
             self.models[ModelType.TEXT_SAM].to("cpu")
+            self._text_sam_parked = True
             empty_cache(self.device)
         log_message("SAM-TS-L text segmentation model moved to RAM.", verbose=verbose)
 

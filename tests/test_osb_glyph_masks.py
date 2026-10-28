@@ -239,8 +239,8 @@ def test_edit_models_still_see_the_whole_box(patched):
 
     (mask,) = inpainter.masks
     np.testing.assert_array_equal(mask, work.mask_groups[0]["combined_mask"])
-    # The map is built before the edit model loads, and its model moved out of VRAM
-    assert (manager.loads, manager.parks) == (1, 1)
+    # The map is built before the edit model loads; the inpainter parks its model
+    assert (manager.loads, manager.parks) == (1, 0)
 
 
 @pytest.mark.parametrize("mode", ["direct", "grouped", "waves"])
@@ -445,66 +445,88 @@ def test_page_map_is_built_once_for_tilt_and_lama(patched):
     assert len(inpainter.masks) == 1
     assert manager.loads == 1
     assert windows == [(300, 400, 3), (600, 800, 3)]  # the page map, then the box pass
-    assert manager.parks == 0  # LaMa keeps the text model on the GPU for the next page
-
-
-@pytest.mark.parametrize("method", ["flux_klein_4b", "qwen_image_2_1_turbo"])
-def test_text_model_is_freed_after_the_map_for_diffusion_methods(patched, method):
-    manager = _FakeManager()
-    patched(_FakeInpainter(), manager)
-
-    _, glyph_map = _tilt_data(_tilted_text_page(), method=method)
-
-    assert glyph_map.prob is not None
-    assert (manager.loads, manager.parks) == (1, 1)
-
-
-@pytest.mark.parametrize("method", ["opencv", "none"])
-def test_text_model_stays_on_the_device_without_a_diffusion_model(patched, method):
-    manager = _FakeManager()
-    patched(_FakeInpainter(), manager)
-
-    _tilt_data(_tilted_text_page(), method=method)
-
-    assert (manager.loads, manager.parks) == (1, 0)
+    assert manager.parks == 0  # only diffusion inpainters park the text model
 
 
 @pytest.mark.parametrize(
-    ("osb", "colored_bubbles", "parks"),
-    [(False, False, 0), (False, True, 1), (True, False, 1)],
+    ("method", "osb", "colored_bubbles"),
+    [
+        ("flux_klein_4b", True, True),
+        ("qwen_image_2_1_turbo", False, True),
+        ("flux_klein_4b", False, False),
+        ("lama_manga", True, True),
+        ("opencv", True, False),
+    ],
 )
-def test_text_model_is_freed_only_when_a_diffusion_model_will_run(
-    patched, osb, colored_bubbles, parks
+def test_building_the_map_leaves_the_text_model_on_the_device(
+    patched, method, osb, colored_bubbles
 ):
+    # Diffusion inpainters park it right before they run, so pages that never reach
+    # one (no colored bubbles, OSB off) keep it loaded
     manager = _FakeManager()
     patched(_FakeInpainter(), manager)
     config = MangaTranslatorConfig(yolo_model_path="unused.pt")
     config.outside_text.enabled = osb
-    config.outside_text.inpainting_method = "flux_klein_4b"
+    config.outside_text.inpainting_method = method
     config.cleaning.inpaint_colored_bubbles = colored_bubbles
 
-    PageGlyphMap.for_page(_page(), config, verbose=False).get()
+    glyph_map = PageGlyphMap.for_page(_page(), config, verbose=False)
 
-    assert manager.parks == parks
+    assert glyph_map.get() is not None
+    assert (manager.loads, manager.parks) == (1, 0)
 
 
-def test_next_page_reuses_the_parked_text_model(patched):
+def test_next_page_reuses_the_loaded_text_model(patched):
     manager = _FakeManager()
     patched(_FakeInpainter(), manager)
 
     _tilt_data(_tilted_text_page(), method="flux_klein_4b")
     _tilt_data(_tilted_text_page(), method="flux_klein_4b")
 
-    assert (manager.loads, manager.parks) == (1, 2)
+    assert (manager.loads, manager.parks) == (1, 0)
 
 
-def test_text_model_is_freed_even_when_the_map_fails(patched):
-    manager = _FakeManager(fail=True)
-    patched(_FakeInpainter(), manager)
+class _SignalingLock:
+    """A lock that reports when a second thread starts waiting on it."""
 
-    _tilt_data(_tilted_text_page(), method="flux_klein_4b")
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.contended = threading.Event()
 
-    assert manager.parks == 1
+    def __enter__(self):
+        if self._lock.locked():
+            self.contended.set()
+        self._lock.acquire()
+
+    def __exit__(self, *exc):
+        self._lock.release()
+
+
+def test_concurrent_first_calls_build_the_map_once(patched, monkeypatch):
+    manager = _FakeManager()
+    windows = patched(_FakeInpainter(), manager)
+    manager.flux_inference_lock = _SignalingLock()
+    predict = pgm.predict_text_probability
+
+    def predict_once_the_other_caller_waits(model, window):
+        # Hold the lock until the second caller is queued on it
+        assert manager.flux_inference_lock.contended.wait(timeout=5)
+        return predict(model, window)
+
+    monkeypatch.setattr(
+        pgm, "predict_text_probability", predict_once_the_other_caller_waits
+    )
+    glyph_map = PageGlyphMap(_page())
+    first = threading.Thread(target=glyph_map.get)
+    first.start()
+    while not manager.loaded:  # the first caller holds the lock
+        threading.Event().wait(0.01)
+
+    second = glyph_map.get()
+    first.join(timeout=5)
+
+    assert second is glyph_map.prob is not None
+    assert len(windows) == 1
 
 
 def test_no_map_is_built_without_tilt_for_other_methods(patched):

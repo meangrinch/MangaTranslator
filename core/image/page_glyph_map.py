@@ -19,9 +19,6 @@ from core.ml.model_manager import get_model_manager
 from utils.exceptions import CancellationError
 from utils.logging import log_message
 
-# Inpainting methods that load no diffusion model, so SAM-TS-L can stay on the device
-_NON_DIFFUSION_METHODS = ("lama_manga", "opencv", "none")
-
 
 @dataclass
 class PageGlyphMap:
@@ -29,13 +26,11 @@ class PageGlyphMap:
 
     Bubble cleaning, OSB tilt detection, LaMa's glyph masks, and the edit models' glyph
     composites share it, so the text segmentation model runs at most once per page, and
-    not at all on pages that need none of them.
+    not at all on pages that need none of them. The model stays on the device like the
+    app's other models until a diffusion inpainter parks it to make room.
     """
 
     image: Image.Image
-    # Stays on the device like the app's other models, unless a diffusion inpainter
-    # needs its VRAM
-    keep_model: bool
     verbose: bool = False
     # LaMa masks add text found in each box at twice the text scale
     upscale_boxes: bool = False
@@ -49,15 +44,10 @@ class PageGlyphMap:
     def for_page(
         cls, image: Image.Image, config: MangaTranslatorConfig, verbose: bool
     ) -> "PageGlyphMap":
-        method = config.outside_text.inpainting_method
-        diffusion = method not in _NON_DIFFUSION_METHODS and (
-            config.outside_text.enabled or config.cleaning.inpaint_colored_bubbles
-        )
         return cls(
             image,
-            keep_model=not diffusion,
             verbose=verbose,
-            upscale_boxes=method == "lama_manga",
+            upscale_boxes=config.outside_text.inpainting_method == "lama_manga",
             enabled=config.cleaning.text_segmentation,
         )
 
@@ -66,11 +56,9 @@ class PageGlyphMap:
         if self.prob is None and self.enabled and not self.failed:
             manager = get_model_manager()
             with manager.flux_inference_lock:
-                try:
+                # Another caller may have built it while this one waited
+                if self.prob is None and not self.failed:
                     self._compute(manager)
-                finally:
-                    if not self.keep_model:
-                        manager.park_text_sam(verbose=self.verbose)
         return self.prob
 
     def _compute(self, manager) -> None:

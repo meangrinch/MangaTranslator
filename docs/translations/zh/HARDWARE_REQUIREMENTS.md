@@ -517,4 +517,4 @@
 
 | 模型 | 显存 (VRAM) | 内存 (RAM) | 存储空间 |
 | --- | --- | --- | --- |
-| Koharu Text SAM-TS-L | +0.9 GB | TBD | +1.4 GB |
+| Koharu Text SAM-TS-L | +0.9 GB | +0.7 GB | +1.4 GB |

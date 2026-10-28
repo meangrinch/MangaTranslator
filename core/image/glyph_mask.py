@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 from scipy.ndimage import distance_transform_edt
 
+from utils.cancellation import raise_if_cancelled
+
 Box = tuple[int, int, int, int]
 
 # SAM-TS-L was tuned on Manga109, whose single pages are ~830 px wide; pages are
@@ -94,6 +96,8 @@ def page_glyph_probability(
     counts = np.zeros((rows, cols), np.float32)
     for y in _window_starts(rows):
         for x in _window_starts(cols):
+            # A window takes up to ~30 s on the CPU
+            raise_if_cancelled()
             window = rgb[y : y + WINDOW, x : x + WINDOW]
             h, w = window.shape[:2]
             total[y : y + h, x : x + w] += predict(window)
@@ -144,6 +148,7 @@ class UpscaledGlyphMap:
             for x in _window_starts(cols):
                 if x >= hi_x or x + WINDOW <= lo_x or (y, x) in self._done:
                     continue
+                raise_if_cancelled()
                 window = self._rgb[y : y + WINDOW, x : x + WINDOW]
                 h, w = window.shape[:2]
                 self._total[y : y + h, x : x + w] += predict(window)
