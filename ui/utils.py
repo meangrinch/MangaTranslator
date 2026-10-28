@@ -225,11 +225,6 @@ def validate_image(image: Any) -> tuple[bool, str]:
                 False,
                 f"Image dimensions too small ({width}x{height}). Min recommended size is 600x600.",
             )
-        if width > 8000 or height > 8000:
-            return (
-                False,
-                f"Image dimensions too large ({width}x{height}). Max allowed size is 8000x8000.",
-            )
 
         return True, "Image is valid"
     except FileNotFoundError:
