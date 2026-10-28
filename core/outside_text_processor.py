@@ -22,6 +22,7 @@ from core.image.glyph_mask import THRESHOLD as GLYPH_THRESHOLD
 from core.image.glyph_mask import (
     glyph_dilation_radius,
     group_glyphs,
+    texts_sharing_detections,
     verified_glyph_box,
 )
 from core.image.image_utils import (
@@ -752,7 +753,8 @@ def _recover_missed_osb_text(
     verbose: bool,
 ) -> list:
     """OSB results for text the OSB model missed: glyph-map letters outside every
-    bubble and OSB box, kept where the OSB model finds text on crops around them."""
+    bubble and OSB box, kept where the OSB model finds text on crops around them, and
+    joined where one of its boxes spans several of them, like the words of a caption."""
     img_w, img_h = pil_image.size
     radius = glyph_dilation_radius((img_w, img_h))
     covered = np.zeros((img_h, img_w), bool)
@@ -783,15 +785,24 @@ def _recover_missed_osb_text(
     if not groups:
         return []
     image_cv = cv2.cvtColor(np.array(pil_image.convert("RGB")), cv2.COLOR_RGB2BGR)
-    recovered = []
+    words = []
     near = detector.detect_text_near(
         image_cv, [group.box for group in groups], OSB_RECOVERY_CONFIDENCE
     )
     for group, detections in zip(groups, near, strict=True):
         box = verified_glyph_box(group, [d for d, _ in detections])
         if box is not None:
-            confidence = max(conf for _, conf in detections)
-            recovered.append((np.array(box, dtype=np.float32), confidence))
+            words.append((box, max(conf for _, conf in detections)))
+    recovered = []
+    all_detections = [d for detections in near for d, _ in detections]
+    for text in texts_sharing_detections([box for box, _ in words], all_detections):
+        boxes = np.array([words[i][0] for i in text], dtype=np.float32)
+        recovered.append(
+            (
+                np.concatenate([boxes[:, :2].min(axis=0), boxes[:, 2:].max(axis=0)]),
+                max(words[i][1] for i in text),
+            )
+        )
     log_message(
         f"Recovered {len(recovered)} OSB text region(s) the OSB model missed "
         f"({len(groups)} checked)",

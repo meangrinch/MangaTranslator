@@ -11,6 +11,7 @@ from core.image.glyph_mask import (
     page_glyph_probability,
     refine_box_mask_to_glyphs,
     refine_mask_to_glyphs,
+    texts_sharing_detections,
     verified_glyph_box,
 )
 
@@ -320,3 +321,22 @@ def test_verified_box_keeps_only_components_inside_a_detection():
     assert verified_glyph_box(word, [(95, 95, 212, 145)]) == (100, 100, 210, 140)
     assert verified_glyph_box(word, [(400, 95, 500, 145)]) is None
     assert verified_glyph_box(word, []) is None
+
+
+def test_boxes_inside_one_detection_form_one_text():
+    words = [
+        (100, 100, 160, 140),  # "MY"
+        (180, 100, 300, 140),  # "VOICE", both on the line one detection covers
+        (100, 160, 200, 200),  # the next line, linked to "VOICE" by a second detection
+        (600, 100, 660, 140),  # a word no shared detection reaches
+    ]
+    detections = [(95, 95, 305, 145), (95, 95, 305, 205), (590, 90, 670, 150)]
+
+    assert sorted(texts_sharing_detections(words, detections)) == [[0, 1, 2], [3]]
+
+
+def test_a_box_mostly_outside_a_detection_stays_apart():
+    words = [(100, 100, 160, 140), (180, 100, 300, 140)]
+
+    # The detection holds all of the first word but only a sliver of the second
+    assert sorted(texts_sharing_detections(words, [(95, 95, 200, 145)])) == [[0], [1]]

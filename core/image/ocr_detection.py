@@ -560,7 +560,7 @@ class OutsideTextDetector:
         self, image_cv: np.ndarray, boxes: list, confidence: float
     ) -> list[list[tuple[tuple[float, float, float, float], float]]]:
         """OSB text detections for each region, from crops around it at several pads
-        and input sizes, as (box clipped to the region, confidence) pairs."""
+        and input sizes, as (page box, confidence) pairs."""
         model = self.manager.load_yolo_osbtext(token=self.hf_token)
         img_h, img_w = image_cv.shape[:2]
         regions = [tuple(int(c) for c in box) for box in boxes]
@@ -590,7 +590,6 @@ class OutsideTextDetector:
         if result.boxes is None:
             return []
         ox, oy = origin
-        x0, y0, x1, y1 = region
         kept = []
         for det, conf in zip(
             result.boxes.xyxy.detach().cpu().numpy(),
@@ -598,24 +597,18 @@ class OutsideTextDetector:
             strict=True,
         ):
             conf = float(conf)
-            det = [
+            det = (
                 float(det[0]) + ox,
                 float(det[1]) + oy,
                 float(det[2]) + ox,
                 float(det[3]) + oy,
-            ]
+            )
             if conf < confidence or not (
                 self.box_ioa(region, det) > NEAR_REGION_IN_DETECTION
                 or self.box_ioa(det, region) > NEAR_DETECTION_IN_REGION
             ):
                 continue
-            clipped = (
-                max(det[0], x0),
-                max(det[1], y0),
-                min(det[2], x1),
-                min(det[3], y1),
-            )
-            kept.append((clipped, conf))
+            kept.append((det, conf))
         return kept
 
     def get_text_masks(

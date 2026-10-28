@@ -140,9 +140,9 @@ def test_text_near_boxes_reruns_the_osb_model_on_crops(monkeypatch):
         (140, 200),
         (340, 400),
     ]
-    # Detections come back in page space, clipped to their region; the one between
-    # the regions belongs to neither
-    assert found == [[((400.0, 400.0, 480.0, 440.0), pytest.approx(0.6))] * 6, []]
+    # Detections come back whole in page space, so one can span several regions; the
+    # one between the regions belongs to neither
+    assert found == [[((390.0, 395.0, 480.0, 450.0), pytest.approx(0.6))] * 6, []]
 
 
 def test_text_near_boxes_drops_weak_detections(monkeypatch):

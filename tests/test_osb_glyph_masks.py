@@ -612,9 +612,9 @@ BUBBLE_BOX = (240, 30, 300, 80)
 YOLO_BOX = (295, 195, 365, 220)
 
 
-def _missed_text_page():
+def _missed_text_page(letters=MISSED_LETTERS):
     page = np.full((300, 400, 3), 255, np.uint8)
-    for x0, y0, x1, y1 in MISSED_LETTERS:
+    for x0, y0, x1, y1 in letters:
         page[y0:y1, x0:x1] = 0
     page[40:60, 250:280] = 0  # dialogue inside the bubble
     page[200:215, 300:360] = 0  # text the OSB model found
@@ -622,8 +622,10 @@ def _missed_text_page():
 
 
 class _FakeOsbDetector:
-    def __init__(self):
+    def __init__(self, near_detection=None):
         self.near_calls = []
+        # The detection reported for regions left of x=100; the region itself by default
+        self.near_detection = near_detection
 
     def detect_outside_text(self, *args, **kwargs):
         return [(np.array(YOLO_BOX, np.float32), 0.8)]
@@ -634,7 +636,7 @@ class _FakeOsbDetector:
     def detect_text_near(self, image_cv, boxes, confidence):
         self.near_calls += [tuple(box) for box in boxes]
         return [
-            [((float(b[0]), float(b[1]), float(b[2]), float(b[3])), 0.7)]
+            [(self.near_detection or tuple(float(c) for c in b), 0.7)]
             if b[0] < 100
             else []
             for b in boxes
@@ -647,7 +649,14 @@ def recovery(patched, monkeypatch):
     detector = _FakeOsbDetector()
     monkeypatch.setattr(otp, "OutsideTextDetector", lambda **kwargs: detector)
 
-    def run(device="cuda", method="lama_manga", **settings):
+    def run(
+        device="cuda",
+        method="lama_manga",
+        letters=MISSED_LETTERS,
+        near=None,
+        **settings,
+    ):
+        detector.near_detection = near
         config = MangaTranslatorConfig(yolo_model_path="unused.pt")
         config.device = torch.device(device)  # never used by the fakes
         config.outside_text.enabled = True
@@ -657,7 +666,7 @@ def recovery(patched, monkeypatch):
             section, field = name.split(".")
             setattr(getattr(config, section), field, value)
         work = otp.prepare_outside_text_work(
-            _missed_text_page(),
+            _missed_text_page(letters),
             config,
             "page.png",
             "PNG",
@@ -681,6 +690,17 @@ def test_text_the_osb_model_missed_is_recovered_from_the_glyph_map(
     # Only the letters outside every bubble and OSB box are checked, as one group
     assert near_calls == [(50, 200, 94, 220)]
     assert boxes == [YOLO_BOX, (50, 200, 94, 220)]
+
+
+def test_recovered_words_of_one_caption_become_one_region(recovery):
+    # Two words, a word space apart: too far for the letters to group as one region
+    second_word = [(90, 200, 102, 220), (106, 200, 118, 220)]
+    letters = MISSED_LETTERS[:2] + second_word
+
+    boxes, near_calls = recovery(letters=letters, near=(45.0, 195.0, 125.0, 225.0))
+
+    assert near_calls == [(50, 200, 78, 220), (90, 200, 118, 220)]
+    assert boxes == [YOLO_BOX, (50, 200, 118, 220)]
 
 
 @pytest.mark.parametrize(

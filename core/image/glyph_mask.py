@@ -40,7 +40,8 @@ TEXT_GROUP_GAP = 0.4
 # Specks and regions smaller than these areas (pixels at the reference scale) are noise
 MIN_LETTER_AREA = 20
 MIN_TEXT_AREA = 150
-# A letter belongs to a verified detection when this share of its box lies inside it
+# A letter, or a verified word, belongs to a detection when this share of its box
+# lies inside it
 VERIFIED_LETTER_OVERLAP = 0.5
 # Text covers at most 22% of a bubble's fill on 376 sample bubbles, and all of the
 # fill of an SFX letter detected as a bubble
@@ -468,3 +469,32 @@ def verified_glyph_box(group: GlyphGroup, detections: list) -> Box | None:
         if any(_overlap_share(box, d) > VERIFIED_LETTER_OVERLAP for d in detections)
     ]
     return _bounds(kept) if kept else None
+
+
+def texts_sharing_detections(boxes: list[Box], detections: list) -> list[list[int]]:
+    """Indices of `boxes` grouped into texts: boxes join when one detection holds most
+    of each, directly or through a chain of such boxes.
+
+    Word spaces split a caption into regions; the OSB model's box spans the caption.
+    """
+    parent = list(range(len(boxes)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for detection in detections:
+        inside = [
+            i
+            for i, box in enumerate(boxes)
+            if _overlap_share(box, detection) > VERIFIED_LETTER_OVERLAP
+        ]
+        for i in inside[1:]:
+            parent[root(i)] = root(inside[0])
+
+    texts: dict[int, list[int]] = {}
+    for i in range(len(boxes)):
+        texts.setdefault(root(i), []).append(i)
+    return list(texts.values())
