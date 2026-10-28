@@ -43,7 +43,6 @@ from utils.exceptions import CancellationError
 from utils.logging import log_message
 from utils.model_metadata import flux_method_backends
 
-# OSB Expansion and Classification Constants
 OSB_EXPANSION_PIXEL_BUFFER = 5  # for bubbles, nearby OSB regions, panels
 OSB_SOLID_RATIO_THRESHOLD = (
     0.95  # Stricter than interior sampling because border ring has no text mask noise
@@ -706,7 +705,6 @@ def _probe_original_text_colors(
         if len(pixels) >= 8:
             pixels = pixels[::4]
 
-        # Use K-Means to find 2 dominant colors
         kmeans = KMeans(n_clusters=2, random_state=42, n_init=1)
         kmeans.fit(pixels)
 
@@ -884,7 +882,6 @@ def prepare_outside_text_work(
                 )
                 return None
 
-        # Filter out probable page numbers
         if config.outside_text.enable_page_number_filtering and outside_text_results:
             outside_text_results = _drop_page_numbers(
                 pil_image, outside_text_results, config, img_w, img_h, verbose
@@ -1457,7 +1454,6 @@ def _general_text_color(
     crop_rgb = np.array(pil_image.crop(text_bounds).convert("RGB"))
     crop_gray = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2GRAY)
 
-    # 1. Detect outlined monochrome text (black text + white outline or white text + dark outline)
     detected_text_color = None
 
     # Glyph cores whose border contrasts: dark text with a light outline, and the reverse
@@ -1497,7 +1493,7 @@ def _general_text_color(
         else:
             detected_text_color = (255, 255, 255)
 
-    # 3. Detect chromatic text via LAB contrast against background
+    # Chromatic text: LAB contrast against the background
     if detected_text_color is None:
         crop_lab = cv2.cvtColor(crop_rgb, cv2.COLOR_RGB2LAB).astype(np.float32)
         dist_map = np.linalg.norm(crop_lab - bg_lab.astype(np.float32), axis=2)
@@ -1541,7 +1537,7 @@ def _general_text_color(
             if hsv[1] >= 25:
                 detected_text_color = sampled_rgb
 
-    # 4. Fallback for non-outlined monochrome text: contrast against fill
+    # Non-outlined monochrome text: contrast against the fill
     if detected_text_color is None:
         fill_for_contrast = (
             fallback_fill_color if fallback_fill_color is not None else (0, 0, 0)
@@ -1606,7 +1602,6 @@ def _decide_osb_region_fill(
         votes_light = 0
         gx1, gy1, gx2, gy2 = composite_clip_bbox
         for (bx1, by1, bx2, by2), t_dark in work.original_text_colors.items():
-            # Check if center of OCR box is inside group box
             bcx = (bx1 + bx2) / 2
             bcy = (by1 + by2) / 2
             if gx1 <= bcx <= gx2 and gy1 <= bcy <= gy2:
@@ -1671,7 +1666,6 @@ def _decide_osb_region_fill(
         p_x0, p_y0 = max(0, p_x0), max(0, p_y0)
         p_x1, p_y1 = min(img_w, p_x1), min(img_h, p_y1)
 
-    # Simply check if the expanded boundary is solid color
     expanded_is_solid = is_border_solid
     if not force_fill:
         eborder_pixels = _border_pixels(

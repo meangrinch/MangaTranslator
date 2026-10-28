@@ -90,7 +90,6 @@ class _ScaledMetrics:
     def __init__(self, original, scale_factor):
         self.fAscent = original.fAscent * scale_factor
         self.fDescent = original.fDescent * scale_factor
-        # Preserve other attributes if they exist
         if hasattr(original, "fLeading"):
             self.fLeading = original.fLeading * scale_factor
         if hasattr(original, "fXMin"):
@@ -115,7 +114,6 @@ def _scale_layout_data(layout_data: dict, factor: float) -> dict:
     if layout_data.get("block_height") is not None:
         scaled_layout_data["block_height"] = layout_data["block_height"] * factor
 
-    # Scale per-line and per-glyph measurements
     for line_data in scaled_layout_data["lines"]:
         for key in (
             "width",
@@ -187,7 +185,6 @@ def _resolve_text_color(
         bg_brightness = (
             bubble_color_bgr[0] + bubble_color_bgr[1] + bubble_color_bgr[2]
         ) / 3.0
-        # If background is dark, use white text; if light, use black
         return (
             skia.ColorWHITE if bg_brightness < GRAYSCALE_MIDPOINT else skia.ColorBLACK
         )
@@ -299,7 +296,6 @@ def _render_supersampled(
     except RenderingError as e:
         raise RenderingError(f"Scaled conversion failed: {e}") from e
 
-    # Downscale using LANCZOS for high quality
     downscaled_result = scaled_pil_result.resize(
         (crop_width, crop_height), Image.Resampling.LANCZOS
     )
@@ -462,7 +458,6 @@ def render_text_skia(
 
     layout_text = clean_text
 
-    # Initialize config with defaults if not provided
     if config is None:
         config = RenderingConfig()
 
@@ -618,7 +613,6 @@ def render_text_skia(
         features_to_enable,
     )
 
-    # Determine text color contrast based on sampled background brightness
     text_color = _resolve_text_color(text_color_rgb, bubble_color_bgr)
 
     skia_bg_color = None
@@ -629,7 +623,6 @@ def render_text_skia(
             text_background_color[2],
         )
 
-    # Apply supersampling if enabled
     outline_px = resolve_outline_width(layout_data["font_size"], config.outline_ratio)
     factor = config.supersampling_factor
     if factor > 1:

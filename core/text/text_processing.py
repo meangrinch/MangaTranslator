@@ -826,7 +826,6 @@ def find_optimal_breaks_dp(
         if not tokens:
             return []
 
-        # Calculate widths for all tokens
         token_w: list[float] = [word_width_func(t) for t in tokens]
         thai_cluster_cache: dict = {}
 

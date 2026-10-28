@@ -13,7 +13,6 @@ from .openai_compatible import (
     routed_sampling_params,
 )
 
-# OpenRouter model metadata cache & reasoning detection
 _OPENROUTER_MODELS_META: dict[str, dict[str, Any]] = {}
 
 
@@ -56,7 +55,6 @@ def openrouter_is_reasoning_model(model_name: str, debug: bool = False) -> bool:
     if not meta:
         return False
 
-    # Check if supported_parameters contains "include_reasoning"
     supported_parameters = meta.get("supported_parameters", [])
     return bool(
         isinstance(supported_parameters, list)

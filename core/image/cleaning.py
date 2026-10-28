@@ -27,12 +27,11 @@ from .image_utils import pil_to_cv2
 from .inpainting import make_flux_inpainter
 from .page_glyph_map import PageGlyphMap
 
-# Cleaning parameters
 GRAYSCALE_MIDPOINT = 128  # Threshold for determining black vs white bubbles
-MIN_CONTOUR_AREA = 50  # Minimum area threshold for filtering small contours
-DILATION_KERNEL_SIZE = (7, 7)  # Kernel size for morphological dilation
-EROSION_KERNEL_SIZE = (5, 5)  # Kernel size for morphological erosion
-DISTANCE_TRANSFORM_MASK_SIZE = 5  # Mask size for distance transform
+MIN_CONTOUR_AREA = 50
+DILATION_KERNEL_SIZE = (7, 7)
+EROSION_KERNEL_SIZE = (5, 5)
+DISTANCE_TRANSFORM_MASK_SIZE = 5
 
 # Classification threshold for solid background bubbles (interior sampling)
 # Lower threshold (0.65) accounts for residual text mask contours and erosion artifacts
@@ -491,7 +490,6 @@ def process_single_bubble(
                 validated_mask, valid_contours, -1, 255, thickness=cv2.FILLED
             )
 
-            # Re-contour to get clean boundary from validated mask
             boundary_contours, _ = cv2.findContours(
                 validated_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
@@ -892,7 +890,6 @@ def clean_speech_bubbles(
             )
             log_message(f"Detection {bbox}: processed successfully", verbose=verbose)
 
-        # Optional Flux inpainting for colored bubbles (text-only mask)
         if inpaint_colored_bubbles and inpaint_method not in ("opencv", "none"):
             colored_bubbles = [
                 b for b in processed_bubbles if b.get("is_colored", False)

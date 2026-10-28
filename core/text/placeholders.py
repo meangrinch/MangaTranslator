@@ -42,7 +42,6 @@ def generate_test_placeholders(
         f"Test mode: generating placeholders for {len(sorted_bubble_data)} bubbles",
         always_print=True,
     )
-    # Map for rendering info used in probe
     bubble_render_info_map_probe = {
         tuple(info["bbox"]): {
             "color": info["color"],

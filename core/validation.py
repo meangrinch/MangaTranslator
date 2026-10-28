@@ -231,13 +231,11 @@ def validate_core_inputs(
                          font pack empty, invalid numeric values).
         ValueError: For general invalid parameter values.
     """
-    # --- YOLO Model Auto-detection ---
     if not models_dir.is_dir():
         raise FileNotFoundError(f"YOLO models directory not found: {models_dir}")
 
     yolo_model_path = autodetect_yolo_model_path(models_dir, bubble_detector_model)
 
-    # --- Font Validation ---
     if not fonts_base_dir.is_dir():
         raise FileNotFoundError(f"Fonts base directory not found: {fonts_base_dir}")
 
@@ -256,7 +254,6 @@ def validate_core_inputs(
             f"No font files (.ttf or .otf) found in the font pack directory: '{font_dir_path}'"
         )
 
-    # --- Rendering Config Validation ---
     if not (
         isinstance(rendering_cfg.max_font_size, int) and rendering_cfg.max_font_size > 0
     ):
@@ -273,7 +270,6 @@ def validate_core_inputs(
     if rendering_cfg.min_font_size > rendering_cfg.max_font_size:
         raise ValidationError("Min Font Size cannot be larger than Max Font Size.")
 
-    # --- Translation Config Validation (Basic) ---
     if not translation_cfg.provider:
         raise ValidationError("Translation provider cannot be empty.")
     if not translation_cfg.model_name:

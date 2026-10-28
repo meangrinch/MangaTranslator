@@ -11,7 +11,6 @@ from core.ml.model_manager import ModelType, get_model_manager
 from utils.exceptions import ImageProcessingError, ModelError
 from utils.logging import log_message
 
-# Detection Parameters
 IOA_THRESHOLD = 0.50  # 50% IoA threshold for conjoined bubble detection
 SAM_MASK_THRESHOLD = 0.5  # SAM2 mask binarization threshold
 IOA_OVERLAP_THRESHOLD = 0.5  # IoA threshold for general overlap detection between boxes
@@ -233,7 +232,6 @@ def _deduplicate_primary_boxes(
     confs_list = confidences.tolist()
     n = len(boxes_list)
 
-    # Sort by confidence (descending)
     indices = sorted(range(n), key=lambda i: confs_list[i], reverse=True)
     keep = []
 
@@ -281,7 +279,6 @@ def _remove_contained_boxes(
             if i == j or not keep[j]:
                 continue
 
-            # Check if box i is contained in box j
             if _calculate_ioa(boxes_list[i], boxes_list[j]) > threshold:
                 # Near-duplicate pair: boxes arrive sorted by confidence, so
                 # keep the earlier one and let the later one be dropped instead
@@ -383,7 +380,6 @@ def _categorize_detections(primary_boxes, secondary_boxes, ioa_threshold=IOA_THR
         if i in conjoined_primary_indices:
             continue
 
-        # Check for duplication against processed secondary bubbles
         is_duplicate = False
         p_box_list = primary_boxes[i].tolist()
 
@@ -493,7 +489,6 @@ def _process_simple_bubbles(
     simple_boxes_to_sam = primary_boxes[simple_indices].unsqueeze(0).cpu()
     inputs = processor(image, input_boxes=simple_boxes_to_sam, return_tensors="pt")
 
-    # Cast floating point tensors to model's dtype before moving to device
     for key in inputs:
         if isinstance(inputs[key], torch.Tensor) and inputs[key].is_floating_point():
             inputs[key] = inputs[key].to(sam_model.dtype)
@@ -1589,7 +1584,6 @@ def detect_speech_bubbles(
 
     primary_sources = [("primary", idx) for idx in range(len(primary_boxes))]
 
-    # Remove duplicate primary detections using IoU-based NMS
     if len(primary_boxes) > 1:
         original_count = len(primary_boxes)
         primary_boxes, keep_indices = _deduplicate_primary_boxes(
@@ -1602,7 +1596,6 @@ def detect_speech_bubbles(
                 verbose=verbose,
             )
 
-    # Remove nested duplicate primary detections
     if len(primary_boxes) > 1:
         original_count = len(primary_boxes)
         primary_boxes, primary_sources = _remove_contained_boxes(
@@ -1651,7 +1644,6 @@ def detect_speech_bubbles(
                 ("secondary", idx) for idx in range(len(secondary_boxes))
             ]
 
-            # Remove nested duplicate secondary detections
             if len(secondary_boxes) > 1:
                 orig_sec_count = len(secondary_boxes)
                 secondary_boxes, secondary_sources = _remove_contained_boxes(
@@ -1808,7 +1800,6 @@ def detect_speech_bubbles(
             log_message("  - Using cached SAM masks", always_print=True)
             return cached_sam, text_free_boxes
 
-        # Load appropriate SAM model
         if seg_model == "sam3":
             processor, sam_model_instance = model_manager.load_sam3(
                 token=osb_text_hf_token, verbose=verbose
@@ -1917,7 +1908,7 @@ def detect_panels(
             log_message("No panels detected", verbose=verbose)
             return []
 
-        # Filter for "frame" class (panel class)
+        # Panels are the "frame" class
         frame_class_id = None
         if hasattr(panel_model, "names"):
             for class_id, class_name in panel_model.names.items():

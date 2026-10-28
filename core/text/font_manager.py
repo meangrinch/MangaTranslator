@@ -55,7 +55,6 @@ _font_variants_cache: dict[str, dict[str, Path | None]] = {}
 # Typical cap height for fonts that have no Latin capitals to measure
 DEFAULT_CAP_HEIGHT_RATIO = 0.7
 
-# Font style detection keywords
 FONT_KEYWORDS = {
     "bold": {"bold", "heavy", "black"},
     "italic": {"italic", "oblique", "slanted", "inclined"},
@@ -255,9 +254,7 @@ def _validate_font_file(font_file: Path, verbose: bool = False) -> bool:
         True if font is valid, False if corrupt or invalid
     """
     try:
-        # Try to load the font with fontTools to check integrity
         font = TTFont(font_file, fontNumber=0)
-        # Basic validation - check if it has required tables
         if "cmap" not in font or "head" not in font:
             log_message(
                 f"Font file {font_file.name} appears to be missing required tables",
@@ -541,7 +538,6 @@ def find_font_variants(font_dir: str, verbose: bool = False) -> dict[str, Path |
         _font_variants_cache[resolved_dir] = font_variants
         return font_variants
 
-    # Check for variable fonts and auto-map if present
     var_variants = auto_map_variable_fonts(font_files, verbose=verbose)
     if var_variants and var_variants.get("regular"):
         # Check if any missing variants can be provided by static files
@@ -573,7 +569,6 @@ def find_font_variants(font_dir: str, verbose: bool = False) -> dict[str, Path |
         if font_file in identified_files:
             continue
 
-        # Validate font file integrity before processing
         if not _validate_font_file(font_file, verbose=verbose):
             continue
 
@@ -593,7 +588,6 @@ def find_font_variants(font_dir: str, verbose: bool = False) -> dict[str, Path |
         if font_file in identified_files:
             continue
 
-        # Validate font file integrity before processing
         if not _validate_font_file(font_file, verbose=verbose):
             continue
 
@@ -618,7 +612,6 @@ def find_font_variants(font_dir: str, verbose: bool = False) -> dict[str, Path |
         if font_file in identified_files:
             continue
 
-        # Validate font file integrity before processing
         if not _validate_font_file(font_file, verbose=verbose):
             continue
 
@@ -645,7 +638,6 @@ def find_font_variants(font_dir: str, verbose: bool = False) -> dict[str, Path |
             if font_file in identified_files:
                 continue
 
-            # Validate font file integrity before processing
             if not _validate_font_file(font_file, verbose=verbose):
                 continue
 

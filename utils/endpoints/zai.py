@@ -79,7 +79,6 @@ def call_zai_endpoint(
         "stream": False,
     }
 
-    # Handle thinking/reasoning parameter
     thinking_config = generation_config.get("thinking")
     if thinking_config:
         payload["thinking"] = thinking_config
@@ -88,7 +87,6 @@ def call_zai_endpoint(
     if reasoning_effort:
         payload["reasoning_effort"] = reasoning_effort
 
-    # Handle web search
     if enable_web_search:
         payload["tools"] = [
             {
@@ -100,7 +98,6 @@ def call_zai_endpoint(
             }
         ]
 
-    # Remove None values
     payload = {k: v for k, v in payload.items() if v is not None}
 
     def parse(result: dict[str, Any]) -> str | None:

@@ -130,7 +130,6 @@ def main():
             "Default: a new output/.glossary/<input name>_<date>.txt"
         ),
     )
-    # --- Provider and API Key Arguments ---
     parser.add_argument(
         "--provider",
         type=str,
@@ -347,7 +346,6 @@ def main():
             "into sections that are translated separately and stitched back together."
         ),
     )
-    # Cleaning args
     parser.add_argument(
         "--use-otsu-threshold",
         action="store_true",
@@ -403,7 +401,6 @@ def main():
             "clean them with the same flat fill as white/black bubbles"
         ),
     )
-    # Translation args
     parser.add_argument(
         "--temperature",
         type=float,
@@ -488,7 +485,6 @@ def main():
             "and must be used in 'two-step' translation mode."
         ),
     )
-    # Rendering args
     parser.add_argument(
         "--max-font-size",
         type=int,
@@ -586,7 +582,6 @@ def main():
         default=1.0,
         help="Font size multiplier for vertical bubble text (0.1-3.0)",
     )
-    # Output args
     parser.add_argument(
         "--jpeg-quality",
         type=int,
@@ -633,7 +628,6 @@ def main():
             "based on image size relative to 1MP. Prevents consistent behavior across different image resolutions."
         ),
     )
-    # General args
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--cpu", action="store_true", help="Force CPU usage")
     parser.add_argument(
@@ -757,7 +751,6 @@ def main():
         ),
     )
 
-    # --- Outside Speech Bubble (OSB) Text Settings ---
     parser.add_argument(
         "--osb-enable",
         action="store_true",
@@ -1173,7 +1166,6 @@ def main():
     )
     from utils.logging import log_message
 
-    # --- Validate mutually exclusive flags ---
     try:
         validate_mutually_exclusive_modes(
             args.cleaning_only, args.upscaling_only, args.test_mode
@@ -1181,7 +1173,6 @@ def main():
     except Exception as e:
         parser.error(str(e))
 
-    # --- Create Config Object ---
     provider = args.provider
     key_field, key_env_vars = PROVIDER_API_KEYS[provider]
     # The CLI flag for SpaceXAI is --spacexai-api-key; others match the config field
@@ -1220,7 +1211,6 @@ def main():
     from core.ml.model_manager import get_model_manager, migrate_model_dirs
 
     models_dir = Path(args.models).resolve()
-    # Create models directory if it doesn't exist (model manager will handle model downloads)
     models_dir.mkdir(parents=True, exist_ok=True)
     migrate_model_dirs(models_dir)
     get_model_manager().set_models_dir(models_dir)
@@ -1418,7 +1408,6 @@ def main():
     )
 
     clamp_settings(config)
-    # --- Execute ---
     if args.batch:
         input_path = Path(args.input)
         suffix = input_path.suffix.lower()

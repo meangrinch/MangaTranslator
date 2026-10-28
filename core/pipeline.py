@@ -308,7 +308,6 @@ def _encode_context_image(
         minimum=512,
         maximum=4096,
     )
-    # Disable upscaling in test_mode
     upscale_method = "none" if config.test_mode else config.translation.upscale_method
 
     if upscale_method in ("model", "model_lite"):
@@ -931,7 +930,6 @@ def _prepare_bubble_crops(
         if bbox_key in mask_by_bbox:
             bubble["sam_mask"] = mask_by_bbox[bbox_key]
 
-    # Disable upscaling in test_mode
     upscale_method = "none" if config.test_mode else config.translation.upscale_method
 
     model_manager = get_model_manager()
@@ -1557,7 +1555,6 @@ def translate_and_render(
 
     log_message(f"Using device: {config.device}", verbose=verbose)
 
-    # Set global HF token for model downloads
     get_model_manager().set_hf_token(config.outside_text.huggingface_token)
 
     pil_original = _open_source_image(image_path)

@@ -133,7 +133,7 @@ def validate_api_key(api_key: str, provider: str) -> tuple[bool, str]:
     if not api_key and provider != "OpenAI-Compatible":
         return False, f"{provider} API key is required"
     elif not api_key and provider == "OpenAI-Compatible":
-        return True, f"{provider} API key is optional and not provided."  # Valid state
+        return True, f"{provider} API key is optional and not provided."
 
     if provider == "Google" and not is_valid_google_api_key(api_key):
         return (
@@ -344,7 +344,6 @@ def is_reasoning_model(provider: str, model_name: str | None) -> bool:
         try:
             return openrouter_is_reasoning_model(model_name, debug=False)
         except Exception:
-            # Fallback to False if detection fails
             return False
     check = REASONING_MODEL_CHECKS.get(provider)
     return check(model_name) if check else False
@@ -363,7 +362,6 @@ def get_enable_web_search_label_and_info(provider: str) -> tuple[str, str]:
     # All providers use the same label
     label = "Enable Web Search"
 
-    # Provider-specific info text
     info_map = {
         "Google": (
             "Use Gemini's web search for up-to-date information. "
@@ -467,7 +465,6 @@ def get_reasoning_effort_info_text(
     if choices is None:
         choices = []
 
-    # Determine base description text based on provider/model
     if provider == "Google":
         if is_gemini_3_plus_model(model_name) or is_gemma_model(model_name):
             return "Controls model's internal reasoning effort."
@@ -1449,7 +1446,6 @@ def fetch_and_update_openrouter_models(
     """
     verbose = get_saved_settings().get("verbose", False)
 
-    # Check if we have cached raw response
     raw_models = OPENROUTER_MODEL_CACHE.get("raw_response")
     if raw_models is None:
         log_message("Fetching OpenRouter models from API...", verbose=verbose)
@@ -1607,7 +1603,6 @@ def fetch_and_update_compatible_models(
                     if clean_id:
                         fetched_models.append(clean_id)
         fetched_models = [m for m in fetched_models if m]
-        # Filter out embedding models (case-insensitive)
         fetched_models = [m for m in fetched_models if "embedding" not in m.lower()]
         if extracted_dep_name and extracted_dep_name not in fetched_models:
             fetched_models.insert(0, extracted_dep_name)

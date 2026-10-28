@@ -22,7 +22,6 @@ def _heuristic_ink_mask(crop: np.ndarray, is_dark_text: bool) -> np.ndarray:
     """Guess the ink of a BGR crop from its colors: whichever polarity looks more like text."""
     h, w = crop.shape[:2]
 
-    # Step 1.2: Background color & luminance sampling around border
     border_mask = np.zeros((h, w), dtype=bool)
     border_mask[0, :] = True
     border_mask[-1, :] = True
@@ -35,11 +34,10 @@ def _heuristic_ink_mask(crop: np.ndarray, is_dark_text: bool) -> np.ndarray:
         0.299 * float(bg_bgr[2]) + 0.587 * float(bg_bgr[1]) + 0.114 * float(bg_bgr[0])
     )
 
-    # Step 1.3: Screentone attenuation
+    # Blurring attenuates screentone
     blurred = cv2.GaussianBlur(crop, (3, 3), 1.0)
     gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
 
-    # Step 1.4: Dual-polarity candidate mask competition
     lab = cv2.cvtColor(blurred, cv2.COLOR_BGR2LAB)
     bg_lab = cv2.cvtColor(np.uint8([[bg_bgr]]), cv2.COLOR_BGR2LAB)[0, 0].astype(
         np.float32
@@ -124,7 +122,6 @@ def _filter_ink_components(mask: np.ndarray, from_text_model: bool) -> _Ink | No
             if area > (0.35 * crop_area):
                 continue
 
-            # Border touch gate
             touches = 0
             if cx == 0:
                 touches += 1
@@ -210,7 +207,6 @@ def detect_crop_tilt_angle(
     orig_h, orig_w = crop_cv.shape[:2]
     default_dims = (float(max(orig_w, orig_h)), float(min(orig_w, orig_h)))
 
-    # Step 1.1: Size gate
     if (
         orig_h < 8
         or orig_w < 8
@@ -219,7 +215,6 @@ def detect_crop_tilt_angle(
     ):
         return 0.0, 0.0, default_dims, "none"
 
-    # Step 1.1: Downscale for perf budget
     max_dim = max(orig_h, orig_w)
     if max_dim > max_side:
         scale = float(max_side) / float(max_dim)
@@ -233,7 +228,6 @@ def detect_crop_tilt_angle(
     h, w = crop.shape[:2]
     scale_inv = 1.0 / scale
 
-    # Steps 1.2-2: Find the ink and drop components that aren't text
     ink = None
     if ink_mask is not None:
         ink = _filter_ink_components(
@@ -249,11 +243,9 @@ def detect_crop_tilt_angle(
     filtered_mask = ink.mask
     crop_area = float(w * h)
 
-    # Step 3: Aspect-Ratio Routing & Multi-Column CJK Guard
     ys, xs = np.where(filtered_mask > 0)
     pts = np.column_stack((xs, ys)).astype(np.float32)
 
-    # PCA elongation check
     _, eigenvectors, eigenvalues = cv2.PCACompute2(pts, mean=None)
     ev1 = float(eigenvalues[0, 0])
     ev2 = float(eigenvalues[1, 0])
@@ -277,7 +269,6 @@ def detect_crop_tilt_angle(
     if from_text_model and 1 / 1.3 <= aspect <= 1.3:
         is_vertical = abs(eigenvectors[0][1]) > abs(eigenvectors[0][0])
 
-    # Step 3.1: Vertical Path & Multi-Column Gutter Guard
     if is_vertical:
         tilt_axis = "vertical"
         col_counts = np.sum(filtered_mask > 0, axis=0).astype(np.float32)
@@ -296,7 +287,6 @@ def detect_crop_tilt_angle(
             col_binary.reshape(1, -1), cv2.MORPH_CLOSE, k_col
         )[0]
 
-        # Extract contiguous column regions
         cols = []
         in_col = False
         start_x = 0
@@ -333,15 +323,12 @@ def detect_crop_tilt_angle(
                     [a for a, _ in tall_cols], weights=[wt for _, wt in tall_cols]
                 )
             )
-            # If upright vertical columns agree within <= 7 deg and average is small:
             if spread <= 7.0 and abs(avg_angle) < 4.0:
                 return 0.0, 1.0, oriented_dims, "vertical"
             if spread <= 7.0:
-                # Consistent tilted columns
                 clamped = max(-max_tilt_deg, min(max_tilt_deg, avg_angle))
                 final_deg = 0.0 if abs(clamped) < deadband_deg else clamped
                 return float(final_deg), 0.85, oriented_dims, "vertical"
-            # Parallel columns disagree -> fail-safe 0.0
             return 0.0, 0.0, oriented_dims, "vertical"
 
         # Prevent boundary clipping from falsely spiking column concentration on narrow crops
@@ -399,7 +386,6 @@ def detect_crop_tilt_angle(
             slope = np.polyfit(unique_y, med_x, 1)[0]
             theta_row = -math.degrees(math.atan(slope))
 
-            # PCA fallback
             v1 = eigenvectors[0]
             if v1[1] < 0:
                 v1 = -v1
@@ -419,10 +405,8 @@ def detect_crop_tilt_angle(
 
         return 0.0, 0.0, oriented_dims, "vertical"
 
-    # Step 3.2: Horizontal Path & Projection-Gain Verification
     tilt_axis = "horizontal"
 
-    # Method A: Centroid Regression
     valid_comp = ink.stats[:, cv2.CC_STAT_AREA] >= max(8, int(crop_area * 0.0005))
     theta_a = None
     if np.count_nonzero(valid_comp) >= 3:
@@ -435,7 +419,6 @@ def detect_crop_tilt_angle(
         except Exception:
             theta_a = None
 
-    # Method B: Column Medians
     unique_xs = np.unique(xs)
     theta_b = None
     if len(unique_xs) >= 8:
@@ -446,7 +429,6 @@ def detect_crop_tilt_angle(
         except Exception:
             theta_b = None
 
-    # Method C: PCA major axis
     v1 = eigenvectors[0]
     if v1[0] < 0:
         v1 = -v1
@@ -477,7 +459,7 @@ def detect_crop_tilt_angle(
     if abs(cand_angle) > 45.0:
         return 0.0, 0.0, oriented_dims, tilt_axis
 
-    # Projection-gain verification (geometric sign & angle proof)
+    # Verify the angle and its sign by how much deskewing concentrates the rows
     def calc_concentration(img_bin: np.ndarray) -> tuple[float, float]:
         row_counts = np.sum(img_bin > 0, axis=1).astype(np.float64)
         total = np.sum(row_counts)
@@ -506,8 +488,6 @@ def detect_crop_tilt_angle(
     c_cw, peak_cw = calc_concentration(rot_cw_deskew)
     c_ccw, peak_ccw = calc_concentration(rot_ccw_deskew)
 
-    # For clockwise text (cand_angle > 0), the deskew rotation is counter-clockwise (m_cw_deskew, +abs_cand in cv2)
-    # For counter-clockwise text (cand_angle < 0), the deskew rotation is clockwise (m_ccw_deskew, -abs_cand in cv2)
     if cand_angle >= 0:
         c_deskew, peak_deskew = c_cw, peak_cw
         c_opp = c_ccw
@@ -515,7 +495,7 @@ def detect_crop_tilt_angle(
         c_deskew, peak_deskew = c_ccw, peak_ccw
         c_opp = c_cw
 
-    # On strong sign conflict (> 1.3x higher concentration in opposite direction), fail safe to 0.0 per spec
+    # Fail safe when deskewing the other way concentrates the rows 1.3x more
     if c_opp > (c_deskew * 1.30) and abs(cand_angle) > 5.0:
         return 0.0, 0.0, oriented_dims, tilt_axis
 

@@ -441,7 +441,6 @@ def _validate_ui_state(ui_state: UIConfigState) -> None:
     except ValidationError as e:
         raise gr.Error(f"{ERROR_PREFIX}{e!s}") from e
 
-    # Skip API key validation if in cleaning-only, upscaling-only, or test mode
     if (
         not ui_state.general.cleaning_only
         and not ui_state.general.upscaling_only
@@ -727,7 +726,6 @@ def _format_batch_success_message(
     else:
         processing_mode_str = "Translation"
 
-    # Determine model display based on mode
     if backend_config.test_mode:
         model_display = "<Test Mode>"
     elif backend_config.cleaning_only:
@@ -1432,7 +1430,6 @@ def handle_save_config_click(*args: Any) -> str:
         batch_glossary_file=str(batch_glossary_file_val or "").strip(),
     )
 
-    # Convert UI state to dictionary for saving
     settings_dict = ui_state.to_save_dict()
     # Persist send_full_page_context from the single UI value (used for both single and batch flows).
     settings_dict["send_full_page_context"] = bool(send_full_page_context_val)
@@ -2227,7 +2224,6 @@ def handle_ocr_method_change(
 
     updates = []
 
-    # Filter provider selector based on OCR method
     available_providers = utils.get_available_providers(ocr_method)
     current_provider = (
         provider

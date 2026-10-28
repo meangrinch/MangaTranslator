@@ -95,9 +95,7 @@ class TranslationConfig:
     temperature: float = float(_DEFAULT_SAMPLING["temperature"])
     top_p: float = float(_DEFAULT_SAMPLING["top_p"])
     top_k: int = int(_DEFAULT_SAMPLING["top_k"])
-    max_tokens: int | None = (
-        None  # None = use default logic (32768 for reasoning, 4096 otherwise)
-    )
+    max_tokens: int | None = None  # None = 32768 for reasoning models, 4096 otherwise
     input_language: str = "Japanese"
     output_language: str = "English"
     reading_direction: str = "rtl"
@@ -105,24 +103,21 @@ class TranslationConfig:
     reasoning_effort: str | None = (
         None  # None = per-provider fallback in translation._build_generation_config
     )
-    effort: str | None = (
-        "high"  # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: token spending eagerness (max/xhigh/high/medium/low)
-    )
-    verbosity: str | None = (
-        None  # GPT-5 and GPT-6 series: controls response verbosity (high/medium/low)
-    )
+    # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: how eagerly it spends tokens
+    effort: str | None = "high"
+    verbosity: str | None = None  # GPT-5 and GPT-6 series (high/medium/low)
     send_full_page_context: bool = True
     whiteout_conjoined_bubbles: bool = True
     upscale_method: str = "model_lite"  # "model", "model_lite", "lanczos", or "none"
-    enable_web_search: bool = False  # Enable model's built-in web search for up-to-date information. OpenRouter uses its own web search tool.
-    enable_code_execution: bool = False  # Enable Gemini's code execution tool for image zoom/inspection (Gemini 3+ only)
+    enable_web_search: bool = False
+    # Google, Gemini 3+: lets the model zoom into and rotate crops with code
+    enable_code_execution: bool = False
     use_custom_sampling: bool = True
-    image_detail: str = "auto"  # OpenAI image detail (auto/high/low/original)
-    media_resolution: str = (
-        "auto"  # Only available via Google provider (auto/high/medium/low)
-    )
-    media_resolution_bubbles: str = "auto"  # Gemini 3 and SpaceXAI models
-    media_resolution_context: str = "auto"  # Gemini 3 and SpaceXAI models
+    image_detail: str = "auto"  # OpenAI models (auto/original/high/low)
+    # Gemini before 3 (auto/high/medium/low); newer models use the per-image fields
+    media_resolution: str = "auto"
+    media_resolution_bubbles: str = "auto"  # Gemini 3+ and SpaceXAI
+    media_resolution_context: str = "auto"  # Gemini 3+ and SpaceXAI
     bubble_min_side_pixels: int = 128
     context_image_max_side_pixels: int = 1024
     previous_context_image_count: int = 0
@@ -172,7 +167,8 @@ class OutsideTextConfig:
     page_filter_min_area_ratio: float = 0.05
     min_area_ignore_ratio: float = 0.0
     seed: int = 1  # -1 = random
-    huggingface_token: str = ""  # Required for Flux Kontext model downloads
+    # Gated downloads: AnimeText YOLO (OSB detection), SAM 3, Flux.1 Kontext Nunchaku
+    huggingface_token: str = ""
     # flux_klein_9b, flux_klein_4b, flux_kontext, flux3_klein, fibo2_edit_turbo,
     # qwen_image_2_1_turbo, lama_manga, opencv, none
     inpainting_method: str = "flux_klein_4b"
@@ -195,7 +191,7 @@ class OutsideTextConfig:
     # Add text the OSB model missed: letters the text segmentation model finds outside
     # bubbles and OSB boxes, kept where the OSB model confirms them on crops
     osb_recover_missed_text: bool = True
-    osb_font_dir: str | None = None  # None = use main font as fallback
+    osb_font_dir: str | None = None  # None = the main font
     osb_max_font_size: int = 64
     osb_min_font_size: int = 10
     osb_use_ligatures: bool = False
@@ -211,10 +207,10 @@ class OutsideTextConfig:
     osb_render_expansion_tiny_multiplier: float = 1.0
     osb_render_expansion_aspect_ratio_threshold: float = 0.4
     osb_render_expansion_area_ratio_threshold: float = 0.005
-    text_box_proximity_ratio: float = 0.02  # 2% of image dimension
+    text_box_proximity_ratio: float = 0.02  # Share of the shorter image side
     flux_guidance_scale: float = 2.5
     flux_prompt: str = "Remove all text."
-    osb_follow_tilt: bool = True  # Enable rotation-matching text rendering for OSB
+    osb_follow_tilt: bool = True
     osb_max_tilt_deg: float = 20.0
     osb_min_tilt_deg: float = 3.0
     osb_tilt_confidence_threshold: float = 0.5
@@ -259,14 +255,12 @@ class MangaTranslatorConfig:
     request_coordinator: Any | None = None
 
     def __post_init__(self):
-        # Load API keys from environment variables if not already set
         for provider, (key_field, _) in PROVIDER_API_KEYS.items():
             if not getattr(self.translation, key_field):
                 setattr(self.translation, key_field, env_api_key(provider))
         if not self.outside_text.huggingface_token:
             self.outside_text.huggingface_token = os.environ.get("HF_TOKEN", "")
 
-        # Autodetect device if not specified
         if self.device is None:
             self.device = get_best_device()
 
@@ -306,5 +300,4 @@ def calculate_reasoning_budget(total_tokens: int, effort_level: str) -> int:
     elif effort_level == "minimal":
         return int(total_tokens * 0.1)
     else:
-        # "auto" or "none" - return 0, caller should handle these cases
         return 0

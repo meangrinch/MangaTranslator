@@ -38,7 +38,6 @@ def scale_length(
     Scale a pixel length and return an int with rounding and clamping.
     """
     scaled = scale_scalar(value, scale, minimum=minimum, maximum=maximum)
-    # Round to nearest integer for pixel units
     return max(1, round(scaled))
 
 
@@ -79,7 +78,6 @@ def scale_kernel(
             maximum=float(maximum),
         )
         dim_int = max(minimum, round(dimension))
-        # Ensure result stays within bounds
         dim_int = min(maximum, dim_int)
         if dim_int % 2 == 0:
             # Prefer rounding up to keep padding generous, but clamp again

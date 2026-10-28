@@ -73,7 +73,6 @@ def get_best_dtype(device: torch.device | None = None) -> torch.dtype:
     if device_type == "mps":
         return torch.float16
 
-    # CPU fallback
     return torch.float32
 
 
@@ -101,7 +100,6 @@ def empty_cache(device: torch.device | None = None) -> None:
             torch.mps.empty_cache()
         return
 
-    # Clear all available backends
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
@@ -210,7 +208,6 @@ def synchronize(device: torch.device | None = None) -> None:
             torch.mps.synchronize()
         return
 
-    # Synchronize all available backends
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 

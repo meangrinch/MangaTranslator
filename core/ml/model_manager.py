@@ -153,13 +153,11 @@ class ModelManager:
             self.device = get_best_device()
             self.dtype = get_best_dtype(self.device)
 
-            # Model storage
             self.models = {}
             self._apply_models_dir(Path("./models"))
             self.model_urls = self._init_model_urls()
             self.model_hf_repos = self._init_hf_repos()
 
-            # Flux-specific configuration
             self.use_hf_cache = False
             self.hf_token = None
             self.flux_hf_token = None
@@ -714,7 +712,6 @@ class ModelManager:
                 target_resolved = target_dir.resolve()
                 try:
                     target_resolved.relative_to(self.models_dir)
-                    # Safe to delete
                     with contextlib.suppress(Exception):
                         shutil.rmtree(target_dir)
                 except ValueError:
@@ -751,7 +748,6 @@ class ModelManager:
             except Exception:
                 download_file(path, self.model_urls[ModelType.UPSCALE])
 
-            # Load model
             if path.suffix == ".safetensors":
                 from safetensors import safe_open
 
@@ -792,7 +788,6 @@ class ModelManager:
             except Exception:
                 download_file(path, self.model_urls[ModelType.UPSCALE_LITE])
 
-            # Load model
             if path.suffix == ".safetensors":
                 from safetensors import safe_open
 
@@ -1002,7 +997,6 @@ class ModelManager:
             from manga_ocr import MangaOcr
             from transformers import logging as transformers_logging
 
-            # Ensure model is downloaded
             model_path = self.load_manga_ocr(verbose=verbose)
 
             # Suppress loading warnings (specifically for position_ids mismatch in transformers v5)
@@ -1141,7 +1135,6 @@ class ModelManager:
             ).to(self.device)
             model.eval()
 
-            # Store as tuple
             self.models[ModelType.SAM2] = (processor, model)
             log_message("SAM 2.1 model loaded.", verbose=verbose)
             return self.models[ModelType.SAM2]
@@ -1279,7 +1272,6 @@ class ModelManager:
                 )
                 self.models[ModelType.FLUX_TRANSFORMER] = transformer
 
-                # Load text encoder
                 hf_info = self.model_hf_repos[ModelType.FLUX_TEXT_ENCODER]
                 text_encoder_path = self._ensure_hf_file(
                     hf_info["repo_id"],
@@ -1293,7 +1285,6 @@ class ModelManager:
                 )
                 self.models[ModelType.FLUX_TEXT_ENCODER] = text_encoder
 
-                # Load pipeline
                 pipeline_repo = self.model_hf_repos[ModelType.FLUX_PIPELINE]["repo_id"]
                 effective_token = (
                     self.flux_hf_token if self.flux_hf_token else self.hf_token
@@ -1307,7 +1298,6 @@ class ModelManager:
                     token=effective_token,
                 ).to(self.device)
 
-                # Apply caching for faster inference
                 apply_cache_on_pipe(
                     pipeline, residual_diff_threshold=self.flux_residual_diff_threshold
                 )
@@ -1912,7 +1902,6 @@ class ModelManager:
         empty_cache(self.device)
 
 
-# Global singleton instance
 _model_manager = None
 
 

@@ -227,15 +227,18 @@ DEFAULT_SETTINGS = {
     "upscaling_only": False,
     "test_mode": False,
     "reasoning_effort": None,  # None = the model's default from get_reasoning_effort_config
-    "effort": "high",  # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: token spending eagerness (max/xhigh/high/medium/low)
-    "verbosity": "low",  # GPT-5 and GPT-6 series: controls response verbosity (high/medium/low)
-    "enable_web_search": False,  # Enable model's built-in web search for up-to-date information.
-    "enable_code_execution": False,  # Enable Gemini's code execution for image zoom/inspection.
+    # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: how eagerly it spends tokens
+    "effort": "high",
+    "verbosity": "low",  # GPT-5 and GPT-6 series (high/medium/low)
+    "enable_web_search": False,
+    # Google, Gemini 3+: lets the model zoom into and rotate crops with code
+    "enable_code_execution": False,
     "use_custom_sampling": True,
-    "image_detail": "auto",  # OpenAI image detail (auto/high/low/original)
-    "media_resolution": "auto",  # Only available via Google provider (auto/high/medium/low)
-    "media_resolution_bubbles": "auto",  # Gemini 3 models
-    "media_resolution_context": "auto",  # Gemini 3 models
+    "image_detail": "auto",  # OpenAI models (auto/original/high/low)
+    # Gemini before 3 (auto/high/medium/low); newer models use the per-image fields
+    "media_resolution": "auto",
+    "media_resolution_bubbles": "auto",  # Gemini 3+ and SpaceXAI
+    "media_resolution_context": "auto",  # Gemini 3+ and SpaceXAI
     "auto_scale": True,
     "split_long_strips": True,
     "send_full_page_context": True,
@@ -249,7 +252,6 @@ DEFAULT_SETTINGS = {
     "bubble_min_side_pixels": 128,
     "context_image_max_side_pixels": 1024,
     "osb_min_side_pixels": 128,
-    # Outside text removal settings
     "outside_text_enabled": False,
     "outside_text_seed": 1,
     "outside_text_huggingface_token": "",
@@ -549,7 +551,6 @@ def save_config(incoming_settings: dict[str, Any]):
 
         os.makedirs(CONFIG_FILE.parent, exist_ok=True)
 
-        # Reorder keys according to canonical order, then append unknown keys alphabetically
         known_in_order = [k for k in CANONICAL_CONFIG_KEY_ORDER if k in config_to_write]
         unknown_keys = sorted(
             [k for k in config_to_write if k not in CANONICAL_CONFIG_KEY_ORDER]
@@ -752,7 +753,6 @@ def reset_to_defaults() -> dict[str, Any]:
             if key in current_saved:
                 settings[key] = current_saved[key]
 
-        # Preserve font pack selections if they exist
         if "font_pack" in current_saved:
             settings["font_pack"] = current_saved["font_pack"]
         if "batch_font_pack" in current_saved:
@@ -762,7 +762,6 @@ def reset_to_defaults() -> dict[str, Any]:
                 "outside_text_osb_font_pack"
             ]
 
-        # Preserve provider and model selection if they exist
         if "provider" in current_saved:
             settings["provider"] = current_saved["provider"]
         if "provider_models" in current_saved and isinstance(
@@ -772,11 +771,9 @@ def reset_to_defaults() -> dict[str, Any]:
         else:
             settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
 
-    # If provider_models wasn't preserved, use defaults
     if "provider_models" not in settings:
         settings["provider_models"] = DEFAULT_SETTINGS["provider_models"].copy()
 
-    # Determine model_name from preserved provider_models
     preserved_provider = settings.get("provider", DEFAULT_SETTINGS["provider"])
     settings["model_name"] = settings["provider_models"].get(preserved_provider)
     _apply_provider_sampling_defaults(settings, preserved_provider)

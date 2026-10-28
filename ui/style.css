@@ -1,4 +1,3 @@
-/* --- APP HEADER --- */
 /* Gradio 6 pads gr.HTML even with padding=False */
 .html-container:has(.mangatranslator-header) {
     padding: 0;
@@ -29,12 +28,10 @@
     color: var(--body-text-color);
 }
 
-/* --- SETTINGS LAYOUT --- */
 #settings-tab-container {
     padding-top: 15px;
 }
 
-/* --- NAVIGATION SIDEBAR --- */
 #settings-nav {
     width: 15em !important;
     padding: 10px 5px 10px 10px !important;
@@ -72,13 +69,11 @@
     color: var(--neutral-800) !important;
 }
 
-/* --- DARK THEME --- */
 .dark #settings-nav button.nav-button-selected {
     background-color: var(--neutral-700) !important;
     color: var(--primary-300) !important;
 }
 
-/* --- SETTINGS CONTENT --- */
 #config-content-area {
     padding-left: 20px;
     padding-right: 15px;
@@ -92,7 +87,6 @@
     background-color: transparent;
 }
 
-/* Style the subsection headers within groups */
 #config-content-area .settings-group .prose h3 {
     margin-top: 0;
     margin-bottom: 1.25em;
@@ -103,7 +97,6 @@
     color: var(--body-text-color);
 }
 
-/* --- Core Reset for Gradio Component Blocks/Wrappers within settings --- */
 #config-content-area .settings-group .block,
 #config-content-area .settings-group div.form,
 #config-content-area .settings-group div.styler {
@@ -114,7 +107,6 @@
     margin-bottom: 1.3em;
 }
 
-/* --- Remove borders for Dropdowns, Textboxes, and Radio Buttons in Settings --- */
 #config-content-area .settings-group .wrap:has(.wrap-inner),
 #config-content-area .settings-group .input-container input,
 #config-content-area .settings-group .input-container textarea,
@@ -123,7 +115,6 @@
     box-shadow: none !important;
 }
 
-/* --- CONFIG BUTTON --- */
 .config-button {
     margin-bottom: 20px !important;
     font-weight: normal !important;
@@ -155,12 +146,10 @@
     background-color: var(--neutral-900) !important;
 }
 
-/* --- CONFIG BUTTONS --- */
 #config-button-row {
     margin-bottom: 5px;
 }
 
-/* --- IMAGE PREVIEW RESIZING --- */
 #translator_input_image img,
 #translator_output_image img {
     display: block;
@@ -172,7 +161,7 @@
     margin: auto;
 }
 
-/* --- Fix textbox overflow scrollbar issue (Gradio 5.44.1+) --- */
+/* Gradio 5.44.1+ shows a needless scrollbar on these textboxes */
 #translator_special_instructions textarea,
 #batch_special_instructions textarea,
 #translator_status_message textarea,
@@ -180,12 +169,11 @@
     overflow-y: hidden !important;
 }
 
-/* --- Gradio hardcodes overflow-y: scroll, which shows an empty scrollbar track --- */
+/* Gradio hardcodes overflow-y: scroll, which shows an empty scrollbar track */
 #batch_output_gallery .grid-wrap {
     overflow-y: auto !important;
 }
 
-/* --- Limit visible entries in dropdown menus --- */
 ul.options {
     max-height: 400px !important;
     overflow-y: auto !important;

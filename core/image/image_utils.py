@@ -26,9 +26,9 @@ def pil_to_cv2(pil_image):
     """
     rgb_image = np.array(pil_image)
     if len(rgb_image.shape) == 3:
-        if rgb_image.shape[2] == 3:  # RGB
+        if rgb_image.shape[2] == 3:
             return cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
-        elif rgb_image.shape[2] == 4:  # RGBA
+        elif rgb_image.shape[2] == 4:
             return cv2.cvtColor(rgb_image, cv2.COLOR_RGBA2BGRA)
     return rgb_image
 
@@ -44,10 +44,10 @@ def cv2_to_pil(cv2_image):
         PIL.Image: PIL Image object
     """
     if len(cv2_image.shape) == 3:
-        if cv2_image.shape[2] == 3:  # BGR
+        if cv2_image.shape[2] == 3:
             rgb_image = cv2.cvtColor(cv2_image, cv2.COLOR_BGR2RGB)
             return Image.fromarray(rgb_image)
-        elif cv2_image.shape[2] == 4:  # BGRA
+        elif cv2_image.shape[2] == 4:
             rgba_image = cv2.cvtColor(cv2_image, cv2.COLOR_BGRA2RGBA)
             return Image.fromarray(rgba_image)
     return Image.fromarray(cv2_image)
@@ -152,7 +152,6 @@ def save_image_with_compression(
                     verbose=verbose,
                     always_print=True,
                 )
-                # Fallback to Pillow if oxipng fails
                 image.save(
                     str(output_path),
                     format="PNG",
@@ -160,7 +159,6 @@ def save_image_with_compression(
                     optimize=True,
                 )
         else:
-            # Use Pillow for non-PNG formats
             image.save(str(output_path), format=output_format, **save_options)
         return True
     except Exception as e:
@@ -328,7 +326,6 @@ def calculate_centroid_expansion_box(
         cx, cy = round(centroid_x), round(centroid_y)
         mask_h, mask_w = safe_area_mask.shape
 
-        # Verify centroid is within safe area, adjust if needed
         if (
             cy < 0
             or cy >= mask_h
@@ -423,7 +420,7 @@ def image_to_tensor(image: Image.Image, device: torch.device) -> torch.Tensor:
     if image.mode != "RGB":
         image = image.convert("RGB")
     img_np = np.array(image).astype(np.float32) / 255.0
-    if img_np.ndim == 2:  # Grayscale to RGB
+    if img_np.ndim == 2:
         img_np = np.stack((img_np,) * 3, axis=-1)
     return torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0).to(device)
 
@@ -463,7 +460,6 @@ def upscale_image_to_dimension(
     if mode not in {"max", "min"}:
         raise ImageProcessingError("mode must be 'max' or 'min'")
 
-    # Validate input image dimensions
     if image.width <= 0 or image.height <= 0:
         log_message(
             f"Invalid image dimensions: {image.width}x{image.height}. Cannot upscale 0x0 images.",
@@ -600,7 +596,6 @@ def resize_to_min_side(
     """Resize so that the smallest side equals min_side (aspect ratio preserved)."""
     width, height = image.size
 
-    # Validate input image dimensions
     if width <= 0 or height <= 0:
         log_message(
             f"Invalid image dimensions: {width}x{height}. Cannot resize 0x0 images.",
@@ -690,8 +685,8 @@ def convert_image_to_target_mode(
                         f"Warning: Alpha composite failed, using simple convert: {composite_err}",
                         verbose=verbose,
                     )
-                    pil_image = pil_image.convert("RGB")  # Final fallback conversion
-        else:  # Non-transparent conversion to RGB
+                    pil_image = pil_image.convert("RGB")
+        else:
             log_message(f"Converting {pil_image.mode} to RGB", verbose=verbose)
             pil_image = pil_image.convert("RGB")
     elif target_mode == "RGBA":

@@ -125,19 +125,17 @@ PADDLE_OCR_VL_LANGUAGES = [
 js_credits = """
     const footer = document.querySelector('footer');
     if (footer) {
-        // Check if credits already exist
         if (footer.parentNode.querySelector('.mangatl-credits')) {
             return;
         }
         const newContent = document.createElement('div');
-        newContent.className = 'mangatl-credits'; // Add a class for identification
-        newContent.innerHTML = 'made by <a href="https://github.com/meangrinch">grinnch</a> with ❤️'; // credits
+        newContent.className = 'mangatl-credits';
+        newContent.innerHTML = 'made by <a href="https://github.com/meangrinch">grinnch</a> with ❤️';
 
         newContent.style.textAlign = 'center';
         newContent.style.paddingTop = '50px';
         newContent.style.color = 'lightgray';
 
-        // Style the hyperlink
         const link = newContent.querySelector('a');
         if (link) {
             link.style.color = 'gray';
@@ -150,10 +148,8 @@ js_credits = """
 
 js_status_fade = """
 () => {
-    // Find the specific config status element by its ID
-    const statusElement = document.getElementById('config_status_message');  // Config status
+    const statusElement = document.getElementById('config_status_message');
 
-    // Apply fade logic only to the config status element
     if (statusElement) {
         if (statusElement && statusElement.textContent.trim() !== "") {
             clearTimeout(statusElement.fadeTimer);
@@ -178,7 +174,6 @@ js_status_fade = """
 
             }, fadeDelay);
         } else {
-            // Ensure hidden if empty
             statusElement.style.display = 'none';
         }
     }
@@ -326,7 +321,6 @@ def create_layout(
             )
             initial_max_tokens = 32768 if is_reasoning else 4096
 
-        # Calculate initial max_tokens maximum based on provider/model
         initial_max_tokens_cap = utils.get_max_tokens_cap(
             initial_provider, initial_model_name
         )
@@ -334,7 +328,6 @@ def create_layout(
             initial_max_tokens_cap if initial_max_tokens_cap is not None else 63488
         )
 
-        # --- Define UI Components ---
         with gr.Tabs():
             with gr.TabItem("Translator"):  # noqa: SIM117
                 with gr.Row():
@@ -656,7 +649,6 @@ def create_layout(
                         nav_buttons.append(nav_button_other)
 
                     with gr.Column(scale=4, elem_id="config-content-area"):
-                        # --- Detection Settings ---
                         with gr.Group(
                             visible=True, elem_classes="settings-group"
                         ) as group_detection:
@@ -752,7 +744,6 @@ def create_layout(
                             )
                         setting_groups.append(group_detection)
 
-                        # --- Cleaning Settings ---
                         with gr.Group(
                             visible=False, elem_classes="settings-group"
                         ) as group_cleaning:
@@ -816,7 +807,6 @@ def create_layout(
 
                         setting_groups.append(group_cleaning)
 
-                        # --- Translation Settings ---
                         with gr.Group(
                             visible=False, elem_classes="settings-group"
                         ) as group_translation:
@@ -1204,7 +1194,6 @@ def create_layout(
                                 elem_id="enable_web_search_checkbox",
                             )
 
-                            # Compute initial visibility for enable_code_execution
                             _initial_enable_code_execution_visible = (
                                 utils.is_code_execution_visible(
                                     config_initial_provider,
@@ -1479,7 +1468,6 @@ def create_layout(
                             )
                         setting_groups.append(group_translation)
 
-                        # --- Rendering Settings ---
                         with gr.Group(
                             visible=False, elem_classes="settings-group"
                         ) as group_rendering:
@@ -1633,7 +1621,6 @@ def create_layout(
                             )
                         setting_groups.append(group_rendering)
 
-                        # --- Outside Text Removal Settings ---
                         with gr.Group(
                             visible=False, elem_classes="settings-group"
                         ) as group_outside_text:
@@ -2301,7 +2288,6 @@ def create_layout(
                                 )
                         setting_groups.append(group_outside_text)
 
-                        # --- Output Settings ---
                         image_upscale_mode_default = saved_settings.get(
                             "image_upscale_mode", "off"
                         )
@@ -2398,7 +2384,6 @@ def create_layout(
                             )
                         setting_groups.append(group_output)
 
-                        # --- Other Settings ---
                         with gr.Group(
                             visible=False, elem_classes="settings-group"
                         ) as group_other:
@@ -2449,7 +2434,6 @@ def create_layout(
                             )
                         setting_groups.append(group_other)
 
-        # --- Define Event Handlers ---
         save_config_inputs = [
             confidence,
             conjoined_confidence,
@@ -2895,7 +2879,6 @@ def create_layout(
         translate_inputs = [input_image, *shared_inputs]
         batch_inputs = [input_files, input_zip, *shared_inputs]
 
-        # Config Tab Navigation & Updates
         output_components_for_switch = setting_groups + nav_buttons
         nav_button_detection.click(
             fn=lambda idx=0: utils.switch_settings_view(
@@ -3137,7 +3120,6 @@ def create_layout(
             queue=False,
         )
 
-        # Thresholding checkbox change handler
         use_otsu_threshold.change(
             fn=callbacks.handle_thresholding_change,
             inputs=use_otsu_threshold,
@@ -3183,7 +3165,6 @@ def create_layout(
             queue=False,
         )
 
-        # Upscaling-only toggle change handler
         upscaling_only_toggle.change(
             fn=callbacks.handle_upscaling_only_change,
             inputs=upscaling_only_toggle,
@@ -3191,7 +3172,6 @@ def create_layout(
             queue=False,
         )
 
-        # Test mode toggle change handler
         test_mode_toggle.change(
             fn=callbacks.handle_test_mode_change,
             inputs=test_mode_toggle,
@@ -3199,7 +3179,6 @@ def create_layout(
             queue=False,
         )
 
-        # OSB enable/disable handler
         outside_text_enabled.change(
             fn=lambda x: gr.update(visible=x),
             inputs=outside_text_enabled,
@@ -3509,7 +3488,7 @@ def create_layout(
             queue=False,
         )
 
-        # Conjoined detection change handler - clears SAM cache
+        # Clears the SAM cache
         conjoined_detection_checkbox.change(
             fn=callbacks.handle_conjoined_detection_change,
             inputs=conjoined_detection_checkbox,
@@ -3517,7 +3496,6 @@ def create_layout(
             queue=False,
         )
 
-        # Panel sorting change handler
         use_panel_sorting_checkbox.change(
             fn=lambda enabled: gr.update(interactive=enabled),
             inputs=use_panel_sorting_checkbox,
@@ -3538,7 +3516,7 @@ def create_layout(
             queue=False,
         )
 
-        # Translation mode change handler - toggle OCR selection and correction when one-step vs two-step
+        # One-step mode hides the OCR selection and correction
         config_translation_mode.change(
             fn=callbacks.handle_translation_mode_change,
             inputs=[config_translation_mode, ocr_method_radio],
@@ -3546,7 +3524,6 @@ def create_layout(
             queue=False,
         )
 
-        # OCR method change handler
         ocr_method_radio.change(
             fn=callbacks.handle_ocr_method_change,
             inputs=[
@@ -3593,7 +3570,6 @@ def create_layout(
             queue=False,
         )
 
-        # Upscale method change handler
         upscale_method.change(
             fn=lambda x: [
                 gr.update(interactive=x != "none"),
@@ -3609,7 +3585,6 @@ def create_layout(
             queue=False,
         )
 
-        # Config Save/Reset Buttons
         save_config_btn.click(
             fn=callbacks.handle_save_config_click,
             inputs=save_config_inputs,
@@ -3627,7 +3602,6 @@ def create_layout(
             queue=False,
         ).then(fn=None, inputs=None, outputs=None, js=js_status_fade, queue=False)
 
-        # Refresh Button
         refresh_outputs = [
             font_dropdown,
             batch_font_dropdown,
@@ -3643,14 +3617,12 @@ def create_layout(
             js=js_refresh_button_processing,
         ).then(fn=None, inputs=None, outputs=None, js=js_refresh_button_reset)
 
-        # Unload Models Button
         unload_models_button.click(
             fn=callbacks.handle_unload_models_click,
             inputs=[],
             outputs=[],
         )
 
-        # Translator Tab Button
         clear_button.click(
             fn=lambda: (None, None, gr.update(value="", lines=1)),
             outputs=[input_image, output_image, status_message],
@@ -3723,7 +3695,6 @@ def create_layout(
             queue=False,
         )
 
-        # Batch Tab Button
         batch_event = batch_process_button.click(
             fn=functools.partial(
                 callbacks.update_process_buttons,

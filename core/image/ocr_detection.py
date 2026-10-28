@@ -11,7 +11,6 @@ from core.ml.model_manager import ModelType, get_model_manager
 from utils.exceptions import ImageProcessingError
 from utils.logging import log_message
 
-# OSB Detection Parameters
 OSB_BUBBLE_MATCH_IOA_THRESHOLD = (
     0.2  # Minimum text-box overlap ratio for OSB assignment
 )

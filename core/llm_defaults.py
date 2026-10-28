@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-# Canonical provider names used across the app
 DEFAULT_LLM_PROVIDER = "Google"
 
 _PROVIDER_SAMPLING_DEFAULTS: dict[str, dict[str, float | int]] = {

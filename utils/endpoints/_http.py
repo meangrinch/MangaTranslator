@@ -78,7 +78,7 @@ def post_with_retries(
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
-            error_text = e.response.text[:500]  # Limit error text length
+            error_text = e.response.text[:500]
             if status_code not in RETRY_STATUSES:
                 reason = f"Status {status_code}: {error_text}"
                 hint = (status_hints or {}).get(status_code)

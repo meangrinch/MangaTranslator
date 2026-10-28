@@ -1810,7 +1810,7 @@ class FluxKleinInpainter(_EditModelInpainter):
 
         Args:
             variant: Model variant - "9b" or "4b" (default: "4b")
-            **kwargs: See _EditModelInpainter (huggingface_token is required for 9B).
+            **kwargs: See _EditModelInpainter.
         """
         self.variant = variant.lower()
         if self.variant not in ("9b", "4b"):

@@ -197,26 +197,19 @@ class UIGeneralSettings:
     cleaning_only: bool = False
     upscaling_only: bool = False
     test_mode: bool = False
-    enable_web_search: bool = (
-        False  # Enable model's built-in web search for up-to-date information.
-    )
-    enable_code_execution: bool = (
-        False  # Enable Gemini's code execution for image zoom/inspection.
-    )
+    enable_web_search: bool = False
+    # Google, Gemini 3+: lets the model zoom into and rotate crops with code
+    enable_code_execution: bool = False
     use_custom_sampling: bool = True
-    image_detail: str = "auto"  # OpenAI image detail (auto/high/low/original)
-    media_resolution: str = (
-        "auto"  # Only available via Google provider (auto/high/medium/low)
-    )
-    media_resolution_bubbles: str = "auto"  # Gemini 3 models
-    media_resolution_context: str = "auto"  # Gemini 3 models
+    image_detail: str = "auto"  # OpenAI models (auto/original/high/low)
+    # Gemini before 3 (auto/high/medium/low); newer models use the per-image fields
+    media_resolution: str = "auto"
+    media_resolution_bubbles: str = "auto"  # Gemini 3+ and SpaceXAI
+    media_resolution_context: str = "auto"  # Gemini 3+ and SpaceXAI
     reasoning_effort: str | None = None
-    effort: str | None = (
-        None  # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: token spending eagerness
-    )
-    verbosity: str | None = (
-        None  # GPT-5 and GPT-6 series: controls response verbosity (high/medium/low)
-    )
+    # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: how eagerly it spends tokens
+    effort: str | None = None
+    verbosity: str | None = None  # GPT-5 and GPT-6 series (high/medium/low)
     auto_scale: bool = True
     split_long_strips: bool = True
     overlap_llm_with_inpaint: bool = True

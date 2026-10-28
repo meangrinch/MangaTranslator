@@ -154,7 +154,6 @@ class UnifiedCache:
             boxes_np = np.array(yolo_boxes)
         boxes_hash = self._hash_numpy(boxes_np)
 
-        # Model ID for cache key differentiation
         model_ids = {
             "sam2": "facebook/sam2.1-hiera-large",
             "sam3": "facebook/sam3",
@@ -517,7 +516,6 @@ class UnifiedCache:
         image_hash = self._hash_image(image)
         mask_hash = self._hash_numpy(mask)
 
-        # Include OCR parameters in cache key if provided
         ocr_params_str = ""
         if ocr_params:
             ocr_params_str = "_" + "_".join(
