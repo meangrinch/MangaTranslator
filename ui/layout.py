@@ -1671,8 +1671,15 @@ def create_layout(
                                         "text blocks), ignoring stray SFX and other detections."
                                     ),
                                 )
+                                _recovery_interactive = (
+                                    _text_segmentation
+                                    and not saved_settings.get(
+                                        "outside_text_osb_text_free_only", False
+                                    )
+                                )
                                 outside_text_osb_recover_missed_text = gr.Checkbox(
-                                    value=saved_settings.get(
+                                    value=_recovery_interactive
+                                    and saved_settings.get(
                                         "outside_text_osb_recover_missed_text", True
                                     ),
                                     label="Recover Missed Text",
@@ -1680,10 +1687,7 @@ def create_layout(
                                         "Use SAM-TS-L to find OSB text the detection model might "
                                         "have missed. Disable if art gets erased as text."
                                     ),
-                                    interactive=_text_segmentation
-                                    and not saved_settings.get(
-                                        "outside_text_osb_text_free_only", False
-                                    ),
+                                    interactive=_recovery_interactive,
                                 )
                                 outside_text_min_area_ignore_ratio_percent = gr.Slider(
                                     0.0,
@@ -2037,8 +2041,14 @@ def create_layout(
                                     visible=_uses_model,
                                     interactive=_uses_model,
                                 )
+                                _preserve_art_offered = (
+                                    _uses_model
+                                    and _initial_method != "lama_manga"
+                                    and _text_segmentation
+                                )
                                 outside_text_flux_preserve_art = gr.Checkbox(
-                                    value=saved_settings.get(
+                                    value=_preserve_art_offered
+                                    and saved_settings.get(
                                         "outside_text_flux_preserve_art", True
                                     ),
                                     label="Preserve Surrounding Art",
@@ -2049,11 +2059,7 @@ def create_layout(
                                         "the letters."
                                     ),
                                     visible=_uses_model,
-                                    interactive=(
-                                        _uses_model
-                                        and _initial_method != "lama_manga"
-                                        and _text_segmentation
-                                    ),
+                                    interactive=_preserve_art_offered,
                                 )
                                 outside_text_seed = gr.Number(
                                     value=saved_settings.get("outside_text_seed", 1),
@@ -3238,6 +3244,14 @@ def create_layout(
             """Edit models paste only the letters the text segmentation model finds."""
             return method not in ("opencv", "none", "lama_manga") and text_segmentation
 
+        def _forced_off_checkbox_update(setting: str, interactive: bool, **kwargs):
+            """Force the checkbox off while disabled and restore it from saved config
+            when enabled, like Hyphenate Long Words."""
+            saved = settings_manager.get_saved_settings().get(setting, True)
+            return gr.update(
+                interactive=interactive, value=interactive and saved, **kwargs
+            )
+
         def _update_inpainting_controls(
             method: str,
             current_backend: str,
@@ -3308,9 +3322,10 @@ def create_layout(
                 luminance_update,
                 gr.update(visible=uses_model, interactive=is_klein),
                 gr.update(visible=uses_model, interactive=uses_model),
-                gr.update(
+                _forced_off_checkbox_update(
+                    "outside_text_flux_preserve_art",
+                    _preserve_art_interactive(method, text_segmentation),
                     visible=uses_model,
-                    interactive=_preserve_art_interactive(method, text_segmentation),
                 ),
                 gr.update(
                     visible=residual_interactive,
@@ -3362,7 +3377,10 @@ def create_layout(
         ):
             """Recovery needs the text segmentation model and adds mostly SFX, which
             caption-box-only mode ignores."""
-            return gr.update(interactive=text_segmentation and not text_free_only)
+            return _forced_off_checkbox_update(
+                "outside_text_osb_recover_missed_text",
+                text_segmentation and not text_free_only,
+            )
 
         for control in (
             outside_text_osb_text_free_only,
@@ -3379,8 +3397,9 @@ def create_layout(
             )
 
         def _update_preserve_art_interactivity(text_segmentation: bool, method: str):
-            return gr.update(
-                interactive=_preserve_art_interactive(method, text_segmentation)
+            return _forced_off_checkbox_update(
+                "outside_text_flux_preserve_art",
+                _preserve_art_interactive(method, text_segmentation),
             )
 
         text_segmentation.change(

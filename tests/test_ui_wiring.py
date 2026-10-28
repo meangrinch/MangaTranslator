@@ -129,8 +129,9 @@ def test_luminance_correction_is_offered_for_every_model(
 
 @pytest.mark.parametrize("method", INPAINTING_METHODS)
 @pytest.mark.parametrize("text_segmentation", [True, False])
+@pytest.mark.parametrize("saved_choice", [True, False])
 def test_preserve_art_is_offered_for_every_model_but_lama(
-    tmp_path, method, text_segmentation
+    tmp_path, monkeypatch, method, text_segmentation, saved_choice
 ):
     app = layout.create_layout(
         models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
@@ -139,6 +140,12 @@ def test_preserve_art_is_offered_for_every_model_but_lama(
         dep.fn
         for dep in app.fns.values()
         if getattr(dep.fn, "__name__", "") == "_update_inpainting_controls"
+    )
+
+    monkeypatch.setattr(
+        layout.settings_manager,
+        "get_saved_settings",
+        lambda: {"outside_text_flux_preserve_art": saved_choice},
     )
 
     preserve = handler(method, "sdcpp", "", "", 4, False, text_segmentation)[9]
@@ -153,6 +160,9 @@ def test_preserve_art_is_offered_for_every_model_but_lama(
     assert preserve["visible"] is uses_model
     assert preserve["interactive"] is offered
     assert toggled["interactive"] is offered
+    # Forced off while disabled, restored from saved config when enabled
+    assert preserve["value"] is (offered and saved_choice)
+    assert toggled["value"] is (offered and saved_choice)
 
 
 def test_a_forced_backend_does_not_replace_the_saved_choice(tmp_path):
@@ -201,8 +211,9 @@ def test_backend_and_quant_radios_store_only_user_choices(tmp_path):
 
 @pytest.mark.parametrize("text_free_only", [False, True])
 @pytest.mark.parametrize("text_segmentation", [True, False])
+@pytest.mark.parametrize("saved_choice", [True, False])
 def test_missed_text_recovery_needs_text_segmentation_and_not_caption_boxes_only(
-    tmp_path, text_free_only, text_segmentation
+    tmp_path, monkeypatch, text_free_only, text_segmentation, saved_choice
 ):
     app = layout.create_layout(
         models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
@@ -213,6 +224,14 @@ def test_missed_text_recovery_needs_text_segmentation_and_not_caption_boxes_only
         if getattr(dep.fn, "__name__", "") == "_update_recovery_interactivity"
     )
 
-    assert handler(text_free_only, text_segmentation)["interactive"] is (
-        text_segmentation and not text_free_only
+    monkeypatch.setattr(
+        layout.settings_manager,
+        "get_saved_settings",
+        lambda: {"outside_text_osb_recover_missed_text": saved_choice},
     )
+
+    update = handler(text_free_only, text_segmentation)
+    offered = text_segmentation and not text_free_only
+    assert update["interactive"] is offered
+    # Forced off while disabled, restored from saved config when enabled
+    assert update["value"] is (offered and saved_choice)
