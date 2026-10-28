@@ -972,7 +972,10 @@ def _effective_osb_tilt(item: dict[str, Any], config: MangaTranslatorConfig) -> 
 def _osb_fill_box_mask(
     img_w: int, img_h: int, box: tuple[int, int, int, int], rot_deg: float
 ) -> np.ndarray:
-    """Boolean mask of `box`, or of a shrunken copy turned by `rot_deg` when tilted."""
+    """Boolean mask of `box`, or of a shrunken copy turned by `rot_deg` when tilted.
+
+    The turned copy is clipped to `box`: its corners can reach past it, onto art the
+    solid-background check never sampled, such as a panel border."""
     bx0, by0, bx1, by1 = box
     mask = np.zeros((img_h, img_w), dtype=bool)
     if abs(rot_deg) <= 0.01:
@@ -997,7 +1000,8 @@ def _osb_fill_box_mask(
     )
     mask_uint8 = np.zeros((img_h, img_w), dtype=np.uint8)
     cv2.fillPoly(mask_uint8, [corners], 255)
-    return mask_uint8 > 0
+    mask[by0:by1, bx0:bx1] = mask_uint8[by0:by1, bx0:bx1] > 0
+    return mask
 
 
 @dataclass(frozen=True)

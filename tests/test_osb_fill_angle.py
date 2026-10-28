@@ -129,6 +129,16 @@ def test_fill_follows_the_tilt_when_tilted_text_fits(run_page):
     assert not any(_white(out, x, y) for x, y in CORNERS)
 
 
+@pytest.mark.parametrize("text", ["HELLO", ""])
+def test_tilted_fill_stays_inside_the_text_box(run_page, text):
+    page, out, _ = run_page(text)
+
+    x0, y0, x1, y1 = BOX
+    outside = np.ones(page.shape[:2], bool)
+    outside[y0:y1, x0:x1] = False
+    np.testing.assert_array_equal(out[outside], page[outside])
+
+
 def test_unrendered_text_is_still_erased_at_the_detected_tilt(run_page):
     _, out, angles = run_page("")
 
@@ -141,5 +151,4 @@ def test_restored_original_patch_gets_no_fill(run_page):
     page, out, angles = run_page("HELLO", ocr_text="HELLO")
 
     assert angles == []
-    # The tilted fill would reach past the box, where the restored crop can't cover it
     np.testing.assert_array_equal(out, page)
