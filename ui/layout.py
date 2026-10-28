@@ -1804,16 +1804,19 @@ def create_layout(
                                         "flux_klein_4b",
                                     ),
                                     choices=[
-                                        ("Fibo 2.0 Edit Turbo", "fibo2_edit_turbo"),
-                                        ("Flux.3 Image Klein", "flux3_klein"),
                                         (
-                                            "Qwen-Image 2.1 Turbo",
+                                            "Fibo 2.0 Edit Turbo (8B)",
+                                            "fibo2_edit_turbo",
+                                        ),
+                                        ("Flux.3 Image Klein (5.6B)", "flux3_klein"),
+                                        (
+                                            "Qwen-Image 2.1 Turbo (7B)",
                                             "qwen_image_2_1_turbo",
                                         ),
                                         ("Flux.2 Klein 9B", "flux_klein_9b"),
                                         ("Flux.2 Klein 4B", "flux_klein_4b"),
                                         ("Flux.1 Kontext (12B)", "flux_kontext"),
-                                        ("LaMa Manga", "lama_manga"),
+                                        ("LaMa Manga (51M)", "lama_manga"),
                                         ("OpenCV", "opencv"),
                                         ("None (text background)", "none"),
                                     ],
