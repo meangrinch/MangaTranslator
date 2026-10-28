@@ -63,6 +63,8 @@ from .image.tilt_detection import compute_effective_tilt_angle
 from .ml.model_manager import get_model_manager
 from .outside_text_processor import (
     finish_outside_text_work,
+    paint_pending_osb_fill,
+    paint_pending_osb_fills,
     prepare_outside_text_work,
     process_outside_text,
 )
@@ -1150,22 +1152,16 @@ def _text_render_config(
     )
 
 
-def _render_outside_text(
-    image: Image.Image,
-    bubble: dict[str, Any],
-    text: str,
-    bubble_id: str,
-    config: MangaTranslatorConfig,
-    sizes: _RenderSizes,
-) -> Image.Image | None:
-    """Render one outside text translation, or None if it could not be placed."""
+_OsbAttempt = tuple[float, bool, tuple[float, float] | None]
+
+
+def _osb_render_attempts(
+    bubble: dict[str, Any], config: MangaTranslatorConfig, sizes: _RenderSizes
+) -> list[_OsbAttempt]:
+    """(rotation, vertical stack, layout dimensions) to try for an outside text, in order."""
     verbose = config.verbose
     osb = config.outside_text
     bbox = bubble["bbox"]
-    log_message(f"Rendering outside text {bbox}: '{text[:30]}...'", verbose=verbose)
-
-    is_dark_text = bubble.get("is_dark_text", True)
-    text_color_rgb = bubble.get("text_color_rgb", None)
     rotation_deg = 0.0
     if osb.osb_follow_tilt:
         rotation_deg = compute_effective_tilt_angle(
@@ -1183,18 +1179,6 @@ def _render_outside_text(
                 verbose=verbose,
             )
 
-    text_bg_rgb = None
-    if bubble.get("needs_text_background"):
-        if text_color_rgb:
-            lum = (
-                0.299 * text_color_rgb[0]
-                + 0.587 * text_color_rgb[1]
-                + 0.114 * text_color_rgb[2]
-            )
-            text_bg_rgb = (255, 255, 255) if lum < 128 else (0, 0, 0)
-        else:
-            text_bg_rgb = (0, 0, 0) if is_dark_text else (255, 255, 255)
-
     tilted_layout_dims = None
     if abs(rotation_deg) > 0.01:
         shrink = max(0.70, math.cos(math.radians(rotation_deg)))
@@ -1208,33 +1192,105 @@ def _render_outside_text(
     if abs(rotation_deg) > 0.01:
         attempts += [(rotation_deg, True, tilted_layout_dims), (0.0, False, None)]
     attempts.append((0.0, True, None))
+    return attempts
 
-    render_config = _text_render_config(config, sizes, is_outside_text=True)
-    for attempt_rotation, attempt_vertical, layout_dims in attempts:
+
+def _render_osb_attempt(
+    image: Image.Image,
+    bubble: dict[str, Any],
+    text: str,
+    bubble_id: str,
+    config: MangaTranslatorConfig,
+    sizes: _RenderSizes,
+    attempt: _OsbAttempt,
+    layout_only: bool = False,
+) -> Image.Image:
+    """Render outside text with one attempt's settings; raises if it doesn't fit."""
+    rotation_deg, vertical_stack, layout_dims = attempt
+    is_dark_text = bubble.get("is_dark_text", True)
+    text_color_rgb = bubble.get("text_color_rgb", None)
+    text_bg_rgb = None
+    if bubble.get("needs_text_background"):
+        if text_color_rgb:
+            lum = (
+                0.299 * text_color_rgb[0]
+                + 0.587 * text_color_rgb[1]
+                + 0.114 * text_color_rgb[2]
+            )
+            text_bg_rgb = (255, 255, 255) if lum < 128 else (0, 0, 0)
+        else:
+            text_bg_rgb = (0, 0, 0) if is_dark_text else (255, 255, 255)
+
+    return render_text_skia(
+        pil_image=image,
+        text=text,
+        bbox=bubble["bbox"],
+        font_dir=config.outside_text.osb_font_dir or config.rendering.font_dir,
+        # Outside text was inpainted, no mask needed
+        cleaned_mask=None,
+        bubble_color_bgr=(50, 50, 50) if is_dark_text else (255, 255, 255),
+        config=_text_render_config(config, sizes, is_outside_text=True),
+        verbose=config.verbose,
+        bubble_id=bubble_id,
+        rotation_deg=rotation_deg,
+        vertical_stack=vertical_stack,
+        text_color_rgb=text_color_rgb,
+        raise_on_safe_error=False,
+        text_background_color=text_bg_rgb,
+        fallback_padding_pixels=sizes.osb_padding_pixels,
+        layout_dimensions=layout_dims,
+        layout_only=layout_only,
+    )
+
+
+def _fitting_osb_attempts(
+    image: Image.Image,
+    bubble: dict[str, Any],
+    text: str,
+    bubble_id: str,
+    config: MangaTranslatorConfig,
+    sizes: _RenderSizes,
+) -> list[_OsbAttempt]:
+    """The OSB attempts from the first one whose layout fits; empty if none fits."""
+    attempts = _osb_render_attempts(bubble, config, sizes)
+    for k, attempt in enumerate(attempts):
         try:
-            return render_text_skia(
-                pil_image=image,
-                text=text,
-                bbox=bbox,
-                font_dir=osb.osb_font_dir or config.rendering.font_dir,
-                # Outside text was inpainted, no mask needed
-                cleaned_mask=None,
-                bubble_color_bgr=(50, 50, 50) if is_dark_text else (255, 255, 255),
-                config=render_config,
-                verbose=verbose,
-                bubble_id=bubble_id,
-                rotation_deg=attempt_rotation,
-                vertical_stack=attempt_vertical,
-                text_color_rgb=text_color_rgb,
-                raise_on_safe_error=False,
-                text_background_color=text_bg_rgb,
-                fallback_padding_pixels=sizes.osb_padding_pixels,
-                layout_dimensions=layout_dims,
+            _render_osb_attempt(
+                image, bubble, text, bubble_id, config, sizes, attempt, True
             )
         except Exception as e:
             log_message(
-                f"OSB render failed at {attempt_rotation:.1f} deg "
-                f"(vertical_stack={attempt_vertical}): {e}",
+                f"OSB layout failed at {attempt[0]:.1f} deg "
+                f"(vertical_stack={attempt[1]}): {e}",
+                verbose=config.verbose,
+            )
+            continue
+        return attempts[k:]
+    return []
+
+
+def _render_outside_text(
+    image: Image.Image,
+    bubble: dict[str, Any],
+    text: str,
+    bubble_id: str,
+    config: MangaTranslatorConfig,
+    sizes: _RenderSizes,
+    attempts: list[_OsbAttempt],
+) -> Image.Image | None:
+    """Render one outside text translation, or None if it could not be placed."""
+    verbose = config.verbose
+    bbox = bubble["bbox"]
+    log_message(f"Rendering outside text {bbox}: '{text[:30]}...'", verbose=verbose)
+    for attempt in attempts:
+        try:
+            return _render_osb_attempt(
+                image, bubble, text, bubble_id, config, sizes, attempt
+            )
+        except Exception as e:
+            log_message(
+                f"OSB render failed at {attempt[0]:.1f} deg "
+                f"(vertical_stack={attempt[1]}): {e}",
                 verbose=verbose,
             )
 
@@ -1375,6 +1431,72 @@ def _render_bubble(
         return None
 
 
+def _render_action(bubble: dict[str, Any], text: str, provider_tag: str) -> str:
+    """How to handle one translation: "ocr_failed", "invalid", "keep_original"
+    (outside text the translation left unchanged) or "render"."""
+    ocr_text = (bubble.get("ocr_text") or "").strip()
+    trimmed_text = (text or "").strip()
+    if (
+        trimmed_text.upper() == "[OCR FAILED]"
+        or ocr_text.upper() == "[OCR FAILED]"
+        or ": OCR FAILED]" in trimmed_text.upper()
+    ):
+        return "ocr_failed"
+    if (
+        not text
+        or text.startswith(
+            ("API Error", "[Translation Error]", "[Translation Error:", provider_tag)
+        )
+        or trimmed_text in INVALID_TRANSLATION_VALUES
+    ):
+        return "invalid"
+    if (
+        bubble.get("is_outside_text", False)
+        and ocr_text
+        and ocr_text not in INVALID_TRANSLATION_VALUES
+        and ocr_text == trimmed_text
+        and "original_crop_pil" in bubble
+    ):
+        return "keep_original"
+    return "render"
+
+
+def _paint_osb_fills(
+    image: Image.Image,
+    sorted_bubble_data: list[dict[str, Any]],
+    translated_texts: list[str],
+    provider_tag: str,
+    config: MangaTranslatorConfig,
+    sizes: _RenderSizes,
+) -> tuple[Image.Image, dict[int, list[_OsbAttempt]]]:
+    """Paint each outside text's pending fill at the angle its translation fits at.
+
+    All fills go down before any text, since a tilted fill can reach past its box.
+    Returns the page and, per rendered outside text index, the attempts to draw it with.
+    """
+    attempts_by_index = {}
+    for i, (bubble, text) in enumerate(
+        zip(sorted_bubble_data, translated_texts, strict=True)
+    ):
+        if not bubble.get("is_outside_text", False):
+            continue
+        action = _render_action(bubble, text, provider_tag)
+        attempts = []
+        if action == "render":
+            attempts = _fitting_osb_attempts(
+                image, bubble, text.upper(), str(i + 1), config, sizes
+            )
+            attempts_by_index[i] = attempts
+            if attempts:
+                image = paint_pending_osb_fill(image, bubble, attempts[0][0])
+                continue
+        if action != "invalid" and "original_crop_pil" in bubble:
+            bubble.pop("pending_fill", None)  # the original patch goes back
+        else:
+            image = paint_pending_osb_fill(image, bubble)
+    return image, attempts_by_index
+
+
 def _render_translations(
     image: Image.Image,
     sorted_bubble_data: list[dict[str, Any]],
@@ -1410,26 +1532,23 @@ def _render_translations(
             always_print=True,
         )
         empty_bubbles.extend(b["bbox"] for b in sorted_bubble_data)
-        return image
+        return paint_pending_osb_fills(image, sorted_bubble_data)
 
     provider_tag = f"[{config.translation.provider}:"
+    image, osb_attempts = _paint_osb_fills(
+        image, sorted_bubble_data, translated_texts, provider_tag, config, sizes
+    )
     for i, (bubble, text) in enumerate(
         zip(sorted_bubble_data, translated_texts, strict=True)
     ):
         _raise_if_cancelled(cancellation_manager)
         bubble["translation"] = text
         bbox = bubble["bbox"]
-        ocr_text = (bubble.get("ocr_text") or "").strip()
-        trimmed_text = (text or "").strip()
         is_outside_text = bubble.get("is_outside_text", False)
         entry_type = "outside text" if is_outside_text else "bubble"
+        action = _render_action(bubble, text, provider_tag)
 
-        is_ocr_failed = (
-            trimmed_text.upper() == "[OCR FAILED]"
-            or ocr_text.upper() == "[OCR FAILED]"
-            or ": OCR FAILED]" in trimmed_text.upper()
-        )
-        if is_ocr_failed:
+        if action == "ocr_failed":
             if "original_crop_pil" in bubble:
                 log_message(
                     f"Restoring original {entry_type} patch due to OCR failure for {bbox}",
@@ -1445,44 +1564,27 @@ def _render_translations(
                 empty_bubbles.append(bbox)
             continue
 
-        if (
-            not text
-            or text.startswith(
-                (
-                    "API Error",
-                    "[Translation Error]",
-                    "[Translation Error:",
-                    provider_tag,
-                )
-            )
-            or trimmed_text in INVALID_TRANSLATION_VALUES
-        ):
+        if action == "invalid":
             log_message(
                 f"Skipping {entry_type} {bbox} - invalid translation", verbose=verbose
             )
             empty_bubbles.append(bbox)
             continue
 
-        if is_outside_text:
-            if (
-                ocr_text
-                and ocr_text not in INVALID_TRANSLATION_VALUES
-                and ocr_text == trimmed_text
-                and "original_crop_pil" in bubble
-            ):
-                log_message(
-                    "Restoring original OSB patch because OCR matches translation "
-                    f"for {bbox}",
-                    verbose=verbose,
-                    always_print=True,
-                )
-                image = _paste_original_crop(image, bubble)
-                continue
+        if action == "keep_original":
+            log_message(
+                f"Restoring original OSB patch because OCR matches translation for {bbox}",
+                verbose=verbose,
+                always_print=True,
+            )
+            image = _paste_original_crop(image, bubble)
+            continue
 
+        if is_outside_text:
             text = text.upper()
             bubble["translation"] = text
             rendered = _render_outside_text(
-                image, bubble, text, str(i + 1), config, sizes
+                image, bubble, text, str(i + 1), config, sizes, osb_attempts[i]
             )
         else:
             rendered = _render_bubble(
@@ -1670,6 +1772,7 @@ def translate_and_render(
 
     if config.cleaning_only:
         log_message("Cleaning only mode - skipping translation", always_print=True)
+        cleaned = paint_pending_osb_fills(cleaned, outside_text_data)
         return _finish_page(cleaned, config, output_path, target_mode, start_time)
 
     sizes = _scaled_render_sizes(config, processing_scale)
@@ -1812,6 +1915,7 @@ def translate_and_render(
         empty_bubbles,
         cancellation_manager,
     )
+    cleaned = paint_pending_osb_fills(cleaned, outside_text_data)
     return _finish_page(cleaned, config, output_path, target_mode, start_time)
 
 

@@ -958,6 +958,106 @@ def prepare_outside_text_work(
         return None
 
 
+def _effective_osb_tilt(item: dict[str, Any], config: MangaTranslatorConfig) -> float:
+    return compute_effective_tilt_angle(
+        tilt_deg=item.get("tilt_deg", 0.0),
+        tilt_conf=item.get("tilt_conf", 0.0),
+        follow_tilt=config.outside_text.osb_follow_tilt,
+        confidence_threshold=config.outside_text.osb_tilt_confidence_threshold,
+        min_tilt_deg=config.outside_text.osb_min_tilt_deg,
+        max_tilt_deg=config.outside_text.osb_max_tilt_deg,
+    )
+
+
+def _osb_fill_box_mask(
+    img_w: int, img_h: int, box: tuple[int, int, int, int], rot_deg: float
+) -> np.ndarray:
+    """Boolean mask of `box`, or of a shrunken copy turned by `rot_deg` when tilted."""
+    bx0, by0, bx1, by1 = box
+    mask = np.zeros((img_h, img_w), dtype=bool)
+    if abs(rot_deg) <= 0.01:
+        mask[by0:by1, bx0:bx1] = True
+        return mask
+    bcx = (bx0 + bx1) / 2.0
+    bcy = (by0 + by1) / 2.0
+    shrink = max(0.70, math.cos(math.radians(rot_deg)))
+    hw = (bx1 - bx0) * shrink / 2.0
+    hh = (by1 - by0) * shrink / 2.0
+    rad = math.radians(rot_deg)
+    cos_t = math.cos(rad)
+    sin_t = math.sin(rad)
+    corners = np.array(
+        [
+            [bcx - hw * cos_t + hh * sin_t, bcy - hw * sin_t - hh * cos_t],
+            [bcx + hw * cos_t + hh * sin_t, bcy + hw * sin_t - hh * cos_t],
+            [bcx + hw * cos_t - hh * sin_t, bcy + hw * sin_t + hh * cos_t],
+            [bcx - hw * cos_t - hh * sin_t, bcy - hw * sin_t + hh * cos_t],
+        ],
+        dtype=np.int32,
+    )
+    mask_uint8 = np.zeros((img_h, img_w), dtype=np.uint8)
+    cv2.fillPoly(mask_uint8, [corners], 255)
+    return mask_uint8 > 0
+
+
+@dataclass(frozen=True)
+class _PendingOsbFill:
+    """A solid fill for one OSB text box, painted once its render angle is known."""
+
+    color: tuple[int, int, int]
+    box: tuple[int, int, int, int]
+    tilt_deg: float  # the detected tilt, for text that is never rendered
+    bubble_mask: np.ndarray | None
+
+
+def paint_pending_osb_fill(
+    image: Image.Image, item: dict[str, Any], rotation_deg: float | None = None
+) -> Image.Image:
+    """Paint and clear `item`'s pending solid fill, turned by `rotation_deg` (default:
+    the detected tilt). Returns `image` itself when nothing is pending."""
+    fill = item.pop("pending_fill", None)
+    if fill is None:
+        return image
+    rot = fill.tilt_deg if rotation_deg is None else rotation_deg
+    mask = _osb_fill_box_mask(image.width, image.height, fill.box, rot)
+    if fill.bubble_mask is not None:
+        mask &= ~fill.bubble_mask
+    return _fill_mask(image, mask, fill.color)
+
+
+def paint_pending_osb_fills(
+    image: Image.Image, items: list[dict[str, Any]]
+) -> Image.Image:
+    """Paint every pending solid fill in `items` at its detected tilt."""
+    for item in items:
+        image = paint_pending_osb_fill(image, item)
+    return image
+
+
+def _osb_fill_boxes(
+    mask_indices: list[int], outside_text_results: list, img_w: int, img_h: int
+) -> list[tuple[int, tuple[int, int, int, int]]]:
+    """(index, box clipped to the page) for each of the group's non-empty text boxes."""
+    boxes = []
+    for idx in mask_indices:
+        if idx >= len(outside_text_results):
+            continue
+        coords = outside_text_results[idx][0]
+        if (
+            isinstance(coords, (list, tuple))
+            and len(coords) == 1
+            and isinstance(coords[0], (list, tuple))
+        ):
+            coords = coords[0]
+        bx0 = max(0, int(coords[0]))
+        by0 = max(0, int(coords[1]))
+        bx1 = min(img_w, int(coords[2]))
+        by1 = min(img_h, int(coords[3]))
+        if bx1 > bx0 and by1 > by0:
+            boxes.append((idx, (bx0, by0, bx1, by1)))
+    return boxes
+
+
 def _build_osb_simple_fill_mask(
     img_w: int,
     img_h: int,
@@ -974,64 +1074,14 @@ def _build_osb_simple_fill_mask(
     has_drawn = False
 
     if mask_indices and outside_text_results:
-        for idx in mask_indices:
-            if idx >= len(outside_text_results):
-                continue
-            coords = outside_text_results[idx][0]
-            if (
-                isinstance(coords, (list, tuple))
-                and len(coords) == 1
-                and isinstance(coords[0], (list, tuple))
-            ):
-                coords = coords[0]
-            bx0 = max(0, int(coords[0]))
-            by0 = max(0, int(coords[1]))
-            bx1 = min(img_w, int(coords[2]))
-            by1 = min(img_h, int(coords[3]))
-            if bx1 <= bx0 or by1 <= by0:
-                continue
-
+        for idx, box in _osb_fill_boxes(
+            mask_indices, outside_text_results, img_w, img_h
+        ):
             rot_deg = 0.0
             if idx < len(outside_text_data):
-                item = outside_text_data[idx]
-                rot_deg = compute_effective_tilt_angle(
-                    tilt_deg=item.get("tilt_deg", 0.0),
-                    tilt_conf=item.get("tilt_conf", 0.0),
-                    follow_tilt=config.outside_text.osb_follow_tilt,
-                    confidence_threshold=config.outside_text.osb_tilt_confidence_threshold,
-                    min_tilt_deg=config.outside_text.osb_min_tilt_deg,
-                    max_tilt_deg=config.outside_text.osb_max_tilt_deg,
-                )
-
-            if abs(rot_deg) > 0.01:
-                bcx = (bx0 + bx1) / 2.0
-                bcy = (by0 + by1) / 2.0
-                bw = float(bx1 - bx0)
-                bh = float(by1 - by0)
-                shrink = max(0.70, math.cos(math.radians(rot_deg)))
-                hw = (bw * shrink) / 2.0
-                hh = (bh * shrink) / 2.0
-                rad = math.radians(rot_deg)
-                cos_t = math.cos(rad)
-                sin_t = math.sin(rad)
-
-                corners = np.array(
-                    [
-                        [bcx - hw * cos_t + hh * sin_t, bcy - hw * sin_t - hh * cos_t],
-                        [bcx + hw * cos_t + hh * sin_t, bcy + hw * sin_t - hh * cos_t],
-                        [bcx + hw * cos_t - hh * sin_t, bcy + hw * sin_t + hh * cos_t],
-                        [bcx - hw * cos_t - hh * sin_t, bcy - hw * sin_t + hh * cos_t],
-                    ],
-                    dtype=np.int32,
-                )
-
-                mask_uint8 = np.zeros((img_h, img_w), dtype=np.uint8)
-                cv2.fillPoly(mask_uint8, [corners], 255)
-                rect_mask |= mask_uint8 > 0
-                has_drawn = True
-            else:
-                rect_mask[by0:by1, bx0:bx1] = True
-                has_drawn = True
+                rot_deg = _effective_osb_tilt(outside_text_data[idx], config)
+            rect_mask |= _osb_fill_box_mask(img_w, img_h, box, rot_deg)
+            has_drawn = True
 
     elif fallback_bounds:
         b_ox0, b_oy0, b_ox1, b_oy1 = fallback_bounds
@@ -1970,17 +2020,39 @@ def finish_outside_text_work(
             def simple_fill(
                 image, color, group, combined_mask, original_bbox_dict, bounds
             ):
-                """Fill the group's (tilt-aware) text boxes, else its whole mask."""
+                """Fill the group's (tilt-aware) text boxes, else its whole mask.
+
+                Boxes whose text gets rendered are left to the renderer, which paints
+                them at the angle the translation is drawn at.
+                """
+                mask_indices = group.get("mask_indices", [])
                 rect_mask = _build_osb_simple_fill_mask(
                     img_w=img_w,
                     img_h=img_h,
-                    mask_indices=group.get("mask_indices", []),
+                    mask_indices=mask_indices,
                     outside_text_results=outside_text_results,
                     outside_text_data=outside_text_data,
                     config=config,
                     fallback_bounds=bounds if original_bbox_dict else None,
                     total_bubble_mask=total_bubble_mask,
                 )
+                boxes = _osb_fill_boxes(
+                    mask_indices, outside_text_results, img_w, img_h
+                )
+                if (
+                    rect_mask is not None
+                    and boxes
+                    and all(idx < len(outside_text_data) for idx, _ in boxes)
+                ):
+                    for idx, box in boxes:
+                        item = outside_text_data[idx]
+                        item["pending_fill"] = _PendingOsbFill(
+                            color,
+                            box,
+                            _effective_osb_tilt(item, config),
+                            total_bubble_mask,
+                        )
+                    return image
                 return _fill_mask(
                     image, combined_mask if rect_mask is None else rect_mask, color
                 )
