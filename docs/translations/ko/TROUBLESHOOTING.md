@@ -61,11 +61,11 @@
   - "패딩 픽셀 (Padding Pixels)" 값을 낮추어 보세요 (예: 3-4).
   - "최소 폰트 크기 (Min Font Size)" 값을 낮추어 보세요 (예: 6-7).
 
-- **말풍선 외부 대체 텍스트가 너무 작거나 빽빽하게 렌더링됨:**
+- **OSB 텍스트가 너무 작거나 빽빽하게 렌더링됨:**
   - "좁고 긴 영역 확장 배율 (Narrow/Tall Expansion Multiplier)" 및/또는 해당 임계값을 높이세요 (예: 2.0).
   - "소형 영역 확장 배율 (Tiny Expansion Multiplier)" 및/또는 해당 임계값을 높이세요 (예: 2.0).
 
-- **말풍선 외부 텍스트의 기울기(회전)가 어색하거나 비활성화하려는 경우:**
+- **OSB 텍스트의 기울기(회전)가 어색하거나 비활성화하려는 경우:**
   - "원본 텍스트 기울기 맞춤 (Match Original Text Tilt)" 옵션을 끄세요
 
 ### 감지 및 클리닝 (Detection/Cleaning)
@@ -89,7 +89,7 @@
 - **말풍선 분할(세그멘테이션) 품질이 떨어짐:**
   - `sam3` 모델로 전환해 보세요 (`hf_token` 설정 필요).
 
-- **OSB 텍스트(큰 효과음, 캡션)가 감지되지 않음:**
+- **OSB 텍스트가 감지되지 않음:**
   - "OSB 텍스트 감지 신뢰도 (OSB Text Detection Confidence)"를 낮춥니다.
 
 - **그림이 지워지거나 텍스트가 아닌 것이 OSB 텍스트로 번역됨:**
@@ -150,7 +150,7 @@
   - "인페인팅 영역 그룹화 (Group Inpainting Regions)"를 활성화하여 한 번의 패스로 여러 OSB 마스크를 한 번에 처리하도록 하세요 (품질은 약간 저하될 수 있습니다).
   - "자르기 영역을 ~1MP로 업스케일 (Upscale Crops to ~1MP)" 옵션을 비활성화하세요 (품질 저하 가능).
   - 다른 모델/백엔드로 전환해 보세요. LaMa Manga는 훨씬 빠르지만 복원되는 디테일이 적습니다.
-  - "텍스트 분할 모델 사용 (Use Text Segmentation Model)"을 비활성화하여 SAM-TS-L(텍스트 분할)을 건너뛰세요.
+  - "텍스트 분할 모델 사용 (Use Text Segmentation Model)"을 비활성화하여 SAM-TS-L 텍스트 분할 모델을 건너뛰세요.
 
 - **인페인팅된 영역의 미세한 색감 차이:**
   - Flux.2 Klein 모델은 약간의 색감 변화를 일으킬 수 있습니다. "조도 보정 (Luminance Correction)" 옵션을 활성화하거나 비활성화해 보며 테스트하세요.
@@ -161,8 +161,8 @@
   - "자르기 영역을 ~1MP로 업스케일 (Upscale Crops to ~1MP)" 옵션을 활성화 상태로 유지하세요.
   - 추론 단계(inference steps) 수를 늘리세요 (Flux.1 Kontext 사용 시).
 
-- **인페인팅 후 말풍선 외 글자 조각이 남음 (확산 모델):**
-  - "주변 그림 보존 (Preserve Surrounding Art)" 옵션을 비활성화하면 텍스트 분할 모델이 찾은 글자만이 아니라 텍스트 상자 전체를 붙여 넣습니다.
+- **인페인팅 후 OSB 글자 조각이 남음:**
+  - "주변 그림 보존 (Preserve Surrounding Art)" 옵션을 비활성화하면 글리프 단위 마스크로 제한하지 않고 텍스트 상자 전체를 붙여 넣습니다.
 
 - **Flux.1 Kontext Nunchaku 백엔드를 사용할 수 없음:**
   - Nunchaku 백엔드는 NVIDIA GPU (CUDA) 및 전용 별도 설치가 필요합니다. 별도로 설치하거나 대신 sd.cpp/SDNQ 백엔드를 사용하세요.

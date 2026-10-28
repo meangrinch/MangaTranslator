@@ -61,11 +61,11 @@
   - Try lowering "Padding Pixels" (e.g., 3-4)
   - Try lowering "Min Font Size" (e.g., 6-7)
 
-- **Outside-bubble replacement text is too small or cramped:**
+- **OSB text is too small or cramped:**
   - Raise "Narrow/Tall Expansion Multiplier" (e.g., 2.0) and/or adjust the corresponding threshold
   - Raise "Tiny Expansion Multiplier" (e.g., 2.0) and/or adjust the corresponding threshold
 
-- **Outside-bubble text tilt/rotation looks incorrect or is unwanted:**
+- **OSB text tilt/rotation looks incorrect or is unwanted:**
   - Disable "Match Original Text Tilt"
 
 ### Detection/Cleaning
@@ -90,7 +90,7 @@
 - **Poor segmentation of speech bubbles:**
   - Try switching to `sam3` (requires hf_token)
 
-- **OSB text (large SFX, captions) not detected:**
+- **OSB text not detected:**
   - Lower "OSB Text Detection Confidence"
 
 - **Art erased or non-text translated as OSB text:**
@@ -151,7 +151,7 @@
   - Enable "Group Inpainting Regions" to inpaint multiple OSB masks in one pass (at the cost of quality)
   - Disable "Upscale Crops to ~1MP" (at the cost of quality)
   - Try switching to a different model/backend; LaMa Manga is much faster, but rebuilds less detail
-  - Disable "Use Text Segmentation Model" to skip SAM-TS-L (text segmentation)
+  - Disable "Use Text Segmentation Model" to skip the SAM-TS-L text segmentation model
 
 - **Minor color shifts in inpainted regions:**
   - Flux.2 Klein models may introduce slight color changes; try enabling/disabling "Luminance Correction"
@@ -162,8 +162,8 @@
   - Keep "Upscale Crops to ~1MP" enabled
   - Increase inference steps (for Flux.1 Kontext)
 
-- **Fragments of OSB letters left after inpainting (diffusion models):**
-  - Disable "Preserve Surrounding Art" to paste the whole text box instead of only the letters the text segmentation model finds
+- **Fragments of OSB letters left after inpainting:**
+  - Disable "Preserve Surrounding Art" to paste the whole text box instead of clamping it to the glyph-level mask
 
 - **Flux.1 Kontext Nunchaku backend not available:**
   - Nunchaku requires an Nvidia GPU (CUDA) and separate installation; install it or use the sd.cpp/SDNQ backends instead

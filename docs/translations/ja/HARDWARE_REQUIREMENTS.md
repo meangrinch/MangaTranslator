@@ -257,8 +257,6 @@
 
 ---
 
-TBD: 未計測。sd.cpp は FLUX.3 Image Klein を分割実行しないため、拡散モデル全体が VRAM に収まる必要があります。ビジョンプロジェクターは GGUF テキストエンコーダーの使用時（Fibo 2.0 と Qwen-Image 2.1）のみダウンロードされます。
-
 <table>
   <thead>
     <tr>

@@ -257,8 +257,6 @@
 
 ---
 
-TBD: 아직 측정되지 않음. sd.cpp는 FLUX.3 Image Klein을 분할 실행하지 않으므로 확산 모델 전체가 VRAM에 들어가야 합니다. 비전 프로젝터는 GGUF 텍스트 인코더를 사용할 때만(Fibo 2.0, Qwen-Image 2.1) 다운로드됩니다.
-
 <table>
   <thead>
     <tr>

@@ -61,11 +61,11 @@
   - 尝试降低“内边距像素 (Padding Pixels)”（例如 3-4）
   - 尝试降低“最小字号 (Min Font Size)”（例如 6-7）
 
-- **气泡外替换文本过小或过于拥挤：**
+- **OSB 文本过小或过于拥挤：**
   - 提高“窄长型放大乘数 (Narrow/Tall Expansion Multiplier)”（例如 2.0）和/或调整对应的阈值
   - 提高“微型放大乘数 (Tiny Expansion Multiplier)”（例如 2.0）和/或调整对应的阈值
 
-- **气泡外文本倾斜（旋转）效果不佳或需要禁用：**
+- **OSB 文本倾斜（旋转）效果不佳或需要禁用：**
   - 取消勾选“匹配原始文本倾斜 (Match Original Text Tilt)”
 
 ### 检测与擦除 (Detection/Cleaning)
@@ -90,7 +90,7 @@
 - **气泡分割效果较差：**
   - 尝试切换到 `sam3`（需要设置 `hf_token`）
 
-- **未检测到 OSB 文本（大型拟声词、旁白框）：**
+- **未检测到 OSB 文本：**
   - 降低“OSB 文本检测置信度 (OSB Text Detection Confidence)”
 
 - **画面被擦除，或非文本内容被当作 OSB 文本翻译：**
@@ -151,7 +151,7 @@
   - 启用“合并重绘区域 (Group Inpainting Regions)”以在单次运行中重绘多个 OSB 掩码（代价是会降低质量）
   - 禁用“将裁剪块放大到约 100万像素 (Upscale Crops to ~1MP)”（代价是会降低质量）
   - 尝试切换到其他模型/后端；LaMa Manga 快得多，但还原的细节较少
-  - 禁用“使用文本分割模型 (Use Text Segmentation Model)”以跳过 SAM-TS-L（文本分割）
+  - 禁用“使用文本分割模型 (Use Text Segmentation Model)”以跳过 SAM-TS-L 文本分割模型
 
 - **重绘区域出现轻微色差：**
   - Flux.2 Klein 模型可能会引入轻微的颜色变化；尝试启用/禁用“亮度校正 (Luminance Correction)”
@@ -162,8 +162,8 @@
   - 保持启用“将裁剪块放大到约 100万像素 (Upscale Crops to ~1MP)”
   - 增加推理步数（对于 Flux.1 Kontext）
 
-- **擦除后残留对话框外文字碎片（扩散模型）：**
-  - 禁用“保留周围画面 (Preserve Surrounding Art)”，以粘贴整个文本框，而不只是文本分割模型找到的文字
+- **擦除后残留 OSB 文字碎片：**
+  - 禁用“保留周围画面 (Preserve Surrounding Art)”，以粘贴整个文本框，而不是将其限制在字形级掩码内
 
 - **Flux.1 Kontext Nunchaku 后端不可用：**
   - Nunchaku 需要 Nvidia GPU (CUDA) 且需单独安装；请进行安装，或者改为使用 sd.cpp/SDNQ 后端

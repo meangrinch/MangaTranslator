@@ -257,8 +257,6 @@
 
 ---
 
-TBD：尚未测量。sd.cpp 运行 FLUX.3 Image Klein 时不分段执行，因此整个扩散模型必须装入显存。视觉投影器仅在使用 GGUF 文本编码器时下载（Fibo 2.0 和 Qwen-Image 2.1）。
-
 <table>
   <thead>
     <tr>

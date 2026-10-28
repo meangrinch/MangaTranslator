@@ -257,8 +257,6 @@ Additive costs on top of baseline. VRAM figures are approximate and hardware-dep
 
 ---
 
-TBD: not measured yet. sd.cpp runs FLUX.3 Image Klein without segmented execution, so its whole diffusion model must fit in VRAM. The vision projector is downloaded only with a GGUF text encoder (Fibo 2.0 and Qwen-Image 2.1).
-
 <table>
   <thead>
     <tr>

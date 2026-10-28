@@ -807,11 +807,10 @@ def create_layout(
                                 value=_text_segmentation,
                                 label="Use Text Segmentation Model",
                                 info=(
-                                    "Segment text with SAM-TS-L to also erase letters that touch "
-                                    "bubble outlines, and to inpaint colored bubbles and OSB text "
-                                    "only over the letters. When off, inpainting covers whole "
-                                    "bubble interiors and text boxes, and OSB Recover Missed Text "
-                                    "is disabled."
+                                    "Use SAM-TS-L to generate glyph-level masks of the text to "
+                                    "erase letters that touch bubble outlines, clamp OSB inpainting "
+                                    "to only the letters, and improve OSB tilt detection. Disable "
+                                    "if text outlines fail to get cleaned properly."
                                 ),
                             )
 
@@ -1691,10 +1690,8 @@ def create_layout(
                                     ),
                                     label="Recover Missed Text",
                                     info=(
-                                        "Also translate text the OSB model misses, such as large "
-                                        "SFX and captions, when the text segmentation model finds "
-                                        "it and the OSB model confirms it up close. Disable if "
-                                        "art gets erased as text."
+                                        "Use SAM-TS-L to find OSB text the detection model might "
+                                        "have missed. Disable if art gets erased as text."
                                     ),
                                     interactive=_text_segmentation
                                     and not saved_settings.get(
@@ -2187,11 +2184,7 @@ def create_layout(
                                         "outside_text_osb_follow_tilt", True
                                     ),
                                     label="Match Original Text Tilt",
-                                    info=(
-                                        "Render outside-bubble text rotated to match the tilt of the "
-                                        "original text, measured on the letters found by the text "
-                                        "segmentation model."
-                                    ),
+                                    info="Render outside-bubble text rotated to match the detected tilt angle of the original text.",
                                 )
                                 outside_text_osb_max_tilt_deg = gr.Slider(
                                     5.0,

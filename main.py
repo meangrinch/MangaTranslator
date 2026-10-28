@@ -369,9 +369,10 @@ def main():
         dest="text_segmentation",
         action="store_false",
         help=(
-            "Don't segment text with SAM-TS-L: bubble fills miss edge-hugging text, "
-            "inpainting covers whole text boxes and bubble interiors, and OSB missed "
-            "text recovery is skipped"
+            "Don't use SAM-TS-L to generate glyph-level masks of the text, which erase "
+            "letters that touch bubble outlines, clamp OSB inpainting to only the "
+            "letters, and improve OSB tilt detection. Use if text outlines fail to get "
+            "cleaned properly"
         ),
     )
     parser.set_defaults(text_segmentation=True)
@@ -1009,8 +1010,8 @@ def main():
         dest="osb_recover_missed_text",
         action="store_false",
         help=(
-            "Don't add text the OSB model misses that the text segmentation model "
-            "finds and the OSB model confirms on crops (large SFX, captions)"
+            "Don't use SAM-TS-L to find OSB text the detection model might have "
+            "missed. Use if art gets erased as text"
         ),
     )
     parser.set_defaults(osb_recover_missed_text=True)
