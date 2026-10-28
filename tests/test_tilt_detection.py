@@ -78,6 +78,25 @@ def test_ink_mask_with_too_little_text_falls_back_to_the_heuristic(ink_pixels):
     ) == detect_crop_tilt_angle(crop, max_tilt_deg=20.0)
 
 
+def test_staggered_columns_keep_the_lean_of_each_column():
+    # Two columns sloping down and to the right, the left one starting lower, so the
+    # ink as a whole runs down and to the left
+    shape = (300, 170)
+    right = _glyph_run(shape, (120, 95), 90 - 25, count=5, step=26, glyph_deg=-25)
+    left = _glyph_run(shape, (55, 200), 90 - 25, count=5, step=26, glyph_deg=-25)
+    text = right | left
+    crop = np.full((*shape, 3), 255, np.uint8)
+    crop[text] = 0
+
+    angle, conf, _, axis = detect_crop_tilt_angle(
+        crop, max_tilt_deg=45.0, ink_mask=text
+    )
+
+    assert axis == "vertical"
+    assert angle == pytest.approx(-25, abs=3)
+    assert conf >= 0.5
+
+
 def test_confidence_stays_within_one():
     text = _glyph_run((260, 110), (55, 130), 90 + 14, count=8, step=27, glyph_deg=14)
     crop = np.full((260, 110, 3), 255, np.uint8)

@@ -303,11 +303,15 @@ def detect_crop_tilt_angle(
 
         # Check multi-column gutter guard on true parallel columns (each spanning >= 40% height)
         tall_cols = []
+        text_cols = 0
         for c_x1, c_x2 in cols:
             c_mask = (xs >= c_x1) & (xs < c_x2)
             c_xs = xs[c_mask]
             c_ys = ys[c_mask]
-            if len(c_xs) >= 20 and (np.max(c_ys) - np.min(c_ys)) >= (0.40 * h):
+            c_span = np.max(c_ys) - np.min(c_ys)
+            if len(c_xs) >= 20 and c_span >= 0.25 * h:
+                text_cols += 1
+            if len(c_xs) >= 20 and c_span >= (0.40 * h):
                 c_pts = np.column_stack((c_xs, c_ys)).astype(np.float32)
                 _, c_evecs, _ = cv2.PCACompute2(c_pts, mean=None)
                 cv1 = c_evecs[0]
@@ -366,12 +370,17 @@ def detect_crop_tilt_angle(
             best_s, best_conc = max(scores, key=lambda sc: sc[1])
             gain = best_conc / max(base_conc, 1e-6)
             if gain >= 1.03 and abs(best_s) >= deadband_deg:
-                # Stroke slant can win the sweep; trust neither when the ink layout leans hard the other way
+                # Stroke slant can win the sweep; trust neither when the ink layout leans hard the other way.
+                # Staggered columns lean the ink the way they step, so it only holds with one column
                 v1 = eigenvectors[0]
                 if v1[1] < 0:
                     v1 = -v1
                 layout_deg = -math.degrees(math.atan2(v1[0], v1[1]))
-                if best_s * layout_deg < 0 and abs(layout_deg) >= 10.0:
+                if (
+                    text_cols < 2
+                    and best_s * layout_deg < 0
+                    and abs(layout_deg) >= 10.0
+                ):
                     return 0.0, 0.0, oriented_dims, "vertical"
                 conf = min(1.0, max(0.60, (gain - 1.0) / 0.12))
                 return float(best_s), conf, oriented_dims, "vertical"
