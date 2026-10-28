@@ -59,7 +59,7 @@ class CleaningConfig:
     use_otsu_threshold: bool = False
     auto_threshold: bool = True
     roi_shrink_px: int = 5
-    inpaint_colored_bubbles: bool = False
+    inpaint_colored_bubbles: bool = True
     # Run the SAM-TS-L text segmentation model; off, bubble fills miss edge-hugging
     # text, LaMa and the edit models inpaint whole text boxes and bubble interiors, OSB
     # tilt and text color use ink heuristics, and OSB recovery is skipped

@@ -43,7 +43,7 @@ class UICleaningSettings:
     use_otsu_threshold: bool = False
     auto_threshold: bool = True
     roi_shrink_px: int = 5
-    inpaint_colored_bubbles: bool = False
+    inpaint_colored_bubbles: bool = True
     text_segmentation: bool = True
 
 
@@ -477,7 +477,7 @@ class UIConfigState:
                 ),
                 inpaint_colored_bubbles=data.get(
                     "inpaint_colored_bubbles",
-                    defaults.get("inpaint_colored_bubbles", False),
+                    defaults.get("inpaint_colored_bubbles", True),
                 ),
                 text_segmentation=data.get(
                     "text_segmentation", defaults.get("text_segmentation", True)

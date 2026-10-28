@@ -395,9 +395,13 @@ def main():
         ),
     )
     parser.add_argument(
-        "--inpaint-colored-bubbles",
-        action="store_true",
-        help="Use Flux model to inpaint colored/grayscale bubbles",
+        "--no-inpaint-colored-bubbles",
+        dest="inpaint_colored_bubbles",
+        action="store_false",
+        help=(
+            "Don't use the inpainting model for colored/grayscale bubbles; "
+            "clean them with the same flat fill as white/black bubbles"
+        ),
     )
     # Translation args
     parser.add_argument(

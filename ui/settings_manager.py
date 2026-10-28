@@ -195,7 +195,7 @@ DEFAULT_SETTINGS = {
     "auto_threshold": True,
     "thresholding_value": 200,
     "roi_shrink_px": 5,
-    "inpaint_colored_bubbles": False,
+    "inpaint_colored_bubbles": True,
     "text_segmentation": True,
     "temperature": DEFAULT_PROVIDER_SAMPLING["temperature"],
     "top_p": DEFAULT_PROVIDER_SAMPLING["top_p"],

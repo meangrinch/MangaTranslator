@@ -2075,7 +2075,7 @@ def create_layout(
                                 )
                                 inpaint_colored_bubbles = gr.Checkbox(
                                     value=saved_settings.get(
-                                        "inpaint_colored_bubbles", False
+                                        "inpaint_colored_bubbles", True
                                     ),
                                     label="Use Inpainting Model for Colored Bubbles",
                                     info=(
