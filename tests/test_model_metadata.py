@@ -192,11 +192,11 @@ def test_anthropic_reasoning_effort_config(model, expected):
 @pytest.mark.parametrize(
     ("model", "expected"),
     [
-        ("claude-opus-4-5", (True, ["high", "medium", "low"], "high")),
-        ("claude-sonnet-4-6", (True, ["max", "high", "medium", "low"], "high")),
+        ("claude-opus-4-5", (True, ["high", "medium", "low"], "medium")),
+        ("claude-sonnet-4-6", (True, ["max", "high", "medium", "low"], "medium")),
         (
             "claude-opus-4-7",
-            (True, ["max", "xhigh", "high", "medium", "low"], "high"),
+            (True, ["max", "xhigh", "high", "medium", "low"], "medium"),
         ),
     ],
 )

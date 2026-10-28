@@ -1083,12 +1083,12 @@ def anthropic_effort_config(
     if not flags.get("is_claude_effort"):
         return False, [], None
     if is_opus_55_model(model_name):
-        return True, ["max", "xhigh", "high", "medium", "low"], "high"
+        return True, ["max", "xhigh", "high", "medium", "low"], "medium"
     if flags.get("is_claude_effort_xhigh"):
-        return True, ["max", "xhigh", "high", "medium", "low"], "high"
+        return True, ["max", "xhigh", "high", "medium", "low"], "medium"
     if flags.get("is_claude_effort_max"):
-        return True, ["max", "high", "medium", "low"], "high"
-    return True, ["high", "medium", "low"], "high"
+        return True, ["max", "high", "medium", "low"], "medium"
+    return True, ["high", "medium", "low"], "medium"
 
 
 def clamp_claude_effort(model_name: str | None, effort: str) -> str:

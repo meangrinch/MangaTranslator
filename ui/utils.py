@@ -21,6 +21,7 @@ from utils.model_metadata import (
     anthropic_omits_thinking_config,
     anthropic_reasoning_effort_config,
     anthropic_uses_adaptive_thinking_info,
+    clamp_gemini_reasoning_effort,
     flux_method_backends,
     gemini_thinking_levels,
     get_gpt5_generation,
@@ -572,7 +573,11 @@ def get_reasoning_effort_config(
         thinking_levels = gemini_thinking_levels(model_name)
         if thinking_levels:
             # Listed strongest first
-            return True, list(reversed(thinking_levels)), "high"
+            return (
+                True,
+                list(reversed(thinking_levels)),
+                clamp_gemini_reasoning_effort(model_name, "medium"),
+            )
 
         if is_gemini_25_flash_model(model_name) or is_gemini_25_pro_model(model_name):
             return True, ["auto", "high", "medium", "low", "minimal", "none"], "auto"
@@ -587,10 +592,10 @@ def get_reasoning_effort_config(
             return False, [], None
 
         if is_gpt6_astra(model_name) or is_gpt61_sol(model_name):
-            return True, ["max", "xhigh", "high", "medium", "low"], "high"
+            return True, ["max", "xhigh", "high", "medium", "low"], "medium"
 
         if is_gpt6_series(model_name):
-            return True, ["max", "xhigh", "high", "medium", "low", "none"], "high"
+            return True, ["max", "xhigh", "high", "medium", "low", "none"], "medium"
 
         gen = get_gpt5_generation(model_name)
 
@@ -600,17 +605,17 @@ def get_reasoning_effort_config(
                 return (
                     True,
                     ["max", "xhigh", "high", "medium", "low", "none"],
-                    "high",
+                    "medium",
                 )
             if gen in ("5.4", "5.2"):
-                return True, ["xhigh", "high", "medium"], "high"
-            return True, ["high", "medium", "low"], "high"
+                return True, ["xhigh", "high", "medium"], "medium"
+            return True, ["high", "medium", "low"], "medium"
 
         if supports_gpt5_max_effort(model_name):
-            return True, ["max", "xhigh", "high", "medium", "low", "none"], "high"
+            return True, ["max", "xhigh", "high", "medium", "low", "none"], "medium"
         if supports_gpt5_xhigh_effort(model_name):
-            return True, ["xhigh", "high", "medium", "low", "none"], "high"
-        return True, ["high", "medium", "low", "none"], "high"
+            return True, ["xhigh", "high", "medium", "low", "none"], "medium"
+        return True, ["high", "medium", "low", "none"], "medium"
 
     elif provider == "Anthropic":
         return anthropic_reasoning_effort_config(model_name)
@@ -619,7 +624,7 @@ def get_reasoning_effort_config(
         if not supports_xai_reasoning_parameter(model_name):
             return False, [], None
         # Listed strongest first
-        return True, list(reversed(xai_reasoning_efforts(model_name))), "high"
+        return True, list(reversed(xai_reasoning_efforts(model_name))), "medium"
 
     elif provider == "DeepSeek":
         if is_deepseek_reasoning_model(model_name):
@@ -657,9 +662,9 @@ def get_reasoning_effort_config(
 
     elif provider == "Meta Model":
         if supports_meta_max_effort(model_name):
-            return True, ["max", "xhigh", "high", "medium", "low", "minimal"], "high"
+            return True, ["max", "xhigh", "high", "medium", "low", "minimal"], "medium"
         if supports_meta_reasoning_effort(model_name):
-            return True, ["xhigh", "high", "medium", "low", "minimal"], "high"
+            return True, ["xhigh", "high", "medium", "low", "minimal"], "medium"
         return False, [], None
 
     elif provider == "OpenCode":
@@ -685,16 +690,16 @@ def get_reasoning_effort_config(
             return True, ["auto", "none"], "auto"
         if is_openai_reasoning_model(model_name):
             if is_gpt6_astra(model_name) or is_gpt61_sol(model_name):
-                return True, ["max", "xhigh", "high", "medium", "low"], "high"
+                return True, ["max", "xhigh", "high", "medium", "low"], "medium"
             if is_gpt6_series(model_name):
-                return True, ["max", "xhigh", "high", "medium", "low", "none"], "high"
-            return True, ["high", "medium", "low", "none"], "high"
+                return True, ["max", "xhigh", "high", "medium", "low", "none"], "medium"
+            return True, ["high", "medium", "low", "none"], "medium"
         if is_xai_reasoning_model(model_name):
-            return True, ["high", "medium", "low", "none"], "high"
+            return True, ["high", "medium", "low", "none"], "medium"
         if supports_meta_max_effort(model_name):
-            return True, ["max", "xhigh", "high", "medium", "low", "minimal"], "high"
+            return True, ["max", "xhigh", "high", "medium", "low", "minimal"], "medium"
         if supports_meta_reasoning_effort(model_name):
-            return True, ["xhigh", "high", "medium", "low", "minimal"], "high"
+            return True, ["xhigh", "high", "medium", "low", "minimal"], "medium"
         if is_anthropic_reasoning_model(model_name):
             return anthropic_reasoning_effort_config(model_name)
         return False, [], None
@@ -710,9 +715,9 @@ def get_reasoning_effort_config(
                 return True, ["high", "minimal"], "high"
 
             if is_gemini_no_minimal_thinking_model(model_name):
-                return True, ["xhigh", "high", "medium", "low", "none"], "high"
+                return True, ["xhigh", "high", "medium", "low", "none"], "medium"
 
-            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "high"
+            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
 
         if is_anthropic_model_family(model_name):
             return anthropic_reasoning_effort_config(model_name)
@@ -723,7 +728,7 @@ def get_reasoning_effort_config(
             is_reasoning = False
 
         if is_reasoning:
-            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "high"
+            return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
 
         return False, [], None
 
@@ -734,12 +739,12 @@ def get_reasoning_effort_config(
             return anthropic_reasoning_effort_config(model_name)
         if is_openai_model_family(model_name) and is_openai_reasoning_model(model_name):
             if is_gpt6_astra(model_name) or is_gpt61_sol(model_name):
-                return True, ["max", "xhigh", "high", "medium", "low"], "high"
+                return True, ["max", "xhigh", "high", "medium", "low"], "medium"
             if is_gpt6_series(model_name):
-                return True, ["max", "xhigh", "high", "medium", "low", "none"], "high"
-            return True, ["high", "medium", "low", "none"], "high"
+                return True, ["max", "xhigh", "high", "medium", "low", "none"], "medium"
+            return True, ["high", "medium", "low", "none"], "medium"
         if is_openai_compatible_reasoning_model(model_name):
-            return True, ["high", "medium", "low", "none"], "high"
+            return True, ["high", "medium", "low", "none"], "medium"
         return False, [], None
 
     return False, [], None
@@ -1773,7 +1778,7 @@ def format_thinking_status(
     thinking_status_str = ""
     if provider == "Google" and model_name:
         if is_gemini_3_plus_model(model_name):
-            effort = reasoning_effort or "high"
+            effort = reasoning_effort or "medium"
             thinking_status_str = f" (thinking: {effort})"
         elif is_gemini_25_flash_model(model_name):
             effort = reasoning_effort or "auto"
@@ -1782,7 +1787,7 @@ def format_thinking_status(
             else:
                 thinking_status_str = f" (thinking: {effort})"
     elif provider == "OpenRouter" and is_gemini_3_plus_model(model_name):
-        effort = reasoning_effort or "high"
+        effort = reasoning_effort or "medium"
         thinking_status_str = f" (thinking: {effort})"
     elif (
         provider == "Anthropic"

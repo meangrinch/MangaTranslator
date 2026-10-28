@@ -24,18 +24,18 @@ from utils.model_metadata import (
 
 # Model used when --model-name is not given; the keys are the --provider choices
 CLI_DEFAULT_MODELS = {
-    "Google": "gemini-3.8-flash",
-    "OpenAI": "gpt-6-luna",
-    "Anthropic": "claude-haiku-5-5",
+    "Google": "gemini-4-argon",
+    "OpenAI": "gpt-6.1-sol",
+    "Anthropic": "claude-opus-5-5",
     "SpaceXAI": "grok-4.7",
     "Meta Model": "muse-spark-1.3-contributor",
     "DeepSeek": "deepseek-flash",
     "Z.ai": "glm-5.3-flash",
     "Moonshot AI": "kimi-k3.1-pro",
-    "Xiaomi MiMo": "mimo-v2.6-flash",
+    "Xiaomi MiMo": "mimo-v2.6-pro",
     "QwenCloud": "qwen3.8-flash",
     "OpenCode": "deepseek-v4.1-flash",
-    "OpenRouter": "google/gemini-3.8-flash",
+    "OpenRouter": "google/gemini-4-argon",
     "OpenAI-Compatible": "default",
 }
 
@@ -250,7 +250,7 @@ def main():
         "--model-name",
         type=str,
         default=None,
-        help="Model name for the selected provider (e.g., 'gemini-3.8-flash'). "
+        help="Model name for the selected provider (e.g., 'gemini-4-argon'). "
         "If not provided, a default will be attempted based on the provider.",
     )
     parser.add_argument(
@@ -456,7 +456,7 @@ def main():
     parser.add_argument(
         "--effort",
         type=str,
-        default="high",
+        default="medium",
         choices=["max", "xhigh", "high", "medium", "low"],
         help=(
             "Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+ only: Controls token spending eagerness when responding. "

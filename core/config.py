@@ -90,7 +90,7 @@ class TranslationConfig:
     openrouter_api_key: str = ""
     openai_compatible_url: str = "http://localhost:8080/v1"
     openai_compatible_api_key: str | None = ""
-    model_name: str = "gemini-3.8-flash"
+    model_name: str = "gemini-4-argon"
     provider_models: dict[str, str | None] = field(default_factory=dict)
     temperature: float = float(_DEFAULT_SAMPLING["temperature"])
     top_p: float = float(_DEFAULT_SAMPLING["top_p"])
@@ -104,7 +104,7 @@ class TranslationConfig:
         None  # None = per-provider fallback in translation._build_generation_config
     )
     # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: how eagerly it spends tokens
-    effort: str | None = "high"
+    effort: str | None = "medium"
     verbosity: str | None = None  # GPT-5 and GPT-6 series (high/medium/low)
     send_full_page_context: bool = True
     whiteout_conjoined_bubbles: bool = True

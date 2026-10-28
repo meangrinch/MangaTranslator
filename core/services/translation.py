@@ -391,7 +391,7 @@ def _gemini_thinking_config(
     if is_gemini_3_plus_model(model_name) or is_gemma_model(model_name):
         return {
             "thinkingLevel": clamp_gemini_reasoning_effort(
-                model_name, reasoning_effort or "high"
+                model_name, reasoning_effort or "medium"
             )
         }
     if not is_google_reasoning_model(model_name):
@@ -443,7 +443,7 @@ def _openrouter_reasoning_effort(
         return reasoning_effort or ("auto" if thinks_by_default else "none")
     if is_openai_model_family(model_name):
         if is_gpt6_series(model_name):
-            return reasoning_effort or "high"
+            return reasoning_effort or "medium"
         if is_gpt5_series(model_name):
             return reasoning_effort
     model_lower = (model_name or "").lower()
@@ -565,7 +565,7 @@ def _openai_generation_config(
     is_chat = is_gpt5_chat_variant(model_name)
     if is_openai_reasoning_model(model_name) and not is_chat:
         generation_config["reasoning_effort"] = clamp_openai_reasoning_effort(
-            model_name, config.reasoning_effort or "high"
+            model_name, config.reasoning_effort or "medium"
         )
         if is_openai_virtual_pro(model_name):
             generation_config["reasoning_mode"] = "pro"
@@ -616,7 +616,7 @@ def _xai_generation_config(
         generation_config["prompt_cache_key"] = prompt_cache_key
     if supports_xai_reasoning_parameter(model_name):
         generation_config["reasoning_effort"] = clamp_xai_reasoning_effort(
-            model_name, config.reasoning_effort or "high"
+            model_name, config.reasoning_effort or "medium"
         )
     return generation_config
 

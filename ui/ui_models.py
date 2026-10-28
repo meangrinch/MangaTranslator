@@ -763,7 +763,7 @@ class UIConfigState:
                 reasoning_effort=data.get(
                     "reasoning_effort", defaults.get("reasoning_effort")
                 ),
-                effort=data.get("effort", defaults.get("effort", "high")),
+                effort=data.get("effort", defaults.get("effort", "medium")),
                 verbosity=data.get("verbosity", defaults.get("verbosity", "low")),
                 auto_scale=data.get("auto_scale", defaults.get("auto_scale", True)),
                 split_long_strips=data.get(

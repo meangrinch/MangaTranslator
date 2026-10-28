@@ -70,3 +70,21 @@ def test_reasoning_effort_becomes_one_the_model_accepts(
 def test_claude_effort_becomes_one_the_model_accepts(provider, model, effort, expected):
     config = TranslationConfig(effort=effort, max_tokens=4096)
     assert _build_generation_config(provider, model, config)["effort"] == expected
+
+
+@pytest.mark.parametrize(
+    ("provider", "model", "key", "expected"),
+    [
+        ("Google", "gemini-4-argon", "thinkingLevel", "medium"),
+        ("Google", "gemma-4-31b-it", "thinkingLevel", "high"),
+        ("OpenAI", "gpt-6.1-sol", "reasoning_effort", "medium"),
+        ("SpaceXAI", "grok-4.7", "reasoning_effort", "medium"),
+        ("OpenRouter", "openai/gpt-6.1-sol", "reasoning_effort", "medium"),
+        ("Anthropic", "claude-opus-5-5", "effort", "medium"),
+    ],
+)
+def test_default_effort_is_medium_where_supported(provider, model, key, expected):
+    config = TranslationConfig(max_tokens=4096)
+    generation_config = _build_generation_config(provider, model, config)
+    sent = generation_config.get("thinkingConfig", generation_config)
+    assert sent.get(key) == expected

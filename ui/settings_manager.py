@@ -228,7 +228,7 @@ DEFAULT_SETTINGS = {
     "test_mode": False,
     "reasoning_effort": None,  # None = the model's default from get_reasoning_effort_config
     # Claude Opus 4.5+, Sonnet 4.6+, Haiku 5.5+, Fable 5+: how eagerly it spends tokens
-    "effort": "high",
+    "effort": "medium",
     "verbosity": "low",  # GPT-5 and GPT-6 series (high/medium/low)
     "enable_web_search": False,
     # Google, Gemini 3+: lets the model zoom into and rotate crops with code
