@@ -189,6 +189,12 @@ def _should_overlap_llm_with_inpaint(config: MangaTranslatorConfig) -> bool:
     )
 
 
+def _inpaints_colored_bubbles(config: MangaTranslatorConfig) -> bool:
+    """Colored bubbles are inpainted with the OSB inpainting model, so only while OSB
+    text removal is enabled."""
+    return config.cleaning.inpaint_colored_bubbles and config.outside_text.enabled
+
+
 def _clean_speech_bubbles_for_page(
     pil_image_processed: Image.Image,
     bubble_data: list[dict[str, Any]],
@@ -202,7 +208,7 @@ def _clean_speech_bubbles_for_page(
     """Clean bubbles (including optional colored-bubble Flux). Returns (cv_image, info)."""
     try:
         use_otsu = config.cleaning.use_otsu_threshold
-        if config.cleaning.inpaint_colored_bubbles:
+        if _inpaints_colored_bubbles(config):
             log_message(
                 "Flux inpainting enabled for colored bubbles",
                 verbose=verbose,
@@ -221,7 +227,7 @@ def _clean_speech_bubbles_for_page(
             verbose=verbose,
             processing_scale=processing_scale,
             conjoined_confidence=config.detection.conjoined_confidence,
-            inpaint_colored_bubbles=config.cleaning.inpaint_colored_bubbles,
+            inpaint_colored_bubbles=_inpaints_colored_bubbles(config),
             flux_hf_token=config.outside_text.huggingface_token,
             flux_num_inference_steps=config.outside_text.flux_num_inference_steps,
             flux_residual_diff_threshold=config.outside_text.flux_residual_diff_threshold,
@@ -1387,7 +1393,7 @@ def _render_bubble(
                 config.cleaning.roi_shrink_px,
                 processing_scale,
                 verbose=verbose,
-                classify_colored=config.cleaning.inpaint_colored_bubbles,
+                classify_colored=_inpaints_colored_bubbles(config),
             )
 
         if retry_result and retry_result.get("mask") is not None:

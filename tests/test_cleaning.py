@@ -1,7 +1,11 @@
 import cv2
 import numpy as np
 import pytest
+import torch
+from PIL import Image
 
+from core import pipeline
+from core.config import MangaTranslatorConfig
 from core.image.cleaning import (
     _build_adaptive_shrink_mask,
     clean_speech_bubbles,
@@ -360,3 +364,43 @@ def test_colored_bubbles_take_the_whole_redraw_without_preserve_art(monkeypatch)
     _, cleaned, _ = _clean_colored(monkeypatch, "flux_klein_4b", preserve_art=False)
 
     assert cleaned[100, 60].tolist() == [255, 255, 255]
+
+
+@pytest.mark.parametrize(
+    ("osb_enabled", "colored_bubbles", "inpaints"),
+    [(True, True, True), (False, True, False), (True, False, False)],
+)
+def test_colored_bubbles_are_inpainted_only_with_osb_removal(
+    monkeypatch, osb_enabled, colored_bubbles, inpaints
+):
+    # They use the OSB inpainting model, whose settings are hidden while OSB is off
+    seen = {}
+
+    def fake_clean(*args, **kwargs):
+        seen["inpaint_colored_bubbles"] = kwargs["inpaint_colored_bubbles"]
+        return np.zeros((8, 8, 3), np.uint8), []
+
+    monkeypatch.setattr(pipeline, "clean_speech_bubbles", fake_clean)
+    config = MangaTranslatorConfig(
+        yolo_model_path="model.pt", device=torch.device("cpu")
+    )
+    config.outside_text.enabled = osb_enabled
+    config.cleaning.inpaint_colored_bubbles = colored_bubbles
+
+    pipeline._clean_speech_bubbles_for_page(
+        Image.new("RGB", (8, 8)),
+        [],
+        config,
+        torch.device("cpu"),
+        1.0,
+        False,
+        np.zeros((8, 8, 3), np.uint8),
+    )
+
+    assert seen["inpaint_colored_bubbles"] is inpaints
+
+
+def test_colored_bubble_inpainting_is_on_by_default():
+    assert MangaTranslatorConfig(
+        yolo_model_path="model.pt"
+    ).cleaning.inpaint_colored_bubbles

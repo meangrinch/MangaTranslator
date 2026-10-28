@@ -84,6 +84,10 @@
 - **未检测到微小气泡/渲染文本空间不足：**
   - 启用“初始 (initial)”图像超分辨率并调整放大倍数（例如 2.0-4.0x），同时禁用“自动缩放 (Auto-Scale to Image Size)”
 
+- **彩色/灰度气泡未能保留内部颜色：**
+  - 启用“启用 OSB 文本检测 (Enable OSB Text Detection)”；彩色气泡会使用其 OSB 重绘模型进行清理
+  - 确保启用了“使用重绘模型处理彩色气泡 (Use Inpainting Model for Colored Bubbles)”
+
 - **气泡分割效果较差：**
   - 尝试切换到 `sam3`（需要设置 `hf_token`）
 

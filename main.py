@@ -397,10 +397,19 @@ def main():
         dest="inpaint_colored_bubbles",
         action="store_false",
         help=(
-            "Don't use the inpainting model for colored/grayscale bubbles; "
-            "clean them with the same flat fill as white/black bubbles"
+            "Don't use the OSB inpainting model for colored/grayscale bubbles; clean "
+            "them with the same flat fill as white/black bubbles. Colored bubbles are "
+            "only inpainted with --osb-enable"
         ),
     )
+    # The default since 1.27.0; kept so existing scripts still run
+    parser.add_argument(
+        "--inpaint-colored-bubbles",
+        dest="inpaint_colored_bubbles",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.set_defaults(inpaint_colored_bubbles=True)
     parser.add_argument(
         "--temperature",
         type=float,

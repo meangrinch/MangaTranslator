@@ -84,6 +84,10 @@
 - **Small bubbles not detected/no room for rendered text:**
   - Enable "initial" image upscaling and adjust upscale factor (e.g., 2.0-4.0x), also disable "Auto-Scale to Image Size"
 
+- **Colored/grayscale bubbles not preserving interior color:**
+  - Enable "Enable OSB Text Detection"; colored bubbles are cleaned with its inpainting model
+  - Ensure "Use Inpainting Model for Colored Bubbles" is enabled
+
 - **Poor segmentation of speech bubbles:**
   - Try switching to `sam3` (requires hf_token)
 

@@ -2079,8 +2079,8 @@ def create_layout(
                                     ),
                                     label="Use Inpainting Model for Colored Bubbles",
                                     info=(
-                                        "Use the inpainting model for bubble cleaning when the interior is not pure white/black "
-                                        "(e.g., colored/grayscale)."
+                                        "Also use the inpainting model above to clean speech bubbles whose interior is not "
+                                        "pure white/black (e.g., colored/grayscale)."
                                     ),
                                     visible=_uses_model,
                                     interactive=_uses_model,

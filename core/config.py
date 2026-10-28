@@ -59,6 +59,8 @@ class CleaningConfig:
     use_otsu_threshold: bool = False
     auto_threshold: bool = True
     roi_shrink_px: int = 5
+    # Inpaint colored/grayscale bubbles with the OSB inpainting model; only applies
+    # while OSB text removal (outside_text.enabled) is on
     inpaint_colored_bubbles: bool = True
     # Run the SAM-TS-L text segmentation model; off, bubble fills miss edge-hugging
     # text and erase all ink enclosed by paper (blush lines, frames), LaMa and the edit models inpaint whole text boxes and bubble interiors, OSB
