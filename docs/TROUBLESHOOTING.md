@@ -95,6 +95,7 @@
   - Lower "OSB Text Detection Confidence"
 
 - **Art erased or non-text translated as OSB text:**
+  - Raise "OSB Text Detection Confidence"
   - Disable "Recover Missed Text"
 
 ### Translation

@@ -4,6 +4,7 @@ import random
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -62,6 +63,8 @@ OSB_GLYPH_HUE_MIN_SHARE = 0.6
 # OSB model confidence on crops that confirms a text region the page-level pass missed;
 # on 63 sample pages it kept 31 of 44 missed texts and 2 of 60 non-text regions
 OSB_RECOVERY_CONFIDENCE = 0.2
+# The page-level OSB confidence (the default) that OSB_RECOVERY_CONFIDENCE was tuned at
+OSB_RECOVERY_REFERENCE_CONFIDENCE = 0.5
 
 
 def _composites_glyphs(config: MangaTranslatorConfig) -> bool:
@@ -744,6 +747,19 @@ def _recovers_missed_text(config: MangaTranslatorConfig) -> bool:
     )
 
 
+def _recovery_confidence(osb_confidence: float) -> float:
+    """Crop confidence that confirms recovered text for a page-level `osb_confidence`.
+
+    Above the reference it keeps the same share of the distance to 1.0, so raising OSB
+    confidence also tightens recovery; below it, lower crop scores would mostly add art.
+    """
+    raised = max(0.0, osb_confidence - OSB_RECOVERY_REFERENCE_CONFIDENCE)
+    headroom = (1.0 - OSB_RECOVERY_CONFIDENCE) / (
+        1.0 - OSB_RECOVERY_REFERENCE_CONFIDENCE
+    )
+    return min(1.0, OSB_RECOVERY_CONFIDENCE + raised * headroom)
+
+
 def _recover_missed_osb_text(
     pil_image: Image.Image,
     outside_text_results: list,
@@ -751,10 +767,16 @@ def _recover_missed_osb_text(
     glyph_prob: np.ndarray,
     detector: OutsideTextDetector,
     verbose: bool,
+    confidence: float = OSB_RECOVERY_CONFIDENCE,
+    rejected_results: list | None = None,
 ) -> list:
     """OSB results for text the OSB model missed: glyph-map letters outside every
-    bubble and OSB box, kept where the OSB model finds text on crops around them, and
-    joined where one of its boxes spans several of them, like the words of a caption."""
+    bubble and OSB box, kept where the OSB model finds text on crops around them at
+    `confidence`, and joined where one of its boxes spans several of them, like the
+    words of a caption.
+
+    `rejected_results` are the page-level detections at the default confidence, so
+    text a raised OSB confidence filtered out isn't recovered: the model saw it."""
     img_w, img_h = pil_image.size
     radius = glyph_dilation_radius((img_w, img_h))
     covered = np.zeros((img_h, img_w), bool)
@@ -777,7 +799,7 @@ def _recover_missed_osb_text(
         covered[max(0, y0) : y1, max(0, x0) : x1] = True
     # Glyphs of found text spill past its box, so pad the box by the glyph dilation
     pad = 2 * radius
-    for bbox, _ in outside_text_results:
+    for bbox, _ in [*outside_text_results, *(rejected_results or [])]:
         x0, y0, x1, y1 = (int(c) for c in bbox)
         covered[max(0, y0 - pad) : y1 + pad, max(0, x0 - pad) : x1 + pad] = True
 
@@ -787,7 +809,7 @@ def _recover_missed_osb_text(
     image_cv = cv2.cvtColor(np.array(pil_image.convert("RGB")), cv2.COLOR_RGB2BGR)
     words = []
     near = detector.detect_text_near(
-        image_cv, [group.box for group in groups], OSB_RECOVERY_CONFIDENCE
+        image_cv, [group.box for group in groups], confidence
     )
     for group, detections in zip(groups, near, strict=True):
         box = verified_glyph_box(group, [d for d, _ in detections])
@@ -837,10 +859,10 @@ def prepare_outside_text_work(
         outside_detector = OutsideTextDetector(
             device=config.device, hf_token=config.outside_text.huggingface_token
         )
-        outside_text_results = outside_detector.detect_outside_text(
+        detect = partial(
+            outside_detector.detect_outside_text,
             str(image_path),
             yolo_model_path=config.yolo_model_path,
-            confidence=config.outside_text.osb_confidence,
             conjoined_confidence=config.detection.conjoined_confidence,
             verbose=verbose,
             image_override=pil_image,
@@ -850,6 +872,8 @@ def prepare_outside_text_work(
             min_area_ignore_ratio=config.outside_text.min_area_ignore_ratio,
             text_free_only=config.outside_text.osb_text_free_only,
         )
+        osb_confidence = config.outside_text.osb_confidence
+        outside_text_results = detect(confidence=osb_confidence)
 
         if glyph_map is None:
             glyph_map = PageGlyphMap.for_page(pil_image, config, verbose)
@@ -857,6 +881,12 @@ def prepare_outside_text_work(
             glyph_prob = glyph_map.get()
             if glyph_prob is not None:
                 try:
+                    # Text a raised OSB confidence filtered out stays out
+                    rejected = (
+                        detect(confidence=OSB_RECOVERY_REFERENCE_CONFIDENCE)
+                        if osb_confidence > OSB_RECOVERY_REFERENCE_CONFIDENCE
+                        else []
+                    )
                     outside_text_results = list(
                         outside_text_results
                     ) + _recover_missed_osb_text(
@@ -866,6 +896,8 @@ def prepare_outside_text_work(
                         glyph_prob,
                         outside_detector,
                         verbose,
+                        confidence=_recovery_confidence(osb_confidence),
+                        rejected_results=rejected,
                     )
                 except CancellationError:
                     raise

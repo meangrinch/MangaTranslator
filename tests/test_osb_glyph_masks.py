@@ -648,14 +648,23 @@ class _FakeOsbDetector:
         self.near_calls = []
         # The detection reported for regions left of x=100; the region itself by default
         self.near_detection = near_detection
+        # A page-level detection scored 0.6, which a higher OSB confidence drops
+        self.weak_detection = None
+        self.page_confidences = []
+        self.near_confidences = []
 
-    def detect_outside_text(self, *args, **kwargs):
-        return [(np.array(YOLO_BOX, np.float32), 0.8)]
+    def detect_outside_text(self, *args, confidence=0.5, **kwargs):
+        self.page_confidences.append(confidence)
+        found = [(np.array(YOLO_BOX, np.float32), 0.8)]
+        if self.weak_detection is not None and confidence <= 0.6:
+            found.append((np.array(self.weak_detection, np.float32), 0.6))
+        return found
 
     def get_text_masks(self, *args, **kwargs):
         return [], None
 
     def detect_text_near(self, image_cv, boxes, confidence):
+        self.near_confidences.append(confidence)
         self.near_calls += [tuple(box) for box in boxes]
         return [
             [(self.near_detection or tuple(float(c) for c in b), 0.7)]
@@ -676,9 +685,11 @@ def recovery(patched, monkeypatch):
         method="lama_manga",
         letters=MISSED_LETTERS,
         near=None,
+        weak=None,
         **settings,
     ):
         detector.near_detection = near
+        detector.weak_detection = weak
         config = MangaTranslatorConfig(yolo_model_path="unused.pt")
         config.device = torch.device(device)  # never used by the fakes
         config.outside_text.enabled = True
@@ -698,6 +709,7 @@ def recovery(patched, monkeypatch):
         boxes = [tuple(int(c) for c in b) for b, _ in work.raw_outside_text_results]
         return boxes, detector.near_calls
 
+    run.detector = detector
     return run
 
 
@@ -738,3 +750,41 @@ def test_missed_text_recovery_is_skipped(recovery, settings):
 
     assert near_calls == []
     assert boxes == [YOLO_BOX]
+
+
+WEAK_TEXT = (50, 200, 94, 220)  # where MISSED_LETTERS are
+
+
+def test_text_a_raised_osb_confidence_drops_is_not_recovered(recovery):
+    # The page model saw it and scored it 0.6, so the user's 0.8 rejected it
+    boxes, near_calls = recovery(weak=WEAK_TEXT, **{"outside_text.osb_confidence": 0.8})
+
+    assert recovery.detector.page_confidences == [0.8, 0.5]
+    assert near_calls == []
+    assert boxes == [YOLO_BOX]
+
+
+def test_default_osb_confidence_runs_one_page_pass(recovery):
+    boxes, near_calls = recovery(weak=WEAK_TEXT)
+
+    assert recovery.detector.page_confidences == [0.5]
+    assert near_calls == []  # the weak detection is kept, so nothing is left to recover
+    assert boxes == [YOLO_BOX, WEAK_TEXT]
+
+
+def test_text_the_page_model_never_saw_is_still_recovered_at_a_raised_confidence(
+    recovery,
+):
+    boxes, near_calls = recovery(**{"outside_text.osb_confidence": 0.7})
+
+    assert near_calls == [(50, 200, 94, 220)]
+    assert recovery.detector.near_confidences == [pytest.approx(0.52)]
+    assert boxes == [YOLO_BOX, (50, 200, 94, 220)]
+
+
+@pytest.mark.parametrize(
+    ("osb_confidence", "expected"),
+    [(0.1, 0.2), (0.5, 0.2), (0.6, 0.36), (0.7, 0.52), (0.9, 0.84), (1.0, 1.0)],
+)
+def test_recovery_confidence_rises_with_the_osb_confidence(osb_confidence, expected):
+    assert otp._recovery_confidence(osb_confidence) == pytest.approx(expected)

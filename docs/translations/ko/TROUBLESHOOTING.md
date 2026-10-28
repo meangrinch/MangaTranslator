@@ -94,6 +94,7 @@
   - "OSB 텍스트 감지 신뢰도 (OSB Text Detection Confidence)"를 낮춥니다.
 
 - **그림이 지워지거나 텍스트가 아닌 것이 OSB 텍스트로 번역됨:**
+  - "OSB 텍스트 감지 신뢰도 (OSB Text Detection Confidence)"를 높입니다.
   - "놓친 텍스트 복구 (Recover Missed Text)"를 끕니다.
 
 ### 번역 (Translation)

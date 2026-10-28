@@ -95,6 +95,7 @@
   - 降低“OSB 文本检测置信度 (OSB Text Detection Confidence)”
 
 - **画面被擦除，或非文本内容被当作 OSB 文本翻译：**
+  - 提高“OSB 文本检测置信度 (OSB Text Detection Confidence)”
   - 禁用“找回遗漏文本 (Recover Missed Text)”
 
 ### 翻译 (Translation)

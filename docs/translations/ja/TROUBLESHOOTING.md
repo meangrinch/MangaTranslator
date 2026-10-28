@@ -94,6 +94,7 @@
   - 「OSB テキスト検出の信頼度（OSB Text Detection Confidence）」を下げます。
 
 - **作画が消される、またはテキストでないものが OSB テキストとして翻訳される:**
+  - 「OSB テキスト検出の信頼度（OSB Text Detection Confidence）」を上げます。
   - 「見逃したテキストを回収（Recover Missed Text）」を無効にします。
 
 ### 翻訳 (Translation)
