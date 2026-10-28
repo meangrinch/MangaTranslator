@@ -2270,7 +2270,7 @@ def finish_outside_text_work(
 
             log_message("Outside text inpainting completed", verbose=verbose)
             parts = [
-                f"Flux: {flux_inpaints}",
+                f"Model: {flux_inpaints}",
                 f"CV2: {cv2_inpaints}",
             ]
             if none_skips:
