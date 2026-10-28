@@ -22,7 +22,7 @@ from utils.exceptions import (
 from utils.logging import log_message
 
 from .detection import detect_speech_bubbles
-from .glyph_mask import glyphs_missed_by_fill
+from .glyph_mask import art_in_fill, glyphs_missed_by_fill
 from .image_utils import pil_to_cv2
 from .inpainting import make_flux_inpainter
 from .page_glyph_map import PageGlyphMap
@@ -334,7 +334,10 @@ def process_single_bubble(
             letters inside the bubble that the fill leaves uncovered
 
     Returns:
-        tuple: (final_mask, fill_color_bgr, is_colored, sample_color_bgr, text_bbox, text_color_bgr)
+        tuple: (final_mask, fill_color_bgr, is_colored, sample_color_bgr, text_bbox,
+            text_color_bgr, art_mask). final_mask covers the bubble interior that text
+            can be rendered in; art_mask (bool, or None) is the ink inside it that the
+            fill leaves alone
 
     Raises:
         CleaningError: If processing fails
@@ -606,6 +609,20 @@ def process_single_bubble(
                             verbose=verbose,
                         )
 
+                art_mask = None
+                if glyph_prob is not None and not is_colored_bubble:
+                    # On non-solid backgrounds the "ink" is shading, which would stay
+                    # as islands in a flat fill
+                    art_crop = art_in_fill(
+                        glyph_prob[crop],
+                        thresholded_roi == 0,
+                        final_mask[crop] == 255,
+                        (img_width, img_height),
+                    )
+                    if art_crop.any():
+                        art_mask = np.zeros((img_height, img_width), dtype=bool)
+                        art_mask[crop] = art_crop
+
                 text_color_bgr = None
                 if image_bgr is not None:
                     text_mask = cv2.bitwise_and(
@@ -646,6 +663,7 @@ def process_single_bubble(
                     sample_color_bgr,
                     text_bbox,
                     text_color_bgr,
+                    art_mask,
                 )
 
         raise CleaningError("Failed to process bubble mask")
@@ -722,6 +740,7 @@ def clean_speech_bubbles(
         numpy.ndarray: Cleaned image with text removed.
         list[dict]: A list of dictionaries per bubble containing:
                     - 'mask' (np.ndarray): validated text mask (0/255)
+                    - 'art_mask' (np.ndarray|None): ink inside 'mask' left unpainted
                     - 'base_mask' (np.ndarray): normalized detection mask used for processing
                     - 'color' (tuple BGR): sampled bubble color
                     - 'bbox' (tuple): detection bounding box
@@ -813,6 +832,7 @@ def clean_speech_bubbles(
                     sample_color_bgr,
                     text_bbox,
                     text_color_bgr,
+                    art_mask,
                 ) = process_single_bubble(
                     base_mask,
                     img_gray,
@@ -874,6 +894,7 @@ def clean_speech_bubbles(
                 is_colored_bubble = retry_res["is_colored"]
                 text_bbox = retry_res["text_bbox"]
                 text_color_bgr = retry_res.get("text_color_bgr")
+                art_mask = retry_res.get("art_mask")
 
             processed_bubbles.append(
                 {
@@ -884,6 +905,7 @@ def clean_speech_bubbles(
                     "is_colored": is_colored_bubble,
                     "text_bbox": text_bbox,
                     "text_color_bgr": text_color_bgr,
+                    "art_mask": art_mask,
                     "is_sam": is_sam_mask,
                     "inpainted": False,
                 }
@@ -1012,7 +1034,10 @@ def clean_speech_bubbles(
                 color_key = bubble_info["color"]
                 if color_key not in color_groups:
                     color_groups[color_key] = []
-                color_groups[color_key].append(bubble_info["mask"])
+                mask = bubble_info["mask"]
+                if bubble_info.get("art_mask") is not None:
+                    mask = np.where(bubble_info["art_mask"], 0, mask).astype(np.uint8)
+                color_groups[color_key].append(mask)
 
             for color_bgr, masks in color_groups.items():
                 combined_mask = np.bitwise_or.reduce(masks)
@@ -1139,6 +1164,7 @@ def retry_cleaning_with_otsu(
         sample_color_bgr,
         text_bbox,
         text_color_bgr,
+        art_mask,
     ) = result
 
     bubble_color = sample_color_bgr if sample_color_bgr else fill_color_bgr
@@ -1156,5 +1182,6 @@ def retry_cleaning_with_otsu(
         "is_colored": is_colored_bubble,
         "text_bbox": text_bbox,
         "text_color_bgr": text_color_bgr,
+        "art_mask": art_mask,
         "is_sam": bubble_info.get("is_sam", False),
     }

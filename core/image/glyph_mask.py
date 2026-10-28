@@ -45,6 +45,10 @@ VERIFIED_LETTER_OVERLAP = 0.5
 # Text covers at most 22% of a bubble's fill on 376 sample bubbles, and all of the
 # fill of an SFX letter detected as a bubble
 FILL_TEXT_MAX_SHARE = 0.5
+# Bubble fills keep ink the model doesn't take for text (blush hatching, screentone,
+# frames) from this many dilation radii away from the text. On 380 sample bubbles the
+# nearest blush stroke was 1.57 away, and the one missed letter (a 。) was 1.31 away
+ART_MIN_TEXT_DISTANCE = 1.5
 
 
 def glyph_scale(size: tuple[int, int]) -> float:
@@ -258,6 +262,41 @@ def glyphs_missed_by_fill(
         cv2.MORPH_ELLIPSE, (2 * radius + 1, 2 * radius + 1)
     )
     return cv2.dilate(keep[labels].astype(np.uint8), kernel).astype(bool) & region
+
+
+def art_in_fill(
+    prob: np.ndarray,
+    ink: np.ndarray,
+    filled: np.ndarray,
+    size: tuple[int, int],
+) -> np.ndarray:
+    """Ink inside `filled` away from all text, with its anti-aliased edge, on a crop
+    of a (width, height) page.
+
+    Marks a few pixels apart form one group, which counts as text if any part of it
+    is near a letter. Specks are left to the fill, and a fill without text gets
+    nothing, since the model misses lone ellipses and small kana.
+    """
+    glyphs = prob > THRESHOLD
+    if not (glyphs & filled).any():
+        return np.zeros_like(filled, dtype=bool)
+    radius = glyph_dilation_radius(size)
+    edge = max(1, radius // 3)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * edge + 1, 2 * edge + 1))
+    ink = ink & filled
+    groups = cv2.dilate(ink.astype(np.uint8), kernel).astype(bool) & filled
+    count, labels = cv2.connectedComponents(groups.astype(np.uint8), connectivity=8)
+    text_distance = cv2.distanceTransform(
+        (~glyphs).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_5
+    )
+    nearest = np.full(count, np.inf, np.float32)
+    np.minimum.at(nearest, labels[ink], text_distance[ink])
+    area = np.bincount(labels[ink], minlength=count)
+    keep = (nearest >= ART_MIN_TEXT_DISTANCE * radius) & (
+        area >= MIN_LETTER_AREA * _area_scale(size)
+    )
+    keep[0] = False
+    return keep[labels]
 
 
 def _is_flat(image: np.ndarray) -> np.ndarray:

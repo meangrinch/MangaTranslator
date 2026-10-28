@@ -106,8 +106,8 @@ def test_cleaning_a_bubble_does_not_depend_on_its_position_on_the_page(use_otsu)
             auto_threshold=True,
         )
 
-    s_mask, *s_rest, s_text_bbox, s_text_color = clean(small)
-    l_mask, *l_rest, l_text_bbox, l_text_color = clean(large)
+    s_mask, *s_rest, s_text_bbox, s_text_color, s_art = clean(small)
+    l_mask, *l_rest, l_text_bbox, l_text_color, l_art = clean(large)
 
     assert s_mask.any()
     assert np.array_equal(l_mask[oy : oy + 240, ox : ox + 280], s_mask)
@@ -117,6 +117,7 @@ def test_cleaning_a_bubble_does_not_depend_on_its_position_on_the_page(use_otsu)
         v + (ox if i % 2 == 0 else oy) for i, v in enumerate(s_text_bbox)
     )
     assert l_text_color == s_text_color
+    assert l_art is s_art is None
 
 
 def _edge_letter_page(touch_edge=True):
@@ -186,6 +187,74 @@ def test_a_bubble_detected_inside_a_letter_takes_no_glyphs():
     _, plain = clean_speech_bubbles(page, None, pre_computed_detections=[detection])
     _, info = clean_speech_bubbles(
         page, None, pre_computed_detections=[detection], glyph_map=_Map(prob)
+    )
+
+    assert np.array_equal(plain[0]["mask"], info[0]["mask"])
+
+
+def _blush_page():
+    """White bubble with a letter, a blush hatch far from it, a dot beside it, and a
+    speck of dust far from it, plus the text map, which has only the letter."""
+    from PIL import Image
+
+    gray = np.full((400, 400), 120, np.uint8)
+    base = np.zeros_like(gray)
+    cv2.ellipse(base, (200, 200), (150, 170), 0, 0, 360, 255, -1)
+    gray[base == 255] = 245
+    cv2.ellipse(gray, (200, 200), (150, 170), 0, 0, 360, 0, 3)
+    letter = np.zeros_like(gray, dtype=bool)
+    letter[150:250, 190:210] = True
+    gray[letter] = 20
+    for x in (100, 106, 112):
+        cv2.line(gray, (x, 215), (x + 8, 200), 60, 2)
+    gray[252:255, 199:202] = 20  # 2 px below the letter
+    gray[300:302, 120:122] = 60
+    return Image.fromarray(gray).convert("RGB"), base, letter.astype(np.float32)
+
+
+def test_marks_away_from_the_text_are_kept():
+    page, base, prob = _blush_page()
+    detection = {"bbox": (50, 30, 350, 370), "sam_mask": base > 0}
+
+    plain, _ = clean_speech_bubbles(page, None, pre_computed_detections=[detection])
+    cleaned, _ = clean_speech_bubbles(
+        page, None, pre_computed_detections=[detection], glyph_map=_Map(prob)
+    )
+
+    hatch = (slice(198, 218), slice(98, 122))
+    ink = np.asarray(page)[hatch][..., 0] < 200
+    assert (plain[hatch][ink] == 255).all()
+    assert (cleaned[hatch][ink] < 200).all()
+    assert cleaned[200, 200].tolist() == [255, 255, 255]  # the letter
+    assert cleaned[253, 200].tolist() == [255, 255, 255]  # the dot beside it
+    assert cleaned[301, 121].tolist() == [255, 255, 255]  # the speck
+
+
+def test_kept_marks_leave_the_text_area_whole():
+    page, base, prob = _blush_page()
+    detection = {"bbox": (50, 30, 350, 370), "sam_mask": base > 0}
+
+    _, plain = clean_speech_bubbles(page, None, pre_computed_detections=[detection])
+    _, info = clean_speech_bubbles(
+        page, None, pre_computed_detections=[detection], glyph_map=_Map(prob)
+    )
+
+    # Rendering places text in the mask, so holes would push it away from the marks
+    assert np.array_equal(plain[0]["mask"], info[0]["mask"])
+    assert info[0]["art_mask"][208, 104]
+    assert plain[0]["art_mask"] is None
+
+
+def test_bubbles_without_text_in_the_map_clean_every_mark():
+    page, base, prob = _blush_page()
+    detection = {"bbox": (50, 30, 350, 370), "sam_mask": base > 0}
+
+    _, plain = clean_speech_bubbles(page, None, pre_computed_detections=[detection])
+    _, info = clean_speech_bubbles(
+        page,
+        None,
+        pre_computed_detections=[detection],
+        glyph_map=_Map(np.zeros_like(prob)),
     )
 
     assert np.array_equal(plain[0]["mask"], info[0]["mask"])
