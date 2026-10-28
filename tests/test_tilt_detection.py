@@ -97,6 +97,23 @@ def test_staggered_columns_keep_the_lean_of_each_column():
     assert conf >= 0.5
 
 
+def test_italic_strokes_in_an_upright_column_are_not_a_tilt():
+    # Long strokes slanting like "/", stacked straight down
+    shape = (170, 80)
+    text = np.zeros(shape, np.uint8)
+    dx = round(30 * np.tan(np.radians(16)))
+    for cy in (48, 122):
+        cv2.line(text, (40 + dx, cy - 30), (40 - dx, cy + 30), 1, 6)
+    text = text.astype(bool)
+    crop = np.full((*shape, 3), 255, np.uint8)
+    crop[text] = 0
+
+    angle, _, _, axis = detect_crop_tilt_angle(crop, max_tilt_deg=20.0, ink_mask=text)
+
+    assert axis == "vertical"
+    assert angle == 0.0
+
+
 def test_confidence_stays_within_one():
     text = _glyph_run((260, 110), (55, 130), 90 + 14, count=8, step=27, glyph_deg=14)
     crop = np.full((260, 110, 3), 255, np.uint8)

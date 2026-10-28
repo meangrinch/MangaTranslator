@@ -370,17 +370,14 @@ def detect_crop_tilt_angle(
             best_s, best_conc = max(scores, key=lambda sc: sc[1])
             gain = best_conc / max(base_conc, 1e-6)
             if gain >= 1.03 and abs(best_s) >= deadband_deg:
-                # Stroke slant can win the sweep; trust neither when the ink layout leans hard the other way.
+                # Stroke slant (italics) can win the sweep, but a turned column also moves its
+                # glyphs, so the ink layout must lean most of the way with it.
                 # Staggered columns lean the ink the way they step, so it only holds with one column
                 v1 = eigenvectors[0]
                 if v1[1] < 0:
                     v1 = -v1
                 layout_deg = -math.degrees(math.atan2(v1[0], v1[1]))
-                if (
-                    text_cols < 2
-                    and best_s * layout_deg < 0
-                    and abs(layout_deg) >= 10.0
-                ):
+                if text_cols < 2 and layout_deg * best_s < 0.6 * best_s**2:
                     return 0.0, 0.0, oriented_dims, "vertical"
                 conf = min(1.0, max(0.60, (gain - 1.0) / 0.12))
                 return float(best_s), conf, oriented_dims, "vertical"
