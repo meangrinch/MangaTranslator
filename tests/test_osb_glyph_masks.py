@@ -6,8 +6,10 @@ import pytest
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
+import core.image.page_glyph_map as pgm
 import core.outside_text_processor as otp
 from core.config import MangaTranslatorConfig
+from core.image.page_glyph_map import PageGlyphMap
 from core.image.tilt_detection import detect_crop_tilt_angle
 
 BOX = (100, 100, 300, 160)  # x0, y0, x1, y1 of the OCR text box
@@ -38,9 +40,10 @@ def _work(
 ):
     config = MangaTranslatorConfig(yolo_model_path="unused.pt")
     config.device = torch.device(device)  # never used by the fakes
+    config.outside_text.enabled = True
     config.outside_text.inpainting_method = method
     config.outside_text.flux_preserve_art = preserve_art
-    config.outside_text.osb_text_segmentation = text_segmentation
+    config.cleaning.text_segmentation = text_segmentation
     config.outside_text.flux_group_regions = mode == "grouped"
     if mode == "waves":
         config.request_coordinator = _InlineCoordinator()
@@ -141,7 +144,8 @@ def patched(monkeypatch):
             otp, "_create_osb_inpainter", lambda config, verbose: inpainter
         )
         monkeypatch.setattr(otp, "get_model_manager", lambda: manager)
-        monkeypatch.setattr(otp, "predict_text_probability", predict)
+        monkeypatch.setattr(pgm, "get_model_manager", lambda: manager)
+        monkeypatch.setattr(pgm, "predict_text_probability", predict)
         return windows
 
     return setup
@@ -200,14 +204,14 @@ def test_lama_runs_the_upscaled_pass_on_the_cpu_too(patched):
 def test_lama_keeps_the_page_map_when_the_upscaled_pass_fails(patched, monkeypatch):
     inpainter = _FakeInpainter()
     patched(inpainter, _FakeManager())
-    page_predict = otp.predict_text_probability
+    page_predict = pgm.predict_text_probability
 
     def predict(model, window):
         if window.shape[0] > 300:
             raise RuntimeError("CUDA out of memory")
         return page_predict(model, window)
 
-    monkeypatch.setattr(otp, "predict_text_probability", predict)
+    monkeypatch.setattr(pgm, "predict_text_probability", predict)
 
     otp.finish_outside_text_work(_work("lama_manga"))
 
@@ -354,13 +358,14 @@ def _tilt_data(
     image, method="lama_manga", follow_tilt=True, glyph_map=None, text_segmentation=True
 ):
     config = MangaTranslatorConfig(yolo_model_path="unused.pt")
+    config.outside_text.enabled = True
     config.outside_text.inpainting_method = method
     config.outside_text.osb_follow_tilt = follow_tilt
-    config.outside_text.osb_text_segmentation = text_segmentation
+    config.cleaning.text_segmentation = text_segmentation
     config.translation.upscale_method = "none"
     config.device = torch.device("cuda")  # never used by the fakes
     if glyph_map is None:
-        glyph_map = otp._PageGlyphMap.for_page(image, config, verbose=False)
+        glyph_map = PageGlyphMap.for_page(image, config, verbose=False)
     (item,) = otp._build_outside_text_data(
         pil_image=image,
         outside_text_results=[(list(TILT_RAW_BOX), 0.9)],
@@ -462,6 +467,25 @@ def test_text_model_stays_on_the_device_without_a_diffusion_model(patched, metho
     _tilt_data(_tilted_text_page(), method=method)
 
     assert (manager.loads, manager.parks) == (1, 0)
+
+
+@pytest.mark.parametrize(
+    ("osb", "colored_bubbles", "parks"),
+    [(False, False, 0), (False, True, 1), (True, False, 1)],
+)
+def test_text_model_is_freed_only_when_a_diffusion_model_will_run(
+    patched, osb, colored_bubbles, parks
+):
+    manager = _FakeManager()
+    patched(_FakeInpainter(), manager)
+    config = MangaTranslatorConfig(yolo_model_path="unused.pt")
+    config.outside_text.enabled = osb
+    config.outside_text.inpainting_method = "flux_klein_4b"
+    config.cleaning.inpaint_colored_bubbles = colored_bubbles
+
+    PageGlyphMap.for_page(_page(), config, verbose=False).get()
+
+    assert manager.parks == parks
 
 
 def test_next_page_reuses_the_parked_text_model(patched):
@@ -630,7 +654,8 @@ def recovery(patched, monkeypatch):
         config.outside_text.inpainting_method = method
         config.translation.upscale_method = "none"
         for name, value in settings.items():
-            setattr(config.outside_text, name, value)
+            section, field = name.split(".")
+            setattr(getattr(config, section), field, value)
         work = otp.prepare_outside_text_work(
             _missed_text_page(),
             config,
@@ -661,9 +686,9 @@ def test_text_the_osb_model_missed_is_recovered_from_the_glyph_map(
 @pytest.mark.parametrize(
     "settings",
     [
-        {"osb_recover_missed_text": False},
-        {"osb_text_free_only": True},
-        {"osb_text_segmentation": False},
+        {"outside_text.osb_recover_missed_text": False},
+        {"outside_text.osb_text_free_only": True},
+        {"cleaning.text_segmentation": False},
     ],
 )
 def test_missed_text_recovery_is_skipped(recovery, settings):

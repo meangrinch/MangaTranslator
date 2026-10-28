@@ -4,7 +4,6 @@ import random
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from functools import partial
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -21,13 +20,8 @@ from core.batch_coordinator import (
 from core.config import MangaTranslatorConfig
 from core.image.glyph_mask import THRESHOLD as GLYPH_THRESHOLD
 from core.image.glyph_mask import (
-    UpscaledGlyphMap,
-    composite_glyphs,
     glyph_dilation_radius,
     group_glyphs,
-    page_glyph_probability,
-    refine_box_mask_to_glyphs,
-    refine_mask_to_glyphs,
     verified_glyph_box,
 )
 from core.image.image_utils import (
@@ -38,11 +32,11 @@ from core.image.image_utils import (
 )
 from core.image.inpainting import make_flux_inpainter
 from core.image.ocr_detection import OutsideTextDetector, extract_text_with_manga_ocr
+from core.image.page_glyph_map import PageGlyphMap
 from core.image.tilt_detection import (
     compute_effective_tilt_angle,
     detect_crop_tilt_angle,
 )
-from core.ml.hi_sam import predict_text_probability
 from core.ml.model_manager import get_model_manager
 from utils.cancellation import raise_if_cancelled
 from utils.exceptions import CancellationError
@@ -68,103 +62,6 @@ OSB_GLYPH_HUE_MIN_SHARE = 0.6
 # OSB model confidence on crops that confirms a text region the page-level pass missed;
 # on 63 sample pages it kept 31 of 44 missed texts and 2 of 60 non-text regions
 OSB_RECOVERY_CONFIDENCE = 0.2
-
-
-@dataclass
-class _PageGlyphMap:
-    """Text probability of the original page, computed on first use.
-
-    Tilt detection, LaMa's glyph masks, and the edit models' glyph composites share it,
-    so the text segmentation model runs at most once per page, and not at all on pages
-    that need none of them.
-    """
-
-    image: Image.Image
-    # Stays on the device like the app's other models, unless a diffusion inpainter
-    # needs its VRAM
-    keep_model: bool
-    verbose: bool = False
-    # LaMa masks add text found in each box at twice the text scale
-    upscale_boxes: bool = False
-    # Off by the user's choice; consumers then get no map, as when the model fails
-    enabled: bool = True
-    prob: np.ndarray | None = None
-    failed: bool = False
-    _upscaled: UpscaledGlyphMap | None = field(default=None, init=False, repr=False)
-
-    @classmethod
-    def for_page(
-        cls, image: Image.Image, config: MangaTranslatorConfig, verbose: bool
-    ) -> "_PageGlyphMap":
-        method = config.outside_text.inpainting_method
-        return cls(
-            image,
-            keep_model=method in ("lama_manga", "opencv", "none"),
-            verbose=verbose,
-            upscale_boxes=method == "lama_manga",
-            enabled=config.outside_text.osb_text_segmentation,
-        )
-
-    def get(self) -> np.ndarray | None:
-        """The probability map, or None when the text model can't be loaded or run."""
-        if self.prob is None and self.enabled and not self.failed:
-            manager = get_model_manager()
-            with manager.flux_inference_lock:
-                try:
-                    self._compute(manager)
-                finally:
-                    if not self.keep_model:
-                        manager.park_text_sam(verbose=self.verbose)
-        return self.prob
-
-    def _compute(self, manager) -> None:
-        try:
-            # No local reference to the model, so unloading it frees its memory
-            self.prob = page_glyph_probability(
-                self.image,
-                partial(
-                    predict_text_probability,
-                    manager.load_text_sam(verbose=self.verbose),
-                ),
-            )
-        except CancellationError:
-            raise
-        except Exception as e:
-            self.failed = True
-            log_message(
-                f"Text segmentation unavailable ({e}); using heuristic tilt and "
-                "whole text boxes for inpainting",
-                always_print=True,
-            )
-
-    def box_probability(self, box: tuple[int, int, int, int]) -> np.ndarray | None:
-        """Text probability inside `box` at twice the text scale, or None when that
-        pass doesn't run for this page."""
-        if not self.upscale_boxes or self.get() is None:
-            return None
-        manager = get_model_manager()
-        with manager.flux_inference_lock:
-            try:
-                if self._upscaled is None:
-                    self._upscaled = UpscaledGlyphMap(self.image)
-                return self._upscaled.box_probability(
-                    box,
-                    partial(
-                        predict_text_probability,
-                        manager.load_text_sam(verbose=self.verbose),
-                    ),
-                )
-            except CancellationError:
-                raise
-            except Exception as e:
-                self.upscale_boxes = False
-                self._upscaled = None
-                log_message(
-                    f"Upscaled text segmentation failed ({e}); LaMa masks use the "
-                    "page map alone",
-                    always_print=True,
-                )
-                return None
 
 
 def _composites_glyphs(config: MangaTranslatorConfig) -> bool:
@@ -197,11 +94,11 @@ class OutsideTextWork:
     cv2_ext: str
     outside_text_data: list[dict[str, Any]] = field(default_factory=list)
     is_color_page: bool = False
-    glyph_map: _PageGlyphMap | None = None
+    glyph_map: PageGlyphMap | None = None
 
     def __post_init__(self):
         if self.glyph_map is None:
-            self.glyph_map = _PageGlyphMap.for_page(
+            self.glyph_map = PageGlyphMap.for_page(
                 self.pil_image, self.config, self.verbose
             )
 
@@ -217,7 +114,7 @@ def _build_outside_text_data(
     cv2_ext: str,
     config: MangaTranslatorConfig,
     verbose: bool,
-    glyph_map: _PageGlyphMap | None,
+    glyph_map: PageGlyphMap | None,
 ) -> list[dict[str, Any]]:
     outside_text_data = []
     original_cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
@@ -843,7 +740,7 @@ def _recovers_missed_text(config: MangaTranslatorConfig) -> bool:
     # Caption-box-only mode deliberately ignores the SFX that recovery mostly finds
     return bool(
         config.outside_text.osb_recover_missed_text
-        and config.outside_text.osb_text_segmentation
+        and config.cleaning.text_segmentation
         and not config.outside_text.osb_text_free_only
     )
 
@@ -915,8 +812,13 @@ def prepare_outside_text_work(
     bubble_data: list[dict[str, Any]] | None = None,
     text_free_boxes: list[list[float]] | None = None,
     panels: list[tuple[int, int, int, int]] | None = None,
+    glyph_map: PageGlyphMap | None = None,
 ) -> OutsideTextWork | None:
-    """Detect outside text and build translation crops without inpainting."""
+    """Detect outside text and build translation crops without inpainting.
+
+    `glyph_map` is the original page's text map, shared with bubble cleaning; one is
+    made for `pil_image` without it.
+    """
     if not config.outside_text.enabled:
         return None
 
@@ -940,7 +842,8 @@ def prepare_outside_text_work(
             text_free_only=config.outside_text.osb_text_free_only,
         )
 
-        glyph_map = _PageGlyphMap.for_page(pil_image, config, verbose)
+        if glyph_map is None:
+            glyph_map = PageGlyphMap.for_page(pil_image, config, verbose)
         if _recovers_missed_text(config):
             glyph_prob = glyph_map.get()
             if glyph_prob is not None:
@@ -1823,17 +1726,9 @@ def _glyph_inpaint_mask(
 ) -> np.ndarray:
     """The region's mask clipped to its text box, then shrunk to the dilated glyphs,
     including those found in the box at twice the text scale."""
-    box_mask = _clip_mask_to_bbox(combined_mask, composite_clip_bbox)
-    glyph_prob = work.glyph_map.get()
-    if glyph_prob is None:
-        return box_mask
-    radius = glyph_dilation_radius(work.pil_image.size)
-    x, y, w, h = cv2.boundingRect(box_mask.astype(np.uint8))
-    box = (x, y, x + w, y + h)
-    box_prob = work.glyph_map.box_probability(box) if w and h else None
-    if box_prob is None:
-        return refine_mask_to_glyphs(box_mask, glyph_prob, radius)
-    return refine_box_mask_to_glyphs(box_mask, glyph_prob, box, box_prob, radius)
+    return work.glyph_map.lama_mask(
+        _clip_mask_to_bbox(combined_mask, composite_clip_bbox)
+    )
 
 
 def _composite_to_glyphs(
@@ -1849,17 +1744,7 @@ def _composite_to_glyphs(
     """
     if not _composites_glyphs(work.config):
         return after
-    glyph_prob = work.glyph_map.get()
-    if glyph_prob is None:
-        return after
-    out = composite_glyphs(
-        np.asarray(before),
-        np.asarray(after),
-        box_mask,
-        glyph_prob,
-        glyph_dilation_radius(work.pil_image.size),
-    )
-    return Image.fromarray(out)
+    return work.glyph_map.composite(before, after, box_mask)
 
 
 def _run_grouped_flux(
@@ -2351,6 +2236,7 @@ def process_outside_text(
     bubble_data: list[dict[str, Any]] | None = None,
     text_free_boxes: list[list[float]] | None = None,
     panels: list[tuple[int, int, int, int]] | None = None,
+    glyph_map: PageGlyphMap | None = None,
 ) -> tuple[Image.Image, list[dict[str, Any]]]:
     """
     Process outside text detection, inpainting, and prepare data for translation.
@@ -2367,6 +2253,7 @@ def process_outside_text(
         image_format: Original image format (PNG, JPEG, etc.)
         processing_scale: The scale factor for image processing
         verbose: Whether to print detailed logging
+        glyph_map: The page's text map, shared with bubble cleaning
 
     Returns:
         Tuple containing:
@@ -2382,6 +2269,7 @@ def process_outside_text(
         bubble_data=bubble_data,
         text_free_boxes=text_free_boxes,
         panels=panels,
+        glyph_map=glyph_map,
     )
     if work is None:
         return pil_image, []

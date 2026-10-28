@@ -55,6 +55,7 @@ from .image.image_utils import (
     upscale_image,
     upscale_image_to_dimension,
 )
+from .image.page_glyph_map import PageGlyphMap
 from .image.sorting import sort_bubbles_by_reading_order
 from .image.strip_splitting import TARGET_RATIO as STRIP_TARGET_RATIO
 from .image.strip_splitting import find_cut_rows
@@ -194,6 +195,7 @@ def _clean_speech_bubbles_for_page(
     processing_scale: float,
     verbose: bool,
     fallback_cv_image: np.ndarray,
+    glyph_map: PageGlyphMap | None = None,
 ) -> tuple[np.ndarray, list[dict[str, Any]]]:
     """Clean bubbles (including optional colored-bubble Flux). Returns (cv_image, info)."""
     try:
@@ -234,6 +236,8 @@ def _clean_speech_bubbles_for_page(
             flux_upscale_small_crops=config.outside_text.flux_upscale_small_crops,
             bubble_detector_model=config.detection.bubble_detector_model,
             request_coordinator=getattr(config, "request_coordinator", None),
+            flux_preserve_art=config.outside_text.flux_preserve_art,
+            glyph_map=glyph_map,
         )
         return cleaned_image_cv, processed_bubbles_info
     except CleaningError as e:
@@ -861,8 +865,13 @@ def _clean_page(
     config: MangaTranslatorConfig,
     processing_scale: float,
     target_mode: str,
+    glyph_map: PageGlyphMap | None = None,
 ) -> tuple[Image.Image, list[dict[str, Any]]]:
-    """Returns (page with bubbles cleaned, in target_mode, per-bubble cleaning info)."""
+    """Returns (page with bubbles cleaned, in target_mode, per-bubble cleaning info).
+
+    `glyph_map` is the text map of the page before outside text was inpainted, which
+    still holds inside the bubbles.
+    """
     if not bubble_data:
         return _as_mode(image, target_mode), []
     log_message("Cleaning speech bubbles...", verbose=config.verbose)
@@ -874,6 +883,7 @@ def _clean_page(
         processing_scale,
         config.verbose,
         pil_to_cv2(image),
+        glyph_map,
     )
     return _as_mode(cv2_to_pil(cleaned_cv), target_mode), processed_bubbles_info
 
@@ -885,11 +895,14 @@ def _finish_deferred_cleaning(
     config: MangaTranslatorConfig,
     processing_scale: float,
     target_mode: str,
+    glyph_map: PageGlyphMap | None = None,
 ) -> tuple[Image.Image, list[dict[str, Any]]]:
     """Finish the deferred outside text inpainting, then clean the bubbles on top of it."""
     if outside_work is not None:
         image, _ = finish_outside_text_work(outside_work)
-    return _clean_page(image, bubble_data, config, processing_scale, target_mode)
+    return _clean_page(
+        image, bubble_data, config, processing_scale, target_mode, glyph_map
+    )
 
 
 def _prepare_bubble_crops(
@@ -1597,6 +1610,8 @@ def translate_and_render(
     _raise_if_cancelled(cancellation_manager)
     panels, debug_panels = _detect_page_panels(image_path, page, config)
     _raise_if_cancelled(cancellation_manager)
+    # Built on first use from the original page, then shared by OSB and bubble cleaning
+    glyph_map = PageGlyphMap.for_page(page, config, verbose)
 
     # Outside text is always detected here, but with overlap its inpainting (and bubble
     # cleaning) is deferred to run alongside the LLM call
@@ -1612,6 +1627,7 @@ def translate_and_render(
             bubble_data=bubble_data,
             text_free_boxes=text_free_boxes,
             panels=panels,
+            glyph_map=glyph_map,
         )
         outside_text_data = (
             outside_work.outside_text_data if outside_work is not None else []
@@ -1626,6 +1642,7 @@ def translate_and_render(
             bubble_data=bubble_data,
             text_free_boxes=text_free_boxes,
             panels=panels,
+            glyph_map=glyph_map,
         )
     # With overlap this is the pre-inpaint page, which the bubble and OSB LLM crops use
     page_cv = pil_to_cv2(page)
@@ -1651,7 +1668,7 @@ def translate_and_render(
         cleaned, processed_bubbles_info = _as_mode(page, target_mode), []
     else:
         cleaned, processed_bubbles_info = _clean_page(
-            page, bubble_data, config, processing_scale, target_mode
+            page, bubble_data, config, processing_scale, target_mode, glyph_map
         )
 
     if config.cleaning_only:
@@ -1670,6 +1687,7 @@ def translate_and_render(
         config,
         processing_scale,
         target_mode,
+        glyph_map,
     )
     valid_bubble_data = [b for b in bubble_data if b.get("image_b64")]
     if not valid_bubble_data and not outside_text_data:

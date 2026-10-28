@@ -365,6 +365,17 @@ def main():
     )
     parser.set_defaults(auto_threshold=True)
     parser.add_argument(
+        "--no-text-segmentation",
+        dest="text_segmentation",
+        action="store_false",
+        help=(
+            "Don't segment text with SAM-TS-L: bubble fills miss edge-hugging text, "
+            "inpainting covers whole text boxes and bubble interiors, and OSB missed "
+            "text recovery is skipped"
+        ),
+    )
+    parser.set_defaults(text_segmentation=True)
+    parser.add_argument(
         "--thresholding-value",
         type=int,
         default=200,
@@ -994,16 +1005,6 @@ def main():
         ),
     )
     parser.add_argument(
-        "--osb-no-text-segmentation",
-        dest="osb_text_segmentation",
-        action="store_false",
-        help=(
-            "Don't segment text with SAM-TS-L: inpaint whole text boxes and skip missed "
-            "text recovery"
-        ),
-    )
-    parser.set_defaults(osb_text_segmentation=True)
-    parser.add_argument(
         "--osb-no-recover-missed-text",
         dest="osb_recover_missed_text",
         action="store_false",
@@ -1271,6 +1272,7 @@ def main():
             auto_threshold=args.auto_threshold,
             roi_shrink_px=max(0, min(10, int(args.roi_shrink_px))),
             inpaint_colored_bubbles=args.inpaint_colored_bubbles,
+            text_segmentation=args.text_segmentation,
         ),
         translation=TranslationConfig(
             provider=provider,
@@ -1373,7 +1375,6 @@ def main():
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
             osb_confidence=args.osb_confidence,
             osb_text_free_only=args.osb_text_free_only,
-            osb_text_segmentation=args.osb_text_segmentation,
             osb_recover_missed_text=args.osb_recover_missed_text,
             seed=args.osb_seed,
             osb_font_dir=args.osb_font_dir,

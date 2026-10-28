@@ -42,6 +42,9 @@ MIN_LETTER_AREA = 20
 MIN_TEXT_AREA = 150
 # A letter belongs to a verified detection when this share of its box lies inside it
 VERIFIED_LETTER_OVERLAP = 0.5
+# Text covers at most 22% of a bubble's fill on 376 sample bubbles, and all of the
+# fill of an SFX letter detected as a bubble
+FILL_TEXT_MAX_SHARE = 0.5
 
 
 def glyph_scale(size: tuple[int, int]) -> float:
@@ -54,6 +57,11 @@ def glyph_dilation_radius(size: tuple[int, int]) -> int:
     return max(
         MIN_DILATION, round(REFERENCE_DILATION * min(size) / REFERENCE_SHORT_SIDE)
     )
+
+
+def _area_scale(size: tuple[int, int]) -> float:
+    """Scale of areas on a (width, height) page relative to the reference scale."""
+    return (min(size) / REFERENCE_SHORT_SIDE) ** 2
 
 
 def _window_starts(length: int) -> list[int]:
@@ -222,6 +230,36 @@ def refine_box_mask_to_glyphs(
     return refined
 
 
+def glyphs_missed_by_fill(
+    prob: np.ndarray,
+    region: np.ndarray,
+    filled: np.ndarray,
+    size: tuple[int, int],
+) -> np.ndarray:
+    """Dilated letters inside `region` that `filled` leaves partly uncovered, clipped
+    to `region`, on a crop of a (width, height) page.
+
+    Bubble fills skip letters that touch the outline, since those don't enclose paper.
+    Letters the fill covers are left out, so it doesn't grow around them. A fill that
+    is mostly text is the inside of a hollow letter detected as a bubble, so it gets
+    nothing.
+    """
+    glyphs = (prob > THRESHOLD) & region
+    if (glyphs & filled).sum() > FILL_TEXT_MAX_SHARE * filled.sum():
+        return np.zeros_like(region, dtype=bool)
+    count, labels = cv2.connectedComponents(glyphs.astype(np.uint8), connectivity=8)
+    uncovered = np.bincount(labels[glyphs & ~filled], minlength=count)
+    keep = uncovered >= MIN_LETTER_AREA * _area_scale(size)
+    keep[0] = False
+    if not keep.any():
+        return np.zeros_like(region, dtype=bool)
+    radius = glyph_dilation_radius(size)
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (2 * radius + 1, 2 * radius + 1)
+    )
+    return cv2.dilate(keep[labels].astype(np.uint8), kernel).astype(bool) & region
+
+
 def _is_flat(image: np.ndarray) -> np.ndarray:
     kernel = np.ones((TONE_FLAT_WINDOW, TONE_FLAT_WINDOW), np.uint8)
     spread = (cv2.dilate(image, kernel) - cv2.erode(image, kernel)).reshape(
@@ -323,7 +361,7 @@ def _gap(a: Box, b: Box) -> int:
 
 def group_glyphs(glyph: np.ndarray) -> list[GlyphGroup]:
     """Connected glyph pixels grouped into text regions by the gaps between them."""
-    area_scale = (min(glyph.shape) / REFERENCE_SHORT_SIDE) ** 2
+    area_scale = _area_scale(glyph.shape)
     count, _, stats, _ = cv2.connectedComponentsWithStats(
         np.asarray(glyph, np.uint8), connectivity=8
     )

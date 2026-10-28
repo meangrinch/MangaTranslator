@@ -44,6 +44,7 @@ class UICleaningSettings:
     auto_threshold: bool = True
     roi_shrink_px: int = 5
     inpaint_colored_bubbles: bool = False
+    text_segmentation: bool = True
 
 
 @dataclass
@@ -153,7 +154,6 @@ class UIOutsideTextSettings:
     flux_residual_diff_threshold: float = 0.15
     osb_confidence: float = 0.5
     osb_text_free_only: bool = False
-    osb_text_segmentation: bool = True
     osb_recover_missed_text: bool = True
     osb_font_dir: str = ""  # Empty = use main font
     osb_max_font_size: int = 64
@@ -275,6 +275,7 @@ class UIConfigState:
             "auto_threshold": self.cleaning.auto_threshold,
             "roi_shrink_px": self.cleaning.roi_shrink_px,
             "inpaint_colored_bubbles": self.cleaning.inpaint_colored_bubbles,
+            "text_segmentation": self.cleaning.text_segmentation,
             "provider": self.provider_settings.provider,
             "google_api_key": self.provider_settings.google_api_key,
             "openai_api_key": self.provider_settings.openai_api_key,
@@ -341,7 +342,6 @@ class UIConfigState:
             "outside_text_flux_residual_diff_threshold": self.outside_text.flux_residual_diff_threshold,
             "outside_text_osb_confidence": self.outside_text.osb_confidence,
             "outside_text_osb_text_free_only": self.outside_text.osb_text_free_only,
-            "outside_text_osb_text_segmentation": self.outside_text.osb_text_segmentation,
             "outside_text_osb_recover_missed_text": self.outside_text.osb_recover_missed_text,
             "outside_text_enable_page_number_filtering": self.outside_text.enable_page_number_filtering,
             "outside_text_page_filter_margin_threshold": self.outside_text.page_filter_margin_threshold,
@@ -479,6 +479,9 @@ class UIConfigState:
                     "inpaint_colored_bubbles",
                     defaults.get("inpaint_colored_bubbles", False),
                 ),
+                text_segmentation=data.get(
+                    "text_segmentation", defaults.get("text_segmentation", True)
+                ),
             ),
             outside_text=UIOutsideTextSettings(
                 enabled=data.get("outside_text_enabled", False),
@@ -539,9 +542,6 @@ class UIConfigState:
                 ),
                 osb_confidence=data.get("outside_text_osb_confidence", 0.5),
                 osb_text_free_only=data.get("outside_text_osb_text_free_only", False),
-                osb_text_segmentation=data.get(
-                    "outside_text_osb_text_segmentation", True
-                ),
                 osb_recover_missed_text=data.get(
                     "outside_text_osb_recover_missed_text", True
                 ),
@@ -853,6 +853,7 @@ def map_ui_to_backend_config(
         auto_threshold=ui_state.cleaning.auto_threshold,
         roi_shrink_px=ui_state.cleaning.roi_shrink_px,
         inpaint_colored_bubbles=ui_state.cleaning.inpaint_colored_bubbles,
+        text_segmentation=ui_state.cleaning.text_segmentation,
     )
 
     translation_cfg = TranslationConfig(
@@ -987,7 +988,6 @@ def map_ui_to_backend_config(
         flux_residual_diff_threshold=ui_state.outside_text.flux_residual_diff_threshold,
         osb_confidence=ui_state.outside_text.osb_confidence,
         osb_text_free_only=ui_state.outside_text.osb_text_free_only,
-        osb_text_segmentation=ui_state.outside_text.osb_text_segmentation,
         osb_recover_missed_text=ui_state.outside_text.osb_recover_missed_text,
         osb_font_dir=str(osb_font_path) if osb_font_path else None,
         osb_max_font_size=ui_state.outside_text.osb_max_font_size,

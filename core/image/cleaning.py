@@ -22,8 +22,10 @@ from utils.exceptions import (
 from utils.logging import log_message
 
 from .detection import detect_speech_bubbles
+from .glyph_mask import glyphs_missed_by_fill
 from .image_utils import pil_to_cv2
 from .inpainting import make_flux_inpainter
+from .page_glyph_map import PageGlyphMap
 
 # Cleaning parameters
 GRAYSCALE_MIDPOINT = 128  # Threshold for determining black vs white bubbles
@@ -63,6 +65,30 @@ def _resample_inpainted_bubble_color(
         bubble_info["color"] = (mean_val, mean_val, mean_val)
 
 
+def _bubble_inpaint_mask(
+    mask: np.ndarray, glyph_map: PageGlyphMap | None, inpaint_method: str
+) -> np.ndarray:
+    """LaMa erases every masked pixel, so it gets only the letters."""
+    if glyph_map is None or inpaint_method != "lama_manga":
+        return mask
+    return glyph_map.lama_mask(mask)
+
+
+def _composite_bubble(
+    before: Image.Image,
+    after: Image.Image,
+    mask: np.ndarray,
+    glyph_map: PageGlyphMap | None,
+    inpaint_method: str,
+    preserve_art: bool,
+) -> Image.Image:
+    """Keep the original art between and around the letters of an edit-model redraw,
+    which covers the whole bubble interior."""
+    if glyph_map is None or inpaint_method == "lama_manga" or not preserve_art:
+        return after
+    return glyph_map.composite(before, after, mask)
+
+
 def _inpaint_colored_bubbles_with_coordinator(
     pil_working: Image.Image,
     colored_bubbles: list[dict[str, Any]],
@@ -70,6 +96,9 @@ def _inpaint_colored_bubbles_with_coordinator(
     base_seed: int,
     verbose: bool,
     request_coordinator: Any,
+    glyph_map: PageGlyphMap | None,
+    inpaint_method: str,
+    preserve_art: bool,
 ) -> Image.Image:
     candidates = []
     for idx, bubble_info in enumerate(colored_bubbles):
@@ -81,6 +110,9 @@ def _inpaint_colored_bubbles_with_coordinator(
                 "index": idx,
                 "bubble_info": bubble_info,
                 "mask": mask_bool,
+                "inpaint_mask": _bubble_inpaint_mask(
+                    mask_bool, glyph_map, inpaint_method
+                ),
                 "seed": base_seed + idx if base_seed > 0 else base_seed,
                 "bbox_tuple": bubble_info.get("bbox"),
                 "context_bbox": context_bbox,
@@ -105,13 +137,21 @@ def _inpaint_colored_bubbles_with_coordinator(
                 try:
                     result_image = inpainter.inpaint_mask(
                         image_for_job,
-                        candidate["mask"],
+                        candidate["inpaint_mask"],
                         seed=candidate["seed"],
                         verbose=verbose,
                         ocr_params={
                             "type": "colored_bubble",
                             "bbox": candidate["bbox_tuple"],
                         },
+                    )
+                    result_image = _composite_bubble(
+                        base_img,
+                        result_image,
+                        candidate["mask"],
+                        glyph_map,
+                        inpaint_method,
+                        preserve_art,
                     )
                     return {
                         "candidate": candidate,
@@ -267,6 +307,7 @@ def process_single_bubble(
     processing_scale: float = 1.0,
     image_bgr: np.ndarray | None = None,
     auto_threshold: bool = False,
+    glyph_prob: np.ndarray | None = None,
 ):
     """
     Process a single speech bubble mask to extract text regions and determine fill color.
@@ -290,6 +331,8 @@ def process_single_bubble(
         processing_scale: Processing scale multiplier
         image_bgr (numpy.ndarray): BGR image for text color sampling
         auto_threshold (bool): Scale thresholding_value by the bubble's background level
+        glyph_prob (numpy.ndarray): Page text probability; the mask then also takes the
+            letters inside the bubble that the fill leaves uncovered
 
     Returns:
         tuple: (final_mask, fill_color_bgr, is_colored, sample_color_bgr, text_bbox, text_color_bgr)
@@ -465,6 +508,18 @@ def process_single_bubble(
                 )
                 x, y, w, h = cv2.boundingRect(largest_contour)
                 text_bbox = (x + ox, y + oy, x + ox + w, y + oy + h)
+                if glyph_prob is not None:
+                    # Within the same shrunk ROI as the fill, so where letters cross
+                    # the outline, the outline is kept
+                    final_crop = final_mask[crop]
+                    final_crop[
+                        glyphs_missed_by_fill(
+                            glyph_prob[crop],
+                            (base_mask == 255) & (shrunk_roi_mask == 255),
+                            final_crop == 255,
+                            (img_width, img_height),
+                        )
+                    ] = 255
 
                 if classify_colored:
                     # Sample bubble interior excluding exact text pixels and outline to determine if colored
@@ -635,6 +690,8 @@ def clean_speech_bubbles(
     flux_upscale_small_crops: bool = True,
     bubble_detector_model: str = "yolo_2",
     request_coordinator: Any | None = None,
+    flux_preserve_art: bool = True,
+    glyph_map: PageGlyphMap | None = None,
 ):
     """
     Clean speech bubbles using YOLO/SAM masks and optional Flux inpainting for colored bubbles.
@@ -658,6 +715,10 @@ def clean_speech_bubbles(
         flux_seed (int): Seed for Flux; -1 enables random per run.
         osb_text_verification (bool): When True, expand bubble boxes to fully cover OSB text detections.
         osb_text_hf_token (str): Optional token for OSB text model downloads.
+        flux_preserve_art (bool): Paste edit-model redraws of colored bubbles only over
+            the letters of `glyph_map`.
+        glyph_map: Text map of the original page. Letters the fill leaves uncovered are
+            cleaned too, and LaMa inpaints only the letters of colored bubbles.
 
     Returns:
         numpy.ndarray: Cleaned image with text removed.
@@ -712,6 +773,7 @@ def clean_speech_bubbles(
             )
 
         processed_bubbles = []
+        glyph_prob = glyph_map.get() if glyph_map is not None and detections else None
 
         effective_roi_shrink_px = float(
             scale_scalar(
@@ -772,6 +834,7 @@ def clean_speech_bubbles(
                     processing_scale=processing_scale,
                     image_bgr=image,
                     auto_threshold=auto_threshold,
+                    glyph_prob=glyph_prob,
                 )
             except Exception as e:
                 retry_res = None
@@ -795,6 +858,7 @@ def clean_speech_bubbles(
                         processing_scale,
                         verbose,
                         inpaint_colored_bubbles,
+                        glyph_prob,
                     )
                     log_message(
                         f"Otsu retry {'successful' if retry_res else 'failed'} for {bbox}",
@@ -870,12 +934,19 @@ def clean_speech_bubbles(
                             base_seed,
                             verbose,
                             request_coordinator,
+                            glyph_map,
+                            inpaint_method,
+                            flux_preserve_art,
                         )
                     else:
                         for idx, bubble_info in enumerate(colored_bubbles):
                             raise_if_cancelled()
                             mask_np = bubble_info["mask"]
                             mask_bool = mask_np.astype(bool)
+                            inpaint_mask = _bubble_inpaint_mask(
+                                mask_bool, glyph_map, inpaint_method
+                            )
+                            before = pil_working
                             region_seed = (
                                 base_seed + idx if base_seed > 0 else base_seed
                             )
@@ -890,7 +961,7 @@ def clean_speech_bubbles(
                                     pil_working = request_coordinator.run(
                                         inpaint_call,
                                         pil_working,
-                                        mask_bool,
+                                        inpaint_mask,
                                         seed=region_seed,
                                         verbose=verbose,
                                         ocr_params=ocr_params,
@@ -898,11 +969,19 @@ def clean_speech_bubbles(
                                 else:
                                     pil_working = inpaint_call(
                                         pil_working,
-                                        mask_bool,
+                                        inpaint_mask,
                                         seed=region_seed,
                                         verbose=verbose,
                                         ocr_params=ocr_params,
                                     )
+                                pil_working = _composite_bubble(
+                                    before,
+                                    pil_working,
+                                    mask_bool,
+                                    glyph_map,
+                                    inpaint_method,
+                                    flux_preserve_art,
+                                )
                                 bubble_info["inpainted"] = True
                                 _resample_inpainted_bubble_color(
                                     pil_working, bubble_info, mask_bool
@@ -968,6 +1047,7 @@ def retry_cleaning_with_otsu(
     processing_scale: float = 1.0,
     verbose: bool = False,
     classify_colored: bool = False,
+    glyph_prob: np.ndarray | None = None,
 ) -> dict | None:
     """
     Retry cleaning for a single bubble using Otsu thresholding.
@@ -1037,6 +1117,7 @@ def retry_cleaning_with_otsu(
             neighbor_bboxes=bubble_info.get("neighbor_bboxes"),
             processing_scale=processing_scale,
             image_bgr=image_bgr,
+            glyph_prob=glyph_prob,
         )
     except CleaningError as e:
         log_message(

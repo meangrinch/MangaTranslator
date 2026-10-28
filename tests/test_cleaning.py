@@ -117,3 +117,177 @@ def test_cleaning_a_bubble_does_not_depend_on_its_position_on_the_page(use_otsu)
         v + (ox if i % 2 == 0 else oy) for i, v in enumerate(s_text_bbox)
     )
     assert l_text_color == s_text_color
+
+
+def _edge_letter_page(touch_edge=True):
+    """White bubble with a letter in the middle and a bar that runs into the outline
+    (or stops short of it), plus the text map of both."""
+    from PIL import Image
+
+    gray = np.full((200, 200), 120, np.uint8)
+    base = np.zeros_like(gray)
+    cv2.ellipse(base, (100, 100), (70, 80), 0, 0, 360, 255, -1)
+    gray[base == 255] = 245
+    cv2.ellipse(gray, (100, 100), (70, 80), 0, 0, 360, 0, 3)
+    letters = np.zeros_like(gray, dtype=bool)
+    letters[90:120, 70:80] = True
+    letters[(10 if touch_edge else 40) : 60, 96:104] = True
+    gray[letters] = 20
+    prob = letters.astype(np.float32)
+    return Image.fromarray(gray).convert("RGB"), base, prob
+
+
+class _Map:
+    """Text map stub; bubble cleaning only reads the probabilities."""
+
+    def __init__(self, prob):
+        self.prob = prob
+
+    def get(self):
+        return self.prob
+
+
+def test_glyphs_left_by_the_fill_are_cleaned_inside_the_bubble():
+    page, base, prob = _edge_letter_page()
+    detection = {"bbox": (30, 20, 170, 180), "sam_mask": base > 0}
+
+    plain, _ = clean_speech_bubbles(page, None, pre_computed_detections=[detection])
+    cleaned, info = clean_speech_bubbles(
+        page, None, pre_computed_detections=[detection], glyph_map=_Map(prob)
+    )
+
+    assert plain[40, 100].tolist() == [20, 20, 20]  # the fill misses the edge letter
+    assert cleaned[40, 100].tolist() == [255, 255, 255]
+    assert cleaned[25, 100].tolist() == [255, 255, 255]  # up to the outline
+    assert cleaned[20, 100].tolist() == [20, 20, 20]  # the outline under the letter
+    assert cleaned[12, 100].tolist() == [20, 20, 20]  # outside the bubble polygon
+    assert cleaned[100, 31].tolist() == [0, 0, 0]  # outline away from the letter
+    assert info[0]["mask"][40, 100] == 255
+
+
+def test_glyphs_the_fill_covers_leave_the_mask_unchanged():
+    page, base, prob = _edge_letter_page(touch_edge=False)
+    detection = {"bbox": (30, 20, 170, 180), "sam_mask": base > 0}
+
+    _, plain = clean_speech_bubbles(page, None, pre_computed_detections=[detection])
+    _, info = clean_speech_bubbles(
+        page, None, pre_computed_detections=[detection], glyph_map=_Map(prob)
+    )
+
+    assert np.array_equal(plain[0]["mask"], info[0]["mask"])
+
+
+def test_a_bubble_detected_inside_a_letter_takes_no_glyphs():
+    page, base, prob = _edge_letter_page()
+    detection = {"bbox": (30, 20, 170, 180), "sam_mask": base > 0}
+    # Hollow SFX letters can pass as bubbles: their white inside is the fill
+    prob[base > 0] = 1
+
+    _, plain = clean_speech_bubbles(page, None, pre_computed_detections=[detection])
+    _, info = clean_speech_bubbles(
+        page, None, pre_computed_detections=[detection], glyph_map=_Map(prob)
+    )
+
+    assert np.array_equal(plain[0]["mask"], info[0]["mask"])
+
+
+def _colored_bubbles_page():
+    """Two bubbles with a gradient interior, each with one letter, and their map."""
+    from PIL import Image
+
+    rgb = np.full((200, 400, 3), 120, np.uint8)
+    prob = np.zeros((200, 400), np.float32)
+    detections = []
+    for cx in (100, 300):
+        base = np.zeros((200, 400), np.uint8)
+        cv2.ellipse(base, (cx, 100), (70, 80), 0, 0, 360, 255, -1)
+        ys, xs = np.nonzero(base)
+        # Red ramps across the bubble and blue down it, so the interior isn't solid
+        rgb[ys, xs] = np.stack(
+            [
+                150 + (xs - cx + 70) * 105 // 140,
+                np.full_like(xs, 255),
+                150 + (ys - 20) * 100 // 160,
+            ],
+            axis=1,
+        ).astype(np.uint8)
+        rgb[85:115, cx - 5 : cx + 5] = 20
+        prob[85:115, cx - 5 : cx + 5] = 1
+        detections.append({"bbox": (cx - 70, 20, cx + 70, 180), "sam_mask": base > 0})
+    return Image.fromarray(rgb), detections, prob
+
+
+class _WhiteInpainter:
+    """Paints the mask white, like an inpainter that redraws the whole region."""
+
+    def __init__(self):
+        self.masks = []
+
+    def inpaint_mask(self, image, mask, **kwargs):
+        mask = np.asarray(mask, bool)
+        self.masks.append(mask.copy())
+        out = np.asarray(image).copy()
+        out[mask] = 255
+        from PIL import Image
+
+        return Image.fromarray(out)
+
+
+class _InlineCoordinator:
+    def map_ordered(self, jobs):
+        return [job() for job in jobs]
+
+    def run(self, fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
+
+def _clean_colored(monkeypatch, method, preserve_art=True, coordinator=None):
+    from core.image import cleaning
+    from core.image.page_glyph_map import PageGlyphMap
+
+    page, detections, prob = _colored_bubbles_page()
+    inpainter = _WhiteInpainter()
+    monkeypatch.setattr(cleaning, "make_flux_inpainter", lambda *a, **k: inpainter)
+    glyph_map = PageGlyphMap(page, keep_model=True, prob=prob)
+    cleaned, info = clean_speech_bubbles(
+        page,
+        None,
+        pre_computed_detections=detections,
+        inpaint_colored_bubbles=True,
+        inpaint_method=method,
+        flux_preserve_art=preserve_art,
+        glyph_map=glyph_map,
+        request_coordinator=coordinator,
+    )
+    assert all(b["is_colored"] and b["inpainted"] for b in info)
+    return np.asarray(page), cleaned[..., ::-1], inpainter.masks
+
+
+@pytest.mark.parametrize("coordinator", [None, _InlineCoordinator()])
+def test_lama_inpaints_only_the_glyphs_of_colored_bubbles(monkeypatch, coordinator):
+    _, _, masks = _clean_colored(monkeypatch, "lama_manga", coordinator=coordinator)
+
+    assert len(masks) == 2
+    for mask, cx in zip(masks, (100, 300), strict=True):
+        assert mask[100, cx] and mask[100, cx + 5]  # the letter and its dilation
+        assert not mask[100, cx - 40]  # gradient away from the letter
+
+
+@pytest.mark.parametrize("coordinator", [None, _InlineCoordinator()])
+def test_edit_model_redraws_of_colored_bubbles_keep_the_art_around_letters(
+    monkeypatch, coordinator
+):
+    original, cleaned, masks = _clean_colored(
+        monkeypatch, "flux_klein_4b", coordinator=coordinator
+    )
+
+    assert masks[0][100, 60]  # the edit model still sees the whole interior
+    for cx in (100, 300):
+        assert (cleaned[100, cx] > 200).all()  # tone-matched to the gradient
+        assert np.array_equal(cleaned[100, cx - 40], original[100, cx - 40])
+
+
+def test_colored_bubbles_take_the_whole_redraw_without_preserve_art(monkeypatch):
+    _, cleaned, _ = _clean_colored(monkeypatch, "flux_klein_4b", preserve_art=False)
+
+    assert cleaned[100, 60].tolist() == [255, 255, 255]

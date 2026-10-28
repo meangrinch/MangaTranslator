@@ -178,7 +178,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
         outside_text_flux_residual_diff_threshold_val,
         outside_text_osb_confidence_val,
         outside_text_osb_text_free_only_val,
-        outside_text_osb_text_segmentation_val,
+        text_segmentation_val,
         outside_text_osb_recover_missed_text_val,
         outside_text_min_area_ignore_ratio_percent_val,
         outside_text_enable_page_number_filtering_val,
@@ -259,6 +259,7 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             auto_threshold=auto_threshold,
             roi_shrink_px=int(roi_shrink_px),
             inpaint_colored_bubbles=inpaint_colored_bubbles,
+            text_segmentation=bool(text_segmentation_val),
         ),
         outside_text=UIOutsideTextSettings(
             enabled=outside_text_enabled_val,
@@ -280,7 +281,6 @@ def _build_ui_state_from_args(args: tuple, is_batch: bool) -> UIConfigState:
             ),
             osb_confidence=float(outside_text_osb_confidence_val),
             osb_text_free_only=bool(outside_text_osb_text_free_only_val),
-            osb_text_segmentation=bool(outside_text_osb_text_segmentation_val),
             osb_recover_missed_text=bool(outside_text_osb_recover_missed_text_val),
             min_area_ignore_ratio=float(outside_text_min_area_ignore_ratio_percent_val)
             / 100.0,
@@ -1200,7 +1200,7 @@ def handle_save_config_click(*args: Any) -> str:
         outside_text_flux_residual_diff_threshold_val,
         outside_text_osb_confidence_val,
         outside_text_osb_text_free_only_val,
-        outside_text_osb_text_segmentation_val,
+        text_segmentation_val,
         outside_text_osb_recover_missed_text_val,
         outside_text_min_area_ignore_ratio_percent_val,
         outside_text_enable_page_number_filtering_val,
@@ -1260,6 +1260,7 @@ def handle_save_config_click(*args: Any) -> str:
             auto_threshold=auto_threshold,
             inpaint_colored_bubbles=inpaint_colored_bubbles,
             roi_shrink_px=int(max(0, min(8, roi_shrink_px))),
+            text_segmentation=bool(text_segmentation_val),
         ),
         outside_text=UIOutsideTextSettings(
             enabled=outside_text_enabled_val,
@@ -1281,7 +1282,6 @@ def handle_save_config_click(*args: Any) -> str:
             ),
             osb_confidence=float(outside_text_osb_confidence_val),
             osb_text_free_only=bool(outside_text_osb_text_free_only_val),
-            osb_text_segmentation=bool(outside_text_osb_text_segmentation_val),
             osb_recover_missed_text=bool(outside_text_osb_recover_missed_text_val),
             min_area_ignore_ratio=float(outside_text_min_area_ignore_ratio_percent_val)
             / 100.0,
@@ -1789,7 +1789,7 @@ def handle_reset_defaults_click(fonts_base_dir: Path) -> list[gr.update]:
         default_ui_state.outside_text.flux_residual_diff_threshold,
         default_ui_state.outside_text.osb_confidence,
         default_ui_state.outside_text.osb_text_free_only,
-        default_ui_state.outside_text.osb_text_segmentation,
+        default_ui_state.cleaning.text_segmentation,
         default_ui_state.outside_text.osb_recover_missed_text,
         default_ui_state.outside_text.min_area_ignore_ratio * 100.0,
         gr.update(value=default_ui_state.outside_text.enable_page_number_filtering),

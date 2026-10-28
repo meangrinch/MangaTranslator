@@ -800,6 +800,20 @@ def create_layout(
                                     "Lower helps clean edge-hugging text; higher preserves outlines."
                                 ),
                             )
+                            _text_segmentation = saved_settings.get(
+                                "text_segmentation", True
+                            )
+                            text_segmentation = gr.Checkbox(
+                                value=_text_segmentation,
+                                label="Use Text Segmentation Model",
+                                info=(
+                                    "Segment text with SAM-TS-L to also erase letters that touch "
+                                    "bubble outlines, and to inpaint colored bubbles and OSB text "
+                                    "only over the letters. When off, inpainting covers whole "
+                                    "bubble interiors and text boxes, and OSB Recover Missed Text "
+                                    "is disabled."
+                                ),
+                            )
 
                         setting_groups.append(group_cleaning)
 
@@ -1671,17 +1685,6 @@ def create_layout(
                                         "text blocks), ignoring stray SFX and other detections."
                                     ),
                                 )
-                                _text_segmentation = saved_settings.get(
-                                    "outside_text_osb_text_segmentation", True
-                                )
-                                outside_text_osb_text_segmentation = gr.Checkbox(
-                                    value=_text_segmentation,
-                                    label="Use Text Segmentation Model",
-                                    info=(
-                                        "Segment text with SAM-TS-L. When off, inpainting covers "
-                                        "whole text boxes and Recover Missed Text is disabled."
-                                    ),
-                                )
                                 outside_text_osb_recover_missed_text = gr.Checkbox(
                                     value=saved_settings.get(
                                         "outside_text_osb_recover_missed_text", True
@@ -2054,8 +2057,9 @@ def create_layout(
                                     label="Preserve Surrounding Art",
                                     info=(
                                         "Paste the inpainted patch only over the letters found by the "
-                                        "text segmentation model, keeping the original art around them. "
-                                        "LaMa always erases only the letters."
+                                        "text segmentation model, keeping the original art around them, "
+                                        "in OSB regions and colored bubbles. LaMa always erases only "
+                                        "the letters."
                                     ),
                                     visible=_uses_model,
                                     interactive=(
@@ -2553,7 +2557,7 @@ def create_layout(
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
-            outside_text_osb_text_segmentation,
+            text_segmentation,
             outside_text_osb_recover_missed_text,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
@@ -2701,7 +2705,7 @@ def create_layout(
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
-            outside_text_osb_text_segmentation,
+            text_segmentation,
             outside_text_osb_recover_missed_text,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
@@ -2841,7 +2845,7 @@ def create_layout(
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
-            outside_text_osb_text_segmentation,
+            text_segmentation,
             outside_text_osb_recover_missed_text,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
@@ -3358,7 +3362,7 @@ def create_layout(
                 outside_text_flux_sdcpp_text_encoder_quant_state,
                 outside_text_flux_num_inference_steps,
                 outside_text_flux_group_regions,
-                outside_text_osb_text_segmentation,
+                text_segmentation,
             ],
             outputs=[
                 outside_text_flux_backend,
@@ -3387,13 +3391,13 @@ def create_layout(
 
         for control in (
             outside_text_osb_text_free_only,
-            outside_text_osb_text_segmentation,
+            text_segmentation,
         ):
             control.change(
                 fn=_update_recovery_interactivity,
                 inputs=[
                     outside_text_osb_text_free_only,
-                    outside_text_osb_text_segmentation,
+                    text_segmentation,
                 ],
                 outputs=[outside_text_osb_recover_missed_text],
                 queue=False,
@@ -3404,9 +3408,9 @@ def create_layout(
                 interactive=_preserve_art_interactive(method, text_segmentation)
             )
 
-        outside_text_osb_text_segmentation.change(
+        text_segmentation.change(
             fn=_update_preserve_art_interactivity,
-            inputs=[outside_text_osb_text_segmentation, outside_text_inpainting_method],
+            inputs=[text_segmentation, outside_text_inpainting_method],
             outputs=[outside_text_flux_preserve_art],
             queue=False,
         )
