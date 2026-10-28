@@ -2059,10 +2059,8 @@ def create_layout(
                                     ),
                                     label="Preserve Surrounding Art",
                                     info=(
-                                        "Paste the inpainted patch only over the letters found by the "
-                                        "text segmentation model, keeping the original art around them, "
-                                        "in OSB regions and colored bubbles. LaMa always erases only "
-                                        "the letters."
+                                        "Paste the inpainted patch over the letters found by the text "
+                                        "segmentation model, preserving the original artwork around them."
                                     ),
                                     visible=_uses_model,
                                     interactive=_preserve_art_offered,

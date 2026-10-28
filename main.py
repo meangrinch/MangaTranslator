@@ -847,8 +847,9 @@ def main():
         dest="osb_flux_preserve_art",
         action="store_false",
         help=(
-            "Paste diffusion inpainting over the whole OSB text box instead of only "
-            "over the letters found by the text segmentation model (not LaMa)"
+            "Paste the whole inpainted patch instead of only over the letters found by "
+            "the text segmentation model, replacing the original artwork around them "
+            "(LaMa always preserves it)"
         ),
     )
     parser.set_defaults(osb_flux_preserve_art=True)
