@@ -160,9 +160,12 @@ def test_preserve_art_is_offered_for_every_model_but_lama(
     assert preserve["visible"] is uses_model
     assert preserve["interactive"] is offered
     assert toggled["interactive"] is offered
-    # Forced off while disabled, restored from saved config when enabled
-    assert preserve["value"] is (offered and saved_choice)
-    assert toggled["value"] is (offered and saved_choice)
+    # Restored from saved config when enabled; while disabled, shows whether the
+    # art is kept anyway (LaMa erases only the letters the segmentation finds)
+    lama_keeps_art = method == "lama_manga" and text_segmentation
+    expected = (offered and saved_choice) or lama_keeps_art
+    assert preserve["value"] is expected
+    assert toggled["value"] is expected
 
 
 def test_a_forced_backend_does_not_replace_the_saved_choice(tmp_path):

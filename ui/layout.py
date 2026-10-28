@@ -2047,9 +2047,15 @@ def create_layout(
                                     and _text_segmentation
                                 )
                                 outside_text_flux_preserve_art = gr.Checkbox(
-                                    value=_preserve_art_offered
-                                    and saved_settings.get(
-                                        "outside_text_flux_preserve_art", True
+                                    value=(
+                                        _preserve_art_offered
+                                        and saved_settings.get(
+                                            "outside_text_flux_preserve_art", True
+                                        )
+                                    )
+                                    or (
+                                        _initial_method == "lama_manga"
+                                        and _text_segmentation
                                     ),
                                     label="Preserve Surrounding Art",
                                     info=(
@@ -3252,6 +3258,15 @@ def create_layout(
                 interactive=interactive, value=interactive and saved, **kwargs
             )
 
+        def _preserve_art_update(method: str, text_segmentation: bool, **kwargs):
+            if method == "lama_manga" and text_segmentation:
+                return gr.update(interactive=False, value=True, **kwargs)
+            return _forced_off_checkbox_update(
+                "outside_text_flux_preserve_art",
+                _preserve_art_interactive(method, text_segmentation),
+                **kwargs,
+            )
+
         def _update_inpainting_controls(
             method: str,
             current_backend: str,
@@ -3322,11 +3337,7 @@ def create_layout(
                 luminance_update,
                 gr.update(visible=uses_model, interactive=is_klein),
                 gr.update(visible=uses_model, interactive=uses_model),
-                _forced_off_checkbox_update(
-                    "outside_text_flux_preserve_art",
-                    _preserve_art_interactive(method, text_segmentation),
-                    visible=uses_model,
-                ),
+                _preserve_art_update(method, text_segmentation, visible=uses_model),
                 gr.update(
                     visible=residual_interactive,
                     interactive=residual_interactive,
@@ -3397,10 +3408,7 @@ def create_layout(
             )
 
         def _update_preserve_art_interactivity(text_segmentation: bool, method: str):
-            return _forced_off_checkbox_update(
-                "outside_text_flux_preserve_art",
-                _preserve_art_interactive(method, text_segmentation),
-            )
+            return _preserve_art_update(method, text_segmentation)
 
         text_segmentation.change(
             fn=_update_preserve_art_interactivity,
