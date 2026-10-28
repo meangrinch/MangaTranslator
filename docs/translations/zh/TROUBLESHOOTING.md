@@ -151,6 +151,7 @@
   - 启用“合并重绘区域 (Group Inpainting Regions)”以在单次运行中重绘多个 OSB 掩码（代价是会降低质量）
   - 禁用“将裁剪块放大到约 100万像素 (Upscale Crops to ~1MP)”（代价是会降低质量）
   - 尝试切换到其他模型/后端；LaMa Manga 快得多，但还原的细节较少
+  - 禁用“使用文本分割模型 (Use Text Segmentation Model)”以跳过 SAM-TS-L（文本分割）
 
 - **重绘区域出现轻微色差：**
   - Flux.2 Klein 模型可能会引入轻微的颜色变化；尝试启用/禁用“亮度校正 (Luminance Correction)”

@@ -94,7 +94,7 @@ def test_inpainting_method_change_keeps_radio_values_in_their_choices(tmp_path, 
     )
 
     # Start from settings another method left behind
-    updates = handler(method, "nunchaku", "INT8-ConvRot", "Q4_K_XL", 4, False)
+    updates = handler(method, "nunchaku", "INT8-ConvRot", "Q4_K_XL", 4, False, True)
 
     backend, _, _, diffusion, text_encoder, steps, *_ = updates
     for radio in (backend, diffusion, text_encoder):
@@ -120,7 +120,7 @@ def test_luminance_correction_is_offered_for_every_model(
         if getattr(dep.fn, "__name__", "") == "_update_inpainting_controls"
     )
 
-    luminance = handler(method, "sdcpp", "", "", 4, group_regions)[6]
+    luminance = handler(method, "sdcpp", "", "", 4, group_regions, True)[6]
 
     uses_model = method not in ("opencv", "none")
     assert luminance["visible"] is uses_model
@@ -128,7 +128,10 @@ def test_luminance_correction_is_offered_for_every_model(
 
 
 @pytest.mark.parametrize("method", INPAINTING_METHODS)
-def test_preserve_art_is_offered_for_every_model_but_lama(tmp_path, method):
+@pytest.mark.parametrize("text_segmentation", [True, False])
+def test_preserve_art_is_offered_for_every_model_but_lama(
+    tmp_path, method, text_segmentation
+):
     app = layout.create_layout(
         models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
     )
@@ -138,11 +141,18 @@ def test_preserve_art_is_offered_for_every_model_but_lama(tmp_path, method):
         if getattr(dep.fn, "__name__", "") == "_update_inpainting_controls"
     )
 
-    preserve = handler(method, "sdcpp", "", "", 4, False)[9]
+    preserve = handler(method, "sdcpp", "", "", 4, False, text_segmentation)[9]
+    toggled = next(
+        dep.fn
+        for dep in app.fns.values()
+        if getattr(dep.fn, "__name__", "") == "_update_preserve_art_interactivity"
+    )(text_segmentation, method)
 
     uses_model = method not in ("opencv", "none")
+    offered = uses_model and method != "lama_manga" and text_segmentation
     assert preserve["visible"] is uses_model
-    assert preserve["interactive"] is (uses_model and method != "lama_manga")
+    assert preserve["interactive"] is offered
+    assert toggled["interactive"] is offered
 
 
 def test_a_forced_backend_does_not_replace_the_saved_choice(tmp_path):
@@ -157,11 +167,11 @@ def test_a_forced_backend_does_not_replace_the_saved_choice(tmp_path):
     )
     assert not any(isinstance(block, gr.State) for block in dep.outputs)
 
-    fibo = dep.fn("fibo2_edit_turbo", "sdnq", "Q6_K", "Q6_K_XL", 4, False)
+    fibo = dep.fn("fibo2_edit_turbo", "sdnq", "Q6_K", "Q6_K_XL", 4, False, True)
     assert fibo[0]["value"] == "sdcpp"
     assert fibo[3]["value"] == "INT8-ConvRot"
 
-    flux3 = dep.fn("flux3_klein", "sdnq", "Q6_K", "Q6_K_XL", 4, False)
+    flux3 = dep.fn("flux3_klein", "sdnq", "Q6_K", "Q6_K_XL", 4, False, True)
     assert flux3[0]["value"] == "sdnq"
     assert flux3[3]["value"] == "Q6_K"
 
@@ -190,8 +200,9 @@ def test_backend_and_quant_radios_store_only_user_choices(tmp_path):
 
 
 @pytest.mark.parametrize("text_free_only", [False, True])
-def test_missed_text_recovery_is_greyed_out_for_caption_boxes_only(
-    tmp_path, text_free_only
+@pytest.mark.parametrize("text_segmentation", [True, False])
+def test_missed_text_recovery_needs_text_segmentation_and_not_caption_boxes_only(
+    tmp_path, text_free_only, text_segmentation
 ):
     app = layout.create_layout(
         models_dir=tmp_path, fonts_base_dir=tmp_path, target_device=torch.device("cpu")
@@ -202,4 +213,6 @@ def test_missed_text_recovery_is_greyed_out_for_caption_boxes_only(
         if getattr(dep.fn, "__name__", "") == "_update_recovery_interactivity"
     )
 
-    assert handler(text_free_only)["interactive"] is not text_free_only
+    assert handler(text_free_only, text_segmentation)["interactive"] is (
+        text_segmentation and not text_free_only
+    )

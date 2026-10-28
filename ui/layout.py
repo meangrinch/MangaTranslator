@@ -1671,6 +1671,17 @@ def create_layout(
                                         "text blocks), ignoring stray SFX and other detections."
                                     ),
                                 )
+                                _text_segmentation = saved_settings.get(
+                                    "outside_text_osb_text_segmentation", True
+                                )
+                                outside_text_osb_text_segmentation = gr.Checkbox(
+                                    value=_text_segmentation,
+                                    label="Use Text Segmentation Model",
+                                    info=(
+                                        "Segment text with SAM-TS-L. When off, inpainting covers "
+                                        "whole text boxes and Recover Missed Text is disabled."
+                                    ),
+                                )
                                 outside_text_osb_recover_missed_text = gr.Checkbox(
                                     value=saved_settings.get(
                                         "outside_text_osb_recover_missed_text", True
@@ -1680,10 +1691,10 @@ def create_layout(
                                         "Also translate text the OSB model misses, such as large "
                                         "SFX and captions, when the text segmentation model finds "
                                         "it and the OSB model confirms it up close. Disable if "
-                                        "art gets erased as text. On CPU, only with LaMa or "
-                                        "Preserve Surrounding Art."
+                                        "art gets erased as text."
                                     ),
-                                    interactive=not saved_settings.get(
+                                    interactive=_text_segmentation
+                                    and not saved_settings.get(
                                         "outside_text_osb_text_free_only", False
                                     ),
                                 )
@@ -2048,7 +2059,9 @@ def create_layout(
                                     ),
                                     visible=_uses_model,
                                     interactive=(
-                                        _uses_model and _initial_method != "lama_manga"
+                                        _uses_model
+                                        and _initial_method != "lama_manga"
+                                        and _text_segmentation
                                     ),
                                 )
                                 outside_text_seed = gr.Number(
@@ -2172,8 +2185,7 @@ def create_layout(
                                     label="Match Original Text Tilt",
                                     info=(
                                         "Render outside-bubble text rotated to match the tilt of the "
-                                        "original text. On a GPU, or when inpainting already finds the "
-                                        "letters, the tilt is measured on the letters found by the text "
+                                        "original text, measured on the letters found by the text "
                                         "segmentation model."
                                     ),
                                 )
@@ -2541,6 +2553,7 @@ def create_layout(
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
+            outside_text_osb_text_segmentation,
             outside_text_osb_recover_missed_text,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
@@ -2688,6 +2701,7 @@ def create_layout(
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
+            outside_text_osb_text_segmentation,
             outside_text_osb_recover_missed_text,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
@@ -2827,6 +2841,7 @@ def create_layout(
             outside_text_flux_residual_diff_threshold,
             outside_text_osb_confidence,
             outside_text_osb_text_free_only,
+            outside_text_osb_text_segmentation,
             outside_text_osb_recover_missed_text,
             outside_text_min_area_ignore_ratio_percent,
             outside_text_enable_page_number_filtering,
@@ -3240,6 +3255,10 @@ def create_layout(
         )
 
         # Inpainting method change -> enable/disable controls and adjust steps range
+        def _preserve_art_interactive(method: str, text_segmentation: bool) -> bool:
+            """Edit models paste only the letters the text segmentation model finds."""
+            return method not in ("opencv", "none", "lama_manga") and text_segmentation
+
         def _update_inpainting_controls(
             method: str,
             current_backend: str,
@@ -3247,6 +3266,7 @@ def create_layout(
             current_text_encoder_quant: str,
             current_steps: int,
             group_regions: bool,
+            text_segmentation: bool,
         ):
             """Update controls based on inpainting method selection."""
             uses_model = method not in ("opencv", "none")
@@ -3311,7 +3331,7 @@ def create_layout(
                 gr.update(visible=uses_model, interactive=uses_model),
                 gr.update(
                     visible=uses_model,
-                    interactive=uses_model and method != "lama_manga",
+                    interactive=_preserve_art_interactive(method, text_segmentation),
                 ),
                 gr.update(
                     visible=residual_interactive,
@@ -3338,6 +3358,7 @@ def create_layout(
                 outside_text_flux_sdcpp_text_encoder_quant_state,
                 outside_text_flux_num_inference_steps,
                 outside_text_flux_group_regions,
+                outside_text_osb_text_segmentation,
             ],
             outputs=[
                 outside_text_flux_backend,
@@ -3357,14 +3378,36 @@ def create_layout(
             queue=False,
         )
 
-        def _update_recovery_interactivity(text_free_only: bool):
-            """Recovery adds mostly SFX, which caption-box-only mode ignores."""
-            return gr.update(interactive=not text_free_only)
+        def _update_recovery_interactivity(
+            text_free_only: bool, text_segmentation: bool
+        ):
+            """Recovery needs the text segmentation model and adds mostly SFX, which
+            caption-box-only mode ignores."""
+            return gr.update(interactive=text_segmentation and not text_free_only)
 
-        outside_text_osb_text_free_only.change(
-            fn=_update_recovery_interactivity,
-            inputs=[outside_text_osb_text_free_only],
-            outputs=[outside_text_osb_recover_missed_text],
+        for control in (
+            outside_text_osb_text_free_only,
+            outside_text_osb_text_segmentation,
+        ):
+            control.change(
+                fn=_update_recovery_interactivity,
+                inputs=[
+                    outside_text_osb_text_free_only,
+                    outside_text_osb_text_segmentation,
+                ],
+                outputs=[outside_text_osb_recover_missed_text],
+                queue=False,
+            )
+
+        def _update_preserve_art_interactivity(text_segmentation: bool, method: str):
+            return gr.update(
+                interactive=_preserve_art_interactive(method, text_segmentation)
+            )
+
+        outside_text_osb_text_segmentation.change(
+            fn=_update_preserve_art_interactivity,
+            inputs=[outside_text_osb_text_segmentation, outside_text_inpainting_method],
+            outputs=[outside_text_flux_preserve_art],
             queue=False,
         )
 

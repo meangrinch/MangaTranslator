@@ -84,9 +84,10 @@ class _PageGlyphMap:
     # needs its VRAM
     keep_model: bool
     verbose: bool = False
-    # LaMa masks add text found in each box at twice the text scale; a window there
-    # takes ~10 s on the CPU, so only GPUs run it
+    # LaMa masks add text found in each box at twice the text scale
     upscale_boxes: bool = False
+    # Off by the user's choice; consumers then get no map, as when the model fails
+    enabled: bool = True
     prob: np.ndarray | None = None
     failed: bool = False
     _upscaled: UpscaledGlyphMap | None = field(default=None, init=False, repr=False)
@@ -96,18 +97,17 @@ class _PageGlyphMap:
         cls, image: Image.Image, config: MangaTranslatorConfig, verbose: bool
     ) -> "_PageGlyphMap":
         method = config.outside_text.inpainting_method
-        lama = method == "lama_manga"
-        device = config.device
         return cls(
             image,
             keep_model=method in ("lama_manga", "opencv", "none"),
             verbose=verbose,
-            upscale_boxes=lama and device is not None and device.type != "cpu",
+            upscale_boxes=method == "lama_manga",
+            enabled=config.outside_text.osb_text_segmentation,
         )
 
     def get(self) -> np.ndarray | None:
         """The probability map, or None when the text model can't be loaded or run."""
-        if self.prob is None and not self.failed:
+        if self.prob is None and self.enabled and not self.failed:
             manager = get_model_manager()
             with manager.flux_inference_lock:
                 try:
@@ -174,27 +174,6 @@ def _composites_glyphs(config: MangaTranslatorConfig) -> bool:
         "opencv",
         "none",
     ) and bool(config.outside_text.flux_preserve_art)
-
-
-def _inpainting_uses_glyph_map(config: MangaTranslatorConfig) -> bool:
-    return config.outside_text.inpainting_method == "lama_manga" or _composites_glyphs(
-        config
-    )
-
-
-def _glyph_map_for_analysis(
-    glyph_map: _PageGlyphMap, config: MangaTranslatorConfig
-) -> _PageGlyphMap | None:
-    """The page map if tilt and text color detection should use it, else None for
-    their heuristics.
-
-    On the CPU the text model takes ~20 s per page, too slow to spend on these alone,
-    so there they only share the map that inpainting builds anyway.
-    """
-    if _inpainting_uses_glyph_map(config):
-        return glyph_map
-    device = config.device
-    return None if device is None or device.type == "cpu" else glyph_map
 
 
 @dataclass
@@ -864,6 +843,7 @@ def _recovers_missed_text(config: MangaTranslatorConfig) -> bool:
     # Caption-box-only mode deliberately ignores the SFX that recovery mostly finds
     return bool(
         config.outside_text.osb_recover_missed_text
+        and config.outside_text.osb_text_segmentation
         and not config.outside_text.osb_text_free_only
     )
 
@@ -961,9 +941,8 @@ def prepare_outside_text_work(
         )
 
         glyph_map = _PageGlyphMap.for_page(pil_image, config, verbose)
-        analysis_map = _glyph_map_for_analysis(glyph_map, config)
-        if _recovers_missed_text(config) and analysis_map is not None:
-            glyph_prob = analysis_map.get()
+        if _recovers_missed_text(config):
+            glyph_prob = glyph_map.get()
             if glyph_prob is not None:
                 try:
                     outside_text_results = list(
@@ -1047,7 +1026,7 @@ def prepare_outside_text_work(
             cv2_ext=cv2_ext,
             config=config,
             verbose=verbose,
-            glyph_map=analysis_map,
+            glyph_map=glyph_map,
         )
 
         return OutsideTextWork(
@@ -1769,18 +1748,13 @@ def _decide_osb_region_fill(
         else (fallback_fill_color if fallback_fill_color is not None else (0, 0, 0)),
         dtype=np.uint8,
     )
-    glyph_map = (
-        _glyph_map_for_analysis(work.glyph_map, work.config)
-        if work.is_color_page
-        else None
-    )
     text_color = _detect_osb_text_color(
         work.pil_image,
         text_bounds,
         ref_bg_rgb,
         fallback_fill_color,
         work.is_color_page,
-        None if glyph_map is None else glyph_map.get(),
+        work.glyph_map.get() if work.is_color_page else None,
     )
 
     force_fill = work.config.outside_text.inpainting_method == "opencv"

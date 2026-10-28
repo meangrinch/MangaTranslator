@@ -33,11 +33,14 @@ class _InlineCoordinator:
         return [job() for job in jobs]
 
 
-def _work(method, mode="direct", preserve_art=True, device="cuda"):
+def _work(
+    method, mode="direct", preserve_art=True, device="cuda", text_segmentation=True
+):
     config = MangaTranslatorConfig(yolo_model_path="unused.pt")
     config.device = torch.device(device)  # never used by the fakes
     config.outside_text.inpainting_method = method
     config.outside_text.flux_preserve_art = preserve_art
+    config.outside_text.osb_text_segmentation = text_segmentation
     config.outside_text.flux_group_regions = mode == "grouped"
     if mode == "waves":
         config.request_coordinator = _InlineCoordinator()
@@ -183,15 +186,15 @@ def test_lama_masks_add_glyphs_found_at_twice_the_scale_inside_the_box(patched, 
     assert windows == [(300, 400, 3), (600, 800, 3)]
 
 
-def test_lama_skips_the_upscaled_pass_on_the_cpu(patched):
+def test_lama_runs_the_upscaled_pass_on_the_cpu_too(patched):
     inpainter = _FakeInpainter()
     windows = patched(inpainter, _FakeManager())
 
     otp.finish_outside_text_work(_work("lama_manga", device="cpu"))
 
     (mask,) = inpainter.masks
-    assert mask[128, 180] and not mask[147, 265]
-    assert windows == [(300, 400, 3)]
+    assert mask[147, 265] and mask[128, 180]
+    assert windows == [(300, 400, 3), (600, 800, 3)]
 
 
 def test_lama_keeps_the_page_map_when_the_upscaled_pass_fails(patched, monkeypatch):
@@ -294,6 +297,29 @@ def test_lama_falls_back_to_box_masks_when_the_text_model_fails(patched):
     np.testing.assert_array_equal(mask, _box_mask())
 
 
+def test_lama_inpaints_whole_boxes_with_text_segmentation_off(patched):
+    inpainter, manager = _FakeInpainter(), _FakeManager()
+    patched(inpainter, manager)
+
+    otp.finish_outside_text_work(_work("lama_manga", text_segmentation=False))
+
+    (mask,) = inpainter.masks
+    np.testing.assert_array_equal(mask, _box_mask())
+    assert manager.loads == 0
+
+
+def test_edit_models_paste_the_whole_box_with_text_segmentation_off(patched):
+    manager = _FakeManager()
+    patched(_FakeInpainter(), manager)
+
+    result, _ = otp.finish_outside_text_work(
+        _work("flux_klein_4b", text_segmentation=False)
+    )
+
+    assert (np.asarray(result)[_box_mask()] == 255).all()
+    assert manager.loads == 0
+
+
 @pytest.mark.parametrize("mode", ["direct", "grouped", "waves"])
 def test_failed_lama_fills_the_whole_box(patched, mode):
     inpainter, manager = _FakeInpainter(succeed=False), _FakeManager()
@@ -324,10 +350,13 @@ def _tilted_text_page():
     return Image.fromarray(page)
 
 
-def _tilt_data(image, method="lama_manga", follow_tilt=True, glyph_map=None):
+def _tilt_data(
+    image, method="lama_manga", follow_tilt=True, glyph_map=None, text_segmentation=True
+):
     config = MangaTranslatorConfig(yolo_model_path="unused.pt")
     config.outside_text.inpainting_method = method
     config.outside_text.osb_follow_tilt = follow_tilt
+    config.outside_text.osb_text_segmentation = text_segmentation
     config.translation.upscale_method = "none"
     config.device = torch.device("cuda")  # never used by the fakes
     if glyph_map is None:
@@ -367,6 +396,22 @@ def test_tilt_is_measured_on_the_glyph_map(patched):
     assert item["tilt_conf"] >= 0.5
     assert item["tilt_axis"] == "horizontal"
     assert manager.loads == 1
+
+
+def test_tilt_uses_the_ink_heuristic_with_text_segmentation_off(patched):
+    manager = _FakeManager()
+    patched(_FakeInpainter(), manager)
+    image = _tilted_text_page()
+
+    item, _ = _tilt_data(image, text_segmentation=False)
+
+    angle, conf, _, axis = _heuristic_tilt(image)
+    assert (item["tilt_deg"], item["tilt_conf"], item["tilt_axis"]) == (
+        angle,
+        conf,
+        axis,
+    )
+    assert manager.loads == 0
 
 
 def test_tilt_uses_the_ink_heuristic_when_the_text_model_fails(patched):
@@ -449,31 +494,6 @@ def test_no_map_is_built_without_tilt_for_other_methods(patched):
     assert windows == []
 
 
-@pytest.mark.parametrize(
-    ("device", "method", "preserve_art", "uses_map"),
-    [
-        ("cuda", "flux_klein_4b", True, True),
-        ("cuda", "flux_klein_4b", False, True),
-        ("cuda", "opencv", True, True),
-        ("cpu", "flux_klein_4b", True, True),
-        ("cpu", "flux_klein_4b", False, False),
-        ("cpu", "lama_manga", False, True),
-        ("cpu", "opencv", True, False),
-        ("cpu", "none", True, False),
-    ],
-)
-def test_cpu_analysis_only_shares_an_inpainting_map(
-    device, method, preserve_art, uses_map
-):
-    config = MangaTranslatorConfig(yolo_model_path="unused.pt")
-    config.outside_text.inpainting_method = method
-    config.outside_text.flux_preserve_art = preserve_art
-    config.device = torch.device(device)
-    glyph_map = otp._PageGlyphMap.for_page(_tilted_text_page(), config, verbose=False)
-
-    assert (otp._glyph_map_for_analysis(glyph_map, config) is glyph_map) == uses_map
-
-
 def test_tilt_without_a_map_uses_the_ink_heuristic(patched):
     manager = _FakeManager()
     patched(_FakeInpainter(), manager)
@@ -552,22 +572,15 @@ def _color_sfx_work(device, method):
 
 
 @pytest.mark.parametrize(
-    ("device", "method", "keeps_hue"),
-    [
-        ("cuda", "opencv", True),
-        ("cpu", "lama_manga", True),
-        # Building the map on the CPU only for text color is too slow
-        ("cpu", "opencv", False),
-    ],
+    ("device", "method"),
+    [("cuda", "opencv"), ("cpu", "lama_manga"), ("cpu", "opencv")],
 )
-def test_color_page_sfx_keep_their_hue_where_the_map_is_shared(
-    device, method, keeps_hue
-):
+def test_color_page_sfx_keep_their_hue(device, method):
     work, group = _color_sfx_work(device, method)
 
     color = otp._decide_osb_region_fill(work, work.pil_image, group, 1).text_color
 
-    assert (np.abs(np.subtract(color, SFX_BLUE)).max() <= 10) == keeps_hue
+    assert np.abs(np.subtract(color, SFX_BLUE)).max() <= 10
 
 
 MISSED_LETTERS = [(50, 200, 62, 220), (66, 200, 78, 220), (82, 200, 94, 220)]
@@ -610,10 +623,11 @@ def recovery(patched, monkeypatch):
     detector = _FakeOsbDetector()
     monkeypatch.setattr(otp, "OutsideTextDetector", lambda **kwargs: detector)
 
-    def run(**settings):
+    def run(device="cuda", method="lama_manga", **settings):
         config = MangaTranslatorConfig(yolo_model_path="unused.pt")
+        config.device = torch.device(device)  # never used by the fakes
         config.outside_text.enabled = True
-        config.outside_text.inpainting_method = "lama_manga"
+        config.outside_text.inpainting_method = method
         config.translation.upscale_method = "none"
         for name, value in settings.items():
             setattr(config.outside_text, name, value)
@@ -631,8 +645,13 @@ def recovery(patched, monkeypatch):
     return run
 
 
-def test_text_the_osb_model_missed_is_recovered_from_the_glyph_map(recovery):
-    boxes, near_calls = recovery()
+@pytest.mark.parametrize(
+    ("device", "method"), [("cuda", "lama_manga"), ("cpu", "opencv")]
+)
+def test_text_the_osb_model_missed_is_recovered_from_the_glyph_map(
+    recovery, device, method
+):
+    boxes, near_calls = recovery(device=device, method=method)
 
     # Only the letters outside every bubble and OSB box are checked, as one group
     assert near_calls == [(50, 200, 94, 220)]
@@ -641,7 +660,11 @@ def test_text_the_osb_model_missed_is_recovered_from_the_glyph_map(recovery):
 
 @pytest.mark.parametrize(
     "settings",
-    [{"osb_recover_missed_text": False}, {"osb_text_free_only": True}],
+    [
+        {"osb_recover_missed_text": False},
+        {"osb_text_free_only": True},
+        {"osb_text_segmentation": False},
+    ],
 )
 def test_missed_text_recovery_is_skipped(recovery, settings):
     boxes, near_calls = recovery(**settings)

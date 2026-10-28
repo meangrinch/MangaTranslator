@@ -151,6 +151,7 @@
   - Enable "Group Inpainting Regions" to inpaint multiple OSB masks in one pass (at the cost of quality)
   - Disable "Upscale Crops to ~1MP" (at the cost of quality)
   - Try switching to a different model/backend; LaMa Manga is much faster, but rebuilds less detail
+  - Disable "Use Text Segmentation Model" to skip SAM-TS-L (text segmentation)
 
 - **Minor color shifts in inpainted regions:**
   - Flux.2 Klein models may introduce slight color changes; try enabling/disabling "Luminance Correction"

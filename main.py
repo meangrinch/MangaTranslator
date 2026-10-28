@@ -994,6 +994,16 @@ def main():
         ),
     )
     parser.add_argument(
+        "--osb-no-text-segmentation",
+        dest="osb_text_segmentation",
+        action="store_false",
+        help=(
+            "Don't segment text with SAM-TS-L: inpaint whole text boxes and skip missed "
+            "text recovery"
+        ),
+    )
+    parser.set_defaults(osb_text_segmentation=True)
+    parser.add_argument(
         "--osb-no-recover-missed-text",
         dest="osb_recover_missed_text",
         action="store_false",
@@ -1363,6 +1373,7 @@ def main():
             flux_residual_diff_threshold=args.osb_flux_residual_threshold,
             osb_confidence=args.osb_confidence,
             osb_text_free_only=args.osb_text_free_only,
+            osb_text_segmentation=args.osb_text_segmentation,
             osb_recover_missed_text=args.osb_recover_missed_text,
             seed=args.osb_seed,
             osb_font_dir=args.osb_font_dir,
