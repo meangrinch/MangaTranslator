@@ -134,16 +134,20 @@ class OutsideTextDetector:
             return 0.0
         return self.box_intersection_area(box_inner, box_outer) / area_inner
 
-    def bubble_is_text_free_region(self, bubble_box, text_free_boxes) -> bool:
-        """Return True if a bubble box is substantially the same as a text_free box.
+    def bubble_is_text_free_region(self, bubble_box, text_box, text_free_boxes) -> bool:
+        """Return True if, for `text_box`, a bubble box is really a text_free box.
 
         Requires real IoA overlap, not a one-pixel touch. Adjacent dialogue
-        bubbles must still suppress in-bubble OSB text detections.
+        bubbles must still suppress in-bubble OSB text detections. Only text_free
+        boxes the text belongs to count, so outside text caught in a bubble's box
+        doesn't exempt the bubble's own text.
         """
         if not text_free_boxes:
             return False
         for tf_box in text_free_boxes:
             tf = list(map(float, tf_box[:4]))
+            if not self.text_box_meaningfully_matches_bubble(text_box, tf):
+                continue
             bubble = list(map(float, bubble_box[:4]))
             if (
                 self.box_ioa(bubble, tf) > TEXT_FREE_BUBBLE_IOA_THRESHOLD
@@ -151,6 +155,28 @@ class OutsideTextDetector:
             ):
                 return True
         return False
+
+    def drop_in_bubble_detections(self, results, bubble_boxes, text_free_boxes):
+        """Keep the OSB detections that don't belong to a speech bubble."""
+        kept = []
+        for result in results:
+            bbox, _ = result
+            best_bubble = None
+            best_intersection = 0.0
+            for bubble_box in bubble_boxes:
+                if not self.boxes_overlap(bbox, bubble_box):
+                    continue
+                if self.bubble_is_text_free_region(bubble_box, bbox, text_free_boxes):
+                    continue
+                intersection = self.box_intersection_area(bbox, bubble_box)
+                if intersection > best_intersection:
+                    best_intersection = intersection
+                    best_bubble = bubble_box
+            if best_bubble is None or not self.text_box_meaningfully_matches_bubble(
+                bbox, best_bubble
+            ):
+                kept.append(result)
+        return kept
 
     def filter_nested_detections(self, results):
         """Remove detections fully contained in larger ones to avoid duplicates.
@@ -504,30 +530,9 @@ class OutsideTextDetector:
                 "Filtering OCR results to keep text outside speech bubbles...",
                 verbose=verbose,
             )
-            filtered_results = []
-            yolo_boxes_np = yolo_boxes.detach().cpu().numpy()
-
-            for ocr_result in final_results:
-                bbox, _ = ocr_result
-
-                best_bubble = None
-                best_intersection = 0.0
-
-                for yolo_box in yolo_boxes_np:
-                    if self.boxes_overlap(bbox, yolo_box):
-                        if self.bubble_is_text_free_region(yolo_box, text_free_boxes):
-                            continue
-
-                        intersection = self.box_intersection_area(bbox, yolo_box)
-                        if intersection > best_intersection:
-                            best_intersection = intersection
-                            best_bubble = yolo_box
-
-                if best_bubble is None or not self.text_box_meaningfully_matches_bubble(
-                    bbox, best_bubble
-                ):
-                    filtered_results.append(ocr_result)
-
+            filtered_results = self.drop_in_bubble_detections(
+                final_results, yolo_boxes.detach().cpu().numpy(), text_free_boxes
+            )
             filtered_out = len(final_results) - len(filtered_results)
             log_message(
                 f"Filtered out {filtered_out} OCR results that meaningfully overlapped speech bubbles",
