@@ -114,6 +114,22 @@ def test_italic_strokes_in_an_upright_column_are_not_a_tilt():
     assert angle == 0.0
 
 
+def test_small_kana_on_the_baseline_is_not_a_tilt():
+    # A big glyph and a small one sharing a baseline, like ぬっ: the line through their
+    # centers slopes down even though the text is upright
+    shape = (155, 255)
+    text = np.zeros(shape, bool)
+    text[20:141, 12:133] = True
+    text[105:141, 215:251] = True
+    crop = np.full((*shape, 3), 255, np.uint8)
+    crop[text] = 0
+
+    angle, _, _, axis = detect_crop_tilt_angle(crop, max_tilt_deg=20.0, ink_mask=text)
+
+    assert axis == "horizontal"
+    assert angle == 0.0
+
+
 def test_confidence_stays_within_one():
     text = _glyph_run((260, 110), (55, 130), 90 + 14, count=8, step=27, glyph_deg=14)
     crop = np.full((260, 110, 3), 255, np.uint8)

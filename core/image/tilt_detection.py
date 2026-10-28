@@ -465,6 +465,22 @@ def detect_crop_tilt_angle(
     if abs(cand_angle) > 45.0:
         return 0.0, 0.0, oriented_dims, tilt_axis
 
+    # Glyphs of mixed size slope the line through their centers, e.g. a small kana on
+    # the baseline of a big one, but a turned line also moves their tops and bottoms
+    if np.count_nonzero(valid_comp) >= 2:
+        comp_stats = ink.stats[valid_comp]
+        comp_xs = (
+            comp_stats[:, cv2.CC_STAT_LEFT] + comp_stats[:, cv2.CC_STAT_WIDTH] / 2.0
+        )
+        if np.ptp(comp_xs) > 0:
+            comp_weights = np.sqrt(comp_stats[:, cv2.CC_STAT_AREA].astype(np.float32))
+            tops = comp_stats[:, cv2.CC_STAT_TOP].astype(np.float64)
+            for edge in (tops, tops + comp_stats[:, cv2.CC_STAT_HEIGHT]):
+                edge_slope = np.polyfit(comp_xs, edge, 1, w=comp_weights)[0]
+                edge_deg = math.degrees(math.atan(edge_slope))
+                if edge_deg * cand_angle < 0.6 * cand_angle**2:
+                    return 0.0, 0.0, oriented_dims, tilt_axis
+
     # Verify the angle and its sign by how much deskewing concentrates the rows
     def calc_concentration(img_bin: np.ndarray) -> tuple[float, float]:
         row_counts = np.sum(img_bin > 0, axis=1).astype(np.float64)
