@@ -159,7 +159,7 @@ js_status_fade = """
             statusElement.style.transition = 'none';
             statusElement.style.opacity = '1';
 
-            const fadeDelay = 3000;
+            const fadeDelay = 6000;
             const fadeDuration = 1000;
 
             statusElement.fadeTimer = setTimeout(() => {
