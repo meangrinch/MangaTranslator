@@ -21,6 +21,7 @@ from utils.model_metadata import (
     is_gemini_4_model,
     is_gemini_no_sampling_model,
     is_google_reasoning_model,
+    is_meta_reasoning_model,
     is_opencode_chat_completions_model,
     is_opencode_multimodal_model,
     is_rosetta_model,
@@ -31,6 +32,7 @@ from utils.model_metadata import (
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
     supports_meta_max_effort,
+    supports_meta_reasoning_effort,
     supports_openai_original_image_detail,
     supports_xai_reasoning_parameter,
     xai_reasoning_efforts,
@@ -176,6 +178,7 @@ def test_is_anthropic_no_sampling_model(model, expected):
     ("model", "expected"),
     [
         ("claude-fable-5-1", (False, [], None)),
+        ("claude-fable-5-2", (False, [], None)),
         ("claude-haiku-5-5", (True, ["auto", "none"], "auto")),
         ("claude-sonnet-4-6", (True, ["auto", "none"], "auto")),
         (
@@ -238,6 +241,7 @@ def test_xai_reasoning_efforts(model, efforts, takes_parameter):
     ("model", "expected"),
     [
         ("muse-wonder-1.0", True),
+        ("muse-ember-1.0", True),
         ("muse-spark-1.3", True),
         ("muse-spark-1.3-contributor", False),
         ("muse-spark-1.3-contributor-free", False),
@@ -288,7 +292,14 @@ def test_is_opencode_chat_completions_model(model, tier, expected):
     assert is_opencode_chat_completions_model(model, tier) is expected
 
 
-@pytest.mark.parametrize("model", ["gemini-4-argon", "google/gemini-4-argon"])
+def test_muse_ember_is_a_reasoning_model():
+    assert is_meta_reasoning_model("muse-ember-1.0")
+    assert supports_meta_reasoning_effort("muse-ember-1.0")
+
+
+@pytest.mark.parametrize(
+    "model", ["gemini-4-argon", "google/gemini-4-argon", "gemini-4-carbon"]
+)
 def test_gemini_4_is_a_thinking_level_model_without_sampling(model):
     assert is_gemini_4_model(model)
     assert is_gemini_3_plus_model(model)

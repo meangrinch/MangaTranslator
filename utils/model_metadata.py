@@ -868,11 +868,11 @@ def supports_qwencloud_reasoning_effort(model_name: str | None) -> bool:
 
 
 def is_meta_reasoning_model(model_name: str | None) -> bool:
-    """Check if a Meta Model API model is reasoning-capable (muse-spark and muse-wonder series)."""
+    """Check if a Meta Model API model is reasoning-capable (muse-spark, muse-wonder, and muse-ember series)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return "muse-spark" in lm or "muse-wonder" in lm
+    return "muse-spark" in lm or "muse-wonder" in lm or "muse-ember" in lm
 
 
 def supports_meta_reasoning_effort(model_name: str | None) -> bool:
@@ -881,11 +881,15 @@ def supports_meta_reasoning_effort(model_name: str | None) -> bool:
 
 
 def supports_meta_max_effort(model_name: str | None) -> bool:
-    """Check if a Meta model supports "max" effort (muse-wonder, standard-tier muse-spark-1.3)."""
+    """Check if a Meta model supports "max" effort (muse-wonder, muse-ember, standard-tier muse-spark-1.3)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return "muse-wonder" in lm or ("muse-spark-1.3" in lm and "contributor" not in lm)
+    return (
+        "muse-wonder" in lm
+        or "muse-ember" in lm
+        or ("muse-spark-1.3" in lm and "contributor" not in lm)
+    )
 
 
 def is_opus_45_model(model_name: str | None) -> bool:
@@ -994,7 +998,7 @@ def anthropic_model_flags(model_name: str | None) -> dict[str, bool]:
     - Sonnet/Opus 4.6: + is_claude_effort_max
     - Sonnet/Opus 4.7/4.8/5: + is_claude_effort_xhigh (also strips sampling params)
     - Sonnet/Opus 5, Haiku 5.5: + is_claude_adaptive_default
-    - Fable 5/5.1, Opus 5.5: same as 4.7+ plus is_claude_omit_thinking
+    - Fable 5+, Opus 5.5: same as 4.7+ plus is_claude_omit_thinking
     """
     if not model_name:
         return {}
@@ -1119,7 +1123,7 @@ def is_gemma_model(model_name: str | None) -> bool:
 
 
 def is_gemini_4_model(model_name: str | None) -> bool:
-    """Check if a model is any Gemini 4 variant (e.g., gemini-4-argon)."""
+    """Check if a model is any Gemini 4 variant (e.g., gemini-4-argon, gemini-4-carbon)."""
     if not model_name:
         return False
     return "gemini-4" in model_name.lower()

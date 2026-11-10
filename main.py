@@ -24,18 +24,18 @@ from utils.model_metadata import (
 
 # Model used when --model-name is not given; the keys are the --provider choices
 CLI_DEFAULT_MODELS = {
-    "Google": "gemini-4-argon",
+    "Google": "gemini-4-carbon",
     "OpenAI": "gpt-6.1-sol",
     "Anthropic": "claude-opus-5-5",
     "SpaceXAI": "grok-4.7",
-    "Meta Model": "muse-spark-1.3-contributor",
+    "Meta Model": "muse-ember-1.0",
     "DeepSeek": "deepseek-flash",
     "Z.ai": "glm-5.3-flash",
     "Moonshot AI": "kimi-k3.1-pro",
     "Xiaomi MiMo": "mimo-v2.6-pro",
     "QwenCloud": "qwen3.8-flash",
     "OpenCode": "deepseek-v4.1-flash",
-    "OpenRouter": "google/gemini-4-argon",
+    "OpenRouter": "google/gemini-4-carbon",
     "OpenAI-Compatible": "default",
 }
 

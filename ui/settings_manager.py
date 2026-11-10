@@ -17,6 +17,7 @@ CONFIG_FILE = (
 
 PROVIDER_MODELS: dict[str, list[str]] = {
     "Google": [
+        "gemini-4-carbon",
         "gemini-4-argon",
         "gemini-3.8-flash",
         "gemini-3.6-flash",
@@ -59,6 +60,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "claude-opus-5-5",
         "claude-sonnet-5-5",
         "claude-haiku-5-5",
+        "claude-fable-5-2",
         "claude-fable-5-1",
         "claude-fable-5",
         "claude-opus-5",
@@ -80,6 +82,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
     ],
     "Meta Model": [
         "muse-wonder-1.0",
+        "muse-ember-1.0",
         "muse-spark-1.3-contributor",
         "muse-spark-1.3",
         "muse-spark-1.2-contributor",
