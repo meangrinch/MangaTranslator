@@ -75,6 +75,8 @@ class ModelType(Enum):
     SAM2 = "sam2"
     SAM3 = "sam3"
     MANGA_OCR = "manga_ocr"
+    HAYAI_OCR = "hayai_ocr"
+    BABERU_OCR = "baberu_ocr"
     PADDLE_OCR_VL = "paddle_ocr_vl"
     FLUX_TRANSFORMER = "flux_transformer"
     FLUX_TEXT_ENCODER = "flux_text_encoder"
@@ -219,6 +221,8 @@ class ModelManager:
                 detection_dir / "text_sam" / "koharu-text-sam-ts-l.safetensors"
             ),
             ModelType.MANGA_OCR: (model_dir / "ocr" / "manga-ocr-base"),
+            ModelType.HAYAI_OCR: (model_dir / "ocr" / "hayai-ocr-v2.5-nova"),
+            ModelType.BABERU_OCR: (model_dir / "ocr" / "baberu-ocr"),
             ModelType.PADDLE_OCR_VL: (model_dir / "ocr" / "paddleocr-vl-1.6"),
             ModelType.SDCPP_SERVER: (
                 model_dir / "runtime" / "sdcpp" / SDCppServerManager.RELEASE_TAG
@@ -318,6 +322,13 @@ class ModelManager:
         repos[ModelType.MANGA_OCR] = {
             "repo_id": "kha-white/manga-ocr-base",
             "revision": "refs/pr/4",
+        }
+        repos[ModelType.HAYAI_OCR] = {
+            "repo_id": "JustANormalTinkerer/hayai-ocr-v2.5-nova",
+        }
+        repos[ModelType.BABERU_OCR] = {
+            "repo_id": "genshiai-daichi/baberu-ocr",
+            "ignore_patterns": ["onnx/*", "*.onnx", "assets/*"],
         }
         repos[ModelType.PADDLE_OCR_VL] = {
             "repo_id": "PaddlePaddle/PaddleOCR-VL-1.6",
@@ -650,6 +661,7 @@ class ModelManager:
         target_dir: Path,
         token: str | None = None,
         revision: str | None = None,
+        ignore_patterns: list[str] | None = None,
         verbose: bool = False,
     ) -> Path:
         """Download entire repository from Hugging Face if it doesn't exist.
@@ -659,6 +671,7 @@ class ModelManager:
             target_dir: Directory where repository should be saved
             token: Optional Hugging Face token
             revision: Optional git revision (branch, tag, commit hash)
+            ignore_patterns: Optional glob patterns of files to skip downloading
             verbose: Whether to print verbose logging
 
         Returns:
@@ -671,6 +684,7 @@ class ModelManager:
                     repo_id=repo_id,
                     token=token or self.hf_token or os.environ.get("HF_TOKEN"),
                     revision=revision,
+                    ignore_patterns=ignore_patterns,
                 )
             )
         # Check for safetensors for transformers v5+
@@ -705,6 +719,7 @@ class ModelManager:
                 local_dir=str(target_dir),
                 token=effective_token,
                 revision=revision,
+                ignore_patterns=ignore_patterns,
             )
             log_message(
                 f"Downloaded repository {repo_id} successfully.", verbose=verbose
@@ -1015,6 +1030,219 @@ class ModelManager:
             self.models[ModelType.MANGA_OCR] = manga_ocr_instance
             log_message("manga-ocr initialized", verbose=verbose)
             return manga_ocr_instance
+
+    def load_hayai_ocr(self, verbose: bool = False) -> Path:
+        """Ensure Hayai OCR v2.5 Nova model repository is downloaded.
+
+        Args:
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Path to the downloaded Hayai OCR v2.5 Nova model directory
+        """
+        with self._lock:
+            model_path = self.model_paths[ModelType.HAYAI_OCR]
+            hf_info = self.model_hf_repos[ModelType.HAYAI_OCR]
+            model_path = self._ensure_hf_repo(
+                hf_info["repo_id"],
+                model_path,
+                revision=hf_info.get("revision"),
+                ignore_patterns=hf_info.get("ignore_patterns"),
+                verbose=verbose,
+            )
+            log_message("Hayai OCR v2.5 Nova model repository ready.", verbose=verbose)
+            return model_path
+
+    def get_hayai_ocr(self, verbose: bool = False):
+        """Get Hayai OCR v2.5 Nova (image_processor, tokenizer, model) tuple.
+
+        Args:
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Tuple of (Siglip2ImageProcessor, PreTrainedTokenizerFast, HayaiModel)
+        """
+        with self._lock:
+            if self.is_loaded(ModelType.HAYAI_OCR):
+                return self.models[ModelType.HAYAI_OCR]
+
+            log_message("Initializing Hayai OCR v2.5 Nova...", verbose=verbose)
+
+            from transformers import (
+                AutoConfig,
+                AutoModel,
+                PreTrainedTokenizerFast,
+                Siglip2ImageProcessor,
+                Siglip2VisionConfig,
+            )
+            from transformers import logging as transformers_logging
+
+            model_path = self.load_hayai_ocr(verbose=verbose)
+            model_path_str = str(model_path)
+            token = self.hf_token or os.environ.get("HF_TOKEN")
+
+            previous_level = None
+            if not verbose:
+                previous_level = transformers_logging.get_verbosity()
+                transformers_logging.set_verbosity_error()
+            try:
+                config = AutoConfig.from_pretrained(
+                    model_path_str, trust_remote_code=True, token=token
+                )
+                # Populate vision_config locally so HayaiModel.__init__ skips a Hub fetch
+                config.vision_config = Siglip2VisionConfig()
+
+                image_processor = Siglip2ImageProcessor()
+                tokenizer = PreTrainedTokenizerFast.from_pretrained(
+                    model_path_str, token=token
+                )
+                model = (
+                    AutoModel.from_pretrained(
+                        model_path_str,
+                        config=config,
+                        trust_remote_code=True,
+                        token=token,
+                    )
+                    .to(self.device)
+                    .eval()
+                )
+            finally:
+                if previous_level is not None:
+                    transformers_logging.set_verbosity(previous_level)
+
+            self.models[ModelType.HAYAI_OCR] = (image_processor, tokenizer, model)
+            log_message("Hayai OCR v2.5 Nova initialized.", verbose=verbose)
+            return self.models[ModelType.HAYAI_OCR]
+
+    def load_baberu_ocr(self, verbose: bool = False) -> Path:
+        """Ensure Baberu OCR model repository is downloaded.
+
+        Args:
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Path to the downloaded Baberu OCR model directory
+        """
+        with self._lock:
+            model_path = self.model_paths[ModelType.BABERU_OCR]
+            hf_info = self.model_hf_repos[ModelType.BABERU_OCR]
+            model_path = self._ensure_hf_repo(
+                hf_info["repo_id"],
+                model_path,
+                revision=hf_info.get("revision"),
+                ignore_patterns=hf_info.get("ignore_patterns"),
+                verbose=verbose,
+            )
+            log_message("Baberu OCR model repository ready.", verbose=verbose)
+            return model_path
+
+    def get_baberu_ocr(self, verbose: bool = False):
+        """Get Baberu OCR (image_processor, tokenizer, model, content_ids) tuple.
+
+        Args:
+            verbose: Whether to print verbose logging
+
+        Returns:
+            Tuple of (BitImageProcessor, BaberuTokenizer, BaberuOCRModel, set[int])
+        """
+        with self._lock:
+            if self.is_loaded(ModelType.BABERU_OCR):
+                return self.models[ModelType.BABERU_OCR]
+
+            log_message("Initializing Baberu OCR...", verbose=verbose)
+
+            import importlib.util
+            import sys
+            import unicodedata
+            from unittest.mock import patch
+
+            from transformers import BitImageProcessor, Dinov2Config
+            from transformers import logging as transformers_logging
+
+            model_path = self.load_baberu_ocr(verbose=verbose)
+            model_path_str = str(model_path)
+
+            def _load_baberu_module(mod_name: str, file_name: str):
+                spec = importlib.util.spec_from_file_location(
+                    mod_name, model_path / file_name
+                )
+                if spec is None or spec.loader is None:
+                    raise ImportError(f"Could not load {file_name} from {model_path}")
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[mod_name] = module
+                spec.loader.exec_module(module)
+                return module
+
+            cfg_mod = _load_baberu_module(
+                "configuration_baberu", "configuration_baberu.py"
+            )
+            mod_mod = _load_baberu_module("modeling_baberu", "modeling_baberu.py")
+            tok_mod = _load_baberu_module(
+                "tokenization_baberu", "tokenization_baberu.py"
+            )
+
+            previous_level = None
+            if not verbose:
+                previous_level = transformers_logging.get_verbosity()
+                transformers_logging.set_verbosity_error()
+            try:
+                config = cfg_mod.BaberuOCRConfig.from_pretrained(model_path_str)
+                dtype = torch.bfloat16 if self.device.type == "cuda" else torch.float32
+                # Checkpoint position_embeddings have shape [1, 1370, 768] (518x518 / patch 14);
+                # supply Dinov2Config locally so BaberuOCRModel.__init__ makes no Hub call
+                vision_cfg = Dinov2Config(image_size=518, patch_size=14)
+                with patch.object(
+                    mod_mod.AutoConfig, "from_pretrained", return_value=vision_cfg
+                ):
+                    model = (
+                        mod_mod.BaberuOCRModel.from_pretrained(
+                            model_path_str,
+                            config=config,
+                            dtype=dtype,
+                        )
+                        .to(device=self.device, dtype=dtype)
+                        .eval()
+                    )
+
+                tok_dir = model_path / "tokenizer"
+                tokenizer = tok_mod.BaberuTokenizer.from_pretrained(
+                    str(tok_dir if tok_dir.exists() else model_path)
+                )
+                image_processor = BitImageProcessor(
+                    do_resize=True,
+                    size={"height": 224, "width": 224},
+                    resample=3,
+                    do_center_crop=False,
+                    do_rescale=True,
+                    rescale_factor=1 / 255.0,
+                    do_normalize=True,
+                    image_mean=[0.485, 0.456, 0.406],
+                    image_std=[0.229, 0.224, 0.225],
+                )
+
+                def _is_content(ch: str) -> bool:
+                    if not ch or len(ch) != 1 or ch in "ーｰ〜~":
+                        return False
+                    return unicodedata.category(ch)[0] in "LN"
+
+                vocab_size = getattr(tokenizer, "vocab_size", None) or len(tokenizer)
+                content_ids = {
+                    i
+                    for i in range(vocab_size)
+                    if _is_content(tokenizer.decode([i], skip_special_tokens=False))
+                }
+            finally:
+                if previous_level is not None:
+                    transformers_logging.set_verbosity(previous_level)
+
+            self.models[ModelType.BABERU_OCR] = (
+                image_processor,
+                tokenizer,
+                model,
+                content_ids,
+            )
+            log_message("Baberu OCR initialized.", verbose=verbose)
+            return self.models[ModelType.BABERU_OCR]
 
     def load_paddle_ocr_vl(self, verbose: bool = False) -> Path:
         """Ensure PaddleOCR-VL-1.6 model repository is downloaded.
@@ -1785,7 +2013,7 @@ class ModelManager:
         log_message("Upscale models unloaded.", verbose=verbose)
 
     def unload_ocr_models(self, verbose: bool = False):
-        """Unload OCR-related models (YOLO, SAM2/SAM3, and manga-ocr)."""
+        """Unload OCR-related models (YOLO, SAM2/SAM3, and local OCR models)."""
         ocr_models = (
             ModelType.YOLO_SPEECH_BUBBLE,
             ModelType.YOLO_SPEECH_BUBBLE_2,
@@ -1795,6 +2023,8 @@ class ModelManager:
             ModelType.YOLO_OSBTEXT,
             ModelType.YOLO_PANEL,
             ModelType.MANGA_OCR,
+            ModelType.HAYAI_OCR,
+            ModelType.BABERU_OCR,
             ModelType.PADDLE_OCR_VL,
         )
         if self._unload_models(ocr_models, verbose):

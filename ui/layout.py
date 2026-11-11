@@ -122,6 +122,52 @@ PADDLE_OCR_VL_LANGUAGES = [
     lang for lang in _ALPHABETICAL_LANGUAGES if lang not in _PADDLE_OCR_VL_UNSUPPORTED
 ]
 
+HAYAI_OCR_LANGUAGES = [
+    "Japanese",
+    "Korean",
+    "Chinese (Simplified)",
+    "Chinese (Traditional)",
+    "English",
+]
+
+BABERU_OCR_LANGUAGES = [
+    "Japanese",
+    "Chinese (Simplified)",
+    "Chinese (Traditional)",
+    "English",
+]
+
+
+def get_ocr_language_config(
+    ocr_method: str, saved_lang: str
+) -> tuple[list[str], str, bool]:
+    """Return (choices, selected_value, interactive) for Source Language given ocr_method."""
+    if ocr_method == "manga-ocr":
+        return ["Japanese"], "Japanese", False
+    if ocr_method == "hayai-ocr-v2.5-nova":
+        choices = HAYAI_OCR_LANGUAGES
+    elif ocr_method == "baberu-ocr":
+        choices = BABERU_OCR_LANGUAGES
+    elif ocr_method == "paddleocr-vl-1.6":
+        choices = PADDLE_OCR_VL_LANGUAGES
+    else:
+        return SOURCE_LANGUAGES, saved_lang, True
+    value = (
+        saved_lang
+        if saved_lang in choices
+        else ("Japanese" if "Japanese" in choices else choices[0])
+    )
+    return choices, value, True
+
+
+LOCAL_OCR_METHODS = (
+    "baberu-ocr",
+    "hayai-ocr-v2.5-nova",
+    "manga-ocr",
+    "paddleocr-vl-1.6",
+)
+OCR_METHODS = ["LLM", *LOCAL_OCR_METHODS]
+
 js_credits = """
     const footer = document.querySelector('footer');
     if (footer) {
@@ -328,6 +374,25 @@ def create_layout(
             initial_max_tokens_cap if initial_max_tokens_cap is not None else 63488
         )
 
+        initial_ocr_method = saved_settings.get(
+            "ocr_method",
+            settings_manager.DEFAULT_SETTINGS.get("ocr_method", "LLM"),
+        )
+        (
+            _init_single_lang_choices,
+            _init_single_lang_val,
+            _init_single_lang_interactive,
+        ) = get_ocr_language_config(
+            initial_ocr_method, saved_settings.get("input_language", "Japanese")
+        )
+        (
+            _init_batch_lang_choices,
+            _init_batch_lang_val,
+            _init_batch_lang_interactive,
+        ) = get_ocr_language_config(
+            initial_ocr_method, saved_settings.get("batch_input_language", "Japanese")
+        )
+
         with gr.Tabs():
             with gr.TabItem("Translator"):  # noqa: SIM117
                 with gr.Row():
@@ -351,9 +416,10 @@ def create_layout(
                                 value=saved_settings.get("input_language", "Japanese")
                             )
                             input_language = gr.Dropdown(
-                                SOURCE_LANGUAGES,
+                                _init_single_lang_choices,
                                 label="Source Language",
-                                value=saved_settings.get("input_language", "Japanese"),
+                                value=_init_single_lang_val,
+                                interactive=_init_single_lang_interactive,
                                 allow_custom_value=True,
                             )
                             output_language = gr.Dropdown(
@@ -434,11 +500,10 @@ def create_layout(
                                 )
                             )
                             batch_input_language = gr.Dropdown(
-                                SOURCE_LANGUAGES,
+                                _init_batch_lang_choices,
                                 label="Source Language",
-                                value=saved_settings.get(
-                                    "batch_input_language", "Japanese"
-                                ),
+                                value=_init_batch_lang_val,
+                                interactive=_init_batch_lang_interactive,
                                 allow_custom_value=True,
                             )
                             batch_output_language = gr.Dropdown(
@@ -833,7 +898,7 @@ def create_layout(
                                 ),
                             )
                             ocr_method_radio = gr.Radio(
-                                choices=["LLM", "manga-ocr", "paddleocr-vl-1.6"],
+                                choices=OCR_METHODS,
                                 label="OCR Method",
                                 value=initial_ocr_method,
                                 info=(
@@ -1208,8 +1273,7 @@ def create_layout(
                                 ),
                                 info="Allow Gemini 3+ to zoom and inspect image details using code execution.",
                                 visible=_initial_enable_code_execution_visible,
-                                interactive=initial_ocr_method
-                                not in ("manga-ocr", "paddleocr-vl-1.6"),
+                                interactive=initial_ocr_method not in LOCAL_OCR_METHODS,
                                 elem_id="enable_code_execution_checkbox",
                             )
 
@@ -1239,8 +1303,7 @@ def create_layout(
                                 value=_initial_image_detail_value,
                                 info=_initial_image_detail_info,
                                 visible=_initial_image_detail_visible,
-                                interactive=initial_ocr_method
-                                not in ("manga-ocr", "paddleocr-vl-1.6"),
+                                interactive=initial_ocr_method not in LOCAL_OCR_METHODS,
                                 elem_id="image_detail_dropdown",
                             )
 
@@ -1391,8 +1454,7 @@ def create_layout(
                                     "Include full page image as context. Helps most with sound effects. "
                                     "Disable if encountering refusals or to reduce token usage."
                                 ),
-                                interactive=initial_ocr_method
-                                not in ("manga-ocr", "paddleocr-vl-1.6"),
+                                interactive=initial_ocr_method not in LOCAL_OCR_METHODS,
                             )
                             whiteout_conjoined_bubbles = gr.Checkbox(
                                 value=saved_settings.get(

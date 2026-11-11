@@ -105,8 +105,10 @@
   - 在“两步 (two-step)”模式下，尝试启用“OCR 校正 (OCR Correction)”，根据上下文修复较差的 OCR 识别文本
   - 保持启用“发送整页给 LLM (Send Full Page to LLM)”；没有整页图像时，LLM 在翻译拟声词时无法看到它们对应的画面
   - 尝试使用本地 OCR 方法，特别是对于能力较弱 of LLM：
+    - "baberu-ocr": 日语、中文和英语源文本
+    - "hayai-ocr-v2.5-nova": 日语、韩语、中文和英语源文本
     - "manga-ocr": 仅限日语源文本
-    - "paddleocr-vl-1.6": 非日语源文本
+    - "paddleocr-vl-1.6": 支持 50 多种语言
   - 增加 `max_tokens` 和/或使用更高的“推理努力 (reasoning_effort)”（例如 "high"）
   - 将“气泡/上下文缩放方法 (Bubble/Context Resizing Method)”切换到质量更好的方法（例如 "Model"）
   - 在批量模式下，尝试提高“前文 OCR 文本 (Previous Context OCR Text)”
@@ -127,7 +129,7 @@
   - 降低“气泡最小边长 (Bubble Min Side Pixels)”/“上下文图像最大边长 (Context Image Max Side Pixels)”/“OSB 最小边长 (OSB Text Min Side Pixels)”的目标大小（对每张图像使用固定 Token 数的模型无效）
   - 降低“媒体分辨率 (Media Resolution)”（如果使用 Gemini 或 SpaceXAI 模型）
   - 降低“图像细节 (Image Detail)”（如果使用 OpenAI 模型）
-  - 使用 "manga-ocr/paddleocr-vl-1.6" OCR 方法（其效果可能不及更强的多模态模型）
+  - 使用本地 OCR 方法（"baberu-ocr"、"hayai-ocr-v2.5-nova"、"manga-ocr" 或 "paddleocr-vl-1.6"，其效果可能不及更强的多模态模型）
   - 启用“强制缓存翻译 (Force Cache Translations)”，以便在非确定性采样下重复运行时复用已缓存的翻译
 
 - **部分文件批量翻译失败：**

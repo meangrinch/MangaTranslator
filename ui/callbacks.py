@@ -2147,7 +2147,12 @@ def _ocr_method_model_update(
     opencode_api_key: str | None,
 ):
     """Refreshes the model dropdown for a provider after the OCR method changes."""
-    text_only = ocr_method in ("manga-ocr", "paddleocr-vl-1.6")
+    text_only = ocr_method in (
+        "baberu-ocr",
+        "hayai-ocr-v2.5-nova",
+        "manga-ocr",
+        "paddleocr-vl-1.6",
+    )
 
     if provider == "OpenRouter":
         return utils.fetch_and_update_openrouter_models(
@@ -2259,34 +2264,43 @@ def handle_ocr_method_change(
         updates.append(batch_saved_language)
 
         updates.extend(_text_only_ocr_control_updates())
-    elif ocr_method == "paddleocr-vl-1.6":
-        # Restrict to PaddleOCR-VL-1.6 supported languages; keep current if supported
-        paddle_langs = layout.PADDLE_OCR_VL_LANGUAGES
-        if input_language in paddle_langs:
+    elif ocr_method in ("hayai-ocr-v2.5-nova", "baberu-ocr", "paddleocr-vl-1.6"):
+        if ocr_method == "hayai-ocr-v2.5-nova":
+            supported_langs = layout.HAYAI_OCR_LANGUAGES
+        elif ocr_method == "baberu-ocr":
+            supported_langs = layout.BABERU_OCR_LANGUAGES
+        else:
+            supported_langs = layout.PADDLE_OCR_VL_LANGUAGES
+
+        if input_language in supported_langs:
             saved_language = original_language_state
             selected_lang = input_language
         else:
             saved_language = input_language
             selected_lang = (
-                "Japanese" if "Japanese" in paddle_langs else paddle_langs[0]
+                "Japanese" if "Japanese" in supported_langs else supported_langs[0]
             )
 
         updates.append(
-            gr.update(value=selected_lang, choices=paddle_langs, interactive=True)
+            gr.update(value=selected_lang, choices=supported_langs, interactive=True)
         )
         updates.append(saved_language)
 
-        if batch_input_language in paddle_langs:
+        if batch_input_language in supported_langs:
             batch_saved_language = batch_original_language_state
             batch_selected_lang = batch_input_language
         else:
             batch_saved_language = batch_input_language
             batch_selected_lang = (
-                "Japanese" if "Japanese" in paddle_langs else paddle_langs[0]
+                "Japanese" if "Japanese" in supported_langs else supported_langs[0]
             )
 
         updates.append(
-            gr.update(value=batch_selected_lang, choices=paddle_langs, interactive=True)
+            gr.update(
+                value=batch_selected_lang,
+                choices=supported_langs,
+                interactive=True,
+            )
         )
         updates.append(batch_saved_language)
 
@@ -2368,7 +2382,12 @@ def handle_translation_mode_change(translation_mode: str, current_ocr_method: st
 
     is_two_step = translation_mode == "two-step"
     if translation_mode == "one-step":
-        if current_ocr_method in ("manga-ocr", "paddleocr-vl-1.6"):
+        if current_ocr_method in (
+            "baberu-ocr",
+            "hayai-ocr-v2.5-nova",
+            "manga-ocr",
+            "paddleocr-vl-1.6",
+        ):
             ocr_update = gr.update(value="LLM", interactive=False)
         else:
             ocr_update = gr.update(interactive=False)

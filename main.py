@@ -487,7 +487,13 @@ def main():
         "--ocr-method",
         type=str,
         default="LLM",
-        choices=["LLM", "manga-ocr", "paddleocr-vl-1.6"],
+        choices=[
+            "LLM",
+            "baberu-ocr",
+            "hayai-ocr-v2.5-nova",
+            "manga-ocr",
+            "paddleocr-vl-1.6",
+        ],
         help=(
             "Determines whether to use a vision-capable LLM or a local OCR model for OCR. "
             "Local OCR options enable text-only LLMs for translation "

@@ -104,8 +104,10 @@
   - 「2ステップ（two-step）」モードでは、「OCR 補正（OCR Correction）」を有効にして、文脈に基づいて不完全な OCR 結果を補正してみてください。
   - 「ページ全体を LLM に送信（Send Full Page to LLM）」は有効のままにしてください。ページがないと、効果音が何の音か分からないまま翻訳されます。
   - 性能 of 低い LLM を使用する場合は、ローカルの OCR 方法を試してください:
+    - "baberu-ocr": 日本語・中国語・英語の原文
+    - "hayai-ocr-v2.5-nova": 日本語・韓国語・中国語・英語の原文
     - "manga-ocr": 日本語の原文のみ
-    - "paddleocr-vl-1.6": 日本語以外の原文
+    - "paddleocr-vl-1.6": 50以上の言語に対応
   - `max_tokens` を増やすか、より高い「推理力（reasoning_effort）」（例: "high"）を使用してください。
   - 「吹き出し/文脈リサイズ方法（Bubble/Context Resizing Method）」をより高品質な方法（例: "Model"）に切り替えてください。
   - バッチモードでは、「前文の OCR テキスト（Previous Context OCR Text）」を増やしてみてください。
@@ -126,7 +128,7 @@
   - 「吹き出し最小短辺ピクセル（Bubble Min Side Pixels）」/「文脈画像最大長辺ピクセル（Context Image Max Side Pixels）」/「OSB 最小短辺ピクセル（OSB Text Min Side Pixels）」のターゲットサイズを下げてください（画像 1 枚あたりのトークン数が固定のモデルでは効果がありません）。
   - 「メディア解像度（Media Resolution）」を下げてください（Gemini または SpaceXAI モデルを使用している場合）。
   - 「画像ディテール（Image Detail）」を下げてください（OpenAI モデルを使用している場合）。
-  - "manga-ocr/paddleocr-vl-1.6" OCR 方法を使用してください（より高性能な VLM を直接使用するよりも性能が劣る場合があります）。
+  - ローカルの OCR 方法（"baberu-ocr"、"hayai-ocr-v2.5-nova"、"manga-ocr"、または "paddleocr-vl-1.6"）を使用してください（より高性能な VLM を直接使用するよりも性能が劣る場合があります）。
   - 「翻訳キャッシュの強制（Force Cache Translations）」を有効にして、非決定論的サンプリングでの再実行時にもキャッシュされた翻訳を再利用してください。
 
 - **一部のファイルのバッチ翻訳に失敗した:**

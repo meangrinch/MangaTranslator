@@ -21,6 +21,8 @@ from core.image.image_utils import (
     resize_lanczos_antiring,
 )
 from core.image.ocr_detection import (
+    extract_text_with_baberu_ocr,
+    extract_text_with_hayai_ocr,
     extract_text_with_manga_ocr,
     extract_text_with_paddle_ocr_vl,
 )
@@ -1516,6 +1518,146 @@ def _perform_paddle_ocr_vl(
     return extracted_texts
 
 
+def _perform_hayai_ocr(
+    images_b64: list[str],
+    bubble_metadata: list[dict[str, Any]],
+    debug: bool = False,
+) -> list[str]:
+    """Perform OCR using Hayai OCR v2.5 Nova model.
+
+    Args:
+        images_b64: List of base64-encoded images
+        bubble_metadata: List of metadata dicts for text elements
+        debug: Whether to print verbose logging
+
+    Returns:
+        List of extracted text strings, or early return with failure list
+    """
+    total_elements = len(images_b64)
+    log_message("Using Hayai OCR v2.5 Nova for text extraction", verbose=debug)
+
+    cache = get_cache()
+    cache_key = cache.get_manga_ocr_cache_key(
+        images_b64, total_elements, prefix="hayai25_"
+    )
+    cached_ocr = cache.get_manga_ocr_result(cache_key)
+    if cached_ocr is not None:
+        if len(cached_ocr) == total_elements:
+            log_message(
+                "  - Using cached Hayai OCR v2.5 Nova results", always_print=True
+            )
+            return cached_ocr
+        log_message(
+            "Discarding Hayai OCR v2.5 Nova cache due to length mismatch", verbose=debug
+        )
+
+    pil_images = _prepare_images_for_ocr(images_b64)
+    extracted_texts = extract_text_with_hayai_ocr(pil_images, verbose=debug)
+
+    formatted_texts = []
+    for text in extracted_texts:
+        if text == "[OCR FAILED]" or not text:
+            formatted_texts.append(text if text else "[OCR FAILED]")
+        else:
+            formatted_texts.append(_join_ocr_lines(text))
+
+    extracted_texts = formatted_texts
+
+    _format_ocr_results(extracted_texts, bubble_metadata)
+
+    if len(extracted_texts) != total_elements:
+        msg = (
+            f"Warning: extracted_texts length ({len(extracted_texts)}) "
+            f"doesn't match total_elements ({total_elements})"
+        )
+        log_message(msg, always_print=True)
+        while len(extracted_texts) < total_elements:
+            extracted_texts.append("[OCR FAILED]")
+        extracted_texts = extracted_texts[:total_elements]
+
+    if not extracted_texts:
+        log_message("Hayai OCR v2.5 Nova returned empty results", verbose=debug)
+        failure_results = ["[OCR FAILED]"] * total_elements
+        cache.set_manga_ocr_result(cache_key, failure_results, debug)
+        return failure_results
+
+    if _check_ocr_failure(extracted_texts):
+        log_message("Hayai OCR v2.5 Nova returned only failures", verbose=debug)
+        cache.set_manga_ocr_result(cache_key, extracted_texts, debug)
+        return extracted_texts
+
+    cache.set_manga_ocr_result(cache_key, extracted_texts, debug)
+    return extracted_texts
+
+
+def _perform_baberu_ocr(
+    images_b64: list[str],
+    bubble_metadata: list[dict[str, Any]],
+    debug: bool = False,
+) -> list[str]:
+    """Perform OCR using Baberu OCR model.
+
+    Args:
+        images_b64: List of base64-encoded images
+        bubble_metadata: List of metadata dicts for text elements
+        debug: Whether to print verbose logging
+
+    Returns:
+        List of extracted text strings, or early return with failure list
+    """
+    total_elements = len(images_b64)
+    log_message("Using Baberu OCR for text extraction", verbose=debug)
+
+    cache = get_cache()
+    cache_key = cache.get_manga_ocr_cache_key(
+        images_b64, total_elements, prefix="baberu_"
+    )
+    cached_ocr = cache.get_manga_ocr_result(cache_key)
+    if cached_ocr is not None:
+        if len(cached_ocr) == total_elements:
+            log_message("  - Using cached Baberu OCR results", always_print=True)
+            return cached_ocr
+        log_message("Discarding Baberu OCR cache due to length mismatch", verbose=debug)
+
+    pil_images = _prepare_images_for_ocr(images_b64)
+    extracted_texts = extract_text_with_baberu_ocr(pil_images, verbose=debug)
+
+    formatted_texts = []
+    for text in extracted_texts:
+        if text == "[OCR FAILED]" or not text:
+            formatted_texts.append(text if text else "[OCR FAILED]")
+        else:
+            formatted_texts.append(_join_ocr_lines(text))
+
+    extracted_texts = formatted_texts
+
+    _format_ocr_results(extracted_texts, bubble_metadata)
+
+    if len(extracted_texts) != total_elements:
+        msg = (
+            f"Warning: extracted_texts length ({len(extracted_texts)}) "
+            f"doesn't match total_elements ({total_elements})"
+        )
+        log_message(msg, always_print=True)
+        while len(extracted_texts) < total_elements:
+            extracted_texts.append("[OCR FAILED]")
+        extracted_texts = extracted_texts[:total_elements]
+
+    if not extracted_texts:
+        log_message("Baberu OCR returned empty results", verbose=debug)
+        failure_results = ["[OCR FAILED]"] * total_elements
+        cache.set_manga_ocr_result(cache_key, failure_results, debug)
+        return failure_results
+
+    if _check_ocr_failure(extracted_texts):
+        log_message("Baberu OCR returned only failures", verbose=debug)
+        cache.set_manga_ocr_result(cache_key, extracted_texts, debug)
+        return extracted_texts
+
+    cache.set_manga_ocr_result(cache_key, extracted_texts, debug)
+    return extracted_texts
+
+
 def _perform_llm_ocr(
     config: TranslationConfig,
     images_b64: list[str],
@@ -1669,6 +1811,10 @@ def _run_ocr_step(
     log_message("Starting OCR step", verbose=debug)
     if config.ocr_method == "manga-ocr":
         return _perform_manga_ocr(images_b64, bubble_metadata, debug)
+    if config.ocr_method == "hayai-ocr-v2.5-nova":
+        return _perform_hayai_ocr(images_b64, bubble_metadata, debug)
+    if config.ocr_method == "baberu-ocr":
+        return _perform_baberu_ocr(images_b64, bubble_metadata, debug)
     if config.ocr_method == "paddleocr-vl-1.6":
         return _perform_paddle_ocr_vl(images_b64, bubble_metadata, debug)
     return _perform_llm_ocr(

@@ -1,4 +1,6 @@
 import os
+import re
+import unicodedata
 
 import cv2
 import numpy as np
@@ -1049,4 +1051,210 @@ def extract_text_with_paddle_ocr_vl(
 
     except Exception as e:
         log_message(f"Error with PaddleOCR-VL-1.6: {e}", always_print=True)
+        return ["[OCR FAILED]"] * len(images)
+
+
+# Kana, CJK ideographs, CJK punctuation, and fullwidth forms (excluding Hangul \uac00-\ud7af so Korean word spaces are kept)
+_HAYAI_CJK_KANA = "\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef"
+
+
+def _normalize_hayai_ocr_text(text: str) -> str:
+    text = re.sub(
+        rf"(?<=[{_HAYAI_CJK_KANA}])\s+(?=[{_HAYAI_CJK_KANA}])",
+        "",
+        text,
+    )
+    text = unicodedata.normalize("NFKC", text)
+    return text.strip()
+
+
+def extract_text_with_hayai_ocr(
+    images: list[Image.Image], verbose: bool = False
+) -> list[str]:
+    """Extract text from images using Hayai OCR v2.5 Nova.
+
+    Args:
+        images: List of PIL Images to process (RGB)
+        verbose: Whether to print verbose output
+
+    Returns:
+        List of extracted text strings (one per image). Returns [OCR FAILED] on errors.
+    """
+    if not images:
+        return []
+
+    try:
+        model_manager = get_model_manager()
+        image_processor, tokenizer, model = model_manager.get_hayai_ocr(verbose=verbose)
+
+        extracted_texts = []
+        for i, img in enumerate(images):
+            try:
+                if img is None:
+                    log_message(
+                        f"Image {i + 1} is None (decode failure), skipping",
+                        always_print=True,
+                    )
+                    extracted_texts.append("[OCR FAILED]")
+                    continue
+
+                log_message(
+                    f"Processing image {i + 1}/{len(images)} with Hayai OCR v2.5 Nova",
+                    verbose=verbose,
+                )
+
+                rgb_img = img.convert("RGB") if img.mode != "RGB" else img
+                processed = image_processor(
+                    images=[rgb_img],
+                    max_num_patches=512,
+                    return_tensors="pt",
+                )
+                pixel_values = processed["pixel_values"].to(model.device)
+                pixel_attention_mask = processed["pixel_attention_mask"].to(
+                    model.device
+                )
+                spatial_shapes = processed["spatial_shapes"].to(model.device)
+
+                with torch.inference_mode():
+                    outputs = model.generate(
+                        pixel_values=pixel_values,
+                        pixel_attention_mask=pixel_attention_mask,
+                        spatial_shapes=spatial_shapes,
+                        tokenizer=tokenizer,
+                        max_new_tokens=128,
+                    )
+
+                raw_text = outputs[0] if outputs else ""
+                extracted_texts.append(
+                    _normalize_hayai_ocr_text(raw_text) if raw_text else ""
+                )
+
+            except Exception as e:
+                log_message(
+                    f"Hayai OCR v2.5 Nova failed for image {i + 1}: {e}",
+                    always_print=True,
+                )
+                extracted_texts.append("[OCR FAILED]")
+
+        return extracted_texts
+
+    except Exception as e:
+        log_message(f"Error with Hayai OCR v2.5 Nova: {e}", always_print=True)
+        return ["[OCR FAILED]"] * len(images)
+
+
+def extract_text_with_baberu_ocr(
+    images: list[Image.Image], verbose: bool = False
+) -> list[str]:
+    """Extract text from images using Baberu OCR.
+
+    Args:
+        images: List of PIL Images to process (RGB)
+        verbose: Whether to print verbose output
+
+    Returns:
+        List of extracted text strings (one per image). Returns [OCR FAILED] on errors.
+    """
+    if not images:
+        return []
+
+    try:
+        from transformers import LogitsProcessor, LogitsProcessorList
+
+        class _CapContentRun(LogitsProcessor):
+            """Symbol-aware run cap from Baberu OCR's canonical inference script."""
+
+            def __init__(
+                self,
+                content_ids: set[int],
+                max_run: int = 12,
+                max_symbol_run: int = 16,
+            ):
+                self.content_ids = content_ids
+                self.max_run = max_run
+                self.max_symbol_run = max_symbol_run
+
+            def __call__(self, input_ids, scores):
+                for b in range(input_ids.shape[0]):
+                    t = int(input_ids[b, -1])
+                    cap = (
+                        self.max_run
+                        if t in self.content_ids
+                        else self.max_symbol_run
+                        if t > 3
+                        else 0
+                    )
+                    if not cap:
+                        continue
+                    run, j = 0, input_ids.shape[1] - 1
+                    while j >= 0 and int(input_ids[b, j]) == t:
+                        run += 1
+                        j -= 1
+                        if run >= cap:
+                            break
+                    if run >= cap:
+                        scores[b, t] = float("-inf")
+                return scores
+
+        model_manager = get_model_manager()
+        image_processor, tokenizer, model, content_ids = model_manager.get_baberu_ocr(
+            verbose=verbose
+        )
+        logits_processor = LogitsProcessorList(
+            [_CapContentRun(content_ids, max_run=12, max_symbol_run=16)]
+        )
+
+        extracted_texts = []
+        for i, img in enumerate(images):
+            try:
+                if img is None:
+                    log_message(
+                        f"Image {i + 1} is None (decode failure), skipping",
+                        always_print=True,
+                    )
+                    extracted_texts.append("[OCR FAILED]")
+                    continue
+
+                log_message(
+                    f"Processing image {i + 1}/{len(images)} with Baberu OCR",
+                    verbose=verbose,
+                )
+
+                rgb_img = img.convert("RGB") if img.mode != "RGB" else img
+                pixel_values = image_processor(rgb_img, return_tensors="pt")[
+                    "pixel_values"
+                ].to(model.device)
+                input_ids = torch.tensor(
+                    [[tokenizer.bos_token_id]], device=model.device
+                )
+
+                with torch.inference_mode():
+                    output_ids = model.generate(
+                        input_ids=input_ids,
+                        pixel_values=pixel_values,
+                        max_new_tokens=256,
+                        do_sample=False,
+                        repetition_penalty=1.2,
+                        logits_processor=logits_processor,
+                        eos_token_id=tokenizer.eos_token_id,
+                        pad_token_id=tokenizer.pad_token_id,
+                        bos_token_id=tokenizer.bos_token_id,
+                        use_cache=True,
+                    )
+
+                pred_ids = output_ids[0, input_ids.shape[1] :].detach().cpu().tolist()
+                text = tokenizer.decode(pred_ids, skip_special_tokens=True)
+                extracted_texts.append(text.strip() if text else "")
+
+            except Exception as e:
+                log_message(
+                    f"Baberu OCR failed for image {i + 1}: {e}",
+                    always_print=True,
+                )
+                extracted_texts.append("[OCR FAILED]")
+
+        return extracted_texts
+
+    except Exception as e:
+        log_message(f"Error with Baberu OCR: {e}", always_print=True)
         return ["[OCR FAILED]"] * len(images)

@@ -126,6 +126,8 @@ MangaTranslator는 오픈 소스이며 무료입니다. 이 프로젝트가 시�
 - Comic Text and Bubble Detector RT-DETR-v2: [ogkalu](https://huggingface.co/ogkalu/comic-text-and-bubble-detector)
 - SAM 2.1: [Meta AI](https://huggingface.co/facebook/sam2.1-hiera-large)
 - SAM 3: [Meta AI](https://huggingface.co/facebook/sam3)
+- Baberu OCR: [genshiai-daichi](https://huggingface.co/genshiai-daichi/baberu-ocr)
+- Hayai OCR v2.5 Nova: [JustANormalTinkerer](https://huggingface.co/JustANormalTinkerer/hayai-ocr-v2.5-nova)
 - Manga OCR: [kha-white](https://github.com/kha-white/manga-ocr)
 - PaddleOCR-VL-1.6: [PaddlePaddle](https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6)
 - Koharu Text SAM-TS-L: [mayocream](https://huggingface.co/mayocream/koharu-text-sam-ts-l)

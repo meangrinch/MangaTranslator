@@ -131,7 +131,7 @@ class TranslationConfig:
     ero_doujinshi_mode: bool = False
     ocr_correction: bool = False
     force_cache_translations: bool = False
-    ocr_method: str = "LLM"  # "LLM", "manga-ocr", or "paddleocr-vl-1.6"
+    ocr_method: str = "LLM"  # "LLM", "baberu-ocr", "hayai-ocr-v2.5-nova", "manga-ocr", or "paddleocr-vl-1.6"
     request_coordinator: Any | None = None
 
 

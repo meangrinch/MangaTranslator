@@ -105,8 +105,10 @@
   - In "two-step" mode, try enabling "OCR Correction" to contextually repair poor OCR transcripts
   - Keep "Send Full Page to LLM" enabled; without the page, sound effects are translated without seeing what they belong to
   - Try using a local OCR method, particularly for less-capable LLMs:
+    - "baberu-ocr": Japanese, Chinese, and English sources
+    - "hayai-ocr-v2.5-nova": Japanese, Korean, Chinese, and English sources
     - "manga-ocr": Japanese sources only
-    - "paddleocr-vl-1.6": non-Japanese sources
+    - "paddleocr-vl-1.6": 50+ languages
   - Increase "max_tokens" and/or use a higher "reasoning_effort" (e.g., "high")
   - Switch "Bubble/Context Resizing Method" to a better quality method (e.g., "Model")
   - In batch mode, try raising "Previous Context OCR Text"
@@ -127,7 +129,7 @@
   - Lower "Bubble Min Side Pixels"/"Context Image Max Side Pixels"/"OSB Text Min Side Pixels" target sizes (no effect on models that use a fixed number of tokens per image)
   - Lower "Media Resolution" (if using Gemini or SpaceXAI models)
   - Lower "Image Detail" (if using OpenAI models)
-  - Use "manga-ocr/paddleocr-vl-1.6" OCR method (may perform worse than more-capable VLMs)
+  - Use a local OCR method ("baberu-ocr", "hayai-ocr-v2.5-nova", "manga-ocr", or "paddleocr-vl-1.6"; may perform worse than more-capable VLMs)
   - Enable "Force Cache Translations" to reuse cached translations on repeat runs when using non-deterministic sampling
 
 - **Batch translation failed for some files:**
