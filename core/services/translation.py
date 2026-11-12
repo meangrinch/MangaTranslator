@@ -63,6 +63,7 @@ from utils.model_metadata import (
     clamp_openai_reasoning_effort,
     clamp_xai_reasoning_effort,
     clamp_zai_reasoning_effort,
+    default_gemini_thinking_level,
     get_max_tokens_cap,
     is_anthropic_model_family,
     is_anthropic_reasoning_model,
@@ -391,10 +392,10 @@ def _gemini_thinking_config(
 ) -> dict[str, Any] | None:
     """Build Gemini's thinkingConfig, or None to leave thinking at the model default."""
     if is_gemini_3_plus_model(model_name) or is_gemma_model(model_name):
+        if not reasoning_effort:
+            return {"thinkingLevel": default_gemini_thinking_level(model_name)}
         return {
-            "thinkingLevel": clamp_gemini_reasoning_effort(
-                model_name, reasoning_effort or "medium"
-            )
+            "thinkingLevel": clamp_gemini_reasoning_effort(model_name, reasoning_effort)
         }
     if not is_google_reasoning_model(model_name):
         return None

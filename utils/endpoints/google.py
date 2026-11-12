@@ -123,7 +123,8 @@ def call_gemini_endpoint(
         return _extract_text(result, debug, earlier_parts), None
 
     # One request stops at a per-request share of maxOutputTokens (32768 on
-    # Gemini 4); resending it unchanged with the returned token resumes it
+    # Gemini 4 Carbon/Argon, 65536 on Hydrogen); resending it unchanged with
+    # the returned token resumes it
     while True:
         text, token = post_with_retries(
             url,

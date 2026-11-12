@@ -33,3 +33,19 @@ def test_model_change_sliders_follow_the_effort_it_selects(monkeypatch):
         0
     ]
     assert temp["interactive"] is True
+
+
+def test_gemini_4_hydrogen_offers_xhigh_and_defaults_to_high():
+    assert utils.get_reasoning_effort_config("Google", "gemini-4-hydrogen") == (
+        True,
+        ["xhigh", "high", "medium", "low"],
+        "high",
+    )
+    assert (
+        utils.get_reasoning_effort_config("OpenRouter", "google/gemini-4-hydrogen")[2]
+        == "high"
+    )
+    assert (
+        utils.get_reasoning_effort_config("OpenRouter", "google/gemini-4-argon")[2]
+        == "medium"
+    )

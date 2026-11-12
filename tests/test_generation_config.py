@@ -29,6 +29,10 @@ from core.services.translation import _build_generation_config
         ("Google", "gemini-4-argon", "minimal", "thinkingLevel", "low"),
         ("Google", "gemini-4-argon", "none", "thinkingLevel", "low"),
         ("Google", "gemini-4-argon", "max", "thinkingLevel", "high"),
+        ("Google", "gemini-4-argon", "xhigh", "thinkingLevel", "high"),
+        ("Google", "gemini-4-hydrogen", "xhigh", "thinkingLevel", "xhigh"),
+        ("Google", "gemini-4-hydrogen", "max", "thinkingLevel", "xhigh"),
+        ("Google", "gemini-4-hydrogen", "minimal", "thinkingLevel", "low"),
         ("Google", "gemini-3.6-flash", "none", "thinkingLevel", "minimal"),
         ("Google", "gemini-3.6-flash", "xhigh", "thinkingLevel", "high"),
         ("Google", "gemma-4-31b-it", "low", "thinkingLevel", "minimal"),
@@ -76,6 +80,7 @@ def test_claude_effort_becomes_one_the_model_accepts(provider, model, effort, ex
     ("provider", "model", "key", "expected"),
     [
         ("Google", "gemini-4-argon", "thinkingLevel", "medium"),
+        ("Google", "gemini-4-hydrogen", "thinkingLevel", "high"),
         ("Google", "gemma-4-31b-it", "thinkingLevel", "high"),
         ("OpenAI", "gpt-6.1-sol", "reasoning_effort", "medium"),
         ("SpaceXAI", "grok-4.7", "reasoning_effort", "medium"),
@@ -83,7 +88,7 @@ def test_claude_effort_becomes_one_the_model_accepts(provider, model, effort, ex
         ("Anthropic", "claude-opus-5-5", "effort", "medium"),
     ],
 )
-def test_default_effort_is_medium_where_supported(provider, model, key, expected):
+def test_default_effort_where_supported(provider, model, key, expected):
     config = TranslationConfig(max_tokens=4096)
     generation_config = _build_generation_config(provider, model, config)
     sent = generation_config.get("thinkingConfig", generation_config)

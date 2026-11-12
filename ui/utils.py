@@ -21,7 +21,7 @@ from utils.model_metadata import (
     anthropic_omits_thinking_config,
     anthropic_reasoning_effort_config,
     anthropic_uses_adaptive_thinking_info,
-    clamp_gemini_reasoning_effort,
+    default_gemini_thinking_level,
     flux_method_backends,
     gemini_thinking_levels,
     get_gpt5_generation,
@@ -576,7 +576,7 @@ def get_reasoning_effort_config(
             return (
                 True,
                 list(reversed(thinking_levels)),
-                clamp_gemini_reasoning_effort(model_name, "medium"),
+                default_gemini_thinking_level(model_name),
             )
 
         if is_gemini_25_flash_model(model_name) or is_gemini_25_pro_model(model_name):
@@ -715,7 +715,11 @@ def get_reasoning_effort_config(
                 return True, ["high", "minimal"], "high"
 
             if is_gemini_no_minimal_thinking_model(model_name):
-                return True, ["xhigh", "high", "medium", "low", "none"], "medium"
+                return (
+                    True,
+                    ["xhigh", "high", "medium", "low", "none"],
+                    default_gemini_thinking_level(model_name),
+                )
 
             return True, ["xhigh", "high", "medium", "low", "minimal", "none"], "medium"
 
@@ -1783,7 +1787,7 @@ def format_thinking_status(
     thinking_status_str = ""
     if provider == "Google" and model_name:
         if is_gemini_3_plus_model(model_name):
-            effort = reasoning_effort or "medium"
+            effort = reasoning_effort or default_gemini_thinking_level(model_name)
             thinking_status_str = f" (thinking: {effort})"
         elif is_gemini_25_flash_model(model_name):
             effort = reasoning_effort or "auto"

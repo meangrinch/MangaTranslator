@@ -15,6 +15,7 @@ from utils.model_metadata import (
     flux_steps_fixed,
     flux_steps_range,
     flux_valid_backend,
+    gemini_thinking_levels,
     get_max_tokens_cap,
     is_anthropic_no_sampling_model,
     is_gemini_3_plus_model,
@@ -298,13 +299,26 @@ def test_muse_ember_is_a_reasoning_model():
 
 
 @pytest.mark.parametrize(
-    "model", ["gemini-4-argon", "google/gemini-4-argon", "gemini-4-carbon"]
+    "model",
+    ["gemini-4-argon", "google/gemini-4-argon", "gemini-4-carbon", "gemini-4-hydrogen"],
 )
 def test_gemini_4_is_a_thinking_level_model_without_sampling(model):
     assert is_gemini_4_model(model)
     assert is_gemini_3_plus_model(model)
     assert is_gemini_no_sampling_model(model)
     assert is_google_reasoning_model(model)
+
+
+@pytest.mark.parametrize(
+    ("model", "levels"),
+    [
+        ("gemini-4-hydrogen", ("low", "medium", "high", "xhigh")),
+        ("gemini-4-argon", ("low", "medium", "high")),
+        ("gemini-4-carbon", ("low", "medium", "high")),
+    ],
+)
+def test_gemini_4_thinking_levels(model, levels):
+    assert gemini_thinking_levels(model) == levels
 
 
 def test_gemini_4_does_not_match_gemma_4_or_gemini_3():
