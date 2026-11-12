@@ -69,8 +69,6 @@ from utils.model_metadata import (
     is_anthropic_reasoning_model,
     is_deepseek_reasoning_model,
     is_gemini_3_plus_model,
-    is_gemini_25_flash_model,
-    is_gemini_25_pro_model,
     is_gemini_no_sampling_model,
     is_gemma_model,
     is_google_model_family,
@@ -400,17 +398,12 @@ def _gemini_thinking_config(
     if not is_google_reasoning_model(model_name):
         return None
 
-    # Gemini 2.5 takes a token budget instead of a level
+    # Gemini 2.5 Flash-Lite takes a token budget instead of a level
     effort = reasoning_effort or "auto"
     if effort == "auto":
         return None
     if effort == "none":
-        if is_gemini_25_flash_model(model_name):
-            return {"thinkingBudget": 0}
-        # 2.5 Pro cannot turn thinking off, so use its minimum budget
-        if is_gemini_25_pro_model(model_name):
-            return {"thinkingBudget": 128}
-        return None
+        return {"thinkingBudget": 0}
     return {"thinkingBudget": calculate_reasoning_budget(max_tokens, effort)}
 
 

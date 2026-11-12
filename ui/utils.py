@@ -34,8 +34,7 @@ from utils.model_metadata import (
     is_deepseek_reasoning_model,
     is_deepseek_vision_model,
     is_gemini_3_plus_model,
-    is_gemini_25_flash_model,
-    is_gemini_25_pro_model,
+    is_gemini_25_flash_lite_model,
     is_gemini_no_minimal_thinking_model,
     is_gemini_no_sampling_model,
     is_gemma_model,
@@ -540,10 +539,7 @@ def get_reasoning_effort_info_text(
     if "minimal" in choices:
         options.append("minimal=10%")
     if "none" in choices:
-        if is_gemini_25_pro_model(model_name):
-            options.append("none=128 tokens - minimum allowed")
-        else:
-            options.append("none=disabled")
+        options.append("none=disabled")
 
     if options:
         return f"{base_text} ({', '.join(options)})."
@@ -579,10 +575,8 @@ def get_reasoning_effort_config(
                 default_gemini_thinking_level(model_name),
             )
 
-        if is_gemini_25_flash_model(model_name) or is_gemini_25_pro_model(model_name):
-            return True, ["auto", "high", "medium", "low", "minimal", "none"], "auto"
-        else:
-            return True, ["auto", "high", "medium", "low", "minimal"], "auto"
+        # Gemini 2.5 Flash-Lite takes a token budget
+        return True, ["auto", "high", "medium", "low", "minimal", "none"], "auto"
 
     elif provider == "OpenAI":
         if not is_openai_reasoning_model(model_name):
@@ -1789,7 +1783,7 @@ def format_thinking_status(
         if is_gemini_3_plus_model(model_name):
             effort = reasoning_effort or default_gemini_thinking_level(model_name)
             thinking_status_str = f" (thinking: {effort})"
-        elif is_gemini_25_flash_model(model_name):
+        elif is_gemini_25_flash_lite_model(model_name):
             effort = reasoning_effort or "auto"
             if effort == "none":
                 thinking_status_str = " (no thinking)"

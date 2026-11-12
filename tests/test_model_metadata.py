@@ -20,6 +20,7 @@ from utils.model_metadata import (
     is_anthropic_no_sampling_model,
     is_gemini_3_plus_model,
     is_gemini_4_model,
+    is_gemini_25_flash_lite_model,
     is_gemini_no_sampling_model,
     is_google_reasoning_model,
     is_meta_reasoning_model,
@@ -325,6 +326,19 @@ def test_gemini_4_does_not_match_gemma_4_or_gemini_3():
     assert not is_gemini_4_model("gemma-4-31b-it")
     assert not is_gemini_4_model("gemini-3.8-flash")
     assert not is_gemini_3_plus_model("gemma-4-31b-it")
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("gemini-2.5-flash-lite", True),
+        ("gemini-2.5-flash", False),
+        ("gemini-2.5-pro", False),
+    ],
+)
+def test_only_gemini_25_flash_lite_remains_supported(model, expected):
+    assert is_gemini_25_flash_lite_model(model) is expected
+    assert is_google_reasoning_model(model) is expected
 
 
 def test_is_rosetta_model_requires_vendor_and_name():

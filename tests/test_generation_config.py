@@ -47,6 +47,7 @@ from core.services.translation import _build_generation_config
         ),
         ("OpenRouter", "openai/gpt-6-astra", "none", "reasoning_effort", "none"),
         ("Google", "gemini-3.6-flash", "minimal", "thinkingLevel", "minimal"),
+        ("Google", "gemini-2.5-flash-lite", "none", "thinkingBudget", 0),
     ],
 )
 def test_reasoning_effort_becomes_one_the_model_accepts(

@@ -1193,7 +1193,7 @@ def is_gemini_no_minimal_thinking_model(model_name: str | None) -> bool:
 def gemini_thinking_levels(model_name: str | None) -> tuple[str, ...]:
     """Thinking levels a Gemini 3+ or Gemma model accepts.
 
-    Empty for models without thinking levels, such as Gemini 2.5 with its token budget.
+    Empty for models without thinking levels, such as Gemini 2.5 Flash-Lite with its token budget.
     """
     if is_gemma_model(model_name):
         return ("minimal", "high")
@@ -1220,27 +1220,23 @@ def default_gemini_thinking_level(model_name: str | None) -> str:
     return clamp_gemini_reasoning_effort(model_name, "medium")
 
 
-def is_gemini_25_flash_model(model_name: str | None) -> bool:
-    """Check if a model is Gemini 2.5 Flash."""
+def is_gemini_25_flash_lite_model(model_name: str | None) -> bool:
+    """Check if a model is Gemini 2.5 Flash-Lite, the only supported Gemini 2.5 model."""
     if not model_name:
         return False
-    lm = model_name.lower()
-    return "gemini-2.5" in lm and "flash" in lm
-
-
-def is_gemini_25_pro_model(model_name: str | None) -> bool:
-    """Check if a model is Gemini 2.5 Pro."""
-    if not model_name:
-        return False
-    return "gemini-2.5-pro" in model_name.lower()
+    return "gemini-2.5-flash-lite" in model_name.lower()
 
 
 def is_google_reasoning_model(model_name: str | None) -> bool:
-    """Check if a Google model is reasoning-capable (Gemini 2.5, 3/4 series, or Gemma)."""
+    """Check if a Google model is reasoning-capable (Gemini 2.5 Flash-Lite, 3/4 series, or Gemma)."""
     if not model_name:
         return False
     lm = model_name.lower()
-    return "gemini-2.5" in lm or is_gemini_3_plus_model(lm) or "gemma-" in lm
+    return (
+        is_gemini_25_flash_lite_model(lm)
+        or is_gemini_3_plus_model(lm)
+        or "gemma-" in lm
+    )
 
 
 def is_rosetta_model(model_name: str | None) -> bool:

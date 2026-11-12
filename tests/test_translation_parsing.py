@@ -207,7 +207,7 @@ def test_system_prompt_glossary_rules_drop_english_examples_for_other_languages(
     [
         ("Google", "gemini-3.5-flash-lite", True),
         ("Google", "gemini-4-argon", True),
-        ("Google", "gemini-2.5-pro", False),
+        ("Google", "gemini-2.5-flash-lite", False),
         ("Google", "gemma-4-31b-it", False),
         ("OpenRouter", "google/gemini-3.8-flash", False),
     ],
