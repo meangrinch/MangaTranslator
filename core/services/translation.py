@@ -61,9 +61,11 @@ from utils.model_metadata import (
     clamp_gpt6_reasoning_effort,
     clamp_moonshot_reasoning_effort,
     clamp_openai_reasoning_effort,
+    clamp_qwencloud_reasoning_effort,
     clamp_xai_reasoning_effort,
     clamp_zai_reasoning_effort,
     default_gemini_thinking_level,
+    default_qwencloud_reasoning_effort,
     get_max_tokens_cap,
     is_anthropic_model_family,
     is_anthropic_reasoning_model,
@@ -696,9 +698,13 @@ def _qwencloud_generation_config(
     generation_config = _sampling_config(config, max_tokens, 1.0)
     if is_qwencloud_reasoning_model(model_name):
         takes_effort = supports_qwencloud_reasoning_effort(model_name)
-        reasoning_effort = config.reasoning_effort or (
-            "xhigh" if takes_effort else "auto"
+        reasoning_effort = (
+            config.reasoning_effort or default_qwencloud_reasoning_effort(model_name)
         )
+        if takes_effort:
+            reasoning_effort = clamp_qwencloud_reasoning_effort(
+                model_name, reasoning_effort
+            )
         generation_config["thinking"] = _thinking_toggle(reasoning_effort)
         if takes_effort and reasoning_effort not in ("auto", "none"):
             generation_config["reasoning_effort"] = reasoning_effort

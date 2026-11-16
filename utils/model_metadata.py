@@ -852,6 +852,13 @@ def is_mimo_reasoning_model(model_name: str | None) -> bool:
     return "mimo-v2.6" in model_name.lower()
 
 
+def is_qwen4_model(model_name: str | None) -> bool:
+    """Check if a model is any Qwen 4 variant (e.g., qwen4-max)."""
+    if not model_name:
+        return False
+    return "qwen4" in model_name.lower()
+
+
 def is_qwencloud_reasoning_model(model_name: str | None) -> bool:
     """Check if a QwenCloud model is reasoning-capable (toggleable thinking mode)."""
     if not model_name:
@@ -864,7 +871,37 @@ def supports_qwencloud_reasoning_effort(model_name: str | None) -> bool:
     """Check if a QwenCloud model supports the reasoning_effort API parameter (Qwen 3.8+)."""
     if not model_name:
         return False
-    return "qwen3.8" in model_name.lower()
+    lm = model_name.lower()
+    return "qwen3.8" in lm or is_qwen4_model(lm)
+
+
+def qwencloud_reasoning_efforts(model_name: str | None) -> tuple[str, ...]:
+    """Reasoning efforts a QwenCloud model accepts, weakest to strongest.
+
+    Empty when the model only has an on/off thinking toggle (Qwen 3.7 and earlier).
+    """
+    if not model_name:
+        return ()
+    lm = model_name.lower()
+    if is_qwen4_model(lm):
+        return ("none", "low", "high", "xhigh")
+    if "qwen3.8" in lm:
+        return ("none", "low", "medium", "xhigh")
+    return ()
+
+
+def default_qwencloud_reasoning_effort(model_name: str | None) -> str:
+    """Default reasoning effort for a QwenCloud model: "high" for Qwen 4, "xhigh" for 3.8, else "auto"."""
+    if is_qwen4_model(model_name):
+        return "high"
+    if supports_qwencloud_reasoning_effort(model_name):
+        return "xhigh"
+    return "auto"
+
+
+def clamp_qwencloud_reasoning_effort(model_name: str | None, effort: str) -> str:
+    """Replace a reasoning effort a QwenCloud model lacks with the nearest one it accepts."""
+    return _nearest_effort(effort, qwencloud_reasoning_efforts(model_name))
 
 
 def is_meta_reasoning_model(model_name: str | None) -> bool:

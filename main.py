@@ -33,7 +33,7 @@ CLI_DEFAULT_MODELS = {
     "Z.ai": "glm-5.3-flash",
     "Moonshot AI": "kimi-k3.1-pro",
     "Xiaomi MiMo": "mimo-v2.6-pro",
-    "QwenCloud": "qwen3.8-flash",
+    "QwenCloud": "qwen4-max",
     "OpenCode": "deepseek-v4.1-flash",
     "OpenRouter": "google/gemini-4-carbon",
     "OpenAI-Compatible": "default",

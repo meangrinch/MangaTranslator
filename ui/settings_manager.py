@@ -110,6 +110,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "mimo-v2.6-flash",
     ],
     "QwenCloud": [
+        "qwen4-max",
         "qwen3.8-flash",
         "qwen3.8-max-0902",
         "qwen3.8-max",

@@ -8,6 +8,8 @@ from utils.model_metadata import (
     anthropic_model_flags,
     anthropic_reasoning_effort_config,
     clamp_openai_reasoning_effort,
+    clamp_qwencloud_reasoning_effort,
+    default_qwencloud_reasoning_effort,
     flux_method_backends,
     flux_sdcpp_diffusion_quants,
     flux_sdcpp_valid_diffusion_quant,
@@ -26,16 +28,20 @@ from utils.model_metadata import (
     is_meta_reasoning_model,
     is_opencode_chat_completions_model,
     is_opencode_multimodal_model,
+    is_qwen4_model,
+    is_qwencloud_reasoning_model,
     is_rosetta_model,
     is_sonnet_5_model,
     is_sonnet_55_model,
     is_xai_reasoning_model,
+    qwencloud_reasoning_efforts,
     resolve_openai_api_model_name,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
     supports_meta_max_effort,
     supports_meta_reasoning_effort,
     supports_openai_original_image_detail,
+    supports_qwencloud_reasoning_effort,
     supports_xai_reasoning_parameter,
     xai_reasoning_efforts,
 )
@@ -412,3 +418,35 @@ def test_flux_steps_per_method():
     assert flux_steps_range("fibo2_edit_turbo") == (4, 12)
     assert flux_steps_fixed("qwen_image_2_1_turbo")
     assert not flux_steps_fixed("flux3_klein")
+
+
+@pytest.mark.parametrize(
+    ("model", "efforts", "default"),
+    [
+        ("qwen4-max", ("none", "low", "high", "xhigh"), "high"),
+        ("qwen/qwen4-max", ("none", "low", "high", "xhigh"), "high"),
+        ("qwen3.8-max", ("none", "low", "medium", "xhigh"), "xhigh"),
+        ("qwen3.7-max", (), "auto"),
+    ],
+)
+def test_qwencloud_reasoning_metadata(model, efforts, default):
+    assert is_qwencloud_reasoning_model(model)
+    assert supports_qwencloud_reasoning_effort(model) is bool(efforts)
+    assert is_qwen4_model(model) is ("qwen4" in model)
+    assert qwencloud_reasoning_efforts(model) == efforts
+    assert default_qwencloud_reasoning_effort(model) == default
+
+
+@pytest.mark.parametrize(
+    ("model", "effort", "expected"),
+    [
+        ("qwen4-max", "minimal", "low"),
+        ("qwen4-max", "medium", "high"),
+        ("qwen4-max", "max", "xhigh"),
+        ("qwen4-max", "xhigh", "xhigh"),
+        ("qwen3.8-max", "high", "xhigh"),
+        ("qwen3.8-max", "medium", "medium"),
+    ],
+)
+def test_clamp_qwencloud_reasoning_effort(model, effort, expected):
+    assert clamp_qwencloud_reasoning_effort(model, effort) == expected

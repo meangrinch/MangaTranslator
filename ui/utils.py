@@ -22,6 +22,7 @@ from utils.model_metadata import (
     anthropic_reasoning_effort_config,
     anthropic_uses_adaptive_thinking_info,
     default_gemini_thinking_level,
+    default_qwencloud_reasoning_effort,
     flux_method_backends,
     gemini_thinking_levels,
     get_gpt5_generation,
@@ -58,6 +59,7 @@ from utils.model_metadata import (
     is_xai_reasoning_model,
     is_zai_reasoning_model,
     is_zai_vision_model,
+    qwencloud_reasoning_efforts,
     supports_gemini_code_execution,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
@@ -649,7 +651,11 @@ def get_reasoning_effort_config(
 
     elif provider == "QwenCloud":
         if supports_qwencloud_reasoning_effort(model_name):
-            return True, ["xhigh", "medium", "low", "none"], "xhigh"
+            return (
+                True,
+                list(reversed(qwencloud_reasoning_efforts(model_name))),
+                default_qwencloud_reasoning_effort(model_name),
+            )
         if is_qwencloud_reasoning_model(model_name):
             return True, ["auto", "none"], "auto"
         return False, [], None
@@ -667,7 +673,11 @@ def get_reasoning_effort_config(
         if is_deepseek_reasoning_model(model_name):
             return True, ["max", "high", "low", "none"], "high"
         if supports_qwencloud_reasoning_effort(model_name):
-            return True, ["xhigh", "medium", "low", "none"], "xhigh"
+            return (
+                True,
+                list(reversed(qwencloud_reasoning_efforts(model_name))),
+                default_qwencloud_reasoning_effort(model_name),
+            )
         if is_qwencloud_reasoning_model(model_name):
             return True, ["auto", "none"], "auto"
         if "glm-5.3" in lm:

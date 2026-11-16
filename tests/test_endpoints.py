@@ -146,6 +146,33 @@ def test_deepseek_sends_responses_style_reasoning(post):
     assert post.sent["reasoning"] == {"effort": "none"}
 
 
+def test_qwencloud_sends_qwen4_max_reasoning_effort(post):
+    post.body = RESPONSES_BODY
+    call_qwencloud_endpoint(
+        "key",
+        "qwen4-max",
+        [{"text": "go"}],
+        {"thinking": {"type": "enabled"}, "reasoning_effort": "xhigh"},
+    )
+    assert post.sent["reasoning"] == {"effort": "xhigh"}
+
+    call_qwencloud_endpoint(
+        "key",
+        "qwen4-max",
+        [{"text": "go"}],
+        {"thinking": {"type": "enabled"}},
+    )
+    assert post.sent["reasoning"] == {"effort": "high"}
+
+    call_qwencloud_endpoint(
+        "key",
+        "qwen4-max",
+        [{"text": "go"}],
+        {"thinking": {"type": "disabled"}},
+    )
+    assert post.sent["reasoning"] == {"effort": "none"}
+
+
 def test_meta_uses_responses_api(post):
     post.body = RESPONSES_BODY
     call_meta_model_endpoint(

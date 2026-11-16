@@ -48,6 +48,13 @@ from core.services.translation import _build_generation_config
         ("OpenRouter", "openai/gpt-6-astra", "none", "reasoning_effort", "none"),
         ("Google", "gemini-3.6-flash", "minimal", "thinkingLevel", "minimal"),
         ("Google", "gemini-2.5-flash-lite", "none", "thinkingBudget", 0),
+        ("QwenCloud", "qwen4-max", "minimal", "reasoning_effort", "low"),
+        ("QwenCloud", "qwen4-max", "medium", "reasoning_effort", "high"),
+        ("QwenCloud", "qwen4-max", "high", "reasoning_effort", "high"),
+        ("QwenCloud", "qwen4-max", "xhigh", "reasoning_effort", "xhigh"),
+        ("QwenCloud", "qwen4-max", "max", "reasoning_effort", "xhigh"),
+        ("QwenCloud", "qwen4-max", "none", "reasoning_effort", None),
+        ("QwenCloud", "qwen3.8-max", "high", "reasoning_effort", "xhigh"),
     ],
 )
 def test_reasoning_effort_becomes_one_the_model_accepts(
@@ -87,6 +94,8 @@ def test_claude_effort_becomes_one_the_model_accepts(provider, model, effort, ex
         ("SpaceXAI", "grok-4.7", "reasoning_effort", "medium"),
         ("OpenRouter", "openai/gpt-6.1-sol", "reasoning_effort", "medium"),
         ("Anthropic", "claude-opus-5-5", "effort", "medium"),
+        ("QwenCloud", "qwen4-max", "reasoning_effort", "high"),
+        ("QwenCloud", "qwen3.8-max", "reasoning_effort", "xhigh"),
     ],
 )
 def test_default_effort_where_supported(provider, model, key, expected):

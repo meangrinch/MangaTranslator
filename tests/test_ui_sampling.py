@@ -49,3 +49,21 @@ def test_gemini_4_hydrogen_offers_xhigh_and_defaults_to_high():
         utils.get_reasoning_effort_config("OpenRouter", "google/gemini-4-argon")[2]
         == "medium"
     )
+
+
+def test_qwen4_max_offers_high_default_and_no_medium():
+    assert utils.get_reasoning_effort_config("QwenCloud", "qwen4-max") == (
+        True,
+        ["xhigh", "high", "low", "none"],
+        "high",
+    )
+    assert utils.get_reasoning_effort_config("OpenCode", "qwen4-max") == (
+        True,
+        ["xhigh", "high", "low", "none"],
+        "high",
+    )
+    assert utils.get_reasoning_effort_config("QwenCloud", "qwen3.8-max") == (
+        True,
+        ["xhigh", "medium", "low", "none"],
+        "xhigh",
+    )

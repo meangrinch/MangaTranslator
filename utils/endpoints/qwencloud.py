@@ -1,7 +1,10 @@
 from typing import Any
 
 from utils.exceptions import ValidationError
-from utils.model_metadata import supports_qwencloud_reasoning_effort
+from utils.model_metadata import (
+    default_qwencloud_reasoning_effort,
+    supports_qwencloud_reasoning_effort,
+)
 
 from ._http import COMMON_STATUS_HINTS, post_with_retries
 from .openai import build_responses_content, read_responses_reply
@@ -79,11 +82,13 @@ def call_qwencloud_endpoint(
             reasoning_effort = "none"
         elif not reasoning_effort or reasoning_effort == "auto":
             reasoning_effort = (
-                "high" if supports_qwencloud_reasoning_effort(model_name) else "medium"
+                default_qwencloud_reasoning_effort(model_name)
+                if supports_qwencloud_reasoning_effort(model_name)
+                else "medium"
             )
-    if reasoning_effort in ("xhigh", "max"):
-        reasoning_effort = "high"
-    if reasoning_effort in ("high", "medium", "low", "minimal", "none"):
+    if reasoning_effort == "max":
+        reasoning_effort = "xhigh"
+    if reasoning_effort in ("xhigh", "high", "medium", "low", "minimal", "none"):
         payload["reasoning"] = {"effort": reasoning_effort}
 
     if enable_web_search:
