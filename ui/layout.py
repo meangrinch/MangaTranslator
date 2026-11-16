@@ -1543,7 +1543,7 @@ def create_layout(
                                 info="The largest font size the renderer will attempt to use.",
                             )
                             min_font_size = gr.Slider(
-                                5,
+                                4,
                                 50,
                                 value=saved_settings.get("min_font_size", 8),
                                 step=1,

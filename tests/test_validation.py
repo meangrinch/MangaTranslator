@@ -48,12 +48,14 @@ def test_clamp_settings_config_object():
     config = _config(parallel_requests=100)
     config.translation.temperature = 9.0
     config.rendering.max_font_size = 1
+    config.rendering.min_font_size = 1
     config.output.image_upscale_factor = 20.0
     config.preprocessing.factor = 0.1
 
     assert clamp_settings(config) is config
     assert config.translation.temperature == 2.0
     assert config.rendering.max_font_size == 5
+    assert config.rendering.min_font_size == 4
     assert config.output.image_upscale_factor == 8.0
     assert config.preprocessing.factor == 1.0
     assert config.parallel_requests == 20

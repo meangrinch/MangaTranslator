@@ -24,7 +24,7 @@ SETTING_CONSTRAINTS: dict[str, tuple[float, float]] = {
     "batch_previous_context_text_count": (0, 50),
     "osb_min_side_pixels": (64, 512),
     "max_font_size": (5, 50),
-    "min_font_size": (5, 50),
+    "min_font_size": (4, 50),
     "line_spacing_mult": (0.5, 2.0),
     "vertical_line_spacing_mult": (0.5, 2.0),
     "vertical_font_size_mult": (0.1, 3.0),
