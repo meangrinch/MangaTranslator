@@ -458,6 +458,20 @@ def is_gpt61_sol(model_name: str | None) -> bool:
     return "gpt-6.1-sol" in lm
 
 
+def is_gpt62_sol(model_name: str | None) -> bool:
+    """Check if a model is GPT-6.2 Sol."""
+    if not model_name:
+        return False
+    return "gpt-6.2-sol" in model_name.lower()
+
+
+def is_gpt62_astra(model_name: str | None) -> bool:
+    """Check if a model is GPT-6.2 Astra."""
+    if not model_name:
+        return False
+    return "gpt-6.2-astra" in model_name.lower()
+
+
 def is_gpt6_luna(model_name: str | None) -> bool:
     """Check if a model is GPT-6 Luna."""
     if not model_name:
@@ -539,10 +553,30 @@ def is_openai_reasoning_model(model_name: str | None) -> bool:
     )
 
 
+def supports_gpt6_none_effort(model_name: str | None) -> bool:
+    """Whether a GPT-6 model accepts reasoning.effort='none'."""
+    if not model_name:
+        return False
+    return not (
+        is_gpt6_astra(model_name)
+        or is_gpt61_sol(model_name)
+        or is_gpt62_sol(model_name)
+        or is_gpt62_astra(model_name)
+    )
+
+
+def gpt6_reasoning_efforts(model_name: str | None) -> list[str]:
+    """Reasoning efforts accepted by a GPT-6 model, strongest first."""
+    efforts = ["max", "xhigh", "high", "medium", "low"]
+    if supports_gpt6_none_effort(model_name):
+        efforts.append("none")
+    return efforts
+
+
 def clamp_gpt6_reasoning_effort(model_name: str | None, effort: str) -> str:
-    """GPT-6 has no "minimal" effort, and Astra / 6.1 Sol have no "none"; both become "low"."""
+    """GPT-6 has no "minimal" effort, and models without "none" fall back to "low"."""
     if effort == "minimal" or (
-        effort == "none" and (is_gpt6_astra(model_name) or is_gpt61_sol(model_name))
+        effort == "none" and not supports_gpt6_none_effort(model_name)
     ):
         return "low"
     return effort

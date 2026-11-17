@@ -126,6 +126,36 @@ def test_responses_api_message_items_stay_on_separate_lines(post):
     assert text == "I'll look that up.\n1: Hello"
 
 
+@pytest.mark.parametrize(
+    ("ui_model", "api_model", "is_pro"),
+    [
+        ("gpt-6.2-sol", "gpt-6.2-sol", False),
+        ("gpt-6.2-astra", "gpt-6.2-astra", False),
+        ("gpt-6.2-sol-pro", "gpt-6.2-sol", True),
+        ("gpt-6.2-astra-pro", "gpt-6.2-astra", True),
+    ],
+)
+def test_openai_gpt62_clamps_none_omits_sampling_and_sets_pro_mode(
+    post, ui_model, api_model, is_pro
+):
+    post.body = RESPONSES_BODY
+    config = {
+        "max_output_tokens": 4096,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "reasoning_effort": "none",
+        "verbosity": "low",
+        **({"reasoning_mode": "pro"} if is_pro else {}),
+    }
+    call_openai_endpoint("key", ui_model, [{"text": "go"}], config)
+    assert post.sent["model"] == api_model
+    expected_reasoning = {"effort": "low", **({"mode": "pro"} if is_pro else {})}
+    assert post.sent["reasoning"] == expected_reasoning
+    assert post.sent["text"] == {"verbosity": "low"}
+    assert "temperature" not in post.sent
+    assert "top_p" not in post.sent
+
+
 def test_responses_api_falls_back_to_top_level_output_text(post):
     post.body = {"output_text": " 1: Hello "}
     assert call_qwencloud_endpoint("key", "qwen3.8-max", [{"text": "go"}], {}) == (

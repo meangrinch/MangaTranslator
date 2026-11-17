@@ -25,7 +25,7 @@ from utils.model_metadata import (
 # Model used when --model-name is not given; the keys are the --provider choices
 CLI_DEFAULT_MODELS = {
     "Google": "gemini-4-carbon",
-    "OpenAI": "gpt-6.1-sol",
+    "OpenAI": "gpt-6.2-astra",
     "Anthropic": "claude-opus-5-5",
     "SpaceXAI": "grok-4.7",
     "Meta Model": "muse-ember-1.0",

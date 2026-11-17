@@ -67,3 +67,30 @@ def test_qwen4_max_offers_high_default_and_no_medium():
         ["xhigh", "medium", "low", "none"],
         "xhigh",
     )
+
+
+@pytest.mark.parametrize(
+    "model",
+    ["gpt-6.2-sol", "gpt-6.2-astra", "gpt-6.2-sol-pro", "gpt-6.2-astra-pro"],
+)
+def test_gpt62_models_omit_none_effort_and_disable_sampling(model):
+    expected_efforts = ["max", "xhigh", "high", "medium", "low"]
+    for provider in ("OpenAI", "OpenCode", "OpenAI-Compatible"):
+        assert utils.get_reasoning_effort_config(provider, model) == (
+            True,
+            expected_efforts,
+            "medium",
+        )
+    assert utils.get_verbosity_config("OpenAI", model) == (
+        True,
+        ["high", "medium", "low"],
+        "low",
+    )
+    assert utils.get_sampling_slider_interactivity("OpenAI", model, "low") == (
+        False,
+        False,
+        False,
+    )
+    assert utils.get_sampling_slider_interactivity(
+        "OpenRouter", f"openai/{model}", "none"
+    ) == (False, False, False)

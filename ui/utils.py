@@ -28,6 +28,7 @@ from utils.model_metadata import (
     get_gpt5_generation,
     get_hy_mt2_sampling_defaults,
     get_max_tokens_cap,
+    gpt6_reasoning_efforts,
     is_anthropic_model_family,
     is_anthropic_no_sampling_model,
     is_anthropic_reasoning_model,
@@ -42,10 +43,8 @@ from utils.model_metadata import (
     is_google_model_family,
     is_gpt5_chat_variant,
     is_gpt5_series,
-    is_gpt6_astra,
     is_gpt6_series,
     is_gpt56_virtual_pro,
-    is_gpt61_sol,
     is_hy_mt2_model,
     is_mimo_multimodal_model,
     is_mimo_reasoning_model,
@@ -63,6 +62,7 @@ from utils.model_metadata import (
     supports_gemini_code_execution,
     supports_gpt5_max_effort,
     supports_gpt5_xhigh_effort,
+    supports_gpt6_none_effort,
     supports_meta_max_effort,
     supports_meta_reasoning_effort,
     supports_moonshot_reasoning_effort,
@@ -587,11 +587,8 @@ def get_reasoning_effort_config(
         if "chat" in lm:
             return False, [], None
 
-        if is_gpt6_astra(model_name) or is_gpt61_sol(model_name):
-            return True, ["max", "xhigh", "high", "medium", "low"], "medium"
-
         if is_gpt6_series(model_name):
-            return True, ["max", "xhigh", "high", "medium", "low", "none"], "medium"
+            return True, gpt6_reasoning_efforts(model_name), "medium"
 
         gen = get_gpt5_generation(model_name)
 
@@ -693,10 +690,8 @@ def get_reasoning_effort_config(
         if is_mimo_reasoning_model(model_name):
             return True, ["auto", "none"], "auto"
         if is_openai_reasoning_model(model_name):
-            if is_gpt6_astra(model_name) or is_gpt61_sol(model_name):
-                return True, ["max", "xhigh", "high", "medium", "low"], "medium"
             if is_gpt6_series(model_name):
-                return True, ["max", "xhigh", "high", "medium", "low", "none"], "medium"
+                return True, gpt6_reasoning_efforts(model_name), "medium"
             return True, ["high", "medium", "low", "none"], "medium"
         if is_xai_reasoning_model(model_name):
             return True, ["high", "medium", "low", "none"], "medium"
@@ -746,10 +741,8 @@ def get_reasoning_effort_config(
         if is_anthropic_model_family(model_name):
             return anthropic_reasoning_effort_config(model_name)
         if is_openai_model_family(model_name) and is_openai_reasoning_model(model_name):
-            if is_gpt6_astra(model_name) or is_gpt61_sol(model_name):
-                return True, ["max", "xhigh", "high", "medium", "low"], "medium"
             if is_gpt6_series(model_name):
-                return True, ["max", "xhigh", "high", "medium", "low", "none"], "medium"
+                return True, gpt6_reasoning_efforts(model_name), "medium"
             return True, ["high", "medium", "low", "none"], "medium"
         if is_openai_compatible_reasoning_model(model_name):
             return True, ["high", "medium", "low", "none"], "medium"
@@ -802,7 +795,7 @@ def get_sampling_interactivity_for_effort(
     """Whether temp/top_p sliders should be interactive given the current reasoning effort.
 
     For GPT-5 series (non-chat): only allowed when effort is 'none'.
-    For other OpenAI reasoning models (GPT-6): never allowed (except Sol, Terra, and Luna when effort is 'none').
+    For other OpenAI reasoning models (GPT-6): never allowed (except 6.0 Sol/Luna and 6.1 Terra when effort is 'none').
     For DeepSeek reasoning models: only allowed when effort is 'none'.
     For Claude models that accept sampling params: only allowed while thinking is off.
     Returns (temp_interactive, top_p_interactive).
@@ -832,9 +825,7 @@ def get_sampling_interactivity_for_effort(
         allow = reasoning_effort == "none"
         return allow, allow
 
-    if is_gpt6_series(model_name) and not (
-        is_gpt6_astra(model_name) or is_gpt61_sol(model_name)
-    ):
+    if is_gpt6_series(model_name) and supports_gpt6_none_effort(model_name):
         allow = reasoning_effort == "none"
         return allow, allow
 
