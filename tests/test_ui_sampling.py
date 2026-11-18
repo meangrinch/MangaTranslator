@@ -1,6 +1,6 @@
 import pytest
 
-from ui import callbacks, utils
+from ui import callbacks, settings_manager, utils
 
 
 @pytest.mark.parametrize(
@@ -35,15 +35,20 @@ def test_model_change_sliders_follow_the_effort_it_selects(monkeypatch):
     assert temp["interactive"] is True
 
 
-def test_gemini_4_hydrogen_offers_xhigh_and_defaults_to_high():
-    assert utils.get_reasoning_effort_config("Google", "gemini-4-hydrogen") == (
+@pytest.mark.parametrize("model", ["gemini-4-hydrogen", "gemini-4-neon"])
+def test_gemini_4_hydrogen_and_neon_offer_xhigh_and_default_to_high(model):
+    assert model in settings_manager.PROVIDER_MODELS["Google"]
+    assert utils.get_reasoning_effort_config("Google", model) == (
         True,
         ["xhigh", "high", "medium", "low"],
         "high",
     )
     assert (
-        utils.get_reasoning_effort_config("OpenRouter", "google/gemini-4-hydrogen")[2]
-        == "high"
+        utils.get_reasoning_effort_config("OpenRouter", f"google/{model}")[2] == "high"
+    )
+    assert (
+        utils.format_thinking_status("OpenRouter", f"google/{model}", None)
+        == " (thinking: high)"
     )
     assert (
         utils.get_reasoning_effort_config("OpenRouter", "google/gemini-4-argon")[2]

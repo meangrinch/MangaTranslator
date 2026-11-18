@@ -1791,7 +1791,7 @@ def format_thinking_status(
             else:
                 thinking_status_str = f" (thinking: {effort})"
     elif provider == "OpenRouter" and is_gemini_3_plus_model(model_name):
-        effort = reasoning_effort or "medium"
+        effort = reasoning_effort or default_gemini_thinking_level(model_name)
         thinking_status_str = f" (thinking: {effort})"
     elif (
         provider == "Anthropic"

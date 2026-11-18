@@ -319,7 +319,14 @@ def test_muse_ember_is_a_reasoning_model():
 
 @pytest.mark.parametrize(
     "model",
-    ["gemini-4-argon", "google/gemini-4-argon", "gemini-4-carbon", "gemini-4-hydrogen"],
+    [
+        "gemini-4-argon",
+        "google/gemini-4-argon",
+        "gemini-4-carbon",
+        "gemini-4-hydrogen",
+        "gemini-4-neon",
+        "google/gemini-4-neon",
+    ],
 )
 def test_gemini_4_is_a_thinking_level_model_without_sampling(model):
     assert is_gemini_4_model(model)
@@ -332,6 +339,7 @@ def test_gemini_4_is_a_thinking_level_model_without_sampling(model):
     ("model", "levels"),
     [
         ("gemini-4-hydrogen", ("low", "medium", "high", "xhigh")),
+        ("gemini-4-neon", ("low", "medium", "high", "xhigh")),
         ("gemini-4-argon", ("low", "medium", "high")),
         ("gemini-4-carbon", ("low", "medium", "high")),
     ],

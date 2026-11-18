@@ -1194,7 +1194,7 @@ def is_gemma_model(model_name: str | None) -> bool:
 
 
 def is_gemini_4_model(model_name: str | None) -> bool:
-    """Check if a model is any Gemini 4 variant (e.g., gemini-4-argon, gemini-4-hydrogen)."""
+    """Check if a model is any Gemini 4 variant (e.g., gemini-4-argon, gemini-4-hydrogen, gemini-4-neon)."""
     if not model_name:
         return False
     return "gemini-4" in model_name.lower()
@@ -1205,6 +1205,13 @@ def is_gemini_4_hydrogen_model(model_name: str | None) -> bool:
     if not model_name:
         return False
     return "gemini-4-hydrogen" in model_name.lower()
+
+
+def is_gemini_4_neon_model(model_name: str | None) -> bool:
+    """Check if a model is Gemini 4 Neon."""
+    if not model_name:
+        return False
+    return "gemini-4-neon" in model_name.lower()
 
 
 def is_gemini_3_plus_model(model_name: str | None) -> bool:
@@ -1274,7 +1281,7 @@ def gemini_thinking_levels(model_name: str | None) -> tuple[str, ...]:
         model_name
     ):
         return ("minimal", "low", "medium", "high")
-    if is_gemini_4_hydrogen_model(model_name):
+    if is_gemini_4_hydrogen_model(model_name) or is_gemini_4_neon_model(model_name):
         return ("low", "medium", "high", "xhigh")
     return ("low", "medium", "high")
 
@@ -1285,8 +1292,8 @@ def clamp_gemini_reasoning_effort(model_name: str | None, effort: str) -> str:
 
 
 def default_gemini_thinking_level(model_name: str | None) -> str:
-    """Thinking level to use when none is chosen: "high" for Hydrogen, else "medium"."""
-    if is_gemini_4_hydrogen_model(model_name):
+    """Thinking level to use when none is chosen: "high" for Hydrogen/Neon, else "medium"."""
+    if is_gemini_4_hydrogen_model(model_name) or is_gemini_4_neon_model(model_name):
         return "high"
     return clamp_gemini_reasoning_effort(model_name, "medium")
 

@@ -33,6 +33,9 @@ from core.services.translation import _build_generation_config
         ("Google", "gemini-4-hydrogen", "xhigh", "thinkingLevel", "xhigh"),
         ("Google", "gemini-4-hydrogen", "max", "thinkingLevel", "xhigh"),
         ("Google", "gemini-4-hydrogen", "minimal", "thinkingLevel", "low"),
+        ("Google", "gemini-4-neon", "xhigh", "thinkingLevel", "xhigh"),
+        ("Google", "gemini-4-neon", "max", "thinkingLevel", "xhigh"),
+        ("Google", "gemini-4-neon", "minimal", "thinkingLevel", "low"),
         ("Google", "gemini-3.6-flash", "none", "thinkingLevel", "minimal"),
         ("Google", "gemini-3.6-flash", "xhigh", "thinkingLevel", "high"),
         ("Google", "gemma-4-31b-it", "low", "thinkingLevel", "minimal"),
@@ -95,6 +98,7 @@ def test_claude_effort_becomes_one_the_model_accepts(provider, model, effort, ex
     [
         ("Google", "gemini-4-argon", "thinkingLevel", "medium"),
         ("Google", "gemini-4-hydrogen", "thinkingLevel", "high"),
+        ("Google", "gemini-4-neon", "thinkingLevel", "high"),
         ("Google", "gemma-4-31b-it", "thinkingLevel", "high"),
         ("OpenAI", "gpt-6.1-sol", "reasoning_effort", "medium"),
         ("OpenAI", "gpt-6.2-sol", "reasoning_effort", "medium"),
